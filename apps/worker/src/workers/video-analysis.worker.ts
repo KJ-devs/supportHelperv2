@@ -1,0 +1,364 @@
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { Prisma } from '@prisma/client';
+import { QUEUE_NAMES } from '../queues';
+import { VideoAnalysisJobData, VideoAnalysisResult } from '../queues/queue.types';
+import { FFmpegService } from '../services/ffmpeg.service';
+import { OCRService } from '../services/ocr.service';
+import { OpenAIService } from '../services/openai.service';
+import { YoloService } from '../services/yolo.service';
+import { S3Service } from '../services/s3.service';
+import { PrismaService } from '../services/prisma.service';
+import { MeilisearchService } from '../services/meilisearch.service';
+
+/**
+ * VideoAnalysisWorker
+ *
+ * BullMQ consumer for video analysis pipeline:
+ * 1. Download S3 video
+ * 2. FFmpeg keyframe extraction (1 frame/sec)
+ * 3. Tesseract OCR parallel (4 workers)
+ * 4. YOLO v11 UI detection
+ * 5. GPT-4o Vision analysis (batch 10 frames)
+ * 6. Generate embeddings (text-embedding-3-large)
+ * 7. Update ticket in DB
+ * 8. Index Meilisearch
+ */
+@Processor(QUEUE_NAMES.VIDEO_ANALYSIS, {
+  concurrency: 10,
+  limiter: {
+    max: 100,
+    duration: 60000,
+  },
+})
+export class VideoAnalysisWorker extends WorkerHost {
+  private readonly logger = new Logger(VideoAnalysisWorker.name);
+
+  constructor(
+    private readonly ffmpegService: FFmpegService,
+    private readonly ocrService: OCRService,
+    private readonly openaiService: OpenAIService,
+    private readonly yoloService: YoloService,
+    private readonly s3Service: S3Service,
+    private readonly prisma: PrismaService,
+    private readonly meilisearch: MeilisearchService
+  ) {
+    super();
+  }
+
+  /**
+   * Main processor method
+   */
+  async process(job: Job<VideoAnalysisJobData>): Promise<VideoAnalysisResult> {
+    const startTime = Date.now();
+    const { ticketId, mediaId, tenantId, storageKey, options } = job.data;
+
+    this.logger.log(`Processing video analysis job ${job.id} for media ${mediaId}`);
+
+    let tempVideoPath: string | null = null;
+    let tempOutputDir: string | null = null;
+
+    try {
+      // Update media status to processing
+      await this.updateMediaStatus(mediaId, 'processing');
+      await job.updateProgress(5);
+
+      // Step 1: Download video from S3
+      this.logger.log('Step 1: Downloading video from S3');
+      tempVideoPath = await this.s3Service.downloadToTemp(storageKey);
+      await job.updateProgress(15);
+
+      // Step 2: Extract keyframes
+      this.logger.log('Step 2: Extracting keyframes with FFmpeg');
+      const keyframeResult = await this.ffmpegService.extractKeyframes(tempVideoPath);
+      tempOutputDir = keyframeResult.frames[0]?.replace(/\/[^/]+$/, '') || null;
+      await job.updateProgress(30);
+
+      // Limit frames if specified
+      const framesToProcess = options?.maxFrames
+        ? keyframeResult.frames.slice(0, options.maxFrames)
+        : keyframeResult.frames;
+
+      this.logger.log(`Extracted ${framesToProcess.length} frames`);
+
+      // Step 3: Parallel OCR processing
+      let ocrResults = null;
+      if (!options?.skipOcr) {
+        this.logger.log('Step 3: Running OCR with Tesseract');
+        ocrResults = await this.ocrService.extractTextBatch(framesToProcess);
+        await this.saveVideoEvents(mediaId, framesToProcess, ocrResults);
+        await job.updateProgress(50);
+      }
+
+      // Step 4: YOLO UI detection
+      let uiDetections: any[] = [];
+      if (!options?.skipYolo) {
+        this.logger.log('Step 4: Running YOLO UI detection');
+        uiDetections = await this.yoloService.detectBatch(framesToProcess);
+        await job.updateProgress(65);
+      }
+
+      // Step 5: GPT-4 Vision analysis
+      let visionAnalysis = null;
+      if (!options?.skipVision) {
+        this.logger.log('Step 5: Running GPT-4 Vision analysis');
+        visionAnalysis = await this.openaiService.analyzeFrames(
+          framesToProcess,
+          ocrResults?.totalText || '',
+          uiDetections
+        );
+        await job.updateProgress(80);
+      }
+
+      // Step 6: Generate embeddings
+      this.logger.log('Step 6: Generating embeddings');
+      const textForEmbedding = this.buildEmbeddingText(ocrResults?.totalText, visionAnalysis);
+      const embeddings = await this.openaiService.generateEmbedding(textForEmbedding);
+      await job.updateProgress(90);
+
+      // Step 7: Update ticket in database
+      this.logger.log('Step 7: Updating ticket in database');
+      await this.updateTicket(ticketId, {
+        aiSummary: visionAnalysis?.summary,
+        aiAnalysis: {
+          ocr: ocrResults,
+          vision: visionAnalysis,
+          uiDetections: uiDetections.slice(0, 100), // Limit stored detections
+          metadata: keyframeResult.metadata,
+        },
+        keywords: visionAnalysis?.uiElements || [],
+      });
+
+      // Update media status
+      await this.updateMediaStatus(mediaId, 'completed', null, {
+        framesExtracted: framesToProcess.length,
+        processingTimeMs: Date.now() - startTime,
+        metadata: keyframeResult.metadata,
+      });
+      await job.updateProgress(95);
+
+      // Step 8: Index in Meilisearch
+      this.logger.log('Step 8: Indexing in Meilisearch');
+      await this.indexTicket(ticketId, tenantId, {
+        ocrText: ocrResults?.totalText,
+        summary: visionAnalysis?.summary,
+        keywords: visionAnalysis?.uiElements,
+        embedding: embeddings.embedding,
+      });
+      await job.updateProgress(100);
+
+      const result: VideoAnalysisResult = {
+        success: true,
+        mediaId,
+        ticketId,
+        framesExtracted: framesToProcess.length,
+        ocrResults: ocrResults
+          ? {
+              totalText: ocrResults.totalText,
+              averageConfidence: ocrResults.averageConfidence,
+            }
+          : undefined,
+        visionAnalysis: visionAnalysis
+          ? {
+              summary: visionAnalysis.summary,
+              uiElements: visionAnalysis.uiElements,
+              actions: visionAnalysis.actions,
+              errorMessages: visionAnalysis.errorMessages,
+              recommendations: visionAnalysis.recommendations,
+            }
+          : undefined,
+        embeddings: {
+          dimensions: embeddings.dimensions,
+          vectorId: `${ticketId}-${mediaId}`,
+        },
+        processingTimeMs: Date.now() - startTime,
+      };
+
+      this.logger.log(`Video analysis completed for ${mediaId} in ${result.processingTimeMs}ms`);
+
+      return result;
+    } catch (error) {
+      this.logger.error(`Video analysis failed for ${mediaId}: ${error.message}`, error.stack);
+
+      // Update media status to failed
+      await this.updateMediaStatus(mediaId, 'failed', error.message);
+
+      return {
+        success: false,
+        mediaId,
+        ticketId,
+        framesExtracted: 0,
+        processingTimeMs: Date.now() - startTime,
+        error: error.message,
+      };
+    } finally {
+      // Cleanup temp files
+      await this.cleanup(tempVideoPath, tempOutputDir);
+    }
+  }
+
+  /**
+   * Update media processing status
+   */
+  private async updateMediaStatus(
+    mediaId: string,
+    status: string,
+    error?: string | null,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    await this.prisma.media.update({
+      where: { id: mediaId },
+      data: {
+        processingStatus: status,
+        processingError: error || null,
+        ...(metadata && { metadata: metadata as Prisma.InputJsonValue }),
+      },
+    });
+  }
+
+  /**
+   * Save video events (OCR text per frame)
+   */
+  private async saveVideoEvents(
+    mediaId: string,
+    framePaths: string[],
+    ocrResults: any
+  ): Promise<void> {
+    const events = framePaths.map((framePath, index) => {
+      // Extract timestamp from frame filename (e.g., frame-0001.png = 1000ms)
+      const frameMatch = framePath.match(/frame-(\d+)\./);
+      const frameNumber = frameMatch ? parseInt(frameMatch[1], 10) : index + 1;
+      const timestampMs = frameNumber * 1000; // 1 frame/sec
+
+      return {
+        mediaId,
+        timestampMs,
+        eventType: 'keyframe',
+        ocrText: ocrResults.results[index]?.text || null,
+        eventData: {
+          confidence: ocrResults.results[index]?.confidence,
+          frameIndex: index,
+        },
+      };
+    });
+
+    await this.prisma.videoEvent.createMany({
+      data: events,
+      skipDuplicates: true,
+    });
+  }
+
+  /**
+   * Update ticket with analysis results
+   */
+  private async updateTicket(
+    ticketId: string,
+    data: {
+      aiSummary?: string;
+      aiAnalysis?: Record<string, unknown>;
+      keywords?: string[];
+    }
+  ): Promise<void> {
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        aiSummary: data.aiSummary,
+        aiAnalysis: data.aiAnalysis as Prisma.InputJsonValue,
+        keywords: data.keywords || [],
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Build text for embedding generation
+   */
+  private buildEmbeddingText(ocrText?: string, visionAnalysis?: any): string {
+    const parts: string[] = [];
+
+    if (visionAnalysis?.summary) {
+      parts.push(visionAnalysis.summary);
+    }
+
+    if (visionAnalysis?.actions?.length) {
+      parts.push('Actions: ' + visionAnalysis.actions.join(', '));
+    }
+
+    if (visionAnalysis?.errorMessages?.length) {
+      parts.push('Errors: ' + visionAnalysis.errorMessages.join(', '));
+    }
+
+    if (ocrText) {
+      parts.push('Screen text: ' + ocrText.slice(0, 2000));
+    }
+
+    return parts.join('\n\n');
+  }
+
+  /**
+   * Index ticket in Meilisearch
+   */
+  private async indexTicket(
+    ticketId: string,
+    tenantId: string,
+    data: {
+      ocrText?: string;
+      summary?: string;
+      keywords?: string[];
+      embedding?: number[];
+    }
+  ): Promise<void> {
+    await this.meilisearch.indexDocument('tickets', {
+      id: ticketId,
+      tenantId,
+      ocrText: data.ocrText,
+      summary: data.summary,
+      keywords: data.keywords,
+      _vectors: data.embedding,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Cleanup temporary files
+   */
+  private async cleanup(videoPath: string | null, outputDir: string | null): Promise<void> {
+    try {
+      if (videoPath) {
+        const fs = await import('fs/promises');
+        await fs.unlink(videoPath).catch(() => {});
+      }
+      if (outputDir) {
+        const fs = await import('fs/promises');
+        await fs.rm(outputDir, { recursive: true, force: true }).catch(() => {});
+      }
+    } catch (error) {
+      this.logger.warn(`Cleanup failed: ${error.message}`);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Worker Events
+  // ═══════════════════════════════════════════════════════════════════════
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job<VideoAnalysisJobData>) {
+    this.logger.log(`Job ${job.id} completed for media ${job.data.mediaId}`);
+  }
+
+  @OnWorkerEvent('failed')
+  onFailed(job: Job<VideoAnalysisJobData>, error: Error) {
+    this.logger.error(`Job ${job.id} failed for media ${job.data.mediaId}: ${error.message}`);
+  }
+
+  @OnWorkerEvent('progress')
+  onProgress(job: Job<VideoAnalysisJobData>, progress: number) {
+    this.logger.debug(`Job ${job.id} progress: ${progress}%`);
+  }
+
+  @OnWorkerEvent('stalled')
+  onStalled(jobId: string) {
+    this.logger.warn(`Job ${jobId} stalled`);
+  }
+}

@@ -1,0 +1,55 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+.next
+out
+build
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Testing
+coverage
+.nyc_output
+
+# Turbo
+.turbo/
+
+# Docker volumes
+data/
+
+# Misc
+*.tsbuildinfo
+.eslintcache
+
+# Claude Code local data
+.claude/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Debug
+*.log.*
+debug.log

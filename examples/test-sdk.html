@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Helper SDK Test</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f0f2f5;
+            color: #1a1a2e;
+        }
+
+        .container {
+            background: white;
+            padding: 32px;
+            border-radius: 12px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+        }
+
+        h1 { font-size: 24px; margin-bottom: 8px; }
+
+        .description {
+            color: #555;
+            margin-bottom: 24px;
+            line-height: 1.5;
+        }
+
+        .description ul {
+            margin: 8px 0 0 20px;
+        }
+
+        /* API Status */
+        .api-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+        }
+
+        .api-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #dc3545;
+            flex-shrink: 0;
+        }
+
+        .api-dot.connected { background: #28a745; }
+        .api-dot.checking {
+            background: #ffc107;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: #0070f3;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) { background: #0051cc; }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) { background: #b02a37; }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) { background: #1e7e34; }
+
+        .btn-outline {
+            background: transparent;
+            color: #555;
+            border: 1px solid #ddd;
+        }
+
+        .btn-outline:hover:not(:disabled) {
+            background: #f8f9fa;
+            border-color: #bbb;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        /* Recording indicator */
+        .recording-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 16px;
+            padding: 12px 16px;
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 8px;
+            color: #c53030;
+            font-size: 14px;
+        }
+
+        .recording-indicator.active { display: flex; }
+
+        .rec-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #dc3545;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+
+        .rec-timer {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        /* Preview section */
+        .preview-section {
+            display: none;
+            margin-top: 24px;
+            padding: 24px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            border: 1px solid #e9ecef;
+        }
+
+        .preview-section.active { display: block; }
+
+        .preview-section h3 {
+            font-size: 16px;
+            margin-bottom: 16px;
+        }
+
+        .preview-video {
+            width: 100%;
+            max-height: 400px;
+            border-radius: 8px;
+            background: #000;
+            margin-bottom: 16px;
+        }
+
+        .video-meta {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .video-meta span {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Form */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #0070f3;
+            box-shadow: 0 0 0 3px rgba(0,112,243,0.1);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        /* Status messages */
+        .status-msg {
+            display: none;
+            margin-top: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .status-msg.active { display: block; }
+
+        .status-msg.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-msg.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-msg.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        /* AI Analysis result */
+        .ai-result {
+            margin-top: 16px;
+            padding: 16px;
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .ai-result h4 {
+            font-size: 14px;
+            margin-bottom: 12px;
+            color: #4a5568;
+        }
+
+        .ai-field {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 13px;
+        }
+
+        .ai-field:last-child { border-bottom: none; }
+
+        .ai-field .label { color: #718096; }
+        .ai-field .value { font-weight: 500; color: #2d3748; }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-critical { background: #fed7d7; color: #c53030; }
+        .badge-high { background: #feebc8; color: #c05621; }
+        .badge-medium { background: #fefcbf; color: #975a16; }
+        .badge-low { background: #c6f6d5; color: #276749; }
+
+        .keywords {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .keyword {
+            padding: 2px 8px;
+            background: #edf2f7;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #4a5568;
+        }
+
+        /* Config panel */
+        .config-panel {
+            margin-top: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .config-panel summary {
+            cursor: pointer;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .config-panel .config-fields {
+            margin-top: 12px;
+            display: grid;
+            gap: 8px;
+        }
+
+        .config-panel .config-field {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .config-panel input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Support Helper SDK Test</h1>
+        <p class="description">
+            Test the bug reporting flow: record your screen, preview the video,
+            add a description, and submit. The backend will process your report with AI.
+        </p>
+
+        <!-- API Status -->
+        <div class="api-status" id="apiStatus">
+            <span class="api-dot checking" id="apiDot"></span>
+            <span id="apiStatusText">Checking API connection...</span>
+        </div>
+
+        <!-- Step 1: Recording controls -->
+        <div class="actions">
+            <button class="btn btn-primary" id="btnStartRec" onclick="startRecording()" disabled>
+                Start Recording
+            </button>
+            <button class="btn btn-danger" id="btnStopRec" onclick="stopRecording()" disabled style="display:none;">
+                Stop Recording
+            </button>
+        </div>
+
+        <!-- Recording indicator -->
+        <div class="recording-indicator" id="recIndicator">
+            <span class="rec-dot"></span>
+            <span>Recording in progress...</span>
+            <span class="rec-timer" id="recTimer">00:00</span>
+        </div>
+
+        <!-- Step 2: Preview + Description -->
+        <div class="preview-section" id="previewSection">
+            <h3>Preview & Describe</h3>
+
+            <video class="preview-video" id="previewVideo" controls></video>
+
+            <div class="video-meta" id="videoMeta"></div>
+
+            <div class="form-group">
+                <label for="bugTitle">Title</label>
+                <input type="text" id="bugTitle" placeholder="Short description of the bug..." />
+            </div>
+
+            <div class="form-group">
+                <label for="bugDescription">Description</label>
+                <textarea id="bugDescription" placeholder="Describe what happened, what you expected, and any steps to reproduce..."></textarea>
+            </div>
+
+            <div class="preview-actions">
+                <button class="btn btn-success" id="btnSubmit" onclick="submitReport()">
+                    Send Report
+                </button>
+                <button class="btn btn-outline" onclick="discardRecording()">
+                    Discard & Re-record
+                </button>
+            </div>
+        </div>
+
+        <!-- Status message -->
+        <div class="status-msg" id="statusMsg"></div>
+
+        <!-- Config -->
+        <details class="config-panel">
+            <summary>Configuration</summary>
+            <div class="config-fields">
+                <div class="config-field">
+                    <label>API URL:</label>
+                    <input type="text" id="cfgApiUrl" value="http://localhost:3001" />
+                </div>
+                <div class="config-field">
+                    <label>SDK Key:</label>
+                    <input type="text" id="cfgSdkKey" value="sdk_1770547467138_test" />
+                </div>
+                <div class="config-field">
+                    <button class="btn btn-outline" onclick="checkApiConnection()" style="font-size:13px;padding:6px 12px;">
+                        Re-check connection
+                    </button>
+                </div>
+            </div>
+        </details>
+    </div>
+
+    <script>
+        // ============================================================
+        // State
+        // ============================================================
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let recordingStream = null;
+        let videoBlob = null;
+        let videoBlobUrl = null;
+        let recordingStartTime = null;
+        let timerInterval = null;
+
+        // ============================================================
+        // Config helpers
+        // ============================================================
+        function getApiUrl() {
+            return document.getElementById('cfgApiUrl').value.replace(/\/+$/, '');
+        }
+
+        function getSdkKey() {
+            return document.getElementById('cfgSdkKey').value;
+        }
+
+        // ============================================================
+        // UI helpers
+        // ============================================================
+        function showStatus(message, type) {
+            const el = document.getElementById('statusMsg');
+            el.innerHTML = message;
+            el.className = 'status-msg active ' + type;
+        }
+
+        function hideStatus() {
+            document.getElementById('statusMsg').className = 'status-msg';
+        }
+
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+            const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${m}:${s}`;
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        function getSeverityBadge(severity) {
+            return `<span class="badge badge-${severity}">${severity}</span>`;
+        }
+
+        // ============================================================
+        // 1. API Connection Check
+        // ============================================================
+        async function checkApiConnection() {
+            const dot = document.getElementById('apiDot');
+            const text = document.getElementById('apiStatusText');
+            const btnStart = document.getElementById('btnStartRec');
+
+            dot.className = 'api-dot checking';
+            text.textContent = 'Checking API connection...';
+            btnStart.disabled = true;
+
+            const apiUrl = getApiUrl();
+
+            try {
+                // Try /health first (excluded from global prefix, no auth needed)
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(`${apiUrl}/health`, {
+                    method: 'GET',
+                    signal: controller.signal,
+                });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    dot.className = 'api-dot connected';
+                    text.textContent = `API connected at ${apiUrl}`;
+                    btnStart.disabled = false;
+                    return;
+                }
+            } catch (e) {
+                // /health might not exist, try /api/docs
+            }
+
+            try {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+
+                const response = await fetch(`${apiUrl}/api/docs`, {
+                    method: 'GET',
+                    signal: controller.signal,
+                });
+                clearTimeout(timeout);
+
+                if (response.ok) {
+                    dot.className = 'api-dot connected';
+                    text.textContent = `API connected at ${apiUrl}`;
+                    btnStart.disabled = false;
+                    return;
+                }
+            } catch (e) {
+                // Both failed
+            }
+
+            // Not reachable
+            dot.className = 'api-dot';
+            text.innerHTML =
+                `Cannot reach API at <strong>${apiUrl}</strong>. ` +
+                'Make sure to run: <code>pnpm dev</code>';
+            btnStart.disabled = true;
+        }
+
+        // ============================================================
+        // 2. Recording: Start / Stop
+        // ============================================================
+        function getSupportedMimeType() {
+            const types = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm;codecs=h264,opus',
+                'video/webm',
+                'video/mp4',
+            ];
+            for (const type of types) {
+                if (MediaRecorder.isTypeSupported(type)) {
+                    console.log('Using codec:', type);
+                    return type;
+                }
+            }
+            return 'video/webm';
+        }
+
+        async function startRecording() {
+            hideStatus();
+            document.getElementById('previewSection').className = 'preview-section';
+
+            try {
+                recordingStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { mediaSource: 'screen' },
+                    audio: false,
+                });
+            } catch (err) {
+                showStatus(
+                    '<strong>Screen capture cancelled.</strong><br>You need to select a screen or window to record.',
+                    'error'
+                );
+                return;
+            }
+
+            const mimeType = getSupportedMimeType();
+            recordedChunks = [];
+
+            try {
+                mediaRecorder = new MediaRecorder(recordingStream, { mimeType });
+            } catch (err) {
+                mediaRecorder = new MediaRecorder(recordingStream);
+            }
+
+            mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                }
+            };
+
+            // If user stops sharing via browser UI
+            recordingStream.getVideoTracks()[0].addEventListener('ended', () => {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    stopRecording();
+                }
+            });
+
+            mediaRecorder.onstop = () => {
+                const mType = mediaRecorder.mimeType || mimeType;
+                videoBlob = new Blob(recordedChunks, { type: mType });
+                onRecordingStopped();
+            };
+
+            mediaRecorder.start(1000); // collect data every second
+
+            // UI updates
+            document.getElementById('btnStartRec').style.display = 'none';
+            document.getElementById('btnStopRec').style.display = 'inline-flex';
+            document.getElementById('btnStopRec').disabled = false;
+            document.getElementById('recIndicator').className = 'recording-indicator active';
+
+            // Timer
+            recordingStartTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = (Date.now() - recordingStartTime) / 1000;
+                document.getElementById('recTimer').textContent = formatTime(elapsed);
+            }, 500);
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            if (recordingStream) {
+                recordingStream.getTracks().forEach(track => track.stop());
+                recordingStream = null;
+            }
+            clearInterval(timerInterval);
+
+            // UI updates
+            document.getElementById('btnStopRec').style.display = 'none';
+            document.getElementById('btnStartRec').style.display = 'inline-flex';
+            document.getElementById('recIndicator').className = 'recording-indicator';
+        }
+
+        // ============================================================
+        // 3. Preview
+        // ============================================================
+        function onRecordingStopped() {
+            if (!videoBlob || videoBlob.size === 0) {
+                showStatus('Recording produced no data. Try again.', 'error');
+                return;
+            }
+
+            // Create preview URL
+            if (videoBlobUrl) URL.revokeObjectURL(videoBlobUrl);
+            videoBlobUrl = URL.createObjectURL(videoBlob);
+
+            const previewVideo = document.getElementById('previewVideo');
+            previewVideo.src = videoBlobUrl;
+
+            // Video meta info
+            const duration = (Date.now() - recordingStartTime) / 1000;
+            document.getElementById('videoMeta').innerHTML = `
+                <span>Duration: <strong>${formatTime(duration)}</strong></span>
+                <span>Size: <strong>${formatSize(videoBlob.size)}</strong></span>
+                <span>Type: <strong>${videoBlob.type}</strong></span>
+            `;
+
+            // Show preview section
+            document.getElementById('previewSection').className = 'preview-section active';
+            document.getElementById('previewVideo').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function discardRecording() {
+            if (videoBlobUrl) URL.revokeObjectURL(videoBlobUrl);
+            videoBlob = null;
+            videoBlobUrl = null;
+            recordedChunks = [];
+            document.getElementById('previewSection').className = 'preview-section';
+            document.getElementById('previewVideo').src = '';
+            document.getElementById('bugTitle').value = '';
+            document.getElementById('bugDescription').value = '';
+            hideStatus();
+        }
+
+        // ============================================================
+        // 4. Submit Report
+        // ============================================================
+        async function submitReport() {
+            const title = document.getElementById('bugTitle').value.trim() || 'Bug Report from SDK';
+            const description = document.getElementById('bugDescription').value.trim();
+            const btnSubmit = document.getElementById('btnSubmit');
+
+            if (!description) {
+                showStatus('Please add a description of the bug before submitting.', 'error');
+                return;
+            }
+
+            btnSubmit.disabled = true;
+            btnSubmit.textContent = 'Sending...';
+            showStatus('Uploading report and running AI analysis...', 'info');
+
+            const apiUrl = getApiUrl();
+            const sdkKey = getSdkKey();
+
+            try {
+                // Build FormData with video + fields
+                const formData = new FormData();
+                formData.append('title', title);
+                formData.append('description', description);
+
+                if (videoBlob) {
+                    const ext = videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
+                    formData.append('video', videoBlob, `recording.${ext}`);
+                }
+
+                formData.append('userContext', JSON.stringify({
+                    os: navigator.platform,
+                    browser: navigator.userAgent,
+                    viewport: `${window.innerWidth}x${window.innerHeight}`,
+                    screenResolution: `${screen.width}x${screen.height}`,
+                    url: window.location.href,
+                    language: navigator.language,
+                    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    timestamp: new Date().toISOString(),
+                }));
+
+                const response = await fetch(`${apiUrl}/api/sdk/tickets/report`, {
+                    method: 'POST',
+                    headers: {
+                        'x-sdk-key': sdkKey,
+                    },
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errText}`);
+                }
+
+                const result = await response.json();
+
+                // Build success message with AI analysis
+                let html = `
+                    <strong>Report submitted successfully!</strong><br><br>
+                    <strong>Ticket ID:</strong> ${result.ticket.id}<br>
+                    <strong>Status:</strong> ${result.ticket.status}<br>
+                `;
+
+                if (result.video?.received) {
+                    html += `<strong>Video:</strong> ${result.video.filename} (${formatSize(result.video.size)})<br>`;
+                }
+
+                if (result.aiAnalysis) {
+                    const ai = result.aiAnalysis;
+                    html += `
+                        <div class="ai-result">
+                            <h4>AI Analysis</h4>
+                            <div class="ai-field">
+                                <span class="label">Summary</span>
+                                <span class="value">${ai.summary}</span>
+                            </div>
+                            <div class="ai-field">
+                                <span class="label">Severity</span>
+                                <span class="value">${getSeverityBadge(ai.severity)} (${Math.round(ai.severityConfidence * 100)}% confidence)</span>
+                            </div>
+                            <div class="ai-field">
+                                <span class="label">Type</span>
+                                <span class="value">${ai.type} (${Math.round(ai.typeConfidence * 100)}% confidence)</span>
+                            </div>
+                            ${ai.keywords?.length ? `
+                            <div class="ai-field" style="flex-direction:column;gap:6px;">
+                                <span class="label">Keywords</span>
+                                <div class="keywords">
+                                    ${ai.keywords.map(k => `<span class="keyword">${k}</span>`).join('')}
+                                </div>
+                            </div>` : ''}
+                            ${ai.enrichedDescription ? `
+                            <div class="ai-field" style="flex-direction:column;gap:6px;">
+                                <span class="label">Enriched Description</span>
+                                <span class="value" style="font-weight:normal;font-size:13px;">${ai.enrichedDescription}</span>
+                            </div>` : ''}
+                        </div>
+                    `;
+                }
+
+                html += `<br>
+                    <a href="http://localhost:3000/tickets/${result.ticket.id}" target="_blank" style="color:#0070f3;">
+                        View in dashboard
+                    </a>
+                `;
+
+                showStatus(html, 'success');
+
+                // Clean up preview
+                document.getElementById('previewSection').className = 'preview-section';
+
+            } catch (error) {
+                showStatus(`
+                    <strong>Error submitting report:</strong><br>
+                    ${error.message}<br><br>
+                    <strong>Troubleshooting:</strong><br>
+                    1. Is the API running? <a href="${apiUrl}/health" target="_blank">Check health</a><br>
+                    2. Is the SDK key valid?<br>
+                    3. Check browser console for details
+                `, 'error');
+                console.error('Submit error:', error);
+            } finally {
+                btnSubmit.disabled = false;
+                btnSubmit.textContent = 'Send Report';
+            }
+        }
+
+        // ============================================================
+        // Init
+        // ============================================================
+        window.addEventListener('load', () => {
+            checkApiConnection();
+        });
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- Web Component Widget Test Section -->
+    <!-- ============================================================ -->
+    <div class="container" style="margin-top: 24px;">
+        <h2>🧩 Web Component Widget Test</h2>
+        <p class="description">
+            This section tests the new plug-and-play <code>&lt;support-helper&gt;</code> custom element.
+            The widget provides a floating button and full recording/submission flow.
+        </p>
+
+        <div class="actions" style="margin-bottom: 16px;">
+            <button class="btn btn-primary" id="btnEnableWidget">
+                Enable Widget
+            </button>
+            <button class="btn btn-outline" id="btnOpenWidget" disabled>
+                Open Widget
+            </button>
+            <button class="btn btn-outline" id="btnCloseWidget" disabled>
+                Close Widget
+            </button>
+        </div>
+
+        <div id="widgetEventLog" style="font-size: 13px; color: #666; margin-top: 12px;">
+            <strong>Event log:</strong>
+            <pre id="widgetEvents" style="background: #f8f9fa; padding: 12px; border-radius: 8px; max-height: 200px; overflow-y: auto; margin-top: 8px; font-family: monospace; font-size: 12px;"></pre>
+        </div>
+
+        <div id="widgetContainer"></div>
+    </div>
+
+    <script type="module">
+        // Import the widget from built SDK (or use CDN version)
+        // In production: <script src="https://cdn.support-helper.com/sdk.js">
+        
+        // For local development, we'll create the widget dynamically
+        // The widget auto-registers itself when the script is loaded
+        
+        let widgetElement = null;
+        
+        function logEvent(eventName, detail = null) {
+            const logEl = document.getElementById('widgetEvents');
+            const timestamp = new Date().toLocaleTimeString();
+            const detailStr = detail ? ` - ${JSON.stringify(detail)}` : '';
+            logEl.textContent += `[${timestamp}] ${eventName}${detailStr}\n`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        function enableWidget() {
+            if (widgetElement) {
+                widgetElement.remove();
+            }
+
+            // Create the custom element
+            widgetElement = document.createElement('support-helper');
+            widgetElement.setAttribute('sdk-key', document.getElementById('cfgSdkKey').value);
+            widgetElement.setAttribute('api-url', document.getElementById('cfgApiUrl').value);
+            widgetElement.setAttribute('position', 'bottom-right');
+            widgetElement.setAttribute('primary-color', '#6366f1');
+
+            // Listen to widget events
+            widgetElement.addEventListener('sh:open', () => logEvent('sh:open'));
+            widgetElement.addEventListener('sh:close', () => logEvent('sh:close'));
+            widgetElement.addEventListener('sh:recording-start', () => logEvent('sh:recording-start'));
+            widgetElement.addEventListener('sh:recording-stop', (e) => logEvent('sh:recording-stop', e.detail));
+            widgetElement.addEventListener('sh:submit', (e) => logEvent('sh:submit', e.detail));
+            widgetElement.addEventListener('sh:error', (e) => logEvent('sh:error', e.detail));
+
+            // Add to page
+            document.getElementById('widgetContainer').appendChild(widgetElement);
+
+            // Enable control buttons
+            document.getElementById('btnOpenWidget').disabled = false;
+            document.getElementById('btnCloseWidget').disabled = false;
+            document.getElementById('btnEnableWidget').textContent = 'Reload Widget';
+
+            logEvent('Widget enabled');
+        }
+
+        function openWidget() {
+            if (widgetElement && typeof widgetElement.open === 'function') {
+                widgetElement.open();
+            }
+        }
+
+        function closeWidget() {
+            if (widgetElement && typeof widgetElement.close === 'function') {
+                widgetElement.close();
+            }
+        }
+
+        // Attach event handlers
+        document.getElementById('btnEnableWidget').addEventListener('click', enableWidget);
+        document.getElementById('btnOpenWidget').addEventListener('click', openWidget);
+        document.getElementById('btnCloseWidget').addEventListener('click', closeWidget);
+
+        // Log initial state
+        logEvent('Widget controls ready. Click "Enable Widget" to start.');
+    </script>
+    
+    <!-- Load the widget from built SDK -->
+    <script src="../packages/sdk-web/dist/cdn/sdk.iife.js"></script>
+    <script>
+        // Widget is now available via the global SupportHelper object
+        // and the <support-helper> custom element is registered
+        console.log('[SupportHelper] SDK loaded:', typeof SupportHelper !== 'undefined' ? 'OK' : 'FAILED');
+    </script>
+</body>
+</html>

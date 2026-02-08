@@ -1,0 +1,210 @@
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  S3Client,
+  GetObjectCommand,
+  PutObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
+import { Readable } from 'stream';
+
+/**
+ * S3 Service
+ *
+ * Handles S3/MinIO object storage operations:
+ * - Download files to temp
+ * - Upload files
+ * - Generate presigned URLs
+ */
+@Injectable()
+export class S3Service implements OnModuleInit {
+  private readonly logger = new Logger(S3Service.name);
+  private client: S3Client;
+  private bucket: string;
+
+  constructor(private readonly configService: ConfigService) {}
+
+  onModuleInit() {
+    const endpoint = this.configService.get<string>('S3_ENDPOINT');
+    const region = this.configService.get<string>('S3_REGION', 'us-east-1');
+    const accessKeyId = this.configService.get<string>('S3_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get<string>('S3_SECRET_ACCESS_KEY');
+    this.bucket = this.configService.get<string>('S3_BUCKET', 'support-helper');
+
+    this.client = new S3Client({
+      endpoint,
+      region,
+      credentials: {
+        accessKeyId: accessKeyId || '',
+        secretAccessKey: secretAccessKey || '',
+      },
+      forcePathStyle: true, // Required for MinIO
+    });
+
+    this.logger.log(`S3 client initialized for bucket: ${this.bucket}`);
+  }
+
+  /**
+   * Download file from S3 to temporary location
+   */
+  async downloadToTemp(key: string): Promise<string> {
+    this.logger.log(`Downloading ${key} from S3`);
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+
+      const response = await this.client.send(command);
+
+      if (!response.Body) {
+        throw new Error('Empty response body from S3');
+      }
+
+      // Create temp file
+      const ext = path.extname(key) || '.tmp';
+      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 's3-download-'));
+      const tempPath = path.join(tempDir, `file${ext}`);
+
+      // Stream body to file
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+
+      await fs.writeFile(tempPath, Buffer.concat(chunks));
+
+      this.logger.log(`Downloaded ${key} to ${tempPath}`);
+      return tempPath;
+    } catch (error) {
+      this.logger.error(`Failed to download ${key}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload file to S3
+   */
+  async upload(key: string, filePath: string, contentType?: string): Promise<string> {
+    this.logger.log(`Uploading to S3: ${key}`);
+
+    try {
+      const fileContent = await fs.readFile(filePath);
+
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: fileContent,
+        ContentType: contentType,
+      });
+
+      await this.client.send(command);
+
+      this.logger.log(`Uploaded ${key} to S3`);
+      return key;
+    } catch (error) {
+      this.logger.error(`Failed to upload ${key}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload buffer to S3
+   */
+  async uploadBuffer(key: string, buffer: Buffer, contentType?: string): Promise<string> {
+    this.logger.log(`Uploading buffer to S3: ${key}`);
+
+    try {
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+      });
+
+      await this.client.send(command);
+
+      this.logger.log(`Uploaded ${key} to S3`);
+      return key;
+    } catch (error) {
+      this.logger.error(`Failed to upload buffer ${key}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete file from S3
+   */
+  async delete(key: string): Promise<void> {
+    this.logger.log(`Deleting from S3: ${key}`);
+
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+
+      await this.client.send(command);
+
+      this.logger.log(`Deleted ${key} from S3`);
+    } catch (error) {
+      this.logger.error(`Failed to delete ${key}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate presigned URL for download
+   */
+  async getSignedDownloadUrl(key: string, expiresIn: number = 3600): Promise<string> {
+    const command = new GetObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn });
+  }
+
+  /**
+   * Generate presigned URL for upload
+   */
+  async getSignedUploadUrl(
+    key: string,
+    contentType: string,
+    expiresIn: number = 3600
+  ): Promise<string> {
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    return getSignedUrl(this.client, command, { expiresIn });
+  }
+
+  /**
+   * Check if file exists in S3
+   */
+  async exists(key: string): Promise<boolean> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+      await this.client.send(command);
+      return true;
+    } catch (error) {
+      if (error.name === 'NoSuchKey') {
+        return false;
+      }
+      throw error;
+    }
+  }
+}

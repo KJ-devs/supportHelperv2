@@ -1,0 +1,34 @@
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { TicketsService } from './tickets.service';
+import { TicketsSearchService } from './tickets-search.service';
+import { TicketsAIService } from './tickets-ai.service';
+import { TicketsController } from './tickets.controller';
+import { SdkTicketsController } from './sdk-tickets.controller';
+import { PrismaModule } from '../../prisma/prisma.module';
+import { AIModule } from '../../ai/ai.module';
+import { IntegrationsModule } from '../integrations/integrations.module';
+
+@Module({
+  imports: [
+    PrismaModule,
+    AIModule,
+    IntegrationsModule,
+    BullModule.registerQueue({
+      name: 'ticket-analysis',
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    }),
+  ],
+  controllers: [TicketsController, SdkTicketsController],
+  providers: [TicketsService, TicketsSearchService, TicketsAIService],
+  exports: [TicketsService, TicketsSearchService, TicketsAIService],
+})
+export class TicketsModule {}

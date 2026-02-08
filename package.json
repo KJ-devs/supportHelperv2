@@ -1,0 +1,57 @@
+{
+  "name": "support-helper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered technical support platform with video capture SDK",
+  "keywords": [
+    "support",
+    "helpdesk",
+    "ai",
+    "video-capture",
+    "sdk"
+  ],
+  "license": "MIT",
+  "author": "Support Helper Team",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "test:unit": "turbo run test:unit",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run test:e2e",
+    "test:coverage": "turbo run test:coverage",
+    "clean": "turbo run clean && rimraf node_modules",
+    "db:migrate": "pnpm --filter @support-helper/api db:migrate",
+    "db:generate": "pnpm --filter @support-helper/api db:generate",
+    "db:seed": "pnpm --filter @support-helper/api db:seed",
+    "db:studio": "pnpm --filter @support-helper/api db:studio",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down",
+    "docker:clean": "docker-compose down -v && rimraf ./data",
+    "docker:logs": "docker-compose logs -f",
+    "docker:ps": "docker-compose ps",
+    "docker:restart": "docker-compose restart",
+    "docker:test": "docker-compose -f docker-compose.test.yml up -d",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "prettier": "^3.1.0",
+    "rimraf": "^5.0.5",
+    "turbo": "^2.0.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.0",
+  "dependencies": {
+    "passport-custom": "^1.1.1"
+  }
+}

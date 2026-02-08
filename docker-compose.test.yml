@@ -1,0 +1,80 @@
+version: '3.8'
+
+# Docker Compose configuration for running integration tests
+# This provides isolated test databases and services
+
+services:
+  # PostgreSQL database for integration tests
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: support-helper-postgres-test
+    environment:
+      POSTGRES_USER: test_user
+      POSTGRES_PASSWORD: test_password
+      POSTGRES_DB: support_helper_test
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test_user -d support_helper_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Redis for integration tests
+  redis-test:
+    image: redis:7-alpine
+    container_name: support-helper-redis-test
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MinIO (S3-compatible storage) for integration tests
+  minio-test:
+    image: minio/minio:latest
+    container_name: support-helper-minio-test
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9002:9000"
+      - "9003:9001"
+    volumes:
+      - minio-test-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # MeiliSearch for integration tests
+  meilisearch-test:
+    image: getmeili/meilisearch:v1.5
+    container_name: support-helper-meilisearch-test
+    environment:
+      MEILI_MASTER_KEY: test_master_key
+      MEILI_ENV: development
+    ports:
+      - "7701:7700"
+    volumes:
+      - meilisearch-test-data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-test-data:
+  minio-test-data:
+  meilisearch-test-data:
+
+networks:
+  default:
+    name: support-helper-test-network

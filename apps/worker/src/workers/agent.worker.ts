@@ -1,0 +1,925 @@
+import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Logger } from '@nestjs/common';
+import { Job } from 'bullmq';
+import { QUEUE_NAMES } from '../queues';
+import {
+  AgentJobData,
+  AgentResult,
+  AgentContext,
+  TicketAnalysis,
+  FunctionCallResult,
+} from '../queues/queue.types';
+import { OpenAIService } from '../services/openai.service';
+import { PrismaService } from '../services/prisma.service';
+import { MeilisearchService } from '../services/meilisearch.service';
+import { AgentService } from '../services/agent.service';
+
+/**
+ * Agent Function Tools for GPT-4o function calling
+ */
+const AGENT_TOOLS = [
+  {
+    type: 'function' as const,
+    function: {
+      name: 'search_similar_tickets',
+      description: 'Search for similar tickets in the knowledge base',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query to find similar tickets',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of results to return',
+            default: 5,
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'get_ticket_details',
+      description: 'Get full details of a specific ticket',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to retrieve',
+          },
+        },
+        required: ['ticketId'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'update_ticket_status',
+      description: 'Update the status of a ticket',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to update',
+          },
+          status: {
+            type: 'string',
+            enum: ['new', 'open', 'in_progress', 'resolved', 'closed'],
+            description: 'The new status for the ticket',
+          },
+        },
+        required: ['ticketId', 'status'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'escalate_to_human',
+      description: 'Escalate the ticket to a human support agent',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to escalate',
+          },
+          reason: {
+            type: 'string',
+            description: 'The reason for escalation',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'critical'],
+            description: 'The priority level for escalation',
+          },
+        },
+        required: ['ticketId', 'reason'],
+      },
+    },
+  },
+  {
+    type: 'function' as const,
+    function: {
+      name: 'suggest_solution',
+      description: 'Suggest a solution based on similar resolved tickets',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to suggest a solution for',
+          },
+          similarTicketIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'IDs of similar tickets to base the suggestion on',
+          },
+        },
+        required: ['ticketId'],
+      },
+    },
+  },
+];
+
+/**
+ * AgentWorker
+ *
+ * BullMQ consumer for AI agent orchestration:
+ * - Ticket analysis and classification
+ * - Solution suggestion based on similar tickets
+ * - Automatic responses
+ * - Escalation management
+ * - GPT-4o function calling for tool use
+ */
+@Processor(QUEUE_NAMES.AGENT_ORCHESTRATION, {
+  concurrency: 10,
+  limiter: {
+    max: 100,
+    duration: 60000,
+  },
+})
+export class AgentWorker extends WorkerHost {
+  private readonly logger = new Logger(AgentWorker.name);
+
+  constructor(
+    private readonly openaiService: OpenAIService,
+    private readonly prisma: PrismaService,
+    private readonly meilisearch: MeilisearchService,
+    private readonly agentService: AgentService
+  ) {
+    super();
+  }
+
+  /**
+   * Main processor method - routes to specific handlers based on job type
+   */
+  async process(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { type, ticketId, tenantId, sessionId, context } = job.data;
+
+    this.logger.log(`Processing agent job ${job.id} of type: ${type}`);
+
+    try {
+      switch (type) {
+        case 'start-session':
+          return await this.handleStartSession(job);
+
+        case 'process-message':
+          return await this.handleProcessMessage(job);
+
+        case 'analyze-ticket':
+          return await this.handleAnalyzeTicket(job);
+
+        case 'classify-ticket':
+          return await this.handleClassifyTicket(job);
+
+        case 'suggest-solution':
+          return await this.handleSuggestSolution(job);
+
+        case 'auto-respond':
+          return await this.handleAutoRespond(job);
+
+        case 'escalate-ticket':
+          return await this.handleEscalateTicket(job);
+
+        default:
+          throw new Error(`Unknown agent job type: ${type}`);
+      }
+    } catch (error) {
+      this.logger.error(`Agent job failed: ${error.message}`, error.stack);
+      return {
+        success: false,
+        type,
+        ticketId,
+        error: error.message,
+      };
+    }
+  }
+
+  /**
+   * Start a new agent session with full state machine processing
+   * This is the main entry point for Phase 4 Agent Processing
+   */
+  private async handleStartSession(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId } = job.data;
+
+    this.logger.log(`Starting agent session for ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    try {
+      // Start the agent session - this triggers the full state machine
+      const session = await this.agentService.startSession(ticketId, tenantId);
+
+      await job.updateProgress(100);
+
+      return {
+        success: true,
+        type: 'start-session',
+        ticketId,
+        response: `Agent session ${session.id} started in state ${session.state}`,
+        metadata: {
+          sessionId: session.id,
+          state: session.state,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to start agent session: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Process an incoming user message in an existing session
+   */
+  private async handleProcessMessage(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, sessionId, context } = job.data;
+
+    if (!sessionId) {
+      throw new Error('sessionId is required for process-message');
+    }
+
+    const message = context?.message;
+    const channel = context?.channel || 'chat';
+
+    if (!message) {
+      throw new Error('context.message is required for process-message');
+    }
+
+    this.logger.log(`Processing message for session ${sessionId}`);
+    await job.updateProgress(10);
+
+    try {
+      // Handle the user message - this will trigger state transitions
+      await this.agentService.handleUserMessage(sessionId, message, channel);
+
+      await job.updateProgress(80);
+
+      // Get updated session status
+      const status = await this.agentService.getSessionStatus(sessionId);
+
+      await job.updateProgress(100);
+
+      return {
+        success: true,
+        type: 'process-message',
+        ticketId,
+        response: `Message processed, session in state ${status.state}`,
+        metadata: {
+          sessionId,
+          state: status.state,
+          confidence: status.confidence,
+          attempts: status.attempts,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Failed to process message: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze ticket with AI - extract insights and classify
+   */
+  private async handleAnalyzeTicket(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, context } = job.data;
+
+    this.logger.log(`Analyzing ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    // Get ticket with all related data
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        media: {
+          include: {
+            videoEvents: true,
+          },
+        },
+        application: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    await job.updateProgress(20);
+
+    // Build analysis prompt
+    const analysisPrompt = this.buildAnalysisPrompt(ticket);
+
+    // Run GPT-4o analysis with function calling
+    const response = await this.openaiService.chat({
+      messages: [
+        {
+          role: 'system',
+          content: `You are an expert technical support AI assistant. Analyze the following ticket and provide:
+1. A clear classification of the issue type
+2. An assessment of the severity
+3. Key keywords for search
+4. A concise summary
+5. Extracted reproduction steps if available
+
+Be precise and structured in your analysis.`,
+        },
+        {
+          role: 'user',
+          content: analysisPrompt,
+        },
+      ],
+      tools: AGENT_TOOLS,
+      response_format: { type: 'json_object' },
+    });
+
+    await job.updateProgress(60);
+
+    // Process function calls if any
+    const functionCalls = await this.processFunctionCalls(response.tool_calls || [], tenantId);
+
+    // Parse analysis result
+    const analysis = this.parseAnalysisResponse(response.content);
+
+    await job.updateProgress(80);
+
+    // Update ticket with analysis
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        type: analysis.classification.type,
+        typeConfidence: analysis.classification.confidence,
+        severity: analysis.severity.level,
+        severityConfidence: analysis.severity.confidence,
+        keywords: analysis.keywords,
+        aiSummary: analysis.summary,
+        aiAnalysis: JSON.parse(
+          JSON.stringify({
+            ...((ticket.aiAnalysis as Record<string, unknown>) || {}),
+            agentAnalysis: analysis,
+            analyzedAt: new Date().toISOString(),
+          })
+        ),
+        reproductionSteps: analysis.reproductionSteps,
+      },
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(`Ticket ${ticketId} analyzed: ${analysis.classification.type}`);
+
+    return {
+      success: true,
+      type: 'analyze-ticket',
+      ticketId,
+      analysis,
+      functionCalls,
+    };
+  }
+
+  /**
+   * Classify ticket type and severity
+   */
+  private async handleClassifyTicket(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId } = job.data;
+
+    this.logger.log(`Classifying ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    await job.updateProgress(30);
+
+    // Quick classification with GPT
+    const classification = await this.openaiService.classify({
+      text: `${ticket.title}\n\n${ticket.description || ''}\n\n${ticket.aiSummary || ''}`,
+      categories: {
+        type: [
+          'bug',
+          'feature_request',
+          'question',
+          'documentation',
+          'performance',
+          'security',
+          'other',
+        ],
+        severity: ['critical', 'high', 'medium', 'low'],
+      },
+    });
+
+    await job.updateProgress(70);
+
+    // Update ticket
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        type: classification.type.value,
+        typeConfidence: classification.type.confidence,
+        severity: classification.severity.value,
+        severityConfidence: classification.severity.confidence,
+      },
+    });
+
+    await job.updateProgress(100);
+
+    return {
+      success: true,
+      type: 'classify-ticket',
+      ticketId,
+      analysis: {
+        classification: {
+          type: classification.type.value,
+          confidence: classification.type.confidence,
+        },
+        severity: {
+          level: classification.severity.value,
+          confidence: classification.severity.confidence,
+        },
+        keywords: [],
+        summary: '',
+      },
+    };
+  }
+
+  /**
+   * Suggest solution based on similar tickets
+   */
+  private async handleSuggestSolution(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, context } = job.data;
+
+    this.logger.log(`Suggesting solution for ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { media: true },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    await job.updateProgress(20);
+
+    // Search for similar resolved tickets
+    const searchQuery = `${ticket.title} ${ticket.description || ''} ${ticket.aiSummary || ''}`;
+    const similarTickets = await this.meilisearch.search('tickets', searchQuery, {
+      filter: `tenantId = "${tenantId}" AND status = "resolved"`,
+      limit: 5,
+    });
+
+    await job.updateProgress(40);
+
+    // Get full details of similar tickets
+    const similarTicketDetails = await this.prisma.ticket.findMany({
+      where: {
+        id: { in: similarTickets.hits.map((h: any) => h.id) },
+      },
+    });
+
+    await job.updateProgress(60);
+
+    // Generate solution suggestion
+    const response = await this.openaiService.chat({
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful support assistant. Based on similar resolved tickets, suggest a solution for the current issue. Be specific and actionable.`,
+        },
+        {
+          role: 'user',
+          content: `Current ticket:
+Title: ${ticket.title}
+Description: ${ticket.description}
+AI Summary: ${ticket.aiSummary}
+
+Similar resolved tickets:
+${similarTicketDetails
+  .map(
+    (t, i) => `
+${i + 1}. ${t.title}
+   Summary: ${t.aiSummary}
+   Type: ${t.type}
+`
+  )
+  .join('\n')}
+
+Please suggest a solution based on how similar issues were resolved.`,
+        },
+      ],
+    });
+
+    await job.updateProgress(90);
+
+    // Store session
+    if (job.data.sessionId) {
+      await this.storeAgentSession(ticketId, job.data.sessionId, {
+        type: 'suggest-solution',
+        similarTickets: similarTickets.hits.map((h: any) => h.id),
+        suggestion: response.content,
+      });
+    }
+
+    await job.updateProgress(100);
+
+    return {
+      success: true,
+      type: 'suggest-solution',
+      ticketId,
+      response: response.content,
+      suggestions: [response.content],
+    };
+  }
+
+  /**
+   * Generate automatic response
+   */
+  private async handleAutoRespond(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, context } = job.data;
+
+    this.logger.log(`Generating auto-response for ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        application: true,
+        reporter: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    await job.updateProgress(30);
+
+    // Build conversation history
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      {
+        role: 'system',
+        content: `You are a helpful support assistant for ${ticket.application?.name || 'the application'}. 
+Respond professionally and helpfully to user issues.
+If you cannot solve the issue, acknowledge it and let them know a human will follow up.
+Keep responses concise but thorough.`,
+      },
+    ];
+
+    // Add context messages if provided
+    if (context?.previousMessages) {
+      messages.push(...context.previousMessages);
+    }
+
+    // Add current ticket as user message
+    messages.push({
+      role: 'user',
+      content: `Issue: ${ticket.title}\n\nDetails: ${ticket.description || 'No additional details provided.'}\n\nAI Analysis: ${ticket.aiSummary || 'Analysis pending.'}`,
+    });
+
+    await job.updateProgress(50);
+
+    // Generate response with function calling
+    const response = await this.openaiService.chat({
+      messages,
+      tools: AGENT_TOOLS,
+    });
+
+    // Process any function calls
+    const functionCalls = await this.processFunctionCalls(response.tool_calls || [], tenantId);
+
+    await job.updateProgress(80);
+
+    // Store agent session
+    const sessionId = job.data.sessionId || `session-${Date.now()}`;
+    await this.storeAgentSession(ticketId, sessionId, {
+      type: 'auto-respond',
+      response: response.content,
+      functionCalls,
+    });
+
+    await job.updateProgress(100);
+
+    return {
+      success: true,
+      type: 'auto-respond',
+      ticketId,
+      response: response.content,
+      functionCalls,
+    };
+  }
+
+  /**
+   * Escalate ticket to human
+   */
+  private async handleEscalateTicket(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, context } = job.data;
+
+    this.logger.log(`Escalating ticket ${ticketId}`);
+    await job.updateProgress(20);
+
+    // Update ticket status
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'escalated',
+        priority: Math.min(
+          (await this.prisma.ticket.findUnique({ where: { id: ticketId } }))?.priority || 0 + 1,
+          10
+        ),
+        aiAnalysis: {
+          escalatedAt: new Date().toISOString(),
+          escalationReason:
+            context?.previousMessages?.[0]?.content || 'AI determined escalation needed',
+        },
+      },
+    });
+
+    await job.updateProgress(60);
+
+    // Create agent session for escalation
+    const sessionId = job.data.sessionId || `escalation-${Date.now()}`;
+    await this.storeAgentSession(ticketId, sessionId, {
+      type: 'escalation',
+      status: 'pending_human',
+    });
+
+    await job.updateProgress(100);
+
+    return {
+      success: true,
+      type: 'escalate-ticket',
+      ticketId,
+      escalated: true,
+      response: 'Ticket has been escalated to human support.',
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Helper Methods
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Build analysis prompt from ticket data
+   */
+  private buildAnalysisPrompt(ticket: any): string {
+    const parts: string[] = [];
+
+    parts.push(`## Ticket Information`);
+    parts.push(`Title: ${ticket.title || 'No title'}`);
+    parts.push(`Description: ${ticket.description || 'No description'}`);
+
+    if (ticket.userContext) {
+      parts.push(`\n## User Environment`);
+      parts.push(JSON.stringify(ticket.userContext, null, 2));
+    }
+
+    if (ticket.media?.length) {
+      parts.push(`\n## Media Analysis`);
+      for (const media of ticket.media) {
+        if (media.videoEvents?.length) {
+          parts.push(`Video OCR text:`);
+          const ocrTexts = media.videoEvents
+            .filter((e: any) => e.ocrText)
+            .map((e: any) => e.ocrText);
+          parts.push(ocrTexts.join('\n').slice(0, 2000));
+        }
+      }
+    }
+
+    if (ticket.aiSummary) {
+      parts.push(`\n## Previous AI Summary`);
+      parts.push(ticket.aiSummary);
+    }
+
+    parts.push(`\n## Request`);
+    parts.push(`Analyze this ticket and return a JSON object with:
+{
+  "classification": { "type": "bug|feature_request|question|documentation|performance|security|other", "confidence": 0.0-1.0 },
+  "severity": { "level": "critical|high|medium|low", "confidence": 0.0-1.0 },
+  "keywords": ["keyword1", "keyword2"],
+  "summary": "A concise summary of the issue",
+  "reproductionSteps": ["step1", "step2"] // if identifiable
+}`);
+
+    return parts.join('\n');
+  }
+
+  /**
+   * Parse analysis response from GPT
+   */
+  private parseAnalysisResponse(content: string): TicketAnalysis {
+    try {
+      const parsed = JSON.parse(content);
+      return {
+        classification: parsed.classification || { type: 'other', confidence: 0.5 },
+        severity: parsed.severity || { level: 'medium', confidence: 0.5 },
+        keywords: parsed.keywords || [],
+        summary: parsed.summary || '',
+        reproductionSteps: parsed.reproductionSteps,
+      };
+    } catch (error) {
+      this.logger.warn(`Failed to parse analysis response: ${error.message}`);
+      return {
+        classification: { type: 'other', confidence: 0.5 },
+        severity: { level: 'medium', confidence: 0.5 },
+        keywords: [],
+        summary: content,
+      };
+    }
+  }
+
+  /**
+   * Process function calls from GPT response
+   */
+  private async processFunctionCalls(
+    toolCalls: any[],
+    tenantId: string
+  ): Promise<FunctionCallResult[]> {
+    const results: FunctionCallResult[] = [];
+
+    for (const call of toolCalls) {
+      if (call.type !== 'function') continue;
+
+      const { name, arguments: args } = call.function;
+      const parsedArgs = JSON.parse(args);
+
+      try {
+        let result: unknown;
+
+        switch (name) {
+          case 'search_similar_tickets':
+            result = await this.executeSearchSimilarTickets(
+              parsedArgs.query,
+              parsedArgs.limit,
+              tenantId
+            );
+            break;
+
+          case 'get_ticket_details':
+            result = await this.executeGetTicketDetails(parsedArgs.ticketId);
+            break;
+
+          case 'update_ticket_status':
+            result = await this.executeUpdateTicketStatus(parsedArgs.ticketId, parsedArgs.status);
+            break;
+
+          case 'escalate_to_human':
+            result = await this.executeEscalateToHuman(
+              parsedArgs.ticketId,
+              parsedArgs.reason,
+              parsedArgs.priority
+            );
+            break;
+
+          case 'suggest_solution':
+            result = await this.executeSuggestSolution(
+              parsedArgs.ticketId,
+              parsedArgs.similarTicketIds
+            );
+            break;
+
+          default:
+            result = { error: `Unknown function: ${name}` };
+        }
+
+        results.push({ name, arguments: parsedArgs, result });
+      } catch (error) {
+        results.push({
+          name,
+          arguments: parsedArgs,
+          result: { error: error.message },
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Function implementations
+   */
+  private async executeSearchSimilarTickets(
+    query: string,
+    limit: number,
+    tenantId: string
+  ): Promise<any> {
+    const results = await this.meilisearch.search('tickets', query, {
+      filter: `tenantId = "${tenantId}"`,
+      limit: limit || 5,
+    });
+    return results.hits;
+  }
+
+  private async executeGetTicketDetails(ticketId: string): Promise<any> {
+    return this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { media: true, application: true },
+    });
+  }
+
+  private async executeUpdateTicketStatus(ticketId: string, status: string): Promise<any> {
+    return this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status },
+    });
+  }
+
+  private async executeEscalateToHuman(
+    ticketId: string,
+    reason: string,
+    priority?: string
+  ): Promise<any> {
+    return this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'escalated',
+        priority: priority === 'critical' ? 10 : priority === 'high' ? 7 : 5,
+        aiAnalysis: {
+          escalatedAt: new Date().toISOString(),
+          escalationReason: reason,
+        },
+      },
+    });
+  }
+
+  private async executeSuggestSolution(
+    ticketId: string,
+    similarTicketIds?: string[]
+  ): Promise<any> {
+    return { ticketId, similarTicketIds, status: 'suggestion_pending' };
+  }
+
+  /**
+   * Store agent session
+   */
+  private async storeAgentSession(
+    ticketId: string,
+    sessionId: string,
+    data: Record<string, unknown>
+  ): Promise<void> {
+    const existingSession = await this.prisma.agentSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (existingSession) {
+      // Update existing session - store in agentState
+      const currentState = (existingSession.agentState as Record<string, unknown>) || {};
+      const messages = Array.isArray(currentState.messages) ? currentState.messages : [];
+
+      await this.prisma.agentSession.update({
+        where: { id: sessionId },
+        data: {
+          agentState: JSON.parse(
+            JSON.stringify({
+              ...currentState,
+              messages: [...messages, data],
+            })
+          ),
+          lastActionAt: new Date(),
+        },
+      });
+    } else {
+      // Create new session
+      await this.prisma.agentSession.create({
+        data: {
+          id: sessionId,
+          ticketId,
+          status: 'active',
+          agentState: JSON.parse(
+            JSON.stringify({
+              messages: [data],
+              context: {},
+            })
+          ),
+        },
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Worker Events
+  // ═══════════════════════════════════════════════════════════════════════
+
+  onCompleted(job: Job<AgentJobData>) {
+    this.logger.log(`Agent job ${job.id} completed: ${job.data.type}`);
+  }
+
+  onFailed(job: Job<AgentJobData>, error: Error) {
+    this.logger.error(`Agent job ${job.id} failed: ${error.message}`);
+  }
+
+  onStalled(jobId: string) {
+    this.logger.warn(`Agent job ${jobId} stalled`);
+  }
+}

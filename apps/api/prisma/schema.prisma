@@ -1,0 +1,335 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [uuidOssp(map: "uuid-ossp"), pgvector(map: "vector")]
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MULTI-TENANT CORE
+// ═══════════════════════════════════════════════════════════════════════
+
+model Tenant {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name      String   @db.VarChar(255)
+  slug      String   @unique @db.VarChar(100)
+  plan      String   @default("free") @db.VarChar(50)
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  users             User[]
+  applications      Application[]
+  tickets           Ticket[]
+  githubConnections GithubConnection[]
+  integrations      Integration[]
+
+  @@map("tenants")
+}
+
+model User {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  email          String   @db.VarChar(255)
+  name           String?  @db.VarChar(255)
+  role           String   @default("member") @db.VarChar(50)
+  passwordHash   String?  @map("password_hash") @db.VarChar(255)
+  authProvider   String?  @map("auth_provider") @db.VarChar(50)
+  authProviderId String?  @map("auth_provider_id") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id])
+  reportedTickets  Ticket[]          @relation("ReportedTickets")
+  assignedTickets  Ticket[]          @relation("AssignedTickets")
+  escalatedSessions AgentSession[]
+  feedbacks        ClassificationFeedback[]
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
+model Application {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  name       String   @db.VarChar(255)
+  platform   String?  @db.VarChar(50)
+  sdkKey     String   @unique @map("sdk_key") @db.VarChar(255)
+  settings   Json     @default("{}")
+  githubRepo String?  @map("github_repo") @db.VarChar(255)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id])
+  tickets Ticket[]
+
+  @@map("applications")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TICKETS & REPORTS
+// ═══════════════════════════════════════════════════════════════════════
+
+model Ticket {
+  id                 String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  applicationId      String    @map("application_id") @db.Uuid
+  reporterId         String?   @map("reporter_id") @db.Uuid
+
+  // Status & Classification
+  status             String    @default("new") @db.VarChar(50)
+  type               String?   @db.VarChar(50)
+  typeConfidence     Decimal?  @map("type_confidence") @db.Decimal(3, 2)
+  severity           String?   @db.VarChar(50)
+  severityConfidence Decimal?  @map("severity_confidence") @db.Decimal(3, 2)
+  priority           Int       @default(0)
+
+  // Content
+  title              String?   @db.VarChar(500)
+  description        String?   @db.Text
+  reproductionSteps  Json?     @map("reproduction_steps")
+
+  // User Context
+  userContext        Json?     @map("user_context")
+  sessionId          String?   @map("session_id") @db.VarChar(255)
+
+  // AI Analysis
+  aiSummary          String?   @map("ai_summary") @db.Text
+  aiAnalysis         Json?     @map("ai_analysis")
+  keywords           String[]  @default([])
+
+  // Assignment
+  assignedTo         String?   @map("assigned_to") @db.Uuid
+  assignedAt         DateTime? @map("assigned_at")
+
+  // Timestamps
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  resolvedAt         DateTime? @map("resolved_at")
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  application   Application    @relation(fields: [applicationId], references: [id])
+  reporter      User?          @relation("ReportedTickets", fields: [reporterId], references: [id])
+  assignee      User?          @relation("AssignedTickets", fields: [assignedTo], references: [id])
+  media                Media[]
+  githubIssues         GithubIssue[]
+  agentSessions        AgentSession[]
+  feedbacks            ClassificationFeedback[]
+  integrationSyncLogs  IntegrationSyncLog[]
+
+  @@index([tenantId])
+  @@index([applicationId])
+  @@index([status])
+  @@index([type])
+  @@index([severity])
+  @@index([createdAt(sort: Desc)])
+  // Composite indexes for common query patterns
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([tenantId, assignedTo])
+  @@index([applicationId, createdAt(sort: Desc)])
+  @@map("tickets")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// MEDIA & ARTIFACTS
+// ═══════════════════════════════════════════════════════════════════════
+
+model Media {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId         String   @map("ticket_id") @db.Uuid
+  type             String   @db.VarChar(50)
+
+  // Storage
+  storageKey       String   @map("storage_key") @db.VarChar(500)
+  storageUrl       String?  @map("storage_url") @db.VarChar(1000)
+  fileSize         BigInt?  @map("file_size")
+  mimeType         String?  @map("mime_type") @db.VarChar(100)
+  durationMs       Int?     @map("duration_ms")
+
+  // Processing Status
+  processingStatus String   @default("pending") @map("processing_status") @db.VarChar(50)
+  processingError  String?  @map("processing_error") @db.Text
+
+  // Metadata
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  ticket      Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  videoEvents VideoEvent[]
+
+  @@index([ticketId])
+  @@index([processingStatus])
+  @@map("media")
+}
+
+model VideoEvent {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  mediaId       String   @map("media_id") @db.Uuid
+  timestampMs   Int      @map("timestamp_ms")
+  eventType     String?  @map("event_type") @db.VarChar(50)
+  eventData     Json?    @map("event_data")
+  screenshotKey String?  @map("screenshot_key") @db.VarChar(500)
+  ocrText       String?  @map("ocr_text") @db.Text
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  media Media @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@index([mediaId])
+  @@index([mediaId, timestampMs])
+  @@map("video_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// GITHUB INTEGRATION
+// ═══════════════════════════════════════════════════════════════════════
+
+model GithubConnection {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  installationId BigInt    @map("installation_id")
+  accessToken    String?   @map("access_token") @db.Text
+  refreshToken   String?   @map("refresh_token") @db.Text
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  repos          Json      @default("[]")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("github_connections")
+}
+
+model GithubIssue {
+  id                String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId          String?  @map("ticket_id") @db.Uuid
+  githubIssueNumber Int      @map("github_issue_number")
+  githubRepo        String   @map("github_repo") @db.VarChar(255)
+  githubIssueUrl    String?  @map("github_issue_url") @db.VarChar(500)
+  syncStatus        String   @default("synced") @map("sync_status") @db.VarChar(50)
+  lastSyncedAt      DateTime @default(now()) @map("last_synced_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  ticket Ticket? @relation(fields: [ticketId], references: [id])
+
+  @@unique([githubRepo, githubIssueNumber])
+  @@index([ticketId])
+  @@map("github_issues")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// THIRD-PARTY INTEGRATIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+model Integration {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  type        String   @db.VarChar(50)
+  name        String   @db.VarChar(255)
+  enabled     Boolean  @default(true)
+
+  // Encrypted configuration (API keys, tokens, workspace IDs)
+  config      String   @db.Text
+  configIv    String   @map("config_iv") @db.VarChar(32)
+
+  // Field mappings (severity->priority, status->state, etc.)
+  mappings    Json?    @default("{}")
+
+  // OAuth tokens (if applicable)
+  accessToken     String?  @map("access_token") @db.Text
+  refreshToken    String?  @map("refresh_token") @db.Text
+  tokenExpiresAt  DateTime? @map("token_expires_at")
+
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  lastSyncedAt DateTime? @map("last_synced_at")
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  syncLogs    IntegrationSyncLog[]
+
+  @@unique([tenantId, type, name])
+  @@index([tenantId])
+  @@index([tenantId, enabled])
+  @@map("integrations")
+}
+
+model IntegrationSyncLog {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  integrationId String   @map("integration_id") @db.Uuid
+  ticketId      String   @map("ticket_id") @db.Uuid
+
+  externalId    String?  @map("external_id") @db.VarChar(500)
+  status        String   @db.VarChar(50)
+  attemptCount  Int      @default(1) @map("attempt_count")
+
+  error         String?  @db.Text
+  metadata      Json?    @default("{}")
+
+  syncedAt      DateTime @default(now()) @map("synced_at")
+
+  integration   Integration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+  ticket        Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId])
+  @@index([ticketId])
+  @@index([status])
+  @@map("integration_sync_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AI AGENT & CONVERSATIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+model AgentSession {
+  id               String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId         String    @map("ticket_id") @db.Uuid
+  status           String    @default("active") @db.VarChar(50)
+  agentState       Json      @default("{}") @map("agent_state")
+  lastActionAt     DateTime  @default(now()) @map("last_action_at")
+  escalatedTo      String?   @map("escalated_to") @db.Uuid
+  escalationReason String?   @map("escalation_reason") @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  ticket    Ticket         @relation(fields: [ticketId], references: [id])
+  escalatee User?          @relation(fields: [escalatedTo], references: [id])
+  messages  AgentMessage[]
+
+  @@index([ticketId])
+  @@map("agent_sessions")
+}
+
+model AgentMessage {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sessionId  String   @map("session_id") @db.Uuid
+  role       String   @db.VarChar(50)
+  content    String   @db.Text
+  channel    String?  @db.VarChar(50)
+  externalId String?  @map("external_id") @db.VarChar(255)
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  session AgentSession @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@map("agent_messages")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// FEEDBACK & LEARNING
+// ═══════════════════════════════════════════════════════════════════════
+
+model ClassificationFeedback {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId       String   @map("ticket_id") @db.Uuid
+  field          String   @db.VarChar(50)
+  originalValue  String?  @map("original_value") @db.VarChar(100)
+  correctedValue String?  @map("corrected_value") @db.VarChar(100)
+  correctedBy    String?  @map("corrected_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  ticket    Ticket @relation(fields: [ticketId], references: [id])
+  corrector User?  @relation(fields: [correctedBy], references: [id])
+
+  @@map("classification_feedback")
+}

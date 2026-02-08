@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnostic Codec - Support Helper</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section h2 {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        .status-box {
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .status-box.success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            color: #155724;
+        }
+
+        .status-box.warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            color: #856404;
+        }
+
+        .status-box.error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            color: #721c24;
+        }
+
+        .status-icon {
+            font-size: 32px;
+        }
+
+        .codec-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .codec-item {
+            padding: 12px 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 4px solid transparent;
+        }
+
+        .codec-item.supported {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+
+        .codec-item.not-supported {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+            opacity: 0.6;
+        }
+
+        .codec-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .codec-status {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .badge.high {
+            background: #28a745;
+            color: white;
+        }
+
+        .badge.medium {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .badge.low {
+            background: #6c757d;
+            color: white;
+        }
+
+        .test-button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .test-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .test-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .info-card {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-card .label {
+            font-size: 12px;
+            color: #6c757d;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .info-card .value {
+            font-size: 18px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        pre {
+            background: #282c34;
+            color: #abb2bf;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Diagnostic Codec Vidéo</h1>
+            <p>Support Helper - Vérification des capacités d'enregistrement</p>
+        </div>
+
+        <div class="content">
+            <!-- MediaRecorder Support -->
+            <div class="section">
+                <h2>📹 Support MediaRecorder API</h2>
+                <div id="mediarecorder-status"></div>
+            </div>
+
+            <!-- Browser Info -->
+            <div class="section">
+                <h2>🌐 Informations Navigateur</h2>
+                <div class="info-grid" id="browser-info"></div>
+            </div>
+
+            <!-- Codec Support -->
+            <div class="section">
+                <h2>🎬 Codecs Supportés</h2>
+                <div class="codec-list" id="codec-list"></div>
+            </div>
+
+            <!-- Recommended Codec -->
+            <div class="section">
+                <h2>⭐ Codec Recommandé</h2>
+                <div id="recommended-codec"></div>
+            </div>
+
+            <!-- Test Button -->
+            <div class="section">
+                <button class="test-button" onclick="testRecording()">
+                    🎥 Tester l'Enregistrement
+                </button>
+            </div>
+
+            <!-- Test Result -->
+            <div class="section" id="test-result-section" style="display: none;">
+                <h2>✅ Résultat du Test</h2>
+                <div id="test-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Codec priority list
+        const CODECS = [
+            { mimeType: 'video/webm;codecs=vp9,opus', name: 'VP9 + Opus', quality: 'high' },
+            { mimeType: 'video/webm;codecs=vp8,opus', name: 'VP8 + Opus', quality: 'medium' },
+            { mimeType: 'video/webm;codecs=h264,opus', name: 'H.264 + Opus', quality: 'medium' },
+            { mimeType: 'video/webm;codecs=vp9', name: 'VP9', quality: 'high' },
+            { mimeType: 'video/webm;codecs=vp8', name: 'VP8', quality: 'medium' },
+            { mimeType: 'video/webm', name: 'WebM (défaut)', quality: 'medium' },
+            { mimeType: 'video/mp4', name: 'MP4', quality: 'low' },
+        ];
+
+        // Check MediaRecorder support
+        function checkMediaRecorderSupport() {
+            const statusEl = document.getElementById('mediarecorder-status');
+
+            if (typeof MediaRecorder === 'undefined') {
+                statusEl.innerHTML = `
+                    <div class="status-box error">
+                        <span class="status-icon">❌</span>
+                        <div>
+                            <strong>MediaRecorder API non supporté</strong><br>
+                            <small>Votre navigateur ne supporte pas l'enregistrement vidéo.</small>
+                        </div>
+                    </div>
+                `;
+                return false;
+            }
+
+            statusEl.innerHTML = `
+                <div class="status-box success">
+                    <span class="status-icon">✅</span>
+                    <div>
+                        <strong>MediaRecorder API supporté</strong><br>
+                        <small>Votre navigateur peut enregistrer des vidéos.</small>
+                    </div>
+                </div>
+            `;
+            return true;
+        }
+
+        // Display browser info
+        function displayBrowserInfo() {
+            const infoEl = document.getElementById('browser-info');
+
+            const ua = navigator.userAgent;
+            let browser = 'Inconnu';
+
+            if (ua.includes('Firefox')) browser = 'Firefox';
+            else if (ua.includes('Chrome')) browser = 'Chrome';
+            else if (ua.includes('Safari')) browser = 'Safari';
+            else if (ua.includes('Edge')) browser = 'Edge';
+            else if (ua.includes('Opera')) browser = 'Opera';
+
+            infoEl.innerHTML = `
+                <div class="info-card">
+                    <div class="label">Navigateur</div>
+                    <div class="value">${browser}</div>
+                </div>
+                <div class="info-card">
+                    <div class="label">Plateforme</div>
+                    <div class="value">${navigator.platform}</div>
+                </div>
+                <div class="info-card">
+                    <div class="label">User Agent</div>
+                    <div class="value" style="font-size: 12px; word-break: break-all;">${ua}</div>
+                </div>
+            `;
+        }
+
+        // Check codec support
+        function checkCodecSupport() {
+            const listEl = document.getElementById('codec-list');
+            const supportedCodecs = [];
+
+            let html = '';
+
+            for (const codec of CODECS) {
+                const isSupported = MediaRecorder.isTypeSupported(codec.mimeType);
+
+                if (isSupported) {
+                    supportedCodecs.push(codec);
+                }
+
+                html += `
+                    <div class="codec-item ${isSupported ? 'supported' : 'not-supported'}">
+                        <div>
+                            <span class="codec-name">${codec.name}</span>
+                            <span class="badge ${codec.quality}">${codec.quality.toUpperCase()}</span>
+                        </div>
+                        <span class="codec-status">${isSupported ? '✅ Supporté' : '❌ Non supporté'}</span>
+                    </div>
+                `;
+            }
+
+            listEl.innerHTML = html;
+            return supportedCodecs;
+        }
+
+        // Display recommended codec
+        function displayRecommendedCodec(supportedCodecs) {
+            const recEl = document.getElementById('recommended-codec');
+
+            if (supportedCodecs.length === 0) {
+                recEl.innerHTML = `
+                    <div class="status-box error">
+                        <span class="status-icon">❌</span>
+                        <div>
+                            <strong>Aucun codec supporté</strong><br>
+                            <small>Impossible d'enregistrer des vidéos sur ce navigateur.</small>
+                        </div>
+                    </div>
+                `;
+                return null;
+            }
+
+            const recommended = supportedCodecs[0];
+
+            recEl.innerHTML = `
+                <div class="status-box success">
+                    <span class="status-icon">⭐</span>
+                    <div>
+                        <strong>${recommended.name}</strong>
+                        <span class="badge ${recommended.quality}">${recommended.quality.toUpperCase()}</span>
+                        <br>
+                        <small><code>${recommended.mimeType}</code></small>
+                    </div>
+                </div>
+            `;
+
+            return recommended;
+        }
+
+        // Test recording
+        async function testRecording() {
+            const resultSection = document.getElementById('test-result-section');
+            const resultEl = document.getElementById('test-result');
+
+            resultSection.style.display = 'block';
+            resultEl.innerHTML = `
+                <div class="status-box warning">
+                    <span class="status-icon">⏳</span>
+                    <div>
+                        <strong>Test en cours...</strong><br>
+                        <small>Sélectionnez un écran à enregistrer (2 secondes)</small>
+                    </div>
+                </div>
+            `;
+
+            try {
+                // Get display media
+                const stream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { mediaSource: 'screen' }
+                });
+
+                // Get best codec
+                const supportedCodecs = CODECS.filter(c => MediaRecorder.isTypeSupported(c.mimeType));
+                const bestCodec = supportedCodecs[0] || { mimeType: 'video/webm' };
+
+                // Start recording
+                const recorder = new MediaRecorder(stream, { mimeType: bestCodec.mimeType });
+                const chunks = [];
+
+                recorder.ondataavailable = e => chunks.push(e.data);
+
+                recorder.start();
+
+                // Record for 2 seconds
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
+                recorder.stop();
+                stream.getTracks().forEach(track => track.stop());
+
+                await new Promise(resolve => {
+                    recorder.onstop = resolve;
+                });
+
+                const blob = new Blob(chunks, { type: bestCodec.mimeType });
+
+                resultEl.innerHTML = `
+                    <div class="status-box success">
+                        <span class="status-icon">✅</span>
+                        <div>
+                            <strong>Test réussi !</strong><br>
+                            <small>
+                                Codec utilisé: <code>${bestCodec.mimeType}</code><br>
+                                Taille vidéo: ${(blob.size / 1024).toFixed(2)} KB
+                            </small>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                resultEl.innerHTML = `
+                    <div class="status-box error">
+                        <span class="status-icon">❌</span>
+                        <div>
+                            <strong>Erreur lors du test</strong><br>
+                            <small>${error.message}</small>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            const isSupported = checkMediaRecorderSupport();
+            displayBrowserInfo();
+
+            if (isSupported) {
+                const supportedCodecs = checkCodecSupport();
+                displayRecommendedCodec(supportedCodecs);
+            }
+        });
+    </script>
+</body>
+</html>
