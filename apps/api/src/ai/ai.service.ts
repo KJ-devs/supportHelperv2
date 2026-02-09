@@ -45,7 +45,7 @@ Please provide a JSON response with the following fields:
 - summary: A brief 1-2 sentence summary of the issue
 - severity: One of 'low', 'medium', 'high', 'critical'
 - severityConfidence: A number between 0 and 1
-- type: The issue type (e.g., 'crash', 'performance', 'ui', 'data-loss', 'other')
+- type: The issue type: 'bug', 'performance', 'feature_request', 'question', 'security', or 'documentation'
 - typeConfidence: A number between 0 and 1
 - keywords: An array of relevant keywords
 - reproductionSteps: An array of steps to reproduce the issue if mentioned
@@ -133,7 +133,7 @@ Please provide a JSON response with the following fields:
 - summary: A brief 1-2 sentence summary of the issue
 - severity: One of 'low', 'medium', 'high', 'critical'
 - severityConfidence: A number between 0 and 1
-- type: The issue type: 'bug', 'performance', 'ui', 'feature_request', 'question', 'security', or 'other'
+- type: The issue type: 'bug', 'performance', 'feature_request', 'question', 'security', or 'documentation'
 - typeConfidence: A number between 0 and 1
 - keywords: An array of relevant keywords for search and categorization
 - reproductionSteps: An array of inferred steps to reproduce the issue based on the description

@@ -27,7 +27,7 @@
     "test:coverage": "turbo run test:coverage",
     "clean": "turbo run clean && rimraf node_modules",
     "db:migrate": "pnpm --filter @support-helper/api db:migrate",
-    "db:generate": "pnpm --filter @support-helper/api db:generate",
+    "db:generate": "pnpm --filter @support-helper/api db:generate && pnpm --filter @support-helper/worker db:generate",
     "db:seed": "pnpm --filter @support-helper/api db:seed",
     "db:studio": "pnpm --filter @support-helper/api db:studio",
     "docker:up": "docker-compose up -d",

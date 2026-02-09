@@ -26,6 +26,25 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationsSyncService } from '../integrations/integrations-sync.service';
 
+// Map AI-returned types to valid ticket schema types
+const AI_TYPE_MAP: Record<string, string> = {
+  bug: 'bug',
+  crash: 'bug',
+  ui: 'bug',
+  'data-loss': 'bug',
+  performance: 'performance',
+  security: 'security',
+  feature_request: 'feature_request',
+  'feature-request': 'feature_request',
+  question: 'question',
+  documentation: 'documentation',
+  other: 'bug',
+};
+
+function mapAiType(aiType: string): string {
+  return AI_TYPE_MAP[aiType] || 'bug';
+}
+
 @ApiTags('SDK - Tickets')
 @ApiSecurity('sdk-key')
 @Controller('sdk/tickets')
@@ -157,6 +176,10 @@ export class SdkTicketsController {
     const ticket = await this.ticketsService.create(tenantId, ticketDto, undefined);
 
     // Update ticket with AI analysis fields
+    const mappedType = mapAiType(aiResult.type);
+    const validSeverities = ['critical', 'high', 'medium', 'low'];
+    const mappedSeverity = validSeverities.includes(aiResult.severity) ? aiResult.severity : 'medium';
+
     await this.ticketsService.update(ticket.id, tenantId, {
       aiSummary: aiResult.summary,
       aiAnalysis: {
@@ -170,8 +193,8 @@ export class SdkTicketsController {
         hasVideo: !!video,
         videoSize: video?.size,
       },
-      type: aiResult.type as any,
-      severity: aiResult.severity as any,
+      type: mappedType as any,
+      severity: mappedSeverity as any,
     });
 
     // Update keywords

@@ -1,7 +1,6 @@
 // Module
 export * from './auth.module';
 export * from './auth.service';
-export * from './auth.controller';
 
 // DTOs
 export * from './dto/auth.dto';

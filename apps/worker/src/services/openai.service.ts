@@ -502,7 +502,7 @@ Respond in JSON:
       `;
       params.push(limit);
 
-      const results = await this.prisma.$queryRawUnsafe<any[]>(query, ...params);
+      const results = await this.prisma.$queryRawUnsafe(query, ...params) as any[];
 
       return results.map(row => ({
         id: row.id,

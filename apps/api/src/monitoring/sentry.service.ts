@@ -1,7 +1,16 @@
 import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Sentry from '@sentry/node';
-import { nodeProfilingIntegration } from '@sentry/profiling-node';
+
+// Dynamic import — @sentry/profiling-node requires a native addon that may
+// not be available for every Node.js ABI version (e.g. Node v24).
+let nodeProfilingIntegration: (() => ReturnType<typeof Sentry.httpIntegration>) | undefined;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  nodeProfilingIntegration = require('@sentry/profiling-node').nodeProfilingIntegration;
+} catch {
+  // Native binary unavailable — profiling will be silently disabled.
+}
 
 @Injectable()
 export class SentryService implements OnModuleInit, OnModuleDestroy {
@@ -26,7 +35,7 @@ export class SentryService implements OnModuleInit, OnModuleDestroy {
         tracesSampleRate: this.config.get<number>('monitoring.sentry.tracesSampleRate'),
         profilesSampleRate: this.config.get<number>('monitoring.sentry.profilesSampleRate'),
         integrations: [
-          nodeProfilingIntegration(),
+          ...(nodeProfilingIntegration ? [nodeProfilingIntegration()] : []),
           Sentry.httpIntegration(),
           Sentry.expressIntegration(),
           Sentry.prismaIntegration(),

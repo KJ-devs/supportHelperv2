@@ -1,7 +1,8 @@
-import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { TenantsService } from '../tenants/tenants.service';
@@ -15,6 +16,7 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
   private readonly refreshTokenSecret: string;
   private readonly refreshTokenExpiry: string;
 
@@ -25,9 +27,22 @@ export class AuthService {
     private readonly tenantsService: TenantsService,
     private readonly configService: ConfigService
   ) {
-    this.refreshTokenSecret =
-      this.configService.get<string>('JWT_REFRESH_SECRET') ||
-      this.configService.get<string>('JWT_SECRET') + '_refresh';
+    const configuredSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
+    if (!configuredSecret) {
+      const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
+      if (nodeEnv === 'production') {
+        throw new Error(
+          'FATAL: JWT_REFRESH_SECRET must be set in production. ' +
+          'Generate one with: openssl rand -hex 32',
+        );
+      }
+      this.logger.warn(
+        'JWT_REFRESH_SECRET is not set. Using a random secret — refresh tokens will not survive restarts.',
+      );
+      this.refreshTokenSecret = crypto.randomBytes(32).toString('hex');
+    } else {
+      this.refreshTokenSecret = configuredSecret;
+    }
     this.refreshTokenExpiry = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '30d');
   }
 

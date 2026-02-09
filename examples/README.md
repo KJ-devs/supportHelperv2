@@ -72,7 +72,7 @@ node examples/get-sdk-key.js
 
 The examples use default configuration:
 - **API URL:** `http://localhost:3001`
-- **SDK Key:** `sdk_1770547467138_test` (from seed data)
+- **SDK Key:** `sdk_test_default_key_12345` (from seed data)
 
 You can modify these values in the test files or use the configuration panels in the HTML examples.
 

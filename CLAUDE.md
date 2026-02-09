@@ -58,22 +58,30 @@ pnpm --filter @support-helper/api test:e2e   # E2E tests
 ### Monorepo Structure
 - **apps/api/** - NestJS backend with Prisma ORM
 - **apps/dashboard/** - Next.js 14 dashboard (App Router)
+- **apps/worker/** - BullMQ job processor (video analysis, GitHub sync, search indexing)
+- **apps/web/** - Public-facing Next.js web application
 - **packages/sdk-web/** - Web SDK for client integration
 - **packages/shared/** - Shared TypeScript types and utilities
 - **packages/database/** - Database-related utilities
 
 ### Backend (NestJS) - apps/api/src/
 
-**Module Organization:**
+**Root-level modules (`src/`):**
 - **auth/** - JWT authentication, login/register endpoints
-- **tickets/** - Ticket CRUD, includes SDK endpoint at `/api/sdk/tickets`
-- **media/** - S3/MinIO file uploads with pre-signed URLs
 - **users/** - User management
 - **tenants/** - Multi-tenant isolation
 - **applications/** - Application (SDK key) management
 - **ai/** - OpenAI integration for video analysis
 - **health/** - Health check endpoint
-- **prisma/** - Database service (singleton PrismaClient)
+
+**Nested modules (`src/modules/`):**
+- **tickets/** - Ticket CRUD, includes SDK endpoint at `/api/sdk/tickets`
+- **media/** - S3/MinIO file uploads with pre-signed URLs
+- **agent/** - AI agent conversation management
+- **analytics/** - Usage analytics
+- **feedback/** - Classification feedback
+- **github/** - GitHub integration
+- **integrations/** - Third-party integrations
 
 **Key Patterns:**
 - Uses NestJS modules with dependency injection
@@ -93,6 +101,10 @@ pnpm --filter @support-helper/api test:e2e   # E2E tests
 - **GithubIssue** - Links tickets to GitHub issues
 - **AgentSession** - AI agent conversation state
 - **ClassificationFeedback** - Human corrections for ML training
+- **VideoEvent** - Timestamped events extracted from video
+- **Integration** - Third-party integration configs
+- **IntegrationSyncLog** - Integration sync history
+- **AgentMessage** - AI agent conversation messages
 
 **Important Schema Features:**
 - PostgreSQL extensions: `uuid-ossp`, `pgvector`
@@ -208,7 +220,7 @@ Key variables (see `.env.example` for full list):
 ## Common Pitfalls
 
 1. **Prisma Client Not Generated** - Run `pnpm db:generate` after schema changes
-2. **Port Conflicts** - Default ports: API=3001, Dashboard=3000, PostgreSQL=5432, Redis=6379, MinIO=9000
+2. **Port Conflicts** - Default ports: API=3001, Dashboard=3000, PostgreSQL=5432, Redis=6379, MinIO=9000, MeiliSearch=7700, MailHog=8025(UI)/1025(SMTP)
 3. **CORS Issues** - Ensure `DASHBOARD_URL` in `.env.local` matches frontend URL
 4. **Multi-Tenant Bugs** - Always filter by `tenantId` in queries
 5. **SDK Key vs JWT** - SDK endpoints use `x-sdk-key` header, dashboard uses JWT Bearer token
@@ -222,12 +234,14 @@ Key variables (see `.env.example` for full list):
 - `apps/api/prisma/seed.ts` - Test data seeding
 - `turbo.json` - Turborepo pipeline configuration
 - `pnpm-workspace.yaml` - Monorepo workspace definition
-- `docker-compose.yml` - Infrastructure services
+- `docker-compose.yml` - Infrastructure services (PostgreSQL, Redis, MinIO, MeiliSearch, MailHog)
+- `docker-compose.test.yml` - Test infrastructure services
+- `apps/worker/src/main.ts` - Worker entry point (video analysis, queue processing)
 
 ## Resources
 
 - API Documentation: http://localhost:3001/api/docs (Swagger UI)
 - Database GUI: `pnpm db:studio`
 - MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
-- Architecture Details: See `ARCHITECTURE.md`
-- Quick Commands: See `QUICK_REFERENCE.md`
+- Quick Start: See `QUICKSTART.md`
+- Quick Commands: See `QUICK_COMMANDS.md`

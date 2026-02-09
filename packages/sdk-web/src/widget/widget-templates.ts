@@ -131,13 +131,13 @@ export function renderOpenView(): string {
 }
 
 /**
- * Recording view - Timer + stop button
+ * Recording view - Timer + stop button (used inside modal for non-recording states)
  */
 export function renderRecordingView(elapsedSeconds: number, isPaused: boolean): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  
+
   return `
     <div class="sh-view sh-view-center">
       <div class="sh-timer">
@@ -157,6 +157,29 @@ export function renderRecordingView(elapsedSeconds: number, isPaused: boolean): 
           <span>Stop</span>
         </button>
       </div>
+    </div>
+  `;
+}
+
+/**
+ * Minimal floating recording bar - shown during recording instead of modal
+ * No backdrop/overlay so the page is fully visible and capturable
+ */
+export function renderRecordingBar(elapsedSeconds: number, isPaused: boolean): string {
+  const mins = Math.floor(elapsedSeconds / 60);
+  const secs = elapsedSeconds % 60;
+  const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+  return `
+    <div class="sh-recording-bar">
+      <span class="sh-rec-dot ${isPaused ? 'paused' : ''}"></span>
+      <span class="sh-rec-time sh-timer-time">${timeStr}</span>
+      <button data-action="${isPaused ? 'resume' : 'pause'}">
+        ${isPaused ? 'Resume' : 'Pause'}
+      </button>
+      <button class="sh-rec-stop" data-action="stop">
+        Stop
+      </button>
     </div>
   `;
 }

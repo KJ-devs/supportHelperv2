@@ -435,7 +435,7 @@
                 </div>
                 <div class="config-field">
                     <label>SDK Key:</label>
-                    <input type="text" id="cfgSdkKey" value="sdk_1770547467138_test" />
+                    <input type="text" id="cfgSdkKey" value="sdk_test_default_key_12345" />
                 </div>
                 <div class="config-field">
                     <button class="btn btn-outline" onclick="checkApiConnection()" style="font-size:13px;padding:6px 12px;">
@@ -512,6 +512,9 @@
 
             const apiUrl = getApiUrl();
 
+            // Always enable recording - it works independently of API
+            btnStart.disabled = false;
+
             try {
                 // Try /health first (excluded from global prefix, no auth needed)
                 const controller = new AbortController();
@@ -526,7 +529,6 @@
                 if (response.ok) {
                     dot.className = 'api-dot connected';
                     text.textContent = `API connected at ${apiUrl}`;
-                    btnStart.disabled = false;
                     return;
                 }
             } catch (e) {
@@ -546,19 +548,17 @@
                 if (response.ok) {
                     dot.className = 'api-dot connected';
                     text.textContent = `API connected at ${apiUrl}`;
-                    btnStart.disabled = false;
                     return;
                 }
             } catch (e) {
                 // Both failed
             }
 
-            // Not reachable
+            // API not reachable - recording still works, just can't submit
             dot.className = 'api-dot';
             text.innerHTML =
                 `Cannot reach API at <strong>${apiUrl}</strong>. ` +
-                'Make sure to run: <code>pnpm dev</code>';
-            btnStart.disabled = true;
+                'Recording works, but submission requires: <code>pnpm dev</code>';
         }
 
         // ============================================================
@@ -587,7 +587,7 @@
 
             try {
                 recordingStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: { mediaSource: 'screen' },
+                    video: { cursor: 'always' },
                     audio: false,
                 });
             } catch (err) {

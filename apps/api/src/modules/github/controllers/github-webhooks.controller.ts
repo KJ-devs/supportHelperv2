@@ -62,23 +62,4 @@ export class GithubWebhooksController {
     }
   }
 
-  /**
-   * POST /github/webhooks/test
-   * Test webhook endpoint (for debugging)
-   */
-  @Post('test')
-  @Public()
-  @ApiOperation({ summary: 'Test webhook endpoint (no signature verification)' })
-  async testWebhook(@Headers('x-github-event') event: string, @Body() payload: any) {
-    this.logger.log(`Test webhook received: ${event}`);
-
-    return {
-      received: true,
-      event: event || 'test',
-      payload: {
-        action: payload.action,
-        repository: payload.repository?.full_name,
-      },
-    };
-  }
 }

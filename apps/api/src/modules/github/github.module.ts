@@ -23,11 +23,6 @@ import {
 // Processors
 import { GithubWebhookProcessor } from './processors';
 
-// Legacy - keep for backward compatibility
-import { GithubService } from './github.service';
-import { GithubController } from './github.controller';
-import { GithubWebhookController } from './github-webhook.controller';
-
 /**
  * GitHub Integration Module
  *
@@ -78,9 +73,6 @@ import { GithubWebhookController } from './github-webhook.controller';
     GithubReposController,
     GithubWebhooksController,
     TicketGithubController,
-    // Legacy controllers (for backward compatibility)
-    GithubController,
-    GithubWebhookController,
   ],
   providers: [
     // New modular services
@@ -90,15 +82,12 @@ import { GithubWebhookController } from './github-webhook.controller';
     GithubWebhooksService,
     // BullMQ processor
     GithubWebhookProcessor,
-    // Legacy service (for backward compatibility)
-    GithubService,
   ],
   exports: [
     GithubOAuthService,
     GithubReposService,
     GithubIssuesService,
     GithubWebhooksService,
-    GithubService,
   ],
 })
 export class GithubModule {}

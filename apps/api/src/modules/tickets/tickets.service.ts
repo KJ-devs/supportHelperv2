@@ -153,7 +153,11 @@ export class TicketsService {
     ]);
 
     return {
-      data: tickets,
+      data: tickets.map(t => ({
+        ...t,
+        typeConfidence: t.typeConfidence ? Number(t.typeConfidence) : null,
+        severityConfidence: t.severityConfidence ? Number(t.severityConfidence) : null,
+      })),
       pagination: {
         page,
         limit,
@@ -227,7 +231,16 @@ export class TicketsService {
       throw new NotFoundException(`Ticket ${ticketId} not found`);
     }
 
-    return ticket;
+    // Convert Prisma Decimal/BigInt to plain numbers for JSON serialization
+    return {
+      ...ticket,
+      typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
+      severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
+      media: ticket.media.map(m => ({
+        ...m,
+        fileSize: m.fileSize ? Number(m.fileSize) : null,
+      })),
+    };
   }
 
   /**
@@ -271,7 +284,11 @@ export class TicketsService {
 
     this.logger.log(`Updated ticket ${ticketId}`);
 
-    return ticket;
+    return {
+      ...ticket,
+      typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
+      severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
+    };
   }
 
   /**
@@ -292,7 +309,11 @@ export class TicketsService {
 
     this.logger.log(`Deleted (closed) ticket ${ticketId}`);
 
-    return ticket;
+    return {
+      ...ticket,
+      typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
+      severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
+    };
   }
 
   /**
@@ -339,7 +360,11 @@ export class TicketsService {
       `${userId ? 'Assigned' : 'Unassigned'} ticket ${ticketId} ${userId ? `to user ${userId}` : ''}`,
     );
 
-    return ticket;
+    return {
+      ...ticket,
+      typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
+      severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
+    };
   }
 
   /**

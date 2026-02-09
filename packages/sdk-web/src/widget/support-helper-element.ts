@@ -7,7 +7,7 @@ import type { WidgetConfig, WidgetState, WidgetEventMap, ReportResponse } from '
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
-import { renderFAB, renderModal, getViewForState } from './widget-templates';
+import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
 import { submitReport } from './widget-api';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
@@ -153,13 +153,21 @@ export class SupportHelperElement extends HTMLElement {
       this.config.position
     );
 
+    // Set data-state attribute on host for CSS state-based selectors
+    this.setAttribute('data-state', state);
+
     let html = `<style>${styles}</style>`;
 
     // Always render FAB
     html += renderFAB('Report an issue');
 
-    // Render modal if not idle
-    if (state !== 'idle') {
+    // During recording: show minimal floating bar instead of modal+backdrop
+    if (state === 'recording') {
+      html += renderRecordingBar(this.videoDuration, this.isRecordingPaused);
+    }
+
+    // Render modal if not idle and not recording
+    if (state !== 'idle' && state !== 'recording') {
       const viewContent = getViewForState(state, {
         videoUrl: this.videoUrl || undefined,
         duration: this.videoDuration,

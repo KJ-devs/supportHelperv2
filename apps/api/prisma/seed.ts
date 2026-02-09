@@ -67,7 +67,7 @@ async function main() {
       tenantId: tenant.id,
       name: 'My Awesome App',
       platform: 'web',
-      sdkKey: `sdk_${Date.now()}_test`,
+      sdkKey: 'sdk_test_default_key_12345',
       settings: {
         recordVideo: true,
         captureLogs: true,
@@ -85,21 +85,66 @@ async function main() {
   const osList = ['Windows 11', 'macOS Sonoma', 'Ubuntu 22.04', 'iOS 17', 'Android 14'];
 
   const ticketTemplates = [
-    { title: 'App crashes when uploading files', desc: 'The application crashes when trying to upload files larger than 50MB.' },
-    { title: 'Performance issue on dashboard', desc: 'Dashboard takes about 10 seconds to load with large datasets.' },
-    { title: 'Login button unresponsive', desc: 'Clicking the login button does nothing on mobile browsers.' },
-    { title: 'Dark mode toggle broken', desc: 'Switching to dark mode causes text to become invisible.' },
-    { title: 'Search returns wrong results', desc: 'Search for exact ticket titles returns unrelated tickets.' },
-    { title: 'Export to CSV fails silently', desc: 'Clicking export button produces no file download.' },
-    { title: 'Notification bell shows wrong count', desc: 'Notification badge shows 99+ but there are only 3 notifications.' },
-    { title: 'Form validation bypassed', desc: 'Submitting empty required fields does not show errors.' },
-    { title: 'Video player controls missing', desc: 'Play/pause buttons do not render on iOS Safari.' },
-    { title: 'Memory leak in real-time updates', desc: 'Browser tab memory grows to 2GB after 1 hour.' },
-    { title: 'API returns 500 on date filter', desc: 'Filtering tickets by date range causes server error.' },
-    { title: 'Image thumbnails not loading', desc: 'Screenshot thumbnails show broken image placeholder.' },
-    { title: 'Keyboard shortcuts conflict', desc: 'Ctrl+S triggers both save and browser bookmark.' },
-    { title: 'Multi-select dropdown clips offscreen', desc: 'Filter dropdowns clip at bottom of screen on small viewports.' },
-    { title: 'Email notifications delayed', desc: 'Assignment emails arrive 30+ minutes after action.' },
+    {
+      title: 'App crashes when uploading files',
+      desc: 'The application crashes when trying to upload files larger than 50MB.',
+    },
+    {
+      title: 'Performance issue on dashboard',
+      desc: 'Dashboard takes about 10 seconds to load with large datasets.',
+    },
+    {
+      title: 'Login button unresponsive',
+      desc: 'Clicking the login button does nothing on mobile browsers.',
+    },
+    {
+      title: 'Dark mode toggle broken',
+      desc: 'Switching to dark mode causes text to become invisible.',
+    },
+    {
+      title: 'Search returns wrong results',
+      desc: 'Search for exact ticket titles returns unrelated tickets.',
+    },
+    {
+      title: 'Export to CSV fails silently',
+      desc: 'Clicking export button produces no file download.',
+    },
+    {
+      title: 'Notification bell shows wrong count',
+      desc: 'Notification badge shows 99+ but there are only 3 notifications.',
+    },
+    {
+      title: 'Form validation bypassed',
+      desc: 'Submitting empty required fields does not show errors.',
+    },
+    {
+      title: 'Video player controls missing',
+      desc: 'Play/pause buttons do not render on iOS Safari.',
+    },
+    {
+      title: 'Memory leak in real-time updates',
+      desc: 'Browser tab memory grows to 2GB after 1 hour.',
+    },
+    {
+      title: 'API returns 500 on date filter',
+      desc: 'Filtering tickets by date range causes server error.',
+    },
+    {
+      title: 'Image thumbnails not loading',
+      desc: 'Screenshot thumbnails show broken image placeholder.',
+    },
+    {
+      title: 'Keyboard shortcuts conflict',
+      desc: 'Ctrl+S triggers both save and browser bookmark.',
+    },
+    {
+      title: 'Multi-select dropdown clips offscreen',
+      desc: 'Filter dropdowns clip at bottom of screen on small viewports.',
+    },
+    {
+      title: 'Email notifications delayed',
+      desc: 'Assignment emails arrive 30+ minutes after action.',
+    },
   ];
 
   const createdTicketIds: string[] = [];
@@ -128,7 +173,9 @@ async function main() {
         severityConfidence: +(0.6 + Math.random() * 0.4).toFixed(2),
         assignedTo: i % 4 === 0 ? support.id : null,
         assignedAt: i % 4 === 0 ? createdAt : null,
-        resolvedAt: isResolved ? new Date(createdAt.getTime() + Math.random() * 7 * 24 * 60 * 60 * 1000) : null,
+        resolvedAt: isResolved
+          ? new Date(createdAt.getTime() + Math.random() * 7 * 24 * 60 * 60 * 1000)
+          : null,
         createdAt,
         userContext: {
           os: osList[i % osList.length],
@@ -174,7 +221,7 @@ async function main() {
 }
 
 main()
-  .catch((e) => {
+  .catch(e => {
     console.error('❌ Seed failed:', e);
     process.exit(1);
   })

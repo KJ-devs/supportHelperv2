@@ -1,5 +1,5 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { ApplicationsService } from './applications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateApplicationDto, UpdateApplicationDto } from './dto/application.dto';
@@ -13,6 +13,8 @@ export class ApplicationsController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new application' })
+  @ApiResponse({ status: 201, description: 'Application created successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async create(
     @Body() dto: CreateApplicationDto,
     @Request() req: { user: { tenantId: string } }
@@ -22,12 +24,18 @@ export class ApplicationsController {
 
   @Get()
   @ApiOperation({ summary: 'List all applications' })
+  @ApiResponse({ status: 200, description: 'Applications retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(@Request() req: { user: { tenantId: string } }) {
     return this.applicationsService.findByTenant(req.user.tenantId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get application by ID' })
+  @ApiParam({ name: 'id', type: String, description: 'Application ID' })
+  @ApiResponse({ status: 200, description: 'Application retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
   async findOne(
     @Param('id') id: string,
     @Request() req: { user: { tenantId: string } }
@@ -37,6 +45,10 @@ export class ApplicationsController {
 
   @Get(':id/stats')
   @ApiOperation({ summary: 'Get application stats' })
+  @ApiParam({ name: 'id', type: String, description: 'Application ID' })
+  @ApiResponse({ status: 200, description: 'Application statistics retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
   async getStats(
     @Param('id') id: string,
     @Request() req: { user: { tenantId: string } }
@@ -46,6 +58,10 @@ export class ApplicationsController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update application' })
+  @ApiParam({ name: 'id', type: String, description: 'Application ID' })
+  @ApiResponse({ status: 200, description: 'Application updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateApplicationDto,
@@ -56,6 +72,10 @@ export class ApplicationsController {
 
   @Post(':id/regenerate-key')
   @ApiOperation({ summary: 'Regenerate SDK key' })
+  @ApiParam({ name: 'id', type: String, description: 'Application ID' })
+  @ApiResponse({ status: 200, description: 'SDK key regenerated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
   async regenerateKey(
     @Param('id') id: string,
     @Request() req: { user: { tenantId: string } }
@@ -65,6 +85,10 @@ export class ApplicationsController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete application' })
+  @ApiParam({ name: 'id', type: String, description: 'Application ID' })
+  @ApiResponse({ status: 200, description: 'Application deleted successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Application not found' })
   async delete(
     @Param('id') id: string,
     @Request() req: { user: { tenantId: string } }

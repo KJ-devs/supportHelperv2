@@ -175,6 +175,7 @@ export class MediaService {
         const downloadUrl = await this.s3Service.getPresignedDownloadUrl(
           storageKey,
           300, // 5 minutes expiry
+          media.mimeType ?? undefined, // Pass MIME type for correct Content-Type
         );
 
         // Extract metadata
@@ -314,6 +315,7 @@ export class MediaService {
             downloadUrl = await this.s3Service.getPresignedDownloadUrl(
               m.storageKey,
               3600,
+              m.mimeType ?? undefined, // Pass MIME type for correct Content-Type
             );
           } catch (error) {
             this.logger.warn(`Could not generate download URL for ${m.id}`);
@@ -362,6 +364,7 @@ export class MediaService {
         downloadUrl = await this.s3Service.getPresignedDownloadUrl(
           media.storageKey,
           3600,
+          media.mimeType ?? undefined, // Pass MIME type for correct Content-Type
         );
       } catch (error) {
         this.logger.warn(`Could not generate download URL for ${mediaId}`);
@@ -447,6 +450,64 @@ export class MediaService {
     }
 
     this.logger.log(`Cleaned up ${pendingMedia.length} pending uploads`);
+  }
+
+  /**
+   * Get video events for a media item
+   */
+  async getVideoEvents(
+    mediaId: string,
+    tenantId: string,
+    pagination: { limit: number; offset: number },
+  ) {
+    // Verify media belongs to tenant
+    const media = await this.prisma.media.findFirst({
+      where: {
+        id: mediaId,
+        ticket: { tenantId },
+      },
+    });
+
+    if (!media) {
+      throw new NotFoundException('Media not found');
+    }
+
+    const [events, total] = await Promise.all([
+      this.prisma.videoEvent.findMany({
+        where: { mediaId },
+        orderBy: { timestampMs: 'asc' },
+        take: pagination.limit,
+        skip: pagination.offset,
+      }),
+      this.prisma.videoEvent.count({ where: { mediaId } }),
+    ]);
+
+    return {
+      data: events,
+      total,
+      limit: pagination.limit,
+      offset: pagination.offset,
+    };
+  }
+
+  /**
+   * Get a presigned download URL for a storage key, with tenant verification
+   */
+  async getDownloadUrlByStorageKey(storageKey: string, tenantId: string): Promise<string> {
+    const media = await this.prisma.media.findFirst({
+      where: {
+        storageKey,
+        ticket: {
+          tenantId,
+        },
+      },
+    });
+
+    if (!media) {
+      throw new NotFoundException('Media not found');
+    }
+
+    return this.s3Service.getPresignedDownloadUrl(storageKey, 3600, media.mimeType ?? undefined);
   }
 
   /**

@@ -44,7 +44,7 @@ data/
 .eslintcache
 
 # Claude Code local data
-.claude/
+
 
 # Playwright
 test-results/

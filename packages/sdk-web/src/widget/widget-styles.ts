@@ -94,7 +94,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
     .sh-fab svg {
       width: 24px;
       height: 24px;
-      fill: currentColor;
     }
 
     /* Modal Backdrop */
@@ -105,6 +104,83 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       background: rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(4px);
       animation: sh-fade-in 0.2s ease;
+    }
+
+    /* Hide backdrop and modal during recording so page is fully visible */
+    :host([data-state="recording"]) .sh-backdrop,
+    :host([data-state="recording"]) .sh-modal {
+      display: none !important;
+    }
+
+    /* Minimal floating recording indicator */
+    .sh-recording-bar {
+      position: fixed;
+      top: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: calc(var(--sh-z-index) + 3);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 20px;
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      border-radius: 999px;
+      font-family: var(--sh-font);
+      font-size: 14px;
+      font-weight: 500;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      animation: sh-fade-in 0.2s ease;
+    }
+
+    .sh-recording-bar .sh-rec-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: sh-pulse 1s infinite;
+    }
+
+    .sh-recording-bar .sh-rec-dot.paused {
+      animation: none;
+      background: #9ca3af;
+    }
+
+    .sh-recording-bar .sh-rec-time {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .sh-recording-bar button {
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      transition: background 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .sh-recording-bar button:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .sh-recording-bar button.sh-rec-stop {
+      background: #ef4444;
+    }
+
+    .sh-recording-bar button.sh-rec-stop:hover {
+      background: #dc2626;
+    }
+
+    .sh-recording-bar button svg {
+      width: 14px;
+      height: 14px;
     }
 
     @keyframes sh-fade-in {

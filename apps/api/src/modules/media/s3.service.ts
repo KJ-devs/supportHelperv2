@@ -80,20 +80,25 @@ export class S3Service {
 
   /**
    * Generate presigned URL for download
+   * @param key Object key in S3
+   * @param expiresIn Expiration time in seconds (default: 1 hour)
+   * @param contentType Optional MIME type to set via ResponseContentType
    */
   async getPresignedDownloadUrl(
     key: string,
     expiresIn: number = 3600,
+    contentType?: string,
   ): Promise<string> {
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucket,
         Key: key,
+        ...(contentType && { ResponseContentType: contentType }),
       });
 
       const url = await getSignedUrl(this.s3Client, command, { expiresIn });
 
-      this.logger.debug(`Generated presigned download URL for key: ${key}`);
+      this.logger.debug(`Generated presigned download URL for key: ${key}${contentType ? ` with Content-Type: ${contentType}` : ''}`);
 
       return url;
     } catch (error) {

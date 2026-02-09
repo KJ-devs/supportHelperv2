@@ -33,6 +33,9 @@ import { AgentModule } from './modules/agent/agent.module';
 import { GithubModule } from './modules/github/github.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 
+// Feedback & Learning
+import { FeedbackModule } from './modules/feedback/feedback.module';
+
 // Analytics & Reporting
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 
@@ -50,7 +53,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     // Global Configuration with Validation
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['.env.local', '.env', '../../.env.local', '../../.env'],
       load: configs,
       validate,
       cache: true,
@@ -67,7 +70,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
           connection: {
             host: url.hostname,
             port: parseInt(url.port || '6379', 10),
-            maxRetriesPerRequest: 3,
+            maxRetriesPerRequest: null,
             connectTimeout: 5000,
             lazyConnect: true,
           },
@@ -96,8 +99,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 
     // Core Infrastructure
     PrismaModule,
-    // MonitoringModule, // Temporarily disabled - needs env config
-    // HealthModule, // Depends on MonitoringModule
+    MonitoringModule,
+    HealthModule,
 
     // Authentication & Authorization
     AuthModule,
@@ -116,6 +119,9 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     // Integrations
     // GithubModule,  // Test after MediaModule works
     IntegrationsModule,
+
+    // Feedback & Learning
+    FeedbackModule,
 
     // Analytics
     AnalyticsModule,

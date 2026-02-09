@@ -6,7 +6,7 @@ import {
   Param,
   UseGuards,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { AgentService } from './agent.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -22,6 +22,10 @@ export class AgentController {
 
   @Post('sessions/:ticketId')
   @ApiOperation({ summary: 'Start AI agent session for ticket' })
+  @ApiParam({ name: 'ticketId', type: String, description: 'Ticket ID to start a session for' })
+  @ApiResponse({ status: 201, description: 'Agent session started successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
   async startSession(
     @CurrentTenant() tenantId: string,
     @Param('ticketId') ticketId: string,
@@ -31,6 +35,10 @@ export class AgentController {
 
   @Get('sessions/:sessionId')
   @ApiOperation({ summary: 'Get agent session with messages' })
+  @ApiParam({ name: 'sessionId', type: String, description: 'Agent session ID' })
+  @ApiResponse({ status: 200, description: 'Session retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
   async getSession(
     @CurrentTenant() tenantId: string,
     @Param('sessionId') sessionId: string,
@@ -40,6 +48,10 @@ export class AgentController {
 
   @Post('sessions/:sessionId/messages')
   @ApiOperation({ summary: 'Send message to agent' })
+  @ApiParam({ name: 'sessionId', type: String, description: 'Agent session ID' })
+  @ApiResponse({ status: 201, description: 'Message sent and agent response received' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
   async sendMessage(
     @CurrentTenant() tenantId: string,
     @CurrentUser('userId') userId: string,

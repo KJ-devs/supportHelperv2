@@ -4,6 +4,7 @@ import {
   Post,
   Body,
   Param,
+  Query,
   Delete,
   UseGuards,
   UsePipes,
@@ -113,16 +114,24 @@ export class MediaController {
     @CurrentTenant() tenantId: string,
     @Res() res: Response,
   ) {
-    // TODO: Add tenant verification by querying media table
-    // For now, generate presigned URL directly (less secure but works for MVP)
-    const s3Service = (this.mediaService as any).s3Service;
+    const downloadUrl = await this.mediaService.getDownloadUrlByStorageKey(storageKey, tenantId);
+    return res.redirect(downloadUrl);
+  }
 
-    try {
-      const downloadUrl = await s3Service.getPresignedDownloadUrl(storageKey, 3600);
-      return res.redirect(downloadUrl);
-    } catch (error) {
-      throw new NotFoundException('Media not found');
-    }
+  @Get(':mediaId/events')
+  @ApiOperation({ summary: 'Get video events for a media item' })
+  @ApiResponse({ status: 200, description: 'Video events retrieved' })
+  @ApiResponse({ status: 404, description: 'Media not found' })
+  async getVideoEvents(
+    @CurrentTenant() tenantId: string,
+    @Param('mediaId') mediaId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.mediaService.getVideoEvents(mediaId, tenantId, {
+      limit: limit ? parseInt(limit, 10) : 100,
+      offset: offset ? parseInt(offset, 10) : 0,
+    });
   }
 
   @Delete(':id')

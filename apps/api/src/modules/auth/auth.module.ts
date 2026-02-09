@@ -4,8 +4,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 
-// Controllers & Services
-import { AuthController } from './auth.controller';
+// Services
 import { AuthService } from './auth.service';
 
 // Strategies
@@ -51,7 +50,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [],
   providers: [
     AuthService,
     JwtStrategy,

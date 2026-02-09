@@ -11,10 +11,11 @@ interface VideoPlayerProps {
   src: string;
   poster?: string;
   title?: string;
+  mimeType?: string;
   onError?: (error: Error) => void;
 }
 
-export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
+export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -23,16 +24,25 @@ export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (!videoRef.current) return;
 
     if (isPlaying) {
       videoRef.current.pause();
+      setIsPlaying(false);
     } else {
-      videoRef.current.play();
+      try {
+        await videoRef.current.play();
+        setIsPlaying(true);
+        setError(null); // Clear any previous errors on successful play
+      } catch (err) {
+        console.error('Video playback failed:', err);
+        setError('Unable to play this video. The format may not be supported by your browser.');
+        setIsPlaying(false);
+      }
     }
-    setIsPlaying(!isPlaying);
   };
 
   const handleTimeUpdate = () => {
@@ -91,10 +101,17 @@ export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
     setPlaybackRate(newRate);
   };
 
+  const getExtension = (mime?: string) => {
+    if (mime?.includes('mp4')) return '.mp4';
+    if (mime?.includes('quicktime')) return '.mov';
+    return '.webm';
+  };
+
   const handleDownload = () => {
     const a = document.createElement('a');
     a.href = src;
-    a.download = title || 'video.webm';
+    const extension = getExtension(mimeType);
+    a.download = title ? title.replace(/\.[^/.]+$/, '') + extension : `video${extension}`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -107,10 +124,36 @@ export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
   };
 
   const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    const error = new Error('Erreur de lecture vidéo');
-    console.error('Video error:', e);
+    const videoElement = e.currentTarget;
+    const mediaError = videoElement.error;
+
+    let errorMessage = 'Unable to load this video.';
+
+    if (mediaError) {
+      switch (mediaError.code) {
+        case MediaError.MEDIA_ERR_ABORTED:
+          errorMessage = 'Video loading was aborted.';
+          break;
+        case MediaError.MEDIA_ERR_NETWORK:
+          errorMessage = 'A network error occurred while loading the video.';
+          break;
+        case MediaError.MEDIA_ERR_DECODE:
+          errorMessage = 'Video decoding failed. The format may be corrupted.';
+          break;
+        case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+          errorMessage = 'Video format is not supported by your browser.';
+          break;
+        default:
+          errorMessage = 'An unknown error occurred.';
+      }
+    }
+
+    setError(errorMessage);
+    setIsPlaying(false);
+    console.error('Video error:', errorMessage, mediaError ? { code: mediaError.code, message: mediaError.message } : 'No media error details');
+
     if (onError) {
-      onError(error);
+      onError(new Error(errorMessage));
     }
   };
 
@@ -120,7 +163,6 @@ export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
       <div className="relative aspect-video bg-black">
         <video
           ref={videoRef}
-          src={src}
           poster={poster}
           className="w-full h-full"
           onTimeUpdate={handleTimeUpdate}
@@ -128,10 +170,36 @@ export function VideoPlayer({ src, poster, title, onError }: VideoPlayerProps) {
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onError={handleError}
-        />
+          onLoadStart={() => setError(null)} // Clear errors when new video loads
+        >
+          <source src={src} type={mimeType || 'video/webm'} />
+          Your browser does not support video playback.
+        </video>
+
+        {/* Error Overlay */}
+        {error && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-80">
+            <div className="text-center px-6 py-4 max-w-md">
+              <svg
+                className="w-12 h-12 text-red-500 mx-auto mb-3"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <p className="text-white text-sm">{error}</p>
+            </div>
+          </div>
+        )}
 
         {/* Play/Pause Overlay */}
-        {!isPlaying && (
+        {!isPlaying && !error && (
           <button
             onClick={handlePlayPause}
             className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 hover:bg-opacity-40 transition-opacity"

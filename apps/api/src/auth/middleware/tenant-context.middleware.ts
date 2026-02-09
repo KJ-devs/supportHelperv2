@@ -68,7 +68,7 @@ export class TenantContextMiddleware implements NestMiddleware {
       // Set PostgreSQL session variable for RLS
       // Note: This requires transactions to be effective
       try {
-        await this.prisma.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
+        await this.prisma.$executeRaw`SET LOCAL app.current_tenant_id = ${tenantId}`;
       } catch {
         // Silently fail - RLS will handle unauthorized access
       }

@@ -2,9 +2,16 @@ import { NestFactory, Reflector } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+
+// BigInt cannot be serialized by JSON.stringify by default.
+// This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
+(BigInt.prototype as any).toJSON = function () {
+  return Number(this);
+};
 
 async function bootstrap() {
   // Create the app
@@ -13,6 +20,20 @@ async function bootstrap() {
   const config = app.get(ConfigService);
   const reflector = app.get(Reflector);
   const logger = new Logger('Bootstrap');
+
+  // Validate JWT secret in production — reject the insecure default
+  const nodeEnv = config.get<string>('app.nodeEnv') || 'development';
+  const jwtSecret = config.get<string>('JWT_SECRET');
+  const insecureDefault = 'your-super-secret-jwt-key-change-in-production';
+  if (nodeEnv === 'production' && (!jwtSecret || jwtSecret === insecureDefault)) {
+    throw new Error(
+      'FATAL: JWT_SECRET is not configured for production. ' +
+      'Generate a secure secret with: openssl rand -hex 32',
+    );
+  }
+
+  // Security headers
+  app.use(helmet());
 
   // Global prefix
   app.setGlobalPrefix('api', {
@@ -125,8 +146,6 @@ async function bootstrap() {
   await app.listen(port);
 
   // Startup banner
-  const nodeEnv = config.get('app.nodeEnv');
-
   console.log('');
   console.log('╔════════════════════════════════════════════════════════╗');
   console.log('║  🚀 Support Helper API is running                      ║');

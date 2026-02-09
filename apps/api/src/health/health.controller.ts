@@ -1,7 +1,8 @@
-import { Controller, Get, HttpCode, HttpStatus, ServiceUnavailableException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, HttpStatus, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
 import { Public } from '../common/decorators';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Health')
 @Controller('health')
@@ -56,35 +57,23 @@ export class HealthController {
   }
 
   @Get('full')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Full health check with all dependencies' })
-  @ApiResponse({
-    status: 200,
-    description: 'Full health status',
-    schema: {
-      example: {
-        status: 'healthy',
-        timestamp: '2024-01-16T12:00:00Z',
-        uptime: 12345,
-        version: '0.1.0',
-        checks: {
-          database: { status: 'healthy', responseTime: 5 },
-          redis: { status: 'healthy', responseTime: 2 },
-          memory: { status: 'healthy', message: 'Heap: 45% used' },
-        },
-      },
-    },
-  })
+  @ApiOperation({ summary: 'Full health check with all dependencies (auth required)' })
+  @ApiResponse({ status: 200, description: 'Full health status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async fullHealth(): Promise<HealthStatus> {
     return this.healthService.getFullHealth();
   }
 
   @Get('db')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Database health check' })
+  @ApiOperation({ summary: 'Database health check (auth required)' })
   @ApiResponse({ status: 200, description: 'Database is healthy' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 503, description: 'Database is unhealthy' })
   async databaseHealth() {
     const check = await this.healthService.checkDatabase();
@@ -95,10 +84,12 @@ export class HealthController {
   }
 
   @Get('redis')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Redis health check' })
+  @ApiOperation({ summary: 'Redis health check (auth required)' })
   @ApiResponse({ status: 200, description: 'Redis is healthy' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 503, description: 'Redis is unhealthy' })
   async redisHealth() {
     const check = await this.healthService.checkRedis();
@@ -109,51 +100,23 @@ export class HealthController {
   }
 
   @Get('cron')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Cron jobs status' })
-  @ApiResponse({
-    status: 200,
-    description: 'Cron jobs status',
-    schema: {
-      example: [
-        {
-          name: 'cleanup-expired-media',
-          lastRun: '2024-01-16T11:00:00Z',
-          nextRun: '2024-01-16T12:00:00Z',
-          status: 'completed',
-        },
-      ],
-    },
-  })
+  @ApiOperation({ summary: 'Cron jobs status (auth required)' })
+  @ApiResponse({ status: 200, description: 'Cron jobs status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   cronStatus(): CronJobStatus[] {
     return this.healthService.getCronJobsStatus();
   }
 
   @Get('queues')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Queue status (BullMQ)' })
-  @ApiResponse({
-    status: 200,
-    description: 'Queue status',
-    schema: {
-      example: {
-        queues: [
-          {
-            name: 'video-processing',
-            waiting: 5,
-            active: 2,
-            completed: 100,
-            failed: 3,
-            delayed: 0,
-            paused: false,
-          },
-        ],
-        deadLetterQueue: 3,
-      },
-    },
-  })
+  @ApiOperation({ summary: 'Queue status (auth required)' })
+  @ApiResponse({ status: 200, description: 'Queue status' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   async queuesStatus(): Promise<{
     queues: (QueueStatus | null)[];
     deadLetterQueue: number;
@@ -171,13 +134,12 @@ export class HealthController {
   }
 
   @Get('metrics')
-  @Public()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Basic metrics' })
-  @ApiResponse({
-    status: 200,
-    description: 'Basic process metrics',
-  })
+  @ApiOperation({ summary: 'Basic metrics (auth required)' })
+  @ApiResponse({ status: 200, description: 'Basic process metrics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
   metrics() {
     const memUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();

@@ -72,16 +72,18 @@ export class ApplicationsService {
     const app = await this.findOne(id, tenantId);
 
     const [totalTickets, openTickets, resolvedTickets] = await Promise.all([
-      this.prisma.ticket.count({ where: { applicationId: id } }),
+      this.prisma.ticket.count({ where: { applicationId: id, tenantId } }),
       this.prisma.ticket.count({
         where: {
           applicationId: id,
+          tenantId,
           status: { in: ['new', 'open', 'in_progress'] },
         },
       }),
       this.prisma.ticket.count({
         where: {
           applicationId: id,
+          tenantId,
           status: { in: ['resolved', 'closed'] },
         },
       }),

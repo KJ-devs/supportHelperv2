@@ -1,5 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import * as bcrypt from 'bcrypt';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
@@ -34,6 +36,41 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    return user;
+  }
+
+  async create(tenantId: string, data: { email: string; name: string; role?: string }) {
+    // Check for existing user with same email in tenant
+    const existing = await this.prisma.user.findFirst({
+      where: { tenantId, email: data.email },
+    });
+
+    if (existing) {
+      throw new ConflictException('A user with this email already exists in the tenant');
+    }
+
+    // Generate a temporary password
+    const temporaryPassword = crypto.randomBytes(16).toString('hex');
+    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
+
+    const user = await this.prisma.user.create({
+      data: {
+        tenantId,
+        email: data.email,
+        name: data.name,
+        role: data.role || 'member',
+        passwordHash,
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        email: true,
+        name: true,
+        role: true,
+        createdAt: true,
+      },
+    });
 
     return user;
   }

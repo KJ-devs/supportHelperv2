@@ -318,7 +318,7 @@ pnpm --filter @support-helper/sdk-web build:all
 ### Test Credentials
 - Email: `owner@test.local`
 - Password: `password123`
-- SDK Key: `sdk_1770547467138_test`
+- SDK Key: `sdk_test_default_key_12345`
 
 ---
 

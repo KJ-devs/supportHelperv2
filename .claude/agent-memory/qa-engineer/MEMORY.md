@@ -1,0 +1,70 @@
+# QA Engineer Memory - Support Helper Platform
+
+## Test Architecture
+- API tests use Jest with `@nestjs/testing` module
+- SDK tests use Vitest with browser mocks (jsdom)
+- Dashboard tests use Vitest + @testing-library/react (unit tests) and Playwright (e2e)
+- Dashboard unit tests: `apps/dashboard/components/**/__tests__/*.test.tsx`
+- Shared package tests use Vitest
+- Database package tests use Vitest with conditional skip for integration tests
+- E2E tests conditionally skip based on environment variables (TEST_DATABASE_URL, TEST_REDIS_URL, TEST_S3_ENDPOINT)
+
+## Critical: Jest Config Discovery
+- Jest `projects` config OVERRIDES top-level `testMatch`
+- Only `test/unit/**` and `test/integration/**` are discovered by Jest
+- Colocated tests in `src/**/*.spec.ts` are NOT picked up by the current jest.config.ts
+- Always put API tests under `apps/api/test/unit/` for them to run
+
+## Test File Locations
+- **Discovered** unit tests: `apps/api/test/unit/` (guards/, controllers/, services/)
+- Colocated tests in src/ are NOT discovered (jest projects config override)
+- External unit tests: `apps/api/test/unit/`
+- E2E tests: `apps/api/test/e2e/`
+- Integration tests: `apps/api/test/integration/`
+- SDK tests: `packages/sdk-web/tests/`
+- Worker tests: `apps/worker/src/services/*.spec.ts`
+- Shared tests: `packages/shared/src/**/*.spec.ts`
+- Database tests: `packages/database/tests/`
+- Dashboard unit tests: `apps/dashboard/components/**/__tests__/*.test.tsx`
+- Dashboard setup: `apps/dashboard/tests/setup.tsx`
+- Web app tests: `apps/web/tests/`
+
+## Mock Patterns
+- PrismaService: mock object with `jest.fn()` for each Prisma model method
+- ConfigService: mock with `get: jest.fn()` returning config values
+- External libs (OpenAI, Octokit, ffmpeg, AWS SDK, BullMQ, ioredis): `jest.mock()` at module level
+- S3Service, FFprobeService: use `jest.spyOn()` on service methods
+
+## Known Gaps (as of 2026-02-08)
+- ai/ai.service.ts has ZERO tests
+- SDK widget element and state machine have ZERO tests
+- 8 of 9 worker services are untested (only openai.service tested)
+- 5 GitHub controllers untested
+- No DTO validation tests
+- tenant-rate-limit.guard has no tests (ThrottlerGuard subclass)
+
+## Tests Added (2026-02-08 remediation)
+- Auth guards: jwt-auth, sdk-key (common), tenant, roles -> `test/unit/guards/`
+- SDK tickets controller -> `test/unit/controllers/sdk-tickets.controller.spec.ts`
+- Users controller (with RBAC) -> `test/unit/controllers/users.controller.spec.ts`
+- Tenants controller -> `test/unit/controllers/tenants.controller.spec.ts`
+- Total: 82 tests across 7 files, all passing
+
+## Tests Added (2026-02-09 VideoPlayer)
+- VideoPlayer component -> `apps/dashboard/components/media/__tests__/VideoPlayer.test.tsx`
+- Coverage: 21 tests covering MediaError handling, UI state, error recovery, console logging
+- Setup: Added vitest config and test setup with MediaError mock for dashboard app
+- All tests passing
+
+## Auth Test Duplication Issue
+- Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`
+- The colocated version is more comprehensive (8 tests vs 3 tests)
+
+## Gotchas
+- agent.service.spec.ts uses `setTimeout` for async processing - fragile pattern
+- E2E tests use `isE2EEnvironmentReady()` and `describe.skip` for conditional execution
+- Integration tests require env vars: TEST_DATABASE_URL, TEST_REDIS_URL, TEST_S3_ENDPOINT
+- Playwright tests require TEST_USER_EMAIL and TEST_USER_PASSWORD env vars
+- **jsdom doesn't define MediaError** - must mock it in setup.tsx for video player tests
+- Video elements don't have accessible roles - use `container.querySelector('video')` instead of `getByRole`
+- Setup files must be .tsx (not .ts) if they contain JSX for mocking components

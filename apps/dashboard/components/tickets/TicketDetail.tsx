@@ -193,6 +193,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                       <VideoPlayer
                         src={getMediaUrl(media.storageKey)}
                         title={filename}
+                        mimeType={media.mimeType}
                         onError={(error) => console.error('Video error:', error)}
                       />
                     </div>
