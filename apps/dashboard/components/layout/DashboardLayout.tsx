@@ -22,6 +22,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/tickets', label: 'Tickets', icon: '🎫' },
   { href: '/dashboard/applications', label: 'Applications', icon: '📱' },
   { href: '/dashboard/integrations', label: 'Integrations', icon: '🔌' },
+  { href: '/dashboard/github', label: 'GitHub', icon: '🐙' },
   { href: '/dashboard/analytics', label: 'Analytiques', icon: '📈' },
   { href: '/dashboard/settings', label: 'Paramètres', icon: '⚙️' },
 ];

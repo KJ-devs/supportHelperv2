@@ -3,14 +3,18 @@ import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam } from '@nestjs/swagger'
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { GithubIssuesService } from '../services/github-issues.service';
-import { CreateGithubIssueDto } from '../dto';
+import { GithubUserstoryService } from '../services/github-userstory.service';
+import { CreateGithubIssueDto, CreateUserStoryDto } from '../dto';
 
 @ApiTags('Ticket GitHub Integration')
 @ApiBearerAuth()
 @Controller('tickets/:ticketId/github')
 @UseGuards(JwtAuthGuard)
 export class TicketGithubController {
-  constructor(private readonly issuesService: GithubIssuesService) {}
+  constructor(
+    private readonly issuesService: GithubIssuesService,
+    private readonly userstoryService: GithubUserstoryService,
+  ) {}
 
   /**
    * POST /tickets/:id/github/create-issue
@@ -77,5 +81,20 @@ export class TicketGithubController {
   async unlinkIssue(@CurrentTenant() tenantId: string, @Param('issueId') issueId: string) {
     await this.issuesService.unlinkIssue(issueId, tenantId);
     return { success: true };
+  }
+
+  /**
+   * POST /tickets/:id/github/user-story
+   * Generate and create a GitHub User Story issue from a ticket
+   */
+  @Post('user-story')
+  @ApiOperation({ summary: 'Create GitHub User Story from ticket' })
+  @ApiParam({ name: 'ticketId', description: 'Ticket ID' })
+  async createUserStory(
+    @CurrentTenant() tenantId: string,
+    @Param('ticketId') ticketId: string,
+    @Body() dto: CreateUserStoryDto,
+  ) {
+    return this.userstoryService.createUserStoryIssue(ticketId, tenantId, dto);
   }
 }
