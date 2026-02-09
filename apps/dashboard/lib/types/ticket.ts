@@ -37,6 +37,7 @@ export interface Ticket {
   assignee?: User;
   media?: Media[];
   agentSession?: AgentSession;
+  agentSessions?: AgentSession[];
 }
 
 export interface Application {

@@ -6,3 +6,6 @@ export * from './github-repos.dto';
 
 // Issue DTOs
 export * from './github-issues.dto';
+
+// User Story DTOs
+export * from './github-userstory.dto';

@@ -1,6 +1,7 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
+import { Octokit } from '@octokit/rest';
 import { QUEUE_NAMES } from '../queues';
 import {
   AgentJobData,
@@ -188,6 +189,9 @@ export class AgentWorker extends WorkerHost {
 
         case 'escalate-ticket':
           return await this.handleEscalateTicket(job);
+
+        case 'create-user-story':
+          return await this.handleCreateUserStory(job);
 
         default:
           throw new Error(`Unknown agent job type: ${type}`);
@@ -662,6 +666,222 @@ Keep responses concise but thorough.`,
       ticketId,
       escalated: true,
       response: 'Ticket has been escalated to human support.',
+    };
+  }
+
+  /**
+   * Generate and create a GitHub User Story from a ticket
+   */
+  private async handleCreateUserStory(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, context } = job.data;
+    const options = context?.userStoryOptions;
+
+    if (!options?.repository) {
+      throw new Error('context.userStoryOptions.repository is required for create-user-story');
+    }
+
+    this.logger.log(`Creating User Story for ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    // Fetch ticket with full context
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: {
+        media: true,
+        application: true,
+        agentSessions: {
+          include: {
+            messages: {
+              orderBy: { createdAt: 'asc' },
+              take: 10,
+            },
+          },
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    await job.updateProgress(20);
+
+    // Build user story generation prompt
+    const promptParts: string[] = [
+      'You are a product manager. Transform this bug report into a structured GitHub User Story.',
+      '',
+      '## Ticket Information',
+      `Title: ${ticket.title || 'No title'}`,
+      `Description: ${ticket.description || 'No description'}`,
+    ];
+
+    if (ticket.aiSummary) promptParts.push(`AI Summary: ${ticket.aiSummary}`);
+    if (ticket.aiAnalysis) promptParts.push(`AI Analysis: ${JSON.stringify(ticket.aiAnalysis)}`);
+    if (ticket.severity) promptParts.push(`Severity: ${ticket.severity}`);
+    if (ticket.type) promptParts.push(`Type: ${ticket.type}`);
+    if (ticket.reproductionSteps) promptParts.push(`Reproduction Steps: ${JSON.stringify(ticket.reproductionSteps)}`);
+    if (ticket.keywords?.length) promptParts.push(`Keywords: ${ticket.keywords.join(', ')}`);
+
+    if (ticket.agentSessions?.[0]?.messages?.length) {
+      promptParts.push('', '## Agent Conversation');
+      for (const msg of ticket.agentSessions[0].messages) {
+        promptParts.push(`${msg.role}: ${msg.content}`);
+      }
+    }
+
+    if (options.additionalContext) {
+      promptParts.push('', '## Additional Context', options.additionalContext);
+    }
+
+    promptParts.push(
+      '',
+      '## Instructions',
+      'Generate a User Story in JSON:',
+      '- title: "As a [user], I want [goal] so that [benefit]"',
+      '- description: Detailed description',
+      '- acceptanceCriteria: Array of testable criteria',
+      '- technicalNotes: Implementation notes',
+      '- labels: Suggested GitHub labels',
+      '- priority: "low" | "medium" | "high" | "critical"',
+      '',
+      'Respond ONLY with valid JSON.',
+    );
+
+    await job.updateProgress(30);
+
+    // Call OpenAI to generate user story
+    const response = await this.openaiService.chat({
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert product manager who transforms bug reports into well-structured User Stories. Always respond with valid JSON.',
+        },
+        {
+          role: 'user',
+          content: promptParts.join('\n'),
+        },
+      ],
+      response_format: { type: 'json_object' },
+    });
+
+    await job.updateProgress(50);
+
+    // Parse user story
+    let userStory: {
+      title: string;
+      description: string;
+      acceptanceCriteria: string[];
+      technicalNotes: string;
+      labels: string[];
+      priority: string;
+    };
+
+    try {
+      const parsed = JSON.parse(response.content);
+      userStory = {
+        title: parsed.title || 'As a user, I want this issue resolved',
+        description: parsed.description || '',
+        acceptanceCriteria: Array.isArray(parsed.acceptanceCriteria) ? parsed.acceptanceCriteria : [],
+        technicalNotes: parsed.technicalNotes || '',
+        labels: Array.isArray(parsed.labels) ? parsed.labels : [],
+        priority: parsed.priority || 'medium',
+      };
+    } catch {
+      throw new Error('Failed to parse User Story from AI response');
+    }
+
+    await job.updateProgress(60);
+
+    // Get GitHub connection for the tenant
+    const connection = await this.prisma.githubConnection.findFirst({
+      where: { tenantId },
+    });
+
+    if (!connection || !connection.accessToken) {
+      throw new Error('GitHub not connected for this tenant');
+    }
+
+    // Format GitHub issue body
+    const bodySections: string[] = [
+      `## User Story\n\n**${userStory.title}**`,
+      `## Description\n\n${userStory.description}`,
+    ];
+
+    if (userStory.acceptanceCriteria.length > 0) {
+      const criteria = userStory.acceptanceCriteria.map(c => `- [ ] ${c}`).join('\n');
+      bodySections.push(`## Acceptance Criteria\n\n${criteria}`);
+    }
+
+    if (userStory.technicalNotes) {
+      bodySections.push(`## Technical Notes\n\n${userStory.technicalNotes}`);
+    }
+
+    const metadata = [
+      `**Ticket ID**: \`${ticketId.slice(0, 8)}\``,
+      ticket.type ? `**Type**: ${ticket.type}` : null,
+      ticket.severity ? `**Severity**: ${ticket.severity}` : null,
+    ].filter(Boolean).join(' | ');
+
+    bodySections.push(`## Original Ticket Context\n\n${metadata}\n\n---\n*Generated from Support Helper ticket as User Story*`);
+
+    const issueBody = bodySections.join('\n\n');
+
+    // Build labels
+    const labels: string[] = ['user-story', 'from-ticket'];
+    if (ticket.severity) labels.push(`severity:${ticket.severity}`);
+    if (ticket.type) labels.push(`type:${ticket.type}`);
+    for (const label of userStory.labels) {
+      if (!labels.includes(label)) labels.push(label);
+    }
+
+    await job.updateProgress(70);
+
+    // Create GitHub issue
+    const octokit = new Octokit({ auth: connection.accessToken });
+    const [owner, repo] = options.repository.split('/');
+
+    const { data: issue } = await octokit.issues.create({
+      owner,
+      repo,
+      title: userStory.title,
+      body: issueBody,
+      labels,
+      assignees: options.assignees,
+      milestone: options.milestone,
+    });
+
+    await job.updateProgress(85);
+
+    // Save link in GithubIssue table
+    await this.prisma.githubIssue.create({
+      data: {
+        ticketId,
+        githubIssueNumber: issue.number,
+        githubRepo: options.repository,
+        githubIssueUrl: issue.html_url,
+        syncStatus: 'user-story',
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(
+      `Created User Story issue #${issue.number} for ticket ${ticketId} in ${options.repository}`,
+    );
+
+    return {
+      success: true,
+      type: 'create-user-story',
+      ticketId,
+      response: `Created User Story issue #${issue.number}: ${userStory.title}`,
+      metadata: {
+        issueNumber: issue.number,
+        issueUrl: issue.html_url,
+        repository: options.repository,
+      },
     };
   }
 

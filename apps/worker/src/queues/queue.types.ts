@@ -126,7 +126,8 @@ export type AgentJobType =
   | 'suggest-solution'
   | 'escalate-ticket'
   | 'auto-respond'
-  | 'classify-ticket';
+  | 'classify-ticket'
+  | 'create-user-story'; // Generate and create GitHub User Story from ticket
 
 export interface AgentJobData {
   type: AgentJobType;
@@ -154,6 +155,14 @@ export interface AgentContext {
     email: string;
     name?: string;
   };
+
+  // User Story options for create-user-story type
+  userStoryOptions?: {
+    repository: string;
+    assignees?: string[];
+    milestone?: number;
+    additionalContext?: string;
+  };
 }
 
 export interface AgentResult {
@@ -170,6 +179,10 @@ export interface AgentResult {
     state?: string;
     confidence?: number;
     attempts?: number;
+    // User Story metadata
+    issueNumber?: number;
+    issueUrl?: string;
+    repository?: string;
   };
   error?: string;
 }

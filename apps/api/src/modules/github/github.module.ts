@@ -4,12 +4,16 @@ import { BullModule } from '@nestjs/bullmq';
 // Prisma
 import { PrismaModule } from '../../prisma/prisma.module';
 
+// AI
+import { AIModule } from '../../ai/ai.module';
+
 // Services
 import {
   GithubOAuthService,
   GithubReposService,
   GithubIssuesService,
   GithubWebhooksService,
+  GithubUserstoryService,
 } from './services';
 
 // Controllers
@@ -47,12 +51,14 @@ import { GithubWebhookProcessor } from './processors';
  * - GET  /tickets/:id/github/related      - Find related issues
  * - GET  /tickets/:id/github/issues       - Get linked issues
  * - POST /tickets/:id/github/sync         - Sync to GitHub
+ * - POST /tickets/:id/github/user-story   - Create User Story
  *
  * - POST /github/webhooks            - Webhook handler
  */
 @Module({
   imports: [
     PrismaModule,
+    AIModule,
     // Register BullMQ queue for async webhook processing
     BullModule.registerQueue({
       name: 'github',
@@ -80,6 +86,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubReposService,
     GithubIssuesService,
     GithubWebhooksService,
+    GithubUserstoryService,
     // BullMQ processor
     GithubWebhookProcessor,
   ],
@@ -88,6 +95,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubReposService,
     GithubIssuesService,
     GithubWebhooksService,
+    GithubUserstoryService,
   ],
 })
 export class GithubModule {}

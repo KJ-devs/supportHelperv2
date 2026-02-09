@@ -1,6 +1,7 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, forwardRef } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
+import { AgentGateway } from './agent.gateway';
 
 export enum AgentState {
   ANALYZING = 'analyzing',
@@ -17,7 +18,9 @@ export class AgentService {
 
   constructor(
     private prisma: PrismaService,
-    private aiService: AIService
+    private aiService: AIService,
+    @Inject(forwardRef(() => AgentGateway))
+    private agentGateway: AgentGateway,
   ) {}
 
   /**
@@ -85,6 +88,13 @@ export class AgentService {
         },
       });
 
+      // Notify connected clients about the state transition
+      this.agentGateway.emitSessionUpdate(sessionId, {
+        status: nextState,
+        step: 'analysis_complete',
+        confidence: analysis.confidence,
+      });
+
       // Take action based on state
       await this.executeStateAction(sessionId, nextState, ticket, analysis);
     } catch (error) {
@@ -96,6 +106,12 @@ export class AgentService {
           status: AgentState.ESCALATED,
           escalationReason: `Analysis failed: ${error.message}`,
         },
+      });
+
+      // Notify connected clients about the escalation
+      this.agentGateway.emitSessionUpdate(sessionId, {
+        status: AgentState.ESCALATED,
+        reason: `Analysis failed: ${error.message}`,
       });
     }
   }
@@ -290,7 +306,7 @@ Respond in JSON format.
     const session = await this.getSession(sessionId, tenantId);
 
     // Create user message
-    await this.prisma.agentMessage.create({
+    const userMessage = await this.prisma.agentMessage.create({
       data: {
         sessionId,
         role: 'user',
@@ -298,6 +314,12 @@ Respond in JSON format.
         channel: 'web',
       },
     });
+
+    // Broadcast the user message to all clients in the room
+    this.agentGateway.emitNewMessage(sessionId, userMessage);
+
+    // Signal that the agent is thinking
+    this.agentGateway.emitAgentTyping(sessionId, true);
 
     // Generate agent response
     const response = await this.generateAgentResponse(session, content);
@@ -311,6 +333,12 @@ Respond in JSON format.
         channel: 'web',
       },
     });
+
+    // Agent finished thinking
+    this.agentGateway.emitAgentTyping(sessionId, false);
+
+    // Broadcast the agent response
+    this.agentGateway.emitNewMessage(sessionId, agentMessage);
 
     return agentMessage;
   }
