@@ -3,7 +3,6 @@ import {
   useMutation,
   useQueryClient,
   useInfiniteQuery,
-  type InfiniteData,
 } from '@tanstack/react-query';
 import type { Ticket, TicketStatus, TicketPriority, PaginatedResponse, User } from '@/types';
 
@@ -273,7 +272,7 @@ export function useBulkUpdateTickets() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: bulkUpdateTickets,
-    onMutate: async ({ ids, data }) => {
+    onMutate: async ({ ids, data: _data }) => {
       // Optimistically update list cache
       await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
 

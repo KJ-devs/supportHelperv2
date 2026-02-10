@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
@@ -26,7 +26,7 @@ export default function TicketDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTicket = async () => {
+  const fetchTicket = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -38,13 +38,13 @@ export default function TicketDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [ticketId]);
 
   useEffect(() => {
     if (!authLoading && ticketId) {
       fetchTicket();
     }
-  }, [ticketId, authLoading]);
+  }, [ticketId, authLoading, fetchTicket]);
 
   const handleUpdate = (updatedTicket: Ticket) => {
     setTicket(updatedTicket);

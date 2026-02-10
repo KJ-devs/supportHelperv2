@@ -15,13 +15,14 @@ const registerBaseSchema = z.object({
   confirmPassword: z.string(),
 });
 
-const registerSchema = registerBaseSchema.refine(
-  data => data.password === data.confirmPassword,
-  {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
-  }
-);
+// Validation handled by TanStack Form field validators
+// const registerSchema = registerBaseSchema.refine(
+//   data => data.password === data.confirmPassword,
+//   {
+//     message: "Passwords don't match",
+//     path: ['confirmPassword'],
+//   }
+// );
 
 export function RegisterForm() {
   const form = useForm({

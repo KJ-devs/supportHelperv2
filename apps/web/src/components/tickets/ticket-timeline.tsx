@@ -9,6 +9,8 @@ interface TicketTimelineProps {
   ticketId: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 // Mock timeline data
 const timelineEvents = [
   {
@@ -55,7 +57,7 @@ const eventIcons: Record<string, typeof MessageSquare> = {
   tag: Tag,
 };
 
-export function TicketTimeline({ ticketId }: TicketTimelineProps) {
+export function TicketTimeline({ ticketId: _ticketId }: TicketTimelineProps) {
   return (
     <Card>
       <CardHeader>

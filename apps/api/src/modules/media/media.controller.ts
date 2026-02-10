@@ -105,6 +105,26 @@ export class MediaController {
     return this.mediaService.findOne(id, tenantId);
   }
 
+  @Get(':id/url')
+  @ApiOperation({ summary: 'Get presigned download URL for media' })
+  @ApiResponse({
+    status: 200,
+    description: 'Presigned URL generated',
+    schema: {
+      properties: {
+        url: { type: 'string', format: 'uri' },
+        expiresIn: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Media not found' })
+  async getMediaUrl(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    return this.mediaService.getMediaDownloadUrl(id, tenantId);
+  }
+
   @Get('download/*')
   @ApiOperation({ summary: 'Stream or redirect to media file by storage key' })
   @ApiResponse({ status: 302, description: 'Redirect to presigned URL' })

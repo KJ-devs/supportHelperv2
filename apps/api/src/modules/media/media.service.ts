@@ -511,6 +511,39 @@ export class MediaService {
   }
 
   /**
+   * Get presigned download URL for a media by ID
+   */
+  async getMediaDownloadUrl(mediaId: string, tenantId: string) {
+    const media = await this.prisma.media.findFirst({
+      where: {
+        id: mediaId,
+        ticket: {
+          tenantId,
+        },
+      },
+    });
+
+    if (!media) {
+      throw new NotFoundException('Media not found');
+    }
+
+    if (media.processingStatus !== 'uploaded' && media.processingStatus !== 'completed') {
+      throw new BadRequestException('Media is not ready for download');
+    }
+
+    const url = await this.s3Service.getPresignedDownloadUrl(
+      media.storageKey,
+      3600, // 1 hour expiry
+      media.mimeType ?? undefined,
+    );
+
+    return {
+      url,
+      expiresIn: 3600,
+    };
+  }
+
+  /**
    * Verify file checksum
    * Compares client checksum with S3 ETag
    * Note: S3 ETag is MD5 for simple uploads, but different for multipart uploads

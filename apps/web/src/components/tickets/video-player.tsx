@@ -65,7 +65,7 @@ export function VideoPlayer({ video, onEventClick }: VideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(video.duration);
-  const [volume, setVolume] = useState(1);
+  const [volume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showOcr, setShowOcr] = useState(false);
@@ -110,7 +110,7 @@ export function VideoPlayer({ video, onEventClick }: VideoPlayerProps) {
     if (videoRef.current) {
       videoRef.current.volume = isMuted ? 0 : volume;
     }
-  }, [volume, isMuted]);
+  }, [isMuted, volume]);
 
   const togglePlay = useCallback(() => {
     if (!videoRef.current) return;

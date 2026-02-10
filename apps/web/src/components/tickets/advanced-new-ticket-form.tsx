@@ -1,10 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from '@tanstack/react-form';
 import { zodValidator } from '@tanstack/zod-form-adapter';
-import { z } from 'zod';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -278,7 +276,6 @@ function ReproductionStepsEditor({
 
 // Main form component
 export function AdvancedNewTicketForm() {
-  const router = useRouter();
   const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState<FormStep>('basics');
   const [completedSteps, setCompletedSteps] = useState<Set<FormStep>>(new Set());

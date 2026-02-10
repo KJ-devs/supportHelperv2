@@ -27,7 +27,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
     // Log slow queries in development
     if (process.env.NODE_ENV === 'development') {
-      // @ts-ignore - Prisma event typing
+      // @ts-expect-error - Prisma event typing
       this.$on('query', (e: any) => {
         if (e.duration > 100) {
           this.logger.warn(`Slow query (${e.duration}ms): ${e.query}`);

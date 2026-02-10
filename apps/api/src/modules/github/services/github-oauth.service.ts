@@ -122,7 +122,9 @@ export class GithubOAuthService {
    */
   getAuthorizationUrl(tenantId: string, redirectUri?: string): { url: string; state: string } {
     if (!this.enabled) {
-      throw new BadRequestException('GitHub integration is not enabled');
+      throw new BadRequestException(
+        'GitHub integration is not enabled. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in your .env file.'
+      );
     }
 
     const state = this.generateStateToken(tenantId, redirectUri);

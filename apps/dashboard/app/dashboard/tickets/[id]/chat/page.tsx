@@ -54,7 +54,6 @@ export default function AgentChatPage() {
   }, [socketMessages]);
 
   // Update session state from socket updates
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (sessionState) {
       setSession((prev) =>
@@ -101,7 +100,6 @@ export default function AgentChatPage() {
   }, [authLoading, fetchData]);
 
   // Join WebSocket room when session is available and socket is connected
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (session && isConnected) {
       joinSession(session.id);
@@ -109,7 +107,7 @@ export default function AgentChatPage() {
         leaveSession(session.id);
       };
     }
-  }, [session?.id, isConnected, joinSession, leaveSession]);
+  }, [session, isConnected, joinSession, leaveSession]);
 
   const handleStartSession = async () => {
     try {

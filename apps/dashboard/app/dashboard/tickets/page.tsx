@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
 import type { Ticket, TicketFilters, PaginatedResponse } from '@/lib/types/ticket';
@@ -44,7 +44,7 @@ export default function TicketsPage() {
   });
 
   // Fetch tickets
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -61,13 +61,13 @@ export default function TicketsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters]);
 
   useEffect(() => {
     if (!authLoading) {
       fetchTickets();
     }
-  }, [filters, authLoading]);
+  }, [authLoading, fetchTickets]);
 
   const handleFiltersChange = (newFilters: TicketFilters) => {
     setFilters({ ...newFilters });

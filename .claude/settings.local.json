@@ -48,7 +48,11 @@
       "Bash(netstat:*)",
       "Bash(docker --version:*)",
       "Bash(\"/mnt/c/Program Files/Docker/Docker/resources/bin/docker.exe\" ps)",
-      "Bash(Where-Object { $_Name -match \"eslint|prettier|husky\" })"
+      "Bash(Where-Object { $_Name -match \"eslint|prettier|husky\" })",
+      "Bash(Select-String \"error\")",
+      "Bash(Select-String -NotMatch \"warning|ELIFECYCLE|ERROR:|ERR_\")",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\krebs\\\\Documents\\\\sphelper\\\\supportHelperv2\" -Recurse -Filter \"CLAUDE.md\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object -ExpandProperty FullName)"
     ]
   }
 }

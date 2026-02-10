@@ -30,12 +30,6 @@ export function EscalationBanner({
   const [selectedUserId, setSelectedUserId] = useState(escalatedTo || '');
   const [showDropdown, setShowDropdown] = useState(false);
 
-  useEffect(() => {
-    if (showDropdown && teamMembers.length === 0) {
-      fetchTeamMembers();
-    }
-  }, [showDropdown]);
-
   const fetchTeamMembers = async () => {
     try {
       setIsLoadingMembers(true);
@@ -47,6 +41,12 @@ export function EscalationBanner({
       setIsLoadingMembers(false);
     }
   };
+
+  useEffect(() => {
+    if (showDropdown && teamMembers.length === 0) {
+      fetchTeamMembers();
+    }
+  }, [showDropdown, teamMembers.length]);
 
   const handleAssign = async () => {
     if (!selectedUserId) return;

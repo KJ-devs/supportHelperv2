@@ -117,7 +117,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     AgentModule,
 
     // Integrations
-    // GithubModule,  // Test after MediaModule works
+    GithubModule,
     IntegrationsModule,
 
     // Feedback & Learning

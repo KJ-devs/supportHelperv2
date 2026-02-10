@@ -8,6 +8,9 @@
 - Handle all MediaError codes: `MEDIA_ERR_ABORTED`, `MEDIA_ERR_NETWORK`, `MEDIA_ERR_DECODE`, `MEDIA_ERR_SRC_NOT_SUPPORTED`
 - Clear error state on `onLoadStart` event to reset UI when loading new video
 - Derive file extension from MIME type for downloads (webm/mp4/mov)
+- **IMPORTANT**: `<video>` elements cannot send custom headers (like Authorization Bearer tokens)
+- Use pre-signed URLs from the API endpoint `GET /api/media/:mediaId/url` instead of direct S3 URLs
+- Fetch the pre-signed URL via authenticated API call first, then pass it to VideoPlayer
 
 ### Component Props
 - When adding optional props to shared components, always check for existing usages in the codebase
@@ -18,3 +21,13 @@
 - Client components need `'use client'` directive
 - Shared UI components in `apps/dashboard/components/`
 - Build command: `pnpm --filter @support-helper/dashboard build`
+
+## Media Handling
+- Media processing statuses: `pending`, `uploaded`, `processing`, `completed`, `failed`
+- Backend uses MinIO/S3 for file storage with pre-signed URLs
+- Media records have `storageKey` (S3 path) and `storageUrl` (direct S3 URL - not usable from browser due to auth)
+- API endpoints:
+  - `GET /api/media/:id` - Get media metadata with downloadUrl
+  - `GET /api/media/:id/url` - Get pre-signed download URL (1 hour expiry)
+  - `GET /api/media/download/:storageKey` - Redirect to pre-signed URL (requires JWT auth header)
+- TypeScript types in `apps/dashboard/lib/types/ticket.ts` must match backend Prisma schema

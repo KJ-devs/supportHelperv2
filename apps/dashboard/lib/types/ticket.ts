@@ -70,7 +70,7 @@ export interface Media {
   fileSize?: bigint | number;
   mimeType?: string;
   durationMs?: number;
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  processingStatus: 'pending' | 'uploaded' | 'processing' | 'completed' | 'failed';
   processingError?: string;
   metadata?: Record<string, any>;
   createdAt: string;

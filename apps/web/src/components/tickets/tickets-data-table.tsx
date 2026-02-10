@@ -27,7 +27,6 @@ import {
   UserPlus,
   ExternalLink,
   Copy,
-  MessageSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { TicketWithRelations } from '@/hooks/use-tickets-advanced';
