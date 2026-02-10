@@ -9,6 +9,8 @@ interface TicketDetailProps {
   ticketId: string;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 // Mock data - would come from API
 const mockTicket = {
   id: '1234',
@@ -57,7 +59,7 @@ const priorityVariants: Record<string, 'default' | 'secondary' | 'destructive' |
   urgent: 'destructive',
 };
 
-export function TicketDetail({ ticketId }: TicketDetailProps) {
+export function TicketDetail({ ticketId: _ticketId }: TicketDetailProps) {
   return (
     <Card>
       <CardHeader>

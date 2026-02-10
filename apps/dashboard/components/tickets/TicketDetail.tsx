@@ -18,11 +18,37 @@ interface TicketDetailProps {
 
 export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+  const [loadingUrls, setLoadingUrls] = useState<Record<string, boolean>>({});
 
-  // Helper to get media URL (construct from storageKey or API endpoint)
-  const getMediaUrl = (storageKey: string) => {
-    // TODO: Replace with actual pre-signed URL from API
-    return `/api/media/download/${encodeURIComponent(storageKey)}`;
+  // Fetch pre-signed URL for a media item
+  const fetchMediaUrl = async (mediaId: string) => {
+    if (mediaUrls[mediaId] || loadingUrls[mediaId]) return;
+
+    setLoadingUrls(prev => ({ ...prev, [mediaId]: true }));
+
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+
+      const response = await fetch(`${API_URL}/api/media/${mediaId}/url`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch media URL: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setMediaUrls(prev => ({ ...prev, [mediaId]: data.url }));
+    } catch (error) {
+      console.error('Error fetching media URL:', error);
+    } finally {
+      setLoadingUrls(prev => ({ ...prev, [mediaId]: false }));
+    }
   };
 
   // Helper to get filename from metadata or storageKey
@@ -190,12 +216,31 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                           </p>
                         </div>
                       </div>
-                      <VideoPlayer
-                        src={getMediaUrl(media.storageKey)}
-                        title={filename}
-                        mimeType={media.mimeType}
-                        onError={(error) => console.error('Video error:', error)}
-                      />
+                      {mediaUrls[media.id] ? (
+                        <VideoPlayer
+                          src={mediaUrls[media.id]!}
+                          title={filename}
+                          mimeType={media.mimeType ?? undefined}
+                          onError={(error) => console.error('Video error:', error)}
+                        />
+                      ) : (
+                        <div className="border rounded-lg p-8 text-center bg-gray-50">
+                          {loadingUrls[media.id] ? (
+                            <div className="space-y-2">
+                              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                              <p className="text-sm text-gray-600">Loading video...</p>
+                            </div>
+                          ) : (
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => fetchMediaUrl(media.id)}
+                            >
+                              Load Video
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="border rounded-lg p-3">
@@ -207,12 +252,26 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                             {media.processingStatus}
                           </p>
                         </div>
-                        {media.processingStatus === 'completed' && (
-                          <a href={getMediaUrl(media.storageKey)} download={filename}>
-                            <Button size="sm" variant="secondary">
-                              📥 Télécharger
-                            </Button>
-                          </a>
+                        {(media.processingStatus === 'uploaded' || media.processingStatus === 'completed') && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={async () => {
+                              await fetchMediaUrl(media.id);
+                              const url = mediaUrls[media.id];
+                              if (url) {
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                              }
+                            }}
+                            disabled={loadingUrls[media.id]}
+                          >
+                            {loadingUrls[media.id] ? '...' : '📥 Télécharger'}
+                          </Button>
                         )}
                       </div>
                     </div>

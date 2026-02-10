@@ -38,6 +38,15 @@
 - GitHub webhook test endpoint removed
 - Legacy duplicate controllers removed (github.controller.ts, github-webhook.controller.ts, modules/auth/auth.controller.ts)
 
+### GitHub Integration
+- Config location: `src/config/github.config.ts`
+- Service: `src/modules/github/services/github-oauth.service.ts`
+- Controller: `src/modules/github/controllers/github-oauth.controller.ts`
+- `isEnabled()` check: Returns `true` only if BOTH `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set
+- Setup docs: `docs/GITHUB_OAUTH_SETUP.md`
+- Required env vars for GitHub: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`
+- OAuth callback URL: `{API_URL}/api/github/oauth/callback`
+
 ### Key Notes
 - `modules/auth/` directory still exists with guards, strategies, middleware -- used by feature modules
 - Build command: `pnpm --filter @support-helper/api build`
@@ -49,5 +58,6 @@
 - `nest-cli.json` has standard config: sourceRoot=src, entryFile=main, deleteOutDir=true
 - Prisma client must be generated (`prisma generate`) before build -- `.prisma/client` not auto-generated on install
 - Required env vars (non-optional): DATABASE_URL, JWT_SECRET, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET
+- Optional env vars: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET, OPENAI_API_KEY
 - dist/ directory exists from previous builds
 - Shared package (`@support-helper/shared`) is built and available

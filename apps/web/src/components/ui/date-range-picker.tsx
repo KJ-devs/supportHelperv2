@@ -3,11 +3,10 @@
 import * as React from 'react';
 import { format } from 'date-fns';
 import { Calendar as CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 export function DateRangePicker() {
-  const [dateRange, setDateRange] = React.useState<{
+  const [dateRange] = React.useState<{
     from: Date;
     to: Date;
   }>({

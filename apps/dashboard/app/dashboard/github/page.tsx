@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -16,6 +16,14 @@ import { ticketsApi } from '@/lib/api/tickets';
 import type { Ticket } from '@/lib/types/ticket';
 
 export default function GitHubPage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <GitHubPageContent />
+    </Suspense>
+  );
+}
+
+function GitHubPageContent() {
   const { isLoading: authLoading } = useRequireAuth();
   const searchParams = useSearchParams();
 

@@ -5,13 +5,6 @@ const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@support-helper/shared'],
 
-  // Sentry configuration
-  sentry: {
-    hideSourceMaps: true,
-    disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
-    disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
-  },
-
   // Experimental features
   experimental: {
     instrumentationHook: true,
@@ -71,6 +64,10 @@ const sentryWebpackPluginOptions = {
 
   // Hide source maps from browser
   hideSourceMaps: true,
+
+  // Disable webpack plugins when no auth token
+  disableServerWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
+  disableClientWebpackPlugin: !process.env.SENTRY_AUTH_TOKEN,
 
   // Automatically add release info
   release: process.env.SENTRY_RELEASE || process.env.VERCEL_GIT_COMMIT_SHA,

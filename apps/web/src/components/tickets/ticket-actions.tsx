@@ -15,7 +15,7 @@ interface TicketActionsProps {
   ticketId: string;
 }
 
-export function TicketActions({ ticketId }: TicketActionsProps) {
+export function TicketActions({ ticketId: _ticketId }: TicketActionsProps) {
   const router = useRouter();
 
   return (

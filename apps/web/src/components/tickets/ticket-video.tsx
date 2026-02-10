@@ -9,7 +9,7 @@ interface TicketVideoProps {
   ticketId: string;
 }
 
-export function TicketVideo({ ticketId }: TicketVideoProps) {
+export function TicketVideo({ ticketId: _ticketId }: TicketVideoProps) {
   const [isPlaying, setIsPlaying] = useState(false);
 
   // Mock - would check if video exists

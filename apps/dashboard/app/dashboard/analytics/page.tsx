@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
 import type { TicketStats } from '@/lib/types/ticket';
@@ -23,7 +23,7 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
 
-  const fetchStats = async () => {
+  const fetchStats = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -46,13 +46,13 @@ export default function AnalyticsPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [timeRange]);
 
   useEffect(() => {
     if (!authLoading) {
       fetchStats();
     }
-  }, [authLoading, timeRange]);
+  }, [authLoading, fetchStats]);
 
   if (authLoading || isLoading) {
     return <PageLoader />;

@@ -27,7 +27,7 @@ export class GithubOAuthController {
     private readonly oauthService: GithubOAuthService,
     private readonly config: ConfigService
   ) {
-    this.frontendUrl = this.config.get('app.frontendUrl') || 'http://localhost:3001';
+    this.frontendUrl = this.config.get('app.dashboardUrl') || 'http://localhost:3000';
   }
 
   /**
@@ -41,7 +41,10 @@ export class GithubOAuthController {
   @ApiQuery({ name: 'redirect', required: false, description: 'Frontend redirect URL after OAuth' })
   authorize(@CurrentTenant() tenantId: string, @Query('redirect') redirect?: string) {
     if (!this.oauthService.isEnabled()) {
-      throw new BadRequestException('GitHub integration is not enabled');
+      throw new BadRequestException(
+        'GitHub integration is not enabled. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in your .env file. ' +
+        'See https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/creating-an-oauth-app for setup instructions.'
+      );
     }
 
     const { url, state } = this.oauthService.getAuthorizationUrl(tenantId, redirect);
@@ -65,7 +68,7 @@ export class GithubOAuthController {
     if (query.error) {
       this.logger.error(`OAuth error: ${query.error} - ${query.error_description}`);
       return res.redirect(
-        `${this.frontendUrl}/settings/integrations?error=${encodeURIComponent(query.error_description || query.error)}`
+        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent(query.error_description || query.error)}`
       );
     }
 
@@ -92,13 +95,13 @@ export class GithubOAuthController {
       );
 
       // Redirect to frontend success page
-      const redirectUrl = redirectUri || `${this.frontendUrl}/settings/integrations`;
+      const redirectUrl = redirectUri || `${this.frontendUrl}/dashboard/github`;
       return res.redirect(`${redirectUrl}?github=connected&user=${user.login}`);
     } catch (error) {
       this.logger.error('OAuth callback error:', error);
 
       return res.redirect(
-        `${this.frontendUrl}/settings/integrations?error=${encodeURIComponent('GitHub connection failed')}`
+        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent('GitHub connection failed')}`
       );
     }
   }

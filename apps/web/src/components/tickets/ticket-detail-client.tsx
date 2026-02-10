@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   useTicketDetail,
@@ -32,7 +32,6 @@ export function TicketDetailClient({ ticketId }: TicketDetailClientProps) {
   const router = useRouter();
   const { toast } = useToast();
   const videoPlayerRef = useRef<{ seekTo: (time: number) => void }>(null);
-  const [selectedEvent, setSelectedEvent] = useState<VideoEvent | null>(null);
 
   // Queries
   const { data: ticket, isLoading, error } = useTicketDetail(ticketId);
@@ -147,8 +146,8 @@ export function TicketDetailClient({ ticketId }: TicketDetailClientProps) {
     }
   }, [ticketId, deleteTicket, toast, router]);
 
-  const handleEventClick = useCallback((event: VideoEvent) => {
-    setSelectedEvent(event);
+  const handleEventClick = useCallback((_event: VideoEvent) => {
+    // Event handling logic here
   }, []);
 
   const handleJumpToTimestamp = useCallback((timestamp: number) => {

@@ -93,7 +93,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
         throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { id: string };
 
       return {
         success: true,
@@ -124,7 +124,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
         throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { id: string };
 
       return {
         success: true,

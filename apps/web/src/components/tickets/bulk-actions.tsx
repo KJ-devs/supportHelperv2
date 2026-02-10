@@ -6,7 +6,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -32,7 +31,6 @@ import {
   UserPlus,
   CheckCircle,
   XCircle,
-  Clock,
   AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';

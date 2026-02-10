@@ -13,7 +13,6 @@ import type {
   DateRange,
 } from '@/types/analytics';
 
-const API_BASE = '/api';
 const POLLING_INTERVAL = 30000; // 30 seconds
 
 // Query keys
@@ -35,18 +34,6 @@ export const analyticsKeys = {
     [...analyticsKeys.all, 'aiConfidence', dateRange, applicationId] as const,
   applications: () => [...analyticsKeys.all, 'applications'] as const,
 };
-
-// Helper function to build query params
-function buildQueryParams(dateRange: DateRange, applicationId?: string | null): URLSearchParams {
-  const params = new URLSearchParams({
-    from: dateRange.from.toISOString(),
-    to: dateRange.to.toISOString(),
-  });
-  if (applicationId) {
-    params.set('applicationId', applicationId);
-  }
-  return params;
-}
 
 // Mock data generators (replace with real API calls)
 function generateMockMetrics(): AnalyticsMetricsResponse {
@@ -197,14 +184,9 @@ function generateMockApplications(): ApplicationsListResponse {
 
 // Fetch functions (using mock data for now, replace with real API calls)
 async function fetchMetrics(
-  dateRange: DateRange,
-  applicationId?: string | null
+  _dateRange: DateRange,
+  _applicationId?: string | null
 ): Promise<AnalyticsMetricsResponse> {
-  // const params = buildQueryParams(dateRange, applicationId);
-  // const response = await fetch(`${API_BASE}/analytics/metrics?${params}`);
-  // if (!response.ok) throw new Error('Failed to fetch metrics');
-  // return response.json();
-
   // Mock implementation
   await new Promise(resolve => setTimeout(resolve, 500));
   return generateMockMetrics();
@@ -212,7 +194,7 @@ async function fetchMetrics(
 
 async function fetchTicketsPerDay(
   dateRange: DateRange,
-  applicationId?: string | null
+  _applicationId?: string | null
 ): Promise<TicketsPerDayResponse> {
   await new Promise(resolve => setTimeout(resolve, 400));
   const daysDiff = Math.ceil(
@@ -222,16 +204,16 @@ async function fetchTicketsPerDay(
 }
 
 async function fetchTicketsByType(
-  dateRange: DateRange,
-  applicationId?: string | null
+  _dateRange: DateRange,
+  _applicationId?: string | null
 ): Promise<TicketsByTypeResponse> {
   await new Promise(resolve => setTimeout(resolve, 350));
   return generateMockTicketsByType();
 }
 
 async function fetchTicketsBySeverity(
-  dateRange: DateRange,
-  applicationId?: string | null
+  _dateRange: DateRange,
+  _applicationId?: string | null
 ): Promise<TicketsBySeverityResponse> {
   await new Promise(resolve => setTimeout(resolve, 300));
   return generateMockTicketsBySeverity();
@@ -239,7 +221,7 @@ async function fetchTicketsBySeverity(
 
 async function fetchResolutionTrend(
   dateRange: DateRange,
-  applicationId?: string | null
+  _applicationId?: string | null
 ): Promise<ResolutionTrendResponse> {
   await new Promise(resolve => setTimeout(resolve, 450));
   const daysDiff = Math.ceil(
@@ -248,14 +230,14 @@ async function fetchResolutionTrend(
   return generateMockResolutionTrend(daysDiff);
 }
 
-async function fetchTopApplications(dateRange: DateRange): Promise<TopApplicationsResponse> {
+async function fetchTopApplications(_dateRange: DateRange): Promise<TopApplicationsResponse> {
   await new Promise(resolve => setTimeout(resolve, 380));
   return generateMockTopApplications();
 }
 
 async function fetchAIConfidence(
   dateRange: DateRange,
-  applicationId?: string | null
+  _applicationId?: string | null
 ): Promise<AIConfidenceResponse> {
   await new Promise(resolve => setTimeout(resolve, 420));
   const daysDiff = Math.ceil(

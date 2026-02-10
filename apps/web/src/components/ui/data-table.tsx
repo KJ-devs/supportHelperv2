@@ -18,7 +18,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronUp, ChevronDown, ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { ChevronsUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 export interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -31,6 +31,7 @@ export interface DataTableProps<TData, TValue> {
   // Selection
   rowSelection?: RowSelectionState;
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   enableRowSelection?: boolean | ((row: any) => boolean);
   // Filtering
   columnFilters?: ColumnFiltersState;
@@ -335,6 +336,7 @@ export function DataTable<TData, TValue>({
 }
 
 // Separate header component for sorting UI
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function TableHeader({ header }: { header: any }) {
   const canSort = header.column.getCanSort();
   const sorted = header.column.getIsSorted();

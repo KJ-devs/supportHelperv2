@@ -100,7 +100,7 @@ export class JiraProvider extends BaseIntegrationProvider {
         throw new Error(`Jira API error: ${response.status} - ${errorText}`);
       }
 
-      const user = await response.json();
+      const user = await response.json() as { displayName?: string; emailAddress?: string };
 
       return {
         success: true,
@@ -196,7 +196,7 @@ export class JiraProvider extends BaseIntegrationProvider {
         throw new Error(`Jira API error: ${response.status} - ${errorText}`);
       }
 
-      const issue = await response.json();
+      const issue = await response.json() as { key: string };
 
       return {
         success: true,

@@ -12,7 +12,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { Filter, X, CalendarIcon, SlidersHorizontal, RotateCcw } from 'lucide-react';
+import { Filter, X, CalendarIcon, RotateCcw } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 import type { TicketStatus, TicketPriority, User } from '@/types';

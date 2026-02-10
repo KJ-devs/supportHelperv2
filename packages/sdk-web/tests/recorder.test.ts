@@ -114,8 +114,8 @@ describe('VideoRecorder', () => {
       expect(recorder.isActive()).toBe(false);
     });
 
-    it('should throw if not recording', () => {
-      expect(() => recorder.stop()).toThrow('Recording not in progress');
+    it('should throw if not recording', async () => {
+      await expect(recorder.stop()).rejects.toThrow('No recording in progress');
     });
 
     it('should stop all media tracks', async () => {

@@ -13,20 +13,17 @@ export const integrationsApi = {
   }): Promise<Integration[]> => {
     const params = new URLSearchParams();
     if (filters?.type) params.append('type', filters.type);
-    if (filters?.enabled !== undefined)
-      params.append('enabled', String(filters.enabled));
+    if (filters?.enabled !== undefined) params.append('enabled', String(filters.enabled));
 
-    return apiRequest(`/integrations?${params}`);
+    return apiRequest(`/api/integrations?${params}`);
   },
 
   getIntegration: async (id: string): Promise<Integration> => {
-    return apiRequest(`/integrations/${id}`);
+    return apiRequest(`/api/integrations/${id}`);
   },
 
-  createIntegration: async (
-    data: CreateIntegrationData
-  ): Promise<Integration> => {
-    return apiRequest('/integrations', {
+  createIntegration: async (data: CreateIntegrationData): Promise<Integration> => {
+    return apiRequest('/api/integrations', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -36,14 +33,14 @@ export const integrationsApi = {
     id: string,
     data: Partial<CreateIntegrationData>
   ): Promise<Integration> => {
-    return apiRequest(`/integrations/${id}`, {
+    return apiRequest(`/api/integrations/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),
     });
   },
 
   deleteIntegration: async (id: string): Promise<void> => {
-    return apiRequest(`/integrations/${id}`, {
+    return apiRequest(`/api/integrations/${id}`, {
       method: 'DELETE',
     });
   },
@@ -51,16 +48,13 @@ export const integrationsApi = {
   testConnection: async (
     id: string
   ): Promise<{ success: boolean; message?: string; error?: string }> => {
-    return apiRequest(`/integrations/${id}/test`, {
+    return apiRequest(`/api/integrations/${id}/test`, {
       method: 'POST',
     });
   },
 
-  syncTickets: async (
-    id: string,
-    ticketIds?: string[]
-  ): Promise<{ queued: number }> => {
-    return apiRequest(`/integrations/${id}/sync`, {
+  syncTickets: async (id: string, ticketIds?: string[]): Promise<{ queued: number }> => {
+    return apiRequest(`/api/integrations/${id}/sync`, {
       method: 'POST',
       body: JSON.stringify({ ticketIds }),
     });
@@ -71,10 +65,10 @@ export const integrationsApi = {
     page = 0,
     limit = 20
   ): Promise<{ data: IntegrationSyncLog[]; total: number; page: number; limit: number }> => {
-    return apiRequest(`/integrations/${id}/logs?page=${page}&limit=${limit}`);
+    return apiRequest(`/api/integrations/${id}/logs?page=${page}&limit=${limit}`);
   },
 
   getTypes: async (): Promise<IntegrationType[]> => {
-    return apiRequest('/integrations/types');
+    return apiRequest('/api/integrations/types');
   },
 };
