@@ -47,6 +47,23 @@
 - Required env vars for GitHub: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`
 - OAuth callback URL: `{API_URL}/api/github/oauth/callback`
 
+### Shared Package (@support-helper/shared)
+- Location: `packages/shared/`
+- Strict mode enabled via `tsconfig.base.json` inheritance
+- NO `any` types, NO `@ts-ignore`, NO `@ts-nocheck` -- all strict rules enforced
+- Test files (*.spec.ts, *.test.ts) excluded from build via tsconfig
+- Exports: types (Ticket, User, Tenant, Media), constants (severity, ticket-status), utils (validation)
+- Used by: API, Worker, SDK, Dashboard, Web
+- Build: `pnpm --filter @support-helper/shared build` (tsc)
+- Tests: `pnpm --filter @support-helper/shared test` (vitest, 45 tests)
+
+### Testing
+- Test framework: Jest for API (*.spec.ts files)
+- Test command: `pnpm --filter @support-helper/api test`
+- 129 total tests: 109 passed, 20 skipped, 0 failed
+- Tests located in `apps/api/test/unit/` directory
+- ConfigService must be mocked in tests that inject AuthService (required dependency)
+
 ### Key Notes
 - `modules/auth/` directory still exists with guards, strategies, middleware -- used by feature modules
 - Build command: `pnpm --filter @support-helper/api build`
@@ -61,3 +78,21 @@
 - Optional env vars: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET, OPENAI_API_KEY
 - dist/ directory exists from previous builds
 - Shared package (`@support-helper/shared`) is built and available
+
+### Multi-Tenant Security Audit (Phase 6 - 2026-02-10)
+All services verified to filter by tenantId:
+- ApplicationsService: ALL queries filter by tenantId ✅
+- TicketsService: ALL queries filter by tenantId ✅
+- UsersService: ALL queries filter by tenantId ✅
+- MediaService: ALL queries verify tenant via ticket.tenantId relation ✅
+- AgentService: ALL queries verify tenant via ticket.tenantId relation ✅
+- AnalyticsService: ALL queries filter by tenantId ✅
+- FeedbackService: ALL queries verify tenant via ticket.tenantId relation ✅
+- IntegrationsService: ALL queries filter by tenantId ✅
+
+All controllers have appropriate guards:
+- Dashboard controllers: @UseGuards(JwtAuthGuard) + @ApiBearerAuth() ✅
+- SDK controllers: @SdkAuth() + @UseGuards(SdkKeyGuard) + @ApiSecurity('sdk-key') ✅
+- Public controllers: @Public() decorator (auth, health probes, OAuth callbacks, webhooks) ✅
+- GitHub webhooks: @Public() but validates GitHub signature ✅
+- Health sensitive endpoints (/full, /db, /redis, etc.): @UseGuards(JwtAuthGuard) ✅

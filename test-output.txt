@@ -1,0 +1,333 @@
+
+> support-helper@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2
+> turbo run test
+
+• turbo 2.7.4
+• Packages in scope: @repo/web, @support-helper/api, @support-helper/dashboard, @support-helper/database, @support-helper/sdk-web, @support-helper/shared, @support-helper/worker
+• Running test in 7 packages
+• Remote caching disabled
+@support-helper/database:build: cache hit, replaying logs 2e02c1b8a4ca8ab9
+@support-helper/database:build: 
+@support-helper/database:build: > @support-helper/database@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\database
+@support-helper/database:build: > tsc
+@support-helper/database:build: 
+@support-helper/database:test: cache miss, executing 77b454fc0c355ab4
+@support-helper/shared:build: cache hit, replaying logs 246f93d73f885dc3
+@support-helper/shared:build: 
+@support-helper/shared:build: > @support-helper/shared@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\shared
+@support-helper/shared:build: > tsc
+@support-helper/shared:build: 
+@support-helper/shared:test: cache miss, executing 3fb08b1bbd8af663
+@support-helper/sdk-web:build: cache hit, replaying logs c8e49d8d760e910e
+@support-helper/sdk-web:build: 
+@support-helper/sdk-web:build: > @support-helper/sdk-web@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\sdk-web
+@support-helper/sdk-web:build: > vite build
+@support-helper/sdk-web:build: 
+@support-helper/sdk-web:build: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@support-helper/sdk-web:build: [36mvite v5.4.21 [32mbuilding for production...[36m[39m
+@support-helper/sdk-web:build: transforming...
+@support-helper/sdk-web:build: [32m✓[39m 15 modules transformed.
+@support-helper/sdk-web:build: rendering chunks...
+@support-helper/sdk-web:build: 
+@support-helper/sdk-web:build: [vite:dts] Start generate declaration files...
+@support-helper/sdk-web:build: computing gzip size...
+@support-helper/sdk-web:build: [2mdist/[22m[36mwidget.es.js                 [39m[1m[2m 0.35 kB[22m[1m[22m[2m │ gzip:  0.26 kB[22m[2m │ map:  0.09 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mreact.es.js                  [39m[1m[2m 2.42 kB[22m[1m[22m[2m │ gzip:  0.85 kB[22m[2m │ map:  9.44 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mvue.es.js                    [39m[1m[2m 3.17 kB[22m[1m[22m[2m │ gzip:  0.98 kB[22m[2m │ map: 10.76 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mindex.es.js                  [39m[1m[2m 5.48 kB[22m[1m[22m[2m │ gzip:  1.87 kB[22m[2m │ map: 14.44 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mchunks/index-DSV3Ce_D.es.js  [39m[1m[2m46.10 kB[22m[1m[22m[2m │ gzip: 10.98 kB[22m[2m │ map: 94.94 kB[22m
+@support-helper/sdk-web:build: [vite:dts] Start rollup declaration files...
+@support-helper/sdk-web:build: Analysis will use the bundled TypeScript version 5.8.2
+@support-helper/sdk-web:build: *** The target project appears to use TypeScript 5.9.3 which is newer than the bundled compiler engine; consider upgrading API Extractor.
+@support-helper/sdk-web:build: Analysis will use the bundled TypeScript version 5.8.2
+@support-helper/sdk-web:build: *** The target project appears to use TypeScript 5.9.3 which is newer than the bundled compiler engine; consider upgrading API Extractor.
+@support-helper/sdk-web:build: Analysis will use the bundled TypeScript version 5.8.2
+@support-helper/sdk-web:build: *** The target project appears to use TypeScript 5.9.3 which is newer than the bundled compiler engine; consider upgrading API Extractor.
+@support-helper/sdk-web:build: Analysis will use the bundled TypeScript version 5.8.2
+@support-helper/sdk-web:build: *** The target project appears to use TypeScript 5.9.3 which is newer than the bundled compiler engine; consider upgrading API Extractor.
+@support-helper/sdk-web:build: [vite:dts] Declaration files built in 7246ms.
+@support-helper/sdk-web:build: 
+@support-helper/sdk-web:build: Entry module "src/react/index.ts" is using named and default exports together. Consumers of your bundle will have to use `chunk.default` to access the default export, which may not be what you want. Use `output.exports: "named"` to disable this warning.
+@support-helper/sdk-web:build: Entry module "src/vue/index.ts" is using named and default exports together. Consumers of your bundle will have to use `chunk.default` to access the default export, which may not be what you want. Use `output.exports: "named"` to disable this warning.
+@support-helper/sdk-web:build: [2mdist/[22m[36mwidget.cjs.js                 [39m[1m[2m 0.50 kB[22m[1m[22m[2m │ gzip:  0.30 kB[22m[2m │ map:  0.09 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mreact.cjs.js                  [39m[1m[2m 1.81 kB[22m[1m[22m[2m │ gzip:  0.83 kB[22m[2m │ map:  9.14 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mvue.cjs.js                    [39m[1m[2m 2.29 kB[22m[1m[22m[2m │ gzip:  0.88 kB[22m[2m │ map: 10.39 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mindex.cjs.js                  [39m[1m[2m 4.09 kB[22m[1m[22m[2m │ gzip:  1.61 kB[22m[2m │ map: 13.87 kB[22m
+@support-helper/sdk-web:build: [2mdist/[22m[36mchunks/index-DkB9ZLu5.cjs.js  [39m[1m[2m39.63 kB[22m[1m[22m[2m │ gzip: 10.01 kB[22m[2m │ map: 92.38 kB[22m
+@support-helper/sdk-web:build: [32m✓ built in 7.70s[39m
+@support-helper/sdk-web:test: cache miss, executing 8f85b432449880d7
+@support-helper/worker:build: cache hit, replaying logs 4a62dc632c1494b4
+@support-helper/worker:build: 
+@support-helper/worker:build: > @support-helper/worker@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\worker
+@support-helper/worker:build: > nest build
+@support-helper/worker:build: 
+@support-helper/worker:test: cache miss, executing b7b1356f8a4927fa
+@repo/web:build: cache hit, replaying logs feab4ddb7fe4b392
+@repo/web:build: 
+@repo/web:build: > @repo/web@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\web
+@repo/web:build: > next build
+@repo/web:build: 
+@repo/web:build:    ▲ Next.js 15.1.0
+@repo/web:build: 
+@repo/web:build:    Creating an optimized production build ...
+@repo/web:build:  ✓ Compiled successfully
+@repo/web:build:    Linting and checking validity of types ...
+@repo/web:build:    Collecting page data ...
+@repo/web:build:    Generating static pages (0/14) ...
+@repo/web:build:    Generating static pages (3/14) 
+@repo/web:build:    Generating static pages (6/14) 
+@repo/web:build:    Generating static pages (10/14) 
+@repo/web:build:  ✓ Generating static pages (14/14)
+@repo/web:build:    Finalizing page optimization ...
+@repo/web:build:    Collecting build traces ...
+@repo/web:build: 
+@repo/web:build: Route (app)                              Size     First Load JS
+@repo/web:build: ┌ ○ /                                    156 B           106 kB
+@repo/web:build: ├ ○ /_not-found                          987 B           107 kB
+@repo/web:build: ├ ○ /analytics                           20 kB           291 kB
+@repo/web:build: ├ ƒ /api/health                          156 B           106 kB
+@repo/web:build: ├ ƒ /api/tickets                         156 B           106 kB
+@repo/web:build: ├ ƒ /api/tickets/[id]                    156 B           106 kB
+@repo/web:build: ├ ○ /dashboard                           4.74 kB         222 kB
+@repo/web:build: ├ ○ /github                              3.18 kB         120 kB
+@repo/web:build: ├ ○ /login                               2.81 kB         140 kB
+@repo/web:build: ├ ○ /register                            2.95 kB         140 kB
+@repo/web:build: ├ ○ /settings                            6.78 kB         159 kB
+@repo/web:build: ├ ○ /tickets                             37.5 kB         232 kB
+@repo/web:build: ├ ƒ /tickets/[id]                        15.3 kB         187 kB
+@repo/web:build: └ ○ /tickets/new                         158 kB          336 kB
+@repo/web:build: + First Load JS shared by all            106 kB
+@repo/web:build:   ├ chunks/3803-0793f6ddeaa0adde.js      50.6 kB
+@repo/web:build:   ├ chunks/3b8c9750-d807c4f382d13fca.js  53 kB
+@repo/web:build:   └ other shared chunks (total)          2.03 kB
+@repo/web:build: 
+@repo/web:build: 
+@repo/web:build: ○  (Static)   prerendered as static content
+@repo/web:build: ƒ  (Dynamic)  server-rendered on demand
+@repo/web:build: 
+@repo/web:test: cache miss, executing 43bd5e3712c3ecf3
+@support-helper/api:build: cache hit, replaying logs 5cce1d382abbd544
+@support-helper/api:build: 
+@support-helper/api:build: > @support-helper/api@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\api
+@support-helper/api:build: > nest build
+@support-helper/api:build: 
+@support-helper/api:test: cache miss, executing 0b49ae23a3bb597c
+@support-helper/dashboard:build: cache hit, replaying logs 66869b6870ebaa79
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build: > @support-helper/dashboard@0.1.0 build C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\dashboard
+@support-helper/dashboard:build: > next build
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build:   ▲ Next.js 14.2.35
+@support-helper/dashboard:build:   - Experiments (use with caution):
+@support-helper/dashboard:build:     · instrumentationHook
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build:    Creating an optimized production build ...
+@support-helper/dashboard:build: [@sentry/nextjs] The Sentry SDK has enabled source map generation for your Next.js app. If you don't want to serve Source Maps to your users, either set the `sourcemaps.deleteSourcemapsAfterUpload` option to true, or manually delete the source maps after the build. In future Sentry SDK versions `sourcemaps.deleteSourcemapsAfterUpload` will default to `true`. If you do not want to generate and upload sourcemaps, set the `sourcemaps.disable` option in `withSentryConfig()`.
+@support-helper/dashboard:build: [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build: [@sentry/nextjs - Node.js] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build: [@sentry/nextjs - Edge] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build: [@sentry/nextjs - Edge] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build: [@sentry/nextjs - Client] Warning: No auth token provided. Will not create release. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build: [@sentry/nextjs - Client] Warning: No auth token provided. Will not upload source maps. Please set the `authToken` option. You can find information on how to generate a Sentry auth token here: https://docs.sentry.io/api/auth/
+@support-helper/dashboard:build:  ✓ Compiled successfully
+@support-helper/dashboard:build:    Linting and checking validity of types ...
+@support-helper/dashboard:build:    Collecting page data ...
+@support-helper/dashboard:build:    Generating static pages (0/13) ...
+@support-helper/dashboard:build:    Generating static pages (3/13) 
+@support-helper/dashboard:build:    Generating static pages (6/13) 
+@support-helper/dashboard:build:    Generating static pages (9/13) 
+@support-helper/dashboard:build:  ✓ Generating static pages (13/13)
+@support-helper/dashboard:build:    Finalizing page optimization ...
+@support-helper/dashboard:build:    Collecting build traces ...
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build: Route (app)                              Size     First Load JS
+@support-helper/dashboard:build: ┌ ○ /                                    664 B           204 kB
+@support-helper/dashboard:build: ├ ○ /_not-found                          1.02 kB         205 kB
+@support-helper/dashboard:build: ├ ○ /dashboard                           1.24 kB         213 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/analytics                 2.92 kB         215 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/applications              4.05 kB         216 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/github                    5.24 kB         217 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/integrations              3.95 kB         216 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/settings                  2.75 kB         215 kB
+@support-helper/dashboard:build: ├ ○ /dashboard/tickets                   5.62 kB         218 kB
+@support-helper/dashboard:build: ├ ƒ /dashboard/tickets/[id]              5.65 kB         218 kB
+@support-helper/dashboard:build: ├ ƒ /dashboard/tickets/[id]/chat         18.8 kB         231 kB
+@support-helper/dashboard:build: ├ ○ /login                               2.38 kB         208 kB
+@support-helper/dashboard:build: └ ○ /signup                              2.63 kB         209 kB
+@support-helper/dashboard:build: + First Load JS shared by all            204 kB
+@support-helper/dashboard:build:   ├ chunks/11d08c45-04ed3c8cd8de4206.js  53.8 kB
+@support-helper/dashboard:build:   ├ chunks/1e4b4fa1-9ccb9e5a6c391161.js  36.9 kB
+@support-helper/dashboard:build:   ├ chunks/561-26665b8dc1342ea8.js       110 kB
+@support-helper/dashboard:build:   └ other shared chunks (total)          2.86 kB
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build: 
+@support-helper/dashboard:build: ○  (Static)   prerendered as static content
+@support-helper/dashboard:build: ƒ  (Dynamic)  server-rendered on demand
+@support-helper/dashboard:build: 
+@support-helper/dashboard:test: cache miss, executing d545d397dd449cde
+@support-helper/database:test: 
+@support-helper/database:test: > @support-helper/database@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\database
+@support-helper/database:test: > vitest run
+@support-helper/database:test: 
+@support-helper/shared:test: 
+@support-helper/shared:test: > @support-helper/shared@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\shared
+@support-helper/shared:test: > vitest run
+@support-helper/shared:test: 
+@support-helper/sdk-web:test: 
+@support-helper/sdk-web:test: > @support-helper/sdk-web@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\sdk-web
+@support-helper/sdk-web:test: > vitest run
+@support-helper/sdk-web:test: 
+@repo/web:test: 
+@repo/web:test: > @repo/web@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\web
+@repo/web:test: > vitest run
+@repo/web:test: 
+@support-helper/worker:test: 
+@support-helper/worker:test: > @support-helper/worker@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\worker
+@support-helper/worker:test: > jest
+@support-helper/worker:test: 
+@support-helper/dashboard:test: 
+@support-helper/dashboard:test: > @support-helper/dashboard@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\dashboard
+@support-helper/dashboard:test: > vitest run
+@support-helper/dashboard:test: 
+@support-helper/api:test: 
+@support-helper/api:test: > @support-helper/api@0.1.0 test C:\Users\krebs\Documents\sphelper\supportHelperv2\apps\api
+@support-helper/api:test: > jest
+@support-helper/api:test: 
+@support-helper/shared:test: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@support-helper/database:test: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@support-helper/sdk-web:test: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@repo/web:test: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@support-helper/shared:test: 
+@support-helper/shared:test: [7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/krebs/Documents/sphelper/supportHelperv2/packages/shared[39m
+@support-helper/shared:test: 
+@support-helper/dashboard:test: [33mThe CJS build of Vite's Node API is deprecated. See https://vite.dev/guide/troubleshooting.html#vite-cjs-node-api-deprecated for more details.[39m
+@support-helper/database:test: 
+@support-helper/database:test: [7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/krebs/Documents/sphelper/supportHelperv2/packages/database[39m
+@support-helper/database:test: 
+@support-helper/sdk-web:test: 
+@support-helper/sdk-web:test: [7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/krebs/Documents/sphelper/supportHelperv2/packages/sdk-web[39m
+@support-helper/sdk-web:test: 
+@repo/web:test: 
+@repo/web:test: [7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/krebs/Documents/sphelper/supportHelperv2/apps/web[39m
+@repo/web:test: 
+@support-helper/dashboard:test: 
+@support-helper/dashboard:test: [7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mC:/Users/krebs/Documents/sphelper/supportHelperv2/apps/dashboard[39m
+@support-helper/dashboard:test: 
+@support-helper/shared:test:  [32m✓[39m src/constants/ticket-status.spec.ts [2m ([22m[2m10 tests[22m[2m)[22m[90m 10[2mms[22m[39m
+@support-helper/shared:test:  [32m✓[39m src/constants/severity.spec.ts [2m ([22m[2m12 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+@support-helper/database:test: [90mstdout[2m | tests/schema.test.ts[22m[39m
+@support-helper/database:test: 🧪 Starting database tests...
+@support-helper/database:test: ✅ Database tests complete
+@support-helper/database:test: 
+@support-helper/database:test:  [33m❯[39m tests/schema.test.ts [2m ([22m[2m20 tests[22m [2m|[22m [31m4 failed[39m[2m)[22m[90m 49[2mms[22m[39m
+@support-helper/database:test: [31m   [33m❯[31m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTenantSchema[2m > [22mshould reject invalid plan[39m
+@support-helper/database:test: [31m     → expected true to be false // Object.is equality[39m
+@support-helper/database:test: [31m   [33m❯[31m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTicketSchema[2m > [22mshould validate a complete ticket[39m
+@support-helper/database:test: [31m     → expected false to be true // Object.is equality[39m
+@support-helper/database:test: [31m   [33m❯[31m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTicketSchema[2m > [22mshould validate ticket with nullable fields[39m
+@support-helper/database:test: [31m     → expected false to be true // Object.is equality[39m
+@support-helper/database:test: [31m   [33m❯[31m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mCreateTicketSchema[2m > [22mshould validate ticket creation without AI fields[39m
+@support-helper/database:test: [31m     → expected false to be true // Object.is equality[39m
+@support-helper/shared:test:  [32m✓[39m src/utils/validation.spec.ts [2m ([22m[2m23 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+@support-helper/database:test:  [2m[90m↓[39m[22m tests/migrations.test.ts [2m ([22m[2m8 tests[22m [2m|[22m [33m8 skipped[39m[2m)[22m
+@support-helper/shared:test: 
+@support-helper/database:test: 
+@support-helper/shared:test: [2m Test Files [22m [1m[32m3 passed[39m[22m[90m (3)[39m
+@support-helper/shared:test: [2m      Tests [22m [1m[32m45 passed[39m[22m[90m (45)[39m
+@support-helper/database:test: [31m⎯⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 4 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[1m[7m FAIL [27m[22m[39m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTenantSchema[2m > [22mshould reject invalid plan
+@support-helper/shared:test: [2m   Start at [22m 20:41:44
+@support-helper/shared:test: [2m   Duration [22m 2.08s[2m (transform 399ms, setup 0ms, collect 403ms, tests 39ms, environment 1ms, prepare 1.76s)[22m
+@support-helper/shared:test: 
+@support-helper/database:test: [31m[1mAssertionError[22m: expected true to be false // Object.is equality[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- Expected[39m
+@support-helper/database:test: [31m+ Received[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- false[39m
+@support-helper/database:test: [31m+ true[39m
+@support-helper/database:test: 
+@support-helper/database:test: [36m [2m❯[22m tests/schema.test.ts:[2m77:30[22m[39m
+@support-helper/database:test:     [90m 75| [39m
+@support-helper/database:test:     [90m 76| [39m      [35mconst[39m result [33m=[39m [33mTenantSchema[39m[33m.[39m[34msafeParse[39m(invalidTenant)[33m;[39m
+@support-helper/database:test:     [90m 77| [39m      [34mexpect[39m(result[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mfalse[39m)[33m;[39m
+@support-helper/database:test:     [90m   | [39m                             [31m^[39m
+@support-helper/database:test:     [90m 78| [39m    })[33m;[39m
+@support-helper/database:test:     [90m 79| [39m  })[33m;[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[1m[7m FAIL [27m[22m[39m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTicketSchema[2m > [22mshould validate a complete ticket
+@support-helper/database:test: [31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- Expected[39m
+@support-helper/database:test: [31m+ Received[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- true[39m
+@support-helper/database:test: [31m+ false[39m
+@support-helper/database:test: 
+@support-helper/database:test: [36m [2m❯[22m tests/schema.test.ts:[2m273:30[22m[39m
+@support-helper/database:test:     [90m271| [39m
+@support-helper/database:test:     [90m272| [39m      [35mconst[39m result [33m=[39m [33mTicketSchema[39m[33m.[39m[34msafeParse[39m(validTicket)[33m;[39m
+@support-helper/database:test:     [90m273| [39m      [34mexpect[39m(result[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+@support-helper/database:test:     [90m   | [39m                             [31m^[39m
+@support-helper/database:test:     [90m274| [39m    })[33m;[39m
+@support-helper/database:test:     [90m275| [39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[1m[7m FAIL [27m[22m[39m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mTicketSchema[2m > [22mshould validate ticket with nullable fields
+@support-helper/database:test: [31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- Expected[39m
+@support-helper/database:test: [31m+ Received[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- true[39m
+@support-helper/database:test: [31m+ false[39m
+@support-helper/database:test: 
+@support-helper/database:test: [36m [2m❯[22m tests/schema.test.ts:[2m301:30[22m[39m
+@support-helper/database:test:     [90m299| [39m
+@support-helper/database:test:     [90m300| [39m      [35mconst[39m result [33m=[39m [33mTicketSchema[39m[33m.[39m[34msafeParse[39m(minimalTicket)[33m;[39m
+@support-helper/database:test:     [90m301| [39m      [34mexpect[39m(result[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+@support-helper/database:test:     [90m   | [39m                             [31m^[39m
+@support-helper/database:test:     [90m302| [39m    })[33m;[39m
+@support-helper/database:test:     [90m303| [39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[1m[7m FAIL [27m[22m[39m tests/schema.test.ts[2m > [22mDatabase Schemas[2m > [22mCreateTicketSchema[2m > [22mshould validate ticket creation without AI fields
+@support-helper/database:test: [31m[1mAssertionError[22m: expected false to be true // Object.is equality[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- Expected[39m
+@support-helper/database:test: [31m+ Received[39m
+@support-helper/database:test: 
+@support-helper/database:test: [32m- true[39m
+@support-helper/database:test: [31m+ false[39m
+@support-helper/database:test: 
+@support-helper/database:test: [36m [2m❯[22m tests/schema.test.ts:[2m352:30[22m[39m
+@support-helper/database:test:     [90m350| [39m
+@support-helper/database:test:     [90m351| [39m      [35mconst[39m result [33m=[39m [33mCreateTicketSchema[39m[33m.[39m[34msafeParse[39m(validCreate)[33m;[39m
+@support-helper/database:test:     [90m352| [39m      [34mexpect[39m(result[33m.[39msuccess)[33m.[39m[34mtoBe[39m([35mtrue[39m)[33m;[39m
+@support-helper/database:test:     [90m   | [39m                             [31m^[39m
+@support-helper/database:test:     [90m353| [39m    })[33m;[39m
+@support-helper/database:test:     [90m354| [39m  })[33m;[39m
+@support-helper/database:test: 
+@support-helper/database:test: [31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+@support-helper/database:test: 
+@support-helper/database:test: [2m Test Files [22m [1m[31m1 failed[39m[22m[2m | [22m[33m1 skipped[39m[90m (2)[39m
+@support-helper/database:test: [2m      Tests [22m [1m[31m4 failed[39m[22m[2m | [22m[1m[32m16 passed[39m[22m[2m | [22m[33m8 skipped[39m[90m (28)[39m
+@support-helper/database:test: [2m   Start at [22m 20:41:44
+@support-helper/database:test: [2m   Duration [22m 2.06s[2m (transform 381ms, setup 147ms, collect 355ms, tests 49ms, environment 3ms, prepare 1.30s)[22m
+@support-helper/database:test: 
+@support-helper/database:test:  ELIFECYCLE  Test failed. See above for more details.
+@support-helper/database:test: ERROR: command finished with error: command (C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\database) C:\Users\krebs\AppData\Local\pnpm\.tools\pnpm\8.15.0\bin\pnpm.CMD run test exited (1)
+@support-helper/database#test: command (C:\Users\krebs\Documents\sphelper\supportHelperv2\packages\database) C:\Users\krebs\AppData\Local\pnpm\.tools\pnpm\8.15.0\bin\pnpm.CMD run test exited (1)
+
+ Tasks:    8 successful, 14 total
+Cached:    7 cached, 14 total
+  Time:    7.032s 
+Failed:    @support-helper/database#test
+
+ ERROR  run failed: command  exited (1)
+ ELIFECYCLE  Test failed. See above for more details.

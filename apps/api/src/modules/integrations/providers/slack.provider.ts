@@ -2,6 +2,7 @@ import { Ticket } from '@prisma/client';
 import { WebClient } from '@slack/web-api';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class SlackProvider extends BaseIntegrationProvider {
   readonly type = 'slack';
@@ -35,7 +36,7 @@ export class SlackProvider extends BaseIntegrationProvider {
         throw new Error('Authentication failed');
       }
 
-      const channelTest = await client.conversations.list({
+      await client.conversations.list({
         types: 'public_channel,private_channel',
       });
 
@@ -46,12 +47,12 @@ export class SlackProvider extends BaseIntegrationProvider {
     } catch (error) {
       return {
         success: false,
-        error: error.message || 'Failed to connect to Slack',
+        error: getErrorMessage(error) || 'Failed to connect to Slack',
       };
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const client = new WebClient(config.botToken);
 
@@ -127,7 +128,7 @@ export class SlackProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const client = new WebClient(config.botToken);
 

@@ -263,9 +263,9 @@ describe('VideoPlayer', () => {
       expect(mockOnError).toHaveBeenCalledTimes(1);
       expect(mockOnError).toHaveBeenCalledWith(expect.any(Error));
 
-      const errorArg = mockOnError.mock.calls[0][0];
+      const errorArg = mockOnError.mock.calls[0]?.[0];
       expect(errorArg).toBeInstanceOf(Error);
-      expect(errorArg.message).toBe('A network error occurred while loading the video.');
+      expect(errorArg?.message).toBe('A network error occurred while loading the video.');
     });
 
     it('does not throw when onError is not provided', () => {

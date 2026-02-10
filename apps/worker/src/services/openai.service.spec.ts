@@ -2,10 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import {
   OpenAIService,
-  VideoAnalysis,
-  Classification,
-  EmbeddingResult,
-  SimilarTicket,
 } from './openai.service';
 import { PrismaService } from './prisma.service';
 
@@ -37,7 +33,6 @@ jest.mock('ioredis', () => {
 
 describe('OpenAIService', () => {
   let service: OpenAIService;
-  let configService: ConfigService;
   let prismaService: PrismaService;
   let mockOpenAI: any;
   let mockRedis: any;
@@ -83,7 +78,7 @@ describe('OpenAIService', () => {
     }).compile();
 
     service = module.get<OpenAIService>(OpenAIService);
-    configService = module.get<ConfigService>(ConfigService);
+    module.get<ConfigService>(ConfigService); // Needed for module initialization
     prismaService = module.get<PrismaService>(PrismaService);
 
     // Get mock instances
@@ -377,7 +372,7 @@ describe('OpenAIService', () => {
       const result = await service.searchSimilarTickets(mockEmbedding, 10);
 
       expect(result).toHaveLength(2);
-      expect(result[0].similarity).toBe(0.95);
+      expect(result[0]?.similarity).toBe(0.95);
       expect(prismaService.$queryRawUnsafe).toHaveBeenCalledWith(
         expect.stringContaining('embedding <=>'),
         expect.any(String),

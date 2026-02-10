@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from '../../../src/auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { UsersService } from '../../../src/users/users.service';
 import { TenantsService } from '../../../src/tenants/tenants.service';
@@ -69,6 +70,23 @@ describe('AuthService', () => {
           provide: TenantsService,
           useValue: {
             create: jest.fn(),
+          },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, defaultValue?: string) => {
+              if (key === 'JWT_REFRESH_SECRET') {
+                return 'test-refresh-secret';
+              }
+              if (key === 'JWT_REFRESH_EXPIRES_IN') {
+                return '30d';
+              }
+              if (key === 'NODE_ENV') {
+                return 'test';
+              }
+              return defaultValue;
+            }),
           },
         },
       ],

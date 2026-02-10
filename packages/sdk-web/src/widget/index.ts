@@ -68,8 +68,13 @@ export function init(options: InitOptions): SupportHelperElement {
 /**
  * Global namespace for CDN usage
  */
+interface SupportHelperGlobal {
+  init: typeof init;
+  Element: typeof SupportHelperElement;
+}
+
 if (typeof window !== 'undefined') {
-  (window as any).SupportHelper = {
+  (window as Window & { SupportHelper?: SupportHelperGlobal }).SupportHelper = {
     init,
     Element: SupportHelperElement,
   };

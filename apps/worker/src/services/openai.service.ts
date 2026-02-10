@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
 import { PrismaService } from './prisma.service';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
 // INTERFACES & TYPES
@@ -87,7 +88,7 @@ export class OpenAIService implements OnModuleInit {
   private readonly logger = new Logger(OpenAIService.name);
   private readonly client: OpenAI;
   private readonly config: any;
-  private redis: Redis;
+  private redis!: Redis;
 
   // Rate limiting
   private readonly RATE_LIMIT = 50; // requests per minute
@@ -99,7 +100,7 @@ export class OpenAIService implements OnModuleInit {
   private readonly EMBEDDING_CACHE_PREFIX = 'openai:embedding:';
 
   // Cost per 1K tokens (approximate)
-  private readonly MODEL_COSTS = {
+  private readonly MODEL_COSTS: Record<string, { input: number; output: number }> = {
     'gpt-4o': { input: 0.005, output: 0.015 },
     'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
     'text-embedding-3-large': { input: 0.00013, output: 0 },
@@ -181,7 +182,7 @@ export class OpenAIService implements OnModuleInit {
       const parsed = JSON.parse(content);
       return this.normalizeVideoAnalysis(parsed);
     } catch (error) {
-      this.logger.error(`Video analysis failed: ${error.message}`, error.stack);
+      this.logger.error(`Video analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
 
       // Return fallback analysis
       return this.getFallbackVideoAnalysis();
@@ -232,7 +233,10 @@ Provide confidence scores (0-1) for your classifications.`;
     const selected: Buffer[] = [];
 
     for (let i = 0; i < frames.length && selected.length < maxFrames; i += step) {
-      selected.push(frames[i]);
+      const frame = frames[i];
+      if (frame) {
+        selected.push(frame);
+      }
     }
 
     return selected;
@@ -324,7 +328,7 @@ Respond in JSON:
       const parsed = JSON.parse(content);
       return this.normalizeClassification(parsed);
     } catch (error) {
-      this.logger.error(`Classification failed: ${error.message}`);
+      this.logger.error(`Classification failed: ${getErrorMessage(error)}`);
       return this.getFallbackClassification();
     }
   }
@@ -394,7 +398,7 @@ Respond in JSON:
         };
       }
     } catch (error) {
-      this.logger.warn(`Redis cache read error: ${error.message}`);
+      this.logger.warn(`Redis cache read error: ${getErrorMessage(error)}`);
     }
 
     // Rate limit check
@@ -412,10 +416,14 @@ Respond in JSON:
         dimensions: 3072, // Full dimensions for best quality
       });
 
-      const embedding = response.data[0].embedding;
+      const embedding = response.data[0]?.embedding;
+
+      if (!embedding) {
+        throw new Error('Failed to generate embedding');
+      }
 
       // Track costs
-      if (tenantId) {
+      if (tenantId && response.usage) {
         await this.trackCost(tenantId, 'text-embedding-3-large', {
           prompt_tokens: response.usage.prompt_tokens,
           completion_tokens: 0,
@@ -428,7 +436,7 @@ Respond in JSON:
         await this.redis.setex(cacheKey, this.EMBEDDING_CACHE_TTL, JSON.stringify(embedding));
         this.logger.debug('Embedding cached successfully');
       } catch (error) {
-        this.logger.warn(`Redis cache write error: ${error.message}`);
+        this.logger.warn(`Redis cache write error: ${getErrorMessage(error)}`);
       }
 
       return {
@@ -438,7 +446,7 @@ Respond in JSON:
         cached: false,
       };
     } catch (error) {
-      this.logger.error(`Embedding generation failed: ${error.message}`);
+      this.logger.error(`Embedding generation failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -514,7 +522,7 @@ Respond in JSON:
         status: row.status || 'new',
       }));
     } catch (error) {
-      this.logger.error(`Similarity search failed: ${error.message}`);
+      this.logger.error(`Similarity search failed: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -532,7 +540,7 @@ Respond in JSON:
       );
       this.logger.debug(`Stored embedding for ticket ${ticketId}`);
     } catch (error) {
-      this.logger.error(`Failed to store embedding: ${error.message}`);
+      this.logger.error(`Failed to store embedding: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -599,14 +607,6 @@ Respond in JSON:
     // Store in Redis for aggregation
     try {
       const key = `openai:cost:${tenantId}:${new Date().toISOString().split('T')[0]}`;
-      const tracking: CostTracking = {
-        tenantId,
-        model,
-        inputTokens,
-        outputTokens,
-        cost,
-        timestamp: new Date(),
-      };
 
       // Increment daily cost counter
       await this.redis.incrbyfloat(`${key}:total`, cost);
@@ -621,7 +621,7 @@ Respond in JSON:
         `Cost tracked: $${cost.toFixed(6)} for ${model} (${inputTokens}+${outputTokens} tokens)`
       );
     } catch (error) {
-      this.logger.warn(`Cost tracking failed: ${error.message}`);
+      this.logger.warn(`Cost tracking failed: ${getErrorMessage(error)}`);
     }
   }
 
@@ -649,6 +649,8 @@ Respond in JSON:
         const date = new Date();
         date.setDate(date.getDate() - i);
         const dateStr = date.toISOString().split('T')[0];
+        if (!dateStr) continue;
+
         const key = `openai:cost:${tenantId}:${dateStr}`;
 
         const [cost, tokens, requests] = await Promise.all([
@@ -673,7 +675,7 @@ Respond in JSON:
         }
       }
     } catch (error) {
-      this.logger.warn(`Cost summary failed: ${error.message}`);
+      this.logger.warn(`Cost summary failed: ${getErrorMessage(error)}`);
     }
 
     return summary;
@@ -712,7 +714,7 @@ Respond in JSON:
       // Aggregate results
       return this.aggregateVisionResults(batchResults);
     } catch (error) {
-      this.logger.error(`Vision analysis failed: ${error.message}`, error.stack);
+      this.logger.error(`Vision analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -789,7 +791,7 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
         recommendations: parsed.recommendations || [],
       };
     } catch (error) {
-      this.logger.error(`Batch ${batchIndex + 1} analysis failed: ${error.message}`);
+      this.logger.error(`Batch ${batchIndex + 1} analysis failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -849,13 +851,17 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
         max_tokens: options.max_tokens || 4096,
       });
 
-      const message = response.choices[0].message;
+      const choice = response.choices[0];
+      if (!choice) {
+        throw new Error('No response from OpenAI');
+      }
+      const message = choice.message;
       return {
         content: message.content || '',
         tool_calls: message.tool_calls,
       };
     } catch (error) {
-      this.logger.error(`Chat completion failed: ${error.message}`);
+      this.logger.error(`Chat completion failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -896,13 +902,21 @@ Return JSON with each category as a key containing { value, confidence }`;
         temperature: 0.3,
       });
 
-      const result = JSON.parse(response.choices[0].message.content || '{}');
+      const choice = response.choices[0];
+      if (!choice || !choice.message.content) {
+        const defaults: Record<string, { value: string; confidence: number }> = {};
+        for (const [name, values] of Object.entries(options.categories)) {
+          defaults[name] = { value: values[0] || '', confidence: 0.5 };
+        }
+        return defaults;
+      }
+      const result = JSON.parse(choice.message.content || '{}');
       return result;
     } catch (error) {
-      this.logger.error(`Classification failed: ${error.message}`);
+      this.logger.error(`Classification failed: ${getErrorMessage(error)}`);
       const defaults: Record<string, { value: string; confidence: number }> = {};
       for (const [name, values] of Object.entries(options.categories)) {
-        defaults[name] = { value: values[0], confidence: 0.5 };
+        defaults[name] = { value: values[0] || '', confidence: 0.5 };
       }
       return defaults;
     }

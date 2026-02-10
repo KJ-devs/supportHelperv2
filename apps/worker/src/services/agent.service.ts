@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { PrismaService } from './prisma.service';
 import { OpenAIService } from './openai.service';
 import { GithubService, GithubConnection } from './github.service';
-import { MeilisearchService } from './meilisearch.service';
 import { EmailService } from './email.service';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
 // STATE MACHINE (Zod Enum)
@@ -149,173 +149,6 @@ const HUMAN_REQUEST_KEYWORDS = [
 // GPT-4o FUNCTION CALLING TOOLS
 // ═══════════════════════════════════════════════════════════════════════
 
-const AGENT_FUNCTION_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
-  {
-    type: 'function',
-    function: {
-      name: 'analyze_ticket',
-      description:
-        'Analyze a support ticket to understand the issue, classify it, and determine severity',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticketId: {
-            type: 'string',
-            description: 'The ID of the ticket to analyze',
-          },
-        },
-        required: ['ticketId'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_similar_tickets',
-      description:
-        'Search for similar tickets in the knowledge base using semantic search (pgvector)',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The search query to find similar tickets',
-          },
-          limit: {
-            type: 'number',
-            description: 'Maximum number of results to return (default: 5)',
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_github_issues',
-      description: 'Search for related GitHub issues in a repository',
-      parameters: {
-        type: 'object',
-        properties: {
-          repo: {
-            type: 'string',
-            description: 'The GitHub repository in format owner/repo',
-          },
-          query: {
-            type: 'string',
-            description: 'The search query to find related issues',
-          },
-        },
-        required: ['repo', 'query'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'ask_question',
-      description: 'Ask the user a clarifying question through a specific channel',
-      parameters: {
-        type: 'object',
-        properties: {
-          question: {
-            type: 'string',
-            description: 'The question to ask the user',
-          },
-          channel: {
-            type: 'string',
-            enum: ['email', 'github', 'chat'],
-            description: 'The channel to send the question through',
-          },
-        },
-        required: ['question', 'channel'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'propose_solution',
-      description: 'Propose a solution to the user with a confidence score',
-      parameters: {
-        type: 'object',
-        properties: {
-          solution: {
-            type: 'string',
-            description: 'The proposed solution or workaround',
-          },
-          confidence: {
-            type: 'number',
-            description: 'Confidence level from 0.0 to 1.0',
-          },
-          steps: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Step-by-step instructions if applicable',
-          },
-        },
-        required: ['solution', 'confidence'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'create_github_issue',
-      description: 'Create a new GitHub issue to track a bug or feature request',
-      parameters: {
-        type: 'object',
-        properties: {
-          repo: {
-            type: 'string',
-            description: 'The GitHub repository in format owner/repo',
-          },
-          title: {
-            type: 'string',
-            description: 'The title of the issue',
-          },
-          body: {
-            type: 'string',
-            description: 'The body/description of the issue',
-          },
-          labels: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Labels to add to the issue',
-          },
-        },
-        required: ['repo', 'title', 'body'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'escalate',
-      description: 'Escalate the ticket to a human support agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          reason: {
-            type: 'string',
-            description: 'The reason for escalation',
-          },
-          assignee: {
-            type: 'string',
-            description: 'Optional specific user ID to assign to',
-          },
-          priority: {
-            type: 'string',
-            enum: ['low', 'medium', 'high', 'critical'],
-            description: 'The priority level for escalation',
-          },
-        },
-        required: ['reason'],
-      },
-    },
-  },
-];
 
 // ═══════════════════════════════════════════════════════════════════════
 // AGENT SERVICE
@@ -334,19 +167,17 @@ const AGENT_FUNCTION_TOOLS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 @Injectable()
 export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
-  private openaiClient: OpenAI;
+  private openaiClient!: OpenAI;
 
   // Configuration
   private readonly MAX_ATTEMPTS = 3;
   private readonly CONFIDENCE_THRESHOLD = 0.7;
-  private readonly MAX_CONVERSATION_TURNS = 10;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
     private readonly openaiService: OpenAIService,
     private readonly githubService: GithubService,
-    private readonly meilisearch: MeilisearchService,
     private readonly emailService: EmailService
   ) {}
 
@@ -415,7 +246,7 @@ export class AgentService implements OnModuleInit {
 
     // Start the agent loop asynchronously
     this.runAgentLoop(sessionData, ticket).catch(error => {
-      this.logger.error(`Agent loop error: ${error.message}`, error.stack);
+      this.logger.error(`Agent loop error: ${getErrorMessage(error)}`, getErrorStack(error));
     });
 
     return sessionData;
@@ -474,13 +305,13 @@ export class AgentService implements OnModuleInit {
         // Wait a bit before next iteration (rate limiting)
         await this.sleep(500);
       } catch (error) {
-        this.logger.error(`Error in agent loop: ${error.message}`);
+        this.logger.error(`Error in agent loop: ${getErrorMessage(error)}`);
         attempts++;
 
         // Escalate on repeated errors
         if (attempts >= this.MAX_ATTEMPTS) {
           await this.escalateTicket(session, ticket, {
-            reason: `Agent failed after ${attempts} attempts: ${error.message}`,
+            reason: `Agent failed after ${attempts} attempts: ${getErrorMessage(error)}`,
             priority: 'high',
           });
           currentState = 'ESCALATED';
@@ -815,215 +646,18 @@ export class AgentService implements OnModuleInit {
   /**
    * Run GPT-4o with function calling tools
    */
-  private async runWithTools(
-    systemPrompt: string,
-    userMessage: string,
-    context: AgentContextData
-  ): Promise<{
-    response: string;
-    functionCalls: Array<{ name: string; arguments: any; result: any }>;
-  }> {
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-    ];
 
-    // Add conversation history
-    for (const msg of context.conversation || []) {
-      messages.push({
-        role: msg.role === 'agent' ? 'assistant' : msg.role,
-        content: msg.content,
-      });
-    }
-
-    messages.push({ role: 'user', content: userMessage });
-
-    // Initial call with tools
-    let response = await this.openaiClient.chat.completions.create({
-      model: 'gpt-4o',
-      messages,
-      tools: AGENT_FUNCTION_TOOLS,
-      tool_choice: 'auto',
-      temperature: 0.3,
-    });
-
-    const functionCalls: Array<{ name: string; arguments: any; result: any }> = [];
-
-    // Process tool calls iteratively
-    while (response.choices[0]?.message?.tool_calls) {
-      const toolCalls = response.choices[0].message.tool_calls;
-
-      // Add assistant message with tool calls
-      messages.push(response.choices[0].message);
-
-      // Execute each tool call
-      for (const toolCall of toolCalls) {
-        const { name, arguments: argsStr } = toolCall.function;
-        const args = JSON.parse(argsStr);
-
-        this.logger.debug(`Executing tool: ${name}`, args);
-
-        const result = await this.executeToolCall(name, args);
-        functionCalls.push({ name, arguments: args, result });
-
-        // Add tool result to messages
-        messages.push({
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          content: JSON.stringify(result),
-        });
-      }
-
-      // Continue conversation
-      response = await this.openaiClient.chat.completions.create({
-        model: 'gpt-4o',
-        messages,
-        tools: AGENT_FUNCTION_TOOLS,
-        tool_choice: 'auto',
-        temperature: 0.3,
-      });
-    }
-
-    return {
-      response: response.choices[0]?.message?.content || '',
-      functionCalls,
-    };
-  }
-
-  /**
-   * Execute a function call
-   */
-  private async executeToolCall(name: string, args: any): Promise<any> {
-    switch (name) {
-      case 'analyze_ticket':
-        return this.toolAnalyzeTicket(args.ticketId);
-
-      case 'search_similar_tickets':
-        return this.toolSearchSimilarTickets(args.query, args.limit);
-
-      case 'search_github_issues':
-        return this.toolSearchGithubIssues(args.repo, args.query);
-
-      case 'ask_question':
-        return this.toolAskQuestion(args.question, args.channel);
-
-      case 'propose_solution':
-        return this.toolProposeSolution(args.solution, args.confidence, args.steps);
-
-      case 'create_github_issue':
-        return this.toolCreateGithubIssue(args.repo, args.title, args.body, args.labels);
-
-      case 'escalate':
-        return this.toolEscalate(args.reason, args.assignee, args.priority);
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // TOOL IMPLEMENTATIONS
   // ═══════════════════════════════════════════════════════════════════════
 
-  private async toolAnalyzeTicket(ticketId: string): Promise<TicketAnalysisResult> {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: { media: true },
-    });
 
-    if (!ticket) {
-      throw new Error(`Ticket ${ticketId} not found`);
-    }
 
-    return this.analyzeTicket(ticket);
-  }
 
-  private async toolSearchSimilarTickets(
-    query: string,
-    limit: number = 5
-  ): Promise<SimilarTicketResult[]> {
-    // Generate embedding for the query
-    const embeddingResult = await this.openaiService.generateEmbedding(query);
 
-    // Search using pgvector
-    const results = await this.openaiService.searchSimilarTickets(embeddingResult.embedding, limit);
 
-    return results.map(r => ({
-      id: r.id,
-      title: r.title,
-      description: r.description,
-      similarity: r.similarity,
-      status: r.status,
-    }));
-  }
 
-  private async toolSearchGithubIssues(repo: string, query: string): Promise<GithubIssueResult[]> {
-    try {
-      const issues = await this.githubService.searchIssues(`repo:${repo} ${query}`);
-      return issues.slice(0, 5).map((issue: any) => ({
-        number: issue.number,
-        title: issue.title,
-        body: issue.body || '',
-        state: issue.state,
-        url: issue.html_url,
-        labels: issue.labels?.map((l: any) => l.name) || [],
-      }));
-    } catch (error) {
-      this.logger.warn(`GitHub search failed: ${error.message}`);
-      return [];
-    }
-  }
-
-  private async toolAskQuestion(
-    question: string,
-    channel: Channel
-  ): Promise<{ sent: boolean; channel: Channel }> {
-    // This will be called by the state handler
-    return { sent: true, channel };
-  }
-
-  private async toolProposeSolution(
-    solution: string,
-    confidence: number,
-    steps?: string[]
-  ): Promise<ProposedSolution> {
-    return {
-      solution,
-      confidence,
-      sources: [],
-      steps,
-    };
-  }
-
-  private async toolCreateGithubIssue(
-    repo: string,
-    title: string,
-    body: string,
-    labels?: string[]
-  ): Promise<{ number: number; url: string }> {
-    const issue = await this.githubService.createIssue(repo, {
-      title,
-      body,
-      labels,
-    });
-
-    return {
-      number: issue.number,
-      url: issue.html_url,
-    };
-  }
-
-  private async toolEscalate(
-    reason: string,
-    assignee?: string,
-    priority: string = 'medium'
-  ): Promise<EscalationResult> {
-    return {
-      reason,
-      assignee,
-      priority,
-      channel: 'chat',
-    };
-  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // CORE ANALYSIS METHODS
@@ -1094,7 +728,7 @@ Respond with JSON:
       );
       return results;
     } catch (error) {
-      this.logger.warn(`Similar ticket search failed: ${error.message}`);
+      this.logger.warn(`Similar ticket search failed: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -1111,11 +745,11 @@ Respond with JSON:
 
       if (connection) {
         await this.githubService.initialize(connection as GithubConnection);
-        return this.toolSearchGithubIssues(repo, query);
+        return this.searchGithubIssues(repo, query);
       }
       return [];
     } catch (error) {
-      this.logger.warn(`GitHub issue search failed: ${error.message}`);
+      this.logger.warn(`GitHub issue search failed: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -1219,7 +853,7 @@ Provide a helpful, actionable solution. Respond with JSON:
    * Process user response
    */
   private async processUserResponse(
-    session: AgentSessionData,
+    _session: AgentSessionData,
     ticket: any,
     userMessage: string,
     context: AgentContextData
@@ -1490,7 +1124,7 @@ Respond with JSON:
         `${this.configService.get('APP_URL')}/tickets/${ticket.id}`
       );
     } catch (error) {
-      this.logger.error(`Failed to send email question: ${error.message}`);
+      this.logger.error(`Failed to send email question: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1518,7 +1152,7 @@ Respond with JSON:
         `${baseUrl}/tickets/${ticket.id}?action=more-help`
       );
     } catch (error) {
-      this.logger.error(`Failed to send email solution: ${error.message}`);
+      this.logger.error(`Failed to send email solution: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1540,7 +1174,7 @@ Respond with JSON:
         `🤖 **AI Support Agent**\n\n${comment}`
       );
     } catch (error) {
-      this.logger.error(`Failed to add GitHub comment: ${error.message}`);
+      this.logger.error(`Failed to add GitHub comment: ${getErrorMessage(error)}`);
     }
   }
 
@@ -1742,7 +1376,7 @@ Respond with JSON:
           `${baseUrl}/tickets/${ticket.id}`
         );
       } catch (error) {
-        this.logger.error(`Failed to send escalation notification: ${error.message}`);
+        this.logger.error(`Failed to send escalation notification: ${getErrorMessage(error)}`);
       }
     }
   }
@@ -1799,7 +1433,7 @@ Respond with JSON:
 
       // Run the agent loop asynchronously
       this.runAgentLoop(sessionData, session.ticket).catch(error => {
-        this.logger.error(`Agent loop error: ${error.message}`, error.stack);
+        this.logger.error(`Agent loop error: ${getErrorMessage(error)}`, getErrorStack(error));
       });
     }
   }

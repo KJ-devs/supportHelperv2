@@ -1,4 +1,4 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { Octokit } from '@octokit/rest';
@@ -6,13 +6,13 @@ import { QUEUE_NAMES } from '../queues';
 import {
   AgentJobData,
   AgentResult,
-  AgentContext,
   TicketAnalysis,
   FunctionCallResult,
 } from '../queues/queue.types';
 import { OpenAIService } from '../services/openai.service';
 import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 import { AgentService } from '../services/agent.service';
 
 /**
@@ -163,7 +163,7 @@ export class AgentWorker extends WorkerHost {
    * Main processor method - routes to specific handlers based on job type
    */
   async process(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { type, ticketId, tenantId, sessionId, context } = job.data;
+    const { type, ticketId } = job.data;
 
     this.logger.log(`Processing agent job ${job.id} of type: ${type}`);
 
@@ -197,12 +197,12 @@ export class AgentWorker extends WorkerHost {
           throw new Error(`Unknown agent job type: ${type}`);
       }
     } catch (error) {
-      this.logger.error(`Agent job failed: ${error.message}`, error.stack);
+      this.logger.error(`Agent job failed: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
         type,
-        ticketId,
-        error: error.message,
+        ticketId: ticketId || '',
+        error: getErrorMessage(error),
       };
     }
   }
@@ -234,7 +234,7 @@ export class AgentWorker extends WorkerHost {
         },
       };
     } catch (error) {
-      this.logger.error(`Failed to start agent session: ${error.message}`);
+      this.logger.error(`Failed to start agent session: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -283,7 +283,7 @@ export class AgentWorker extends WorkerHost {
         },
       };
     } catch (error) {
-      this.logger.error(`Failed to process message: ${error.message}`);
+      this.logger.error(`Failed to process message: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -292,7 +292,7 @@ export class AgentWorker extends WorkerHost {
    * Analyze ticket with AI - extract insights and classify
    */
   private async handleAnalyzeTicket(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, context } = job.data;
+    const { ticketId, tenantId } = job.data;
 
     this.logger.log(`Analyzing ticket ${ticketId}`);
     await job.updateProgress(10);
@@ -390,7 +390,7 @@ Be precise and structured in your analysis.`,
    * Classify ticket type and severity
    */
   private async handleClassifyTicket(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId } = job.data;
+    const { ticketId } = job.data;
 
     this.logger.log(`Classifying ticket ${ticketId}`);
     await job.updateProgress(10);
@@ -428,10 +428,10 @@ Be precise and structured in your analysis.`,
     await this.prisma.ticket.update({
       where: { id: ticketId },
       data: {
-        type: classification.type.value,
-        typeConfidence: classification.type.confidence,
-        severity: classification.severity.value,
-        severityConfidence: classification.severity.confidence,
+        type: classification.type?.value || null,
+        typeConfidence: classification.type?.confidence || null,
+        severity: classification.severity?.value || null,
+        severityConfidence: classification.severity?.confidence || null,
       },
     });
 
@@ -443,12 +443,12 @@ Be precise and structured in your analysis.`,
       ticketId,
       analysis: {
         classification: {
-          type: classification.type.value,
-          confidence: classification.type.confidence,
+          type: classification.type?.value || 'unknown',
+          confidence: classification.type?.confidence || 0,
         },
         severity: {
-          level: classification.severity.value,
-          confidence: classification.severity.confidence,
+          level: classification.severity?.value || 'unknown',
+          confidence: classification.severity?.confidence || 0,
         },
         keywords: [],
         summary: '',
@@ -460,7 +460,7 @@ Be precise and structured in your analysis.`,
    * Suggest solution based on similar tickets
    */
   private async handleSuggestSolution(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, context } = job.data;
+    const { ticketId, tenantId } = job.data;
 
     this.logger.log(`Suggesting solution for ticket ${ticketId}`);
     await job.updateProgress(10);
@@ -627,7 +627,7 @@ Keep responses concise but thorough.`,
    * Escalate ticket to human
    */
   private async handleEscalateTicket(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, context } = job.data;
+    const { ticketId } = job.data;
 
     this.logger.log(`Escalating ticket ${ticketId}`);
     await job.updateProgress(20);
@@ -643,8 +643,7 @@ Keep responses concise but thorough.`,
         ),
         aiAnalysis: {
           escalatedAt: new Date().toISOString(),
-          escalationReason:
-            context?.previousMessages?.[0]?.content || 'AI determined escalation needed',
+          escalationReason: 'AI determined escalation needed',
         },
       },
     });
@@ -840,7 +839,11 @@ Keep responses concise but thorough.`,
 
     // Create GitHub issue
     const octokit = new Octokit({ auth: connection.accessToken });
-    const [owner, repo] = options.repository.split('/');
+    const [owner = '', repo = ''] = options.repository.split('/');
+
+    if (!owner || !repo) {
+      throw new Error('Invalid repository format. Expected "owner/repo"');
+    }
 
     const { data: issue } = await octokit.issues.create({
       owner,
@@ -949,7 +952,7 @@ Keep responses concise but thorough.`,
         reproductionSteps: parsed.reproductionSteps,
       };
     } catch (error) {
-      this.logger.warn(`Failed to parse analysis response: ${error.message}`);
+      this.logger.warn(`Failed to parse analysis response: ${getErrorMessage(error)}`);
       return {
         classification: { type: 'other', confidence: 0.5 },
         severity: { level: 'medium', confidence: 0.5 },
@@ -1018,7 +1021,7 @@ Keep responses concise but thorough.`,
         results.push({
           name,
           arguments: parsedArgs,
-          result: { error: error.message },
+          result: { error: getErrorMessage(error) },
         });
       }
     }
@@ -1136,7 +1139,7 @@ Keep responses concise but thorough.`,
   }
 
   onFailed(job: Job<AgentJobData>, error: Error) {
-    this.logger.error(`Agent job ${job.id} failed: ${error.message}`);
+    this.logger.error(`Agent job ${job.id} failed: ${getErrorMessage(error)}`);
   }
 
   onStalled(jobId: string) {

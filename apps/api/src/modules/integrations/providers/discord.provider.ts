@@ -1,6 +1,7 @@
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class DiscordProvider extends BaseIntegrationProvider {
   readonly type = 'discord';
@@ -54,12 +55,12 @@ export class DiscordProvider extends BaseIntegrationProvider {
     } catch (error) {
       return {
         success: false,
-        error: error.message || 'Failed to connect to Discord',
+        error: getErrorMessage(error) || 'Failed to connect to Discord',
       };
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const severityColor = this.getSeverityColor(ticket.severity);
 
@@ -125,7 +126,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(_externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
     return this.syncTicket(ticket, config, mappings);
   }
 

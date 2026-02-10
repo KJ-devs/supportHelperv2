@@ -8,6 +8,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as fs from 'fs/promises';
+import { getErrorMessage } from '../utils/error.utils';
 import * as path from 'path';
 import * as os from 'os';
 import { Readable } from 'stream';
@@ -23,8 +24,8 @@ import { Readable } from 'stream';
 @Injectable()
 export class S3Service implements OnModuleInit {
   private readonly logger = new Logger(S3Service.name);
-  private client: S3Client;
-  private bucket: string;
+  private client!: S3Client;
+  private bucket!: string;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -84,7 +85,7 @@ export class S3Service implements OnModuleInit {
       this.logger.log(`Downloaded ${key} to ${tempPath}`);
       return tempPath;
     } catch (error) {
-      this.logger.error(`Failed to download ${key}: ${error.message}`);
+      this.logger.error(`Failed to download ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -110,7 +111,7 @@ export class S3Service implements OnModuleInit {
       this.logger.log(`Uploaded ${key} to S3`);
       return key;
     } catch (error) {
-      this.logger.error(`Failed to upload ${key}: ${error.message}`);
+      this.logger.error(`Failed to upload ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -134,7 +135,7 @@ export class S3Service implements OnModuleInit {
       this.logger.log(`Uploaded ${key} to S3`);
       return key;
     } catch (error) {
-      this.logger.error(`Failed to upload buffer ${key}: ${error.message}`);
+      this.logger.error(`Failed to upload buffer ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -155,7 +156,7 @@ export class S3Service implements OnModuleInit {
 
       this.logger.log(`Deleted ${key} from S3`);
     } catch (error) {
-      this.logger.error(`Failed to delete ${key}: ${error.message}`);
+      this.logger.error(`Failed to delete ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -201,7 +202,7 @@ export class S3Service implements OnModuleInit {
       await this.client.send(command);
       return true;
     } catch (error) {
-      if (error.name === 'NoSuchKey') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'NoSuchKey') {
         return false;
       }
       throw error;

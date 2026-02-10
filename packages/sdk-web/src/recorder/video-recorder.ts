@@ -70,7 +70,7 @@ export class VideoRecorder {
         };
       });
     } catch (error) {
-      if ((error as any).name === 'NotAllowedError') {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
         throw new Error('Permission denied to capture screen');
       }
       throw error;
@@ -114,14 +114,16 @@ export class VideoRecorder {
         resolve(blob);
       };
 
-      this.mediaRecorder.onerror = event => {
+      this.mediaRecorder.onerror = (event: Event) => {
         this.chunks = [];
         if (this.stream) {
           this.stream.getTracks().forEach(track => track.stop());
           this.stream = null;
         }
+        const mediaErrorEvent = event as ErrorEvent;
+        const errorMessage = mediaErrorEvent.error?.message || mediaErrorEvent.message || 'Unknown error';
         reject(
-          new Error('MediaRecorder error: ' + (event as any).error?.message || 'Unknown error')
+          new Error('MediaRecorder error: ' + errorMessage)
         );
       };
 

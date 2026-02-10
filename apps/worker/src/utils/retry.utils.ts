@@ -91,7 +91,7 @@ export function sleep(ms: number): Promise<void> {
  * Retry decorator for class methods
  */
 export function Retry(options: Partial<RetryOptions> = {}) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {

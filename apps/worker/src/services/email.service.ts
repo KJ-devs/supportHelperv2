@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import { getErrorMessage } from '../utils/error.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
 // EMAIL SERVICE (Resend Integration)
@@ -219,7 +220,7 @@ const TEMPLATES: Record<string, EmailTemplate> = {
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private resend: Resend | null = null;
-  private fromEmail: string;
+  private fromEmail!: string;
   private enabled: boolean = false;
 
   constructor(private readonly configService: ConfigService) {}
@@ -272,7 +273,7 @@ export class EmailService implements OnModuleInit {
       this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
       return { id: result.data?.id || 'unknown' };
     } catch (error) {
-      this.logger.error(`Failed to send email: ${error.message}`);
+      this.logger.error(`Failed to send email: ${getErrorMessage(error)}`);
       throw error;
     }
   }

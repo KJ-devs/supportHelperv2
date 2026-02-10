@@ -52,7 +52,11 @@
       "Bash(Select-String \"error\")",
       "Bash(Select-String -NotMatch \"warning|ELIFECYCLE|ERROR:|ERR_\")",
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\krebs\\\\Documents\\\\sphelper\\\\supportHelperv2\" -Recurse -Filter \"CLAUDE.md\" -ErrorAction SilentlyContinue)",
-      "Bash(Select-Object -ExpandProperty FullName)"
+      "Bash(Select-Object -ExpandProperty FullName)",
+      "Bash(node.exe:*)",
+      "Bash(where:*)",
+      "Bash(Select-String -Pattern \"FAIL\" -Context 10,10)",
+      "Bash(tee:*)"
     ]
   }
 }

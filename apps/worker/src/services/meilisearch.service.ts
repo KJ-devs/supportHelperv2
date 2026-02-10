@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MeiliSearch, Index } from 'meilisearch';
+import { getErrorMessage } from '../utils/error.utils';
 
 /**
  * Meilisearch Service
@@ -13,8 +14,7 @@ import { MeiliSearch, Index } from 'meilisearch';
 @Injectable()
 export class MeilisearchService implements OnModuleInit {
   private readonly logger = new Logger(MeilisearchService.name);
-  private client: MeiliSearch;
-  private initialized = false;
+  private client!: MeiliSearch;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -28,7 +28,6 @@ export class MeilisearchService implements OnModuleInit {
     });
 
     await this.setupIndexes();
-    this.initialized = true;
     this.logger.log('Meilisearch service initialized');
   }
 
@@ -59,7 +58,7 @@ export class MeilisearchService implements OnModuleInit {
       this.logger.log('Meilisearch indexes configured');
     } catch (error) {
       // Index might already exist, which is fine
-      this.logger.debug(`Index setup: ${error.message}`);
+      this.logger.debug(`Index setup: ${getErrorMessage(error)}`);
     }
   }
 
@@ -79,7 +78,7 @@ export class MeilisearchService implements OnModuleInit {
       await index.addDocuments([document]);
       this.logger.debug(`Indexed document ${document.id} in ${indexName}`);
     } catch (error) {
-      this.logger.error(`Failed to index document: ${error.message}`);
+      this.logger.error(`Failed to index document: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -93,7 +92,7 @@ export class MeilisearchService implements OnModuleInit {
       await index.addDocuments(documents);
       this.logger.debug(`Indexed ${documents.length} documents in ${indexName}`);
     } catch (error) {
-      this.logger.error(`Failed to index documents: ${error.message}`);
+      this.logger.error(`Failed to index documents: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -107,7 +106,7 @@ export class MeilisearchService implements OnModuleInit {
       await index.updateDocuments([document]);
       this.logger.debug(`Updated document ${document.id} in ${indexName}`);
     } catch (error) {
-      this.logger.error(`Failed to update document: ${error.message}`);
+      this.logger.error(`Failed to update document: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -121,7 +120,7 @@ export class MeilisearchService implements OnModuleInit {
       await index.deleteDocument(documentId);
       this.logger.debug(`Deleted document ${documentId} from ${indexName}`);
     } catch (error) {
-      this.logger.error(`Failed to delete document: ${error.message}`);
+      this.logger.error(`Failed to delete document: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -160,7 +159,7 @@ export class MeilisearchService implements OnModuleInit {
         processingTimeMs: result.processingTimeMs,
       };
     } catch (error) {
-      this.logger.error(`Search failed: ${error.message}`);
+      this.logger.error(`Search failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -173,7 +172,7 @@ export class MeilisearchService implements OnModuleInit {
       const index = this.getIndex(indexName);
       return await index.getDocument(documentId);
     } catch (error) {
-      if (error.code === 'document_not_found') {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'document_not_found') {
         return null;
       }
       throw error;

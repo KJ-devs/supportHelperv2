@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createWorker, Worker, RecognizeResult } from 'tesseract.js';
 import sharp from 'sharp';
+import { getErrorMessage } from '../utils/error.utils';
 
 export interface OCRResult {
   text: string;
@@ -97,7 +98,7 @@ export class OCRService {
       // Parse result
       return this.parseOCRResult(result);
     } catch (error) {
-      this.logger.error(`OCR failed for ${imagePath}: ${error.message}`);
+      this.logger.error(`OCR failed for ${imagePath}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -145,7 +146,7 @@ export class OCRService {
         averageConfidence,
       };
     } catch (error) {
-      this.logger.error(`Batch OCR failed: ${error.message}`);
+      this.logger.error(`Batch OCR failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -182,7 +183,7 @@ export class OCRService {
 
       return outputPath;
     } catch (error) {
-      this.logger.warn(`Image preprocessing failed, using original: ${error.message}`);
+      this.logger.warn(`Image preprocessing failed, using original: ${getErrorMessage(error)}`);
       return imagePath;
     }
   }
@@ -208,7 +209,7 @@ export class OCRService {
       }));
 
     // Extract blocks
-    const blocks = data.blocks
+    const blocks = (data.blocks || [])
       .filter(block => block.confidence >= this.config.extraction.minConfidence)
       .map(block => ({
         text: block.text,

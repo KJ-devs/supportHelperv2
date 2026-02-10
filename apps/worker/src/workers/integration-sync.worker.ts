@@ -1,11 +1,11 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
-import { QUEUE_NAMES } from '../queues';
 import { IntegrationSyncJobData, IntegrationSyncResult } from '../queues/queue.types';
 import { PrismaService } from '../services/prisma.service';
 import { createDecipheriv } from 'crypto';
 import { INTEGRATION_PROVIDERS } from '../../../api/src/modules/integrations/providers';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 @Processor('integration-sync', {
   concurrency: 10,
@@ -64,7 +64,7 @@ export class IntegrationSyncWorker extends WorkerHost {
 
       const config = JSON.parse(this.decrypt(integration.config, integration.configIv));
 
-      const Provider = INTEGRATION_PROVIDERS[integration.type];
+      const Provider = INTEGRATION_PROVIDERS[integration.type as keyof typeof INTEGRATION_PROVIDERS];
       if (!Provider) {
         throw new Error(`Provider ${integration.type} not found`);
       }
@@ -78,8 +78,8 @@ export class IntegrationSyncWorker extends WorkerHost {
           result = await provider.syncTicket(ticket, config, integration.mappings as any);
         } else if (action === 'update') {
           result = await provider.updateTicket(metadata.externalId, ticket, config, integration.mappings as any);
-        } else if (action === 'delete' && provider.deleteTicket) {
-          await provider.deleteTicket(metadata.externalId, config);
+        } else if (action === 'delete' && 'deleteTicket' in provider) {
+          await (provider as any).deleteTicket(metadata.externalId, config);
           result = { success: true };
         } else {
           throw new Error(`Unsupported action: ${action}`);
@@ -119,7 +119,7 @@ export class IntegrationSyncWorker extends WorkerHost {
             integrationId,
             ticketId,
             status: job.attemptsMade >= 2 ? 'failed' : 'retrying',
-            error: error.message,
+            error: getErrorMessage(error),
             attemptCount: job.attemptsMade + 1,
           },
         });
@@ -127,7 +127,7 @@ export class IntegrationSyncWorker extends WorkerHost {
         throw error;
       }
     } catch (error) {
-      this.logger.error(`Integration sync failed: ${error.message}`, error.stack);
+      this.logger.error(`Integration sync failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -146,20 +146,6 @@ export class IntegrationSyncWorker extends WorkerHost {
     return decrypted;
   }
 
-  @OnWorkerEvent('completed')
-  onCompleted(job: Job, result: IntegrationSyncResult) {
-    this.logger.log(
-      `Integration sync completed for job ${job.id}: ticket ${result.ticketId} → ${result.provider} (${result.processingTimeMs}ms)`,
-    );
-  }
 
-  @OnWorkerEvent('failed')
-  onFailed(job: Job, error: Error) {
-    this.logger.error(`Integration sync failed for job ${job.id}: ${error.message}`, error.stack);
-  }
 
-  @OnWorkerEvent('progress')
-  onProgress(job: Job, progress: number) {
-    this.logger.log(`Integration sync progress for job ${job.id}: ${progress}%`);
-  }
 }
