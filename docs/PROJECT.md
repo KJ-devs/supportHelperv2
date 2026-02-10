@@ -1,566 +1,368 @@
-# Support Helper Platform
+# PROJECT.MD - Support Helper Platform
 
-> **Plateforme de support technique autonome, propulsée par l'IA, hébergée en local.**
-> Reporter des bugs en vidéo. Analyser automatiquement. Résoudre avec des agents IA. Du ticket au déploiement.
-
----
-
-## Table des matières
-
-- [Concept](#concept)
-- [Le Problème](#le-problème)
-- [La Solution](#la-solution)
-- [Comment ça marche](#comment-ça-marche)
-- [Architecture technique](#architecture-technique)
-- [Stack technique](#stack-technique)
-- [Fonctionnalités — Ce qui est fait](#fonctionnalités--ce-qui-est-fait)
-- [Fonctionnalités — Ce qui reste à faire](#fonctionnalités--ce-qui-reste-à-faire)
-- [Roadmap visuelle](#roadmap-visuelle)
-- [Self-hosted : Pourquoi tout est en local](#self-hosted--pourquoi-tout-est-en-local)
-- [Modèle économique](#modèle-économique)
+> Document de suivi technique - Analyse complète, roadmap et changelog prévisionnel.
+> Dernière mise a jour : 2026-02-10
 
 ---
 
-## Concept
+## 1. Etat des lieux (Ce qui est fait)
 
-Support Helper est une plateforme complète qui couvre **tout le cycle de vie du support technique** — du bug reporté par l'utilisateur final jusqu'au correctif déployé en production.
+### 1.1 Architecture Globale
 
-```
-  Utilisateur       →  SDK (vidéo)  →  IA (analyse)  →  Ticket  →  Agent IA  →  Code Fix  →  Déployé
-  reporte un bug       capture          classifie        créé       résout       généré       en prod
-```
+**Monorepo TypeScript** gere par **pnpm workspaces** + **Turborepo**, compose de :
 
-**En une phrase** : Un utilisateur clique sur un bouton, filme son bug, et l'IA s'occupe du reste — analyse, classification, création de ticket, proposition de solution, écriture du code, review de PR, et déploiement.
+| Package | Framework | Port | Etat |
+|---------|-----------|------|------|
+| `apps/api` | NestJS 10 + Prisma | 3001 | Fonctionnel |
+| `apps/dashboard` | Next.js 14 (App Router) | 3000 | Fonctionnel (legacy) |
+| `apps/web` | Next.js 15 (App Router + Turbopack) | 3002 | Fonctionnel (principal) |
+| `apps/worker` | NestJS + BullMQ | - | Fonctionnel |
+| `packages/sdk-web` | Vite + Web Component | - | Fonctionnel |
+| `packages/shared` | TypeScript pur | - | Fonctionnel |
+| `packages/database` | Prisma utilities | - | Fonctionnel |
+
+**Infrastructure Docker** (`docker-compose.yml`) :
+- PostgreSQL 16 + pgvector
+- Redis 7.4 (queues BullMQ + cache)
+- MeiliSearch 1.11 (recherche full-text)
+- MinIO (stockage S3-compatible : videos, screenshots, exports)
+- MailHog (testing email SMTP)
 
 ---
 
-## Le Problème
+### 1.2 Backend API (NestJS) - Fonctionnalites implementees
 
-Le support technique est un gouffre de temps et d'argent :
+#### Modules Core
+- **Auth** : Login/Register JWT, refresh tokens, guards (`JwtAuthGuard`, `SdkKeyGuard`, `TenantGuard`, `RolesGuard`)
+- **Users** : CRUD utilisateurs, roles (admin/member)
+- **Tenants** : Isolation multi-tenant complete, middleware `TenantContext`
+- **Applications** : Gestion des apps clientes avec SDK keys uniques
+- **Health** : Endpoint de health check
 
-| Problème | Impact |
+#### Modules Metier (`src/modules/`)
+- **Tickets** : CRUD complet (create, findAll, findOne, update, delete, assign, stats, search, findSimilar)
+  - Validation Zod (DTOs)
+  - Filtres avances + pagination
+  - Recherche MeiliSearch
+  - Recherche vectorielle de tickets similaires (pgvector)
+  - Auto-indexation MeiliSearch a la creation
+  - Lancement automatique analyse IA a la creation
+  - Sync automatique vers integrations tierces
+- **Media** : Upload presigne S3/MinIO, confirmation, gestion du cycle de vie (`pending` -> `processing` -> `completed` -> `failed`)
+- **Agent AI** : Sessions conversationnelles IA par ticket
+  - Machine a etats : `analyzing` -> `needs_info` / `proposing` / `waiting` / `escalated`
+  - WebSocket Gateway (Socket.io, namespace `/agent`)
+  - Events : `join-session`, `send-message`, `typing`, `leave-session`
+  - Emits : `new-message`, `agent-typing`, `session-update`
+  - Escalade automatique vers humain si confiance < 50%
+- **Analytics** : Statistiques et metriques (tickets par jour, par type, par severite, temps de resolution, confiance IA)
+- **Feedback** : Corrections humaines sur les classifications IA (pour boucle d'apprentissage)
+- **GitHub** : OAuth, repos, webhooks, liaison tickets <-> GitHub Issues
+- **Integrations** : Architecture provider extensible
+  - Providers implementes : **Slack**, **Discord**, **Notion**, **HubSpot**, **Jira**
+  - Chiffrement des credentials (AES + IV)
+  - Sync queue asynchrone (BullMQ, 3 retries, backoff exponentiel)
+  - Logs de synchronisation
+
+#### Infrastructure
+- **Rate Limiting** : Throttler global (short/medium/long)
+- **Monitoring** : Sentry, PostHog, BetterStack, Correlation ID middleware
+- **Config** : Validation d'env via Zod, configs typees (app, db, jwt, s3, github, openai, meilisearch, monitoring)
+- **Swagger** : Documentation API auto-generee a `/api/docs`
+
+---
+
+### 1.3 Worker (BullMQ) - Pipeline implemente
+
+| Worker | Queue | Description |
+|--------|-------|-------------|
+| `VideoAnalysisWorker` | `video-analysis` | Pipeline complet : S3 download -> FFmpeg keyframes -> Tesseract OCR (batch) -> YOLO v11 UI detection -> GPT-4o Vision -> Embeddings (text-embedding-3-large) -> Update DB -> Index MeiliSearch |
+| `GithubSyncWorker` | `github-sync` | Synchronisation tickets <-> GitHub Issues |
+| `IntegrationSyncWorker` | `integration-sync` | Sync vers Slack/Discord/Notion/HubSpot/Jira |
+| `AgentWorker` | `agent` | Traitement asynchrone des taches agent IA |
+
+Services worker :
+- `FFmpegService` : Extraction keyframes (1 frame/sec)
+- `OCRService` : Tesseract OCR parallelise
+- `YoloService` : Detection UI YOLO v11
+- `OpenAIService` : GPT-4o Vision + Embeddings
+- `S3Service` : Download/upload S3
+- `MeilisearchService` : Indexation full-text
+- `EmailService` : Notifications via Resend/MailHog
+
+---
+
+### 1.4 Frontend Web (Next.js 15) - `apps/web`
+
+**UI Stack** : TailwindCSS, Radix UI, Lucide Icons, Recharts, TipTap, next-themes (dark mode)
+
+#### Pages implementees
+| Route | Composant | Etat |
+|-------|-----------|------|
+| `/` | Landing page | OK |
+| `/login` | Formulaire login | OK |
+| `/register` | Formulaire inscription | OK |
+| `/(dashboard)` | Overview (cards, trends, quick actions, recent tickets) | OK |
+| `/(dashboard)/tickets` | Liste + DataTable + filtres avances + recherche MeiliSearch | OK |
+| `/(dashboard)/tickets/new` | Formulaire creation ticket (simple + avance) | OK |
+| `/(dashboard)/tickets/[id]` | Detail ticket (header, tabs, timeline, video, sidebar, actions) | OK |
+| `/(dashboard)/analytics` | Dashboard analytique complet (7 charts) | OK (mock data) |
+| `/(dashboard)/github` | GitHub repos, issues, sync status | OK |
+| `/(dashboard)/settings` | General, integrations, notifications, team | OK |
+
+#### Composants cles
+- **Layout** : Sidebar collapsible (Zustand store) + Header avec theme toggle, notifications, user menu
+- **Tickets** : DataTable TanStack, filtres a facettes, actions bulk, recherche, video player
+- **Analytics** : 7 charts Recharts (tickets/jour, par type, par severite, resolution trend, top apps, confiance IA)
+- **Settings** : 4 onglets (general, integrations, notifications, equipe)
+- **UI** : Design system complet (button, card, badge, input, select, tabs, toast, dialog, dropdown, sheet, skeleton, separator, checkbox, avatar, tooltip, popover, calendar, file-upload, rich-text-editor)
+
+#### Etat management
+- **Zustand** : `sidebar-store`, `ticket-store`, `ticket-table-store`
+- **TanStack Query** : Hooks (`use-auth`, `use-analytics`, `use-meilisearch`)
+- **API Client** : Wrapper fetch avec JWT auto-injection, error handling
+
+---
+
+### 1.5 Frontend Dashboard (Next.js 14) - `apps/dashboard`
+
+> Note : Ce dashboard est la version **legacy**. `apps/web` est la version principale plus complete.
+
+#### Pages : login, signup, dashboard, tickets, tickets/[id], tickets/[id]/chat, applications, integrations, github, analytics, settings
+#### Composants : Chat agent (ChatInput, ChatMessage, AgentStatus, EscalationBanner, SessionInfo), VideoPlayer, GlobalSearch, TicketTable, ApplicationCard/Modal, IntegrationCard/Modal, Analytics (PieChart, BarChart, StatsCard), ExportButton
+#### API Layer : Axios client avec interceptors (auth, agent, analytics, applications, github, integrations, tickets)
+#### Auth : Context custom avec JWT (pas next-auth)
+
+---
+
+### 1.6 SDK Web (`packages/sdk-web`)
+
+- **Classe principale** : `SupportHelper`
+- **Web Component** : `<support-helper>` avec Shadow DOM
+- **State Machine** : `idle` -> `open` -> `recording` -> `preview` -> `editing` -> `submitting` -> `success`/`error`
+- **Video Recording** : MediaRecorder API, detection codec automatique
+- **Context Capture** : OS, navigateur, viewport, metadata
+- **API Client** : POST `/api/sdk/tickets/report` (multipart FormData, header `x-sdk-key`)
+- **Offline Queue** : IndexedDB
+- **Builds** : ESM/CJS (Vite) + CDN IIFE (`vite.config.cdn.ts`)
+- **Framework bindings** : React + Vue wrappers
+
+---
+
+### 1.7 Packages partages
+
+- **`packages/shared`** : Types TypeScript (User, Ticket, Media, Tenant), constantes (severity, ticket-status), utils (validation)
+- **`packages/database`** : Client Prisma, schemas Zod, tests de schema validation
+
+---
+
+### 1.8 Tests existants
+
+| Package | Framework | Fichiers |
+|---------|-----------|----------|
+| `apps/api` | Jest | `agent.service.spec.ts`, `analytics.service.spec.ts`, `integrations-crypto.service.spec.ts`, `integrations.service.spec.ts`, `openai.service.spec.ts` (worker) |
+| `apps/dashboard` | Vitest | `VideoPlayer.test.tsx` |
+| `apps/web` | Vitest + Playwright | `button.spec.tsx`, `use-auth.spec.tsx`, E2E |
+| `packages/shared` | Vitest | `severity.spec.ts`, `ticket-status.spec.ts`, `validation.spec.ts` |
+| `packages/database` | Vitest | `migrations.test.ts`, `schema.test.ts` |
+| `packages/sdk-web` | Vitest | `recorder.test.ts`, `uploader.test.ts` |
+
+---
+
+## 2. Roadmap (Ce qu'il reste a faire)
+
+### 2.1 MVP - Taches restantes pour finaliser
+
+- [ ] **Analytics : Connecter aux vraies API** - `apps/web/src/hooks/use-analytics.ts` utilise des mock data (generateurs aleatoires). Connecter aux endpoints `GET /api/analytics/*`.
+- [ ] **Auth Web : Renouvellement token** - Le hook `use-auth.ts` stocke les tokens en `localStorage` sans refresh automatique. Implementer le refresh token flow.
+- [ ] **Notifications : Backend** - Le bouton notifications dans le Header est present mais n'a pas de backend (pas de modele Notification en Prisma, pas d'endpoint).
+- [ ] **Recherche Header Web** - La barre de recherche dans le Header (`apps/web`) est un `<Input>` non fonctionnel. La connecter a MeiliSearch (comme `GlobalSearch` dans le dashboard legacy).
+- [ ] **Profil utilisateur** - Le menu utilisateur a un lien "Profile" mais pas de page dediee.
+- [ ] **Tests E2E** - Completer les tests Playwright pour les parcours critiques (login, creation ticket, analyse video).
+- [ ] **SDK : Tests d'integration** - Tester le SDK dans un vrai navigateur (upload video, offline queue).
+- [ ] **Worker : Gestion d'erreur avancee** - Dead letter queue, alerting Sentry sur echecs pipeline.
+- [ ] **Consolidation des 2 dashboards** - `apps/dashboard` (legacy) et `apps/web` ont des fonctionnalites qui se chevauchent. Fusionner vers `apps/web`.
+
+### 2.2 Nouvelles features demandees
+
+#### Feature : Command Center (`Ctrl + K`) - Chat Agent
+
+- [ ] **Frontend : Composant `CommandCenter`** - Modal/overlay qui s'ouvre avec `Ctrl + K` (ou `Cmd + K` sur Mac)
+  - Interface chat minimaliste style Claude.ai
+  - Champ de saisie avec parsing de commandes naturelles
+  - Historique de conversation dans le contexte de la session
+  - Indicateur de typing agent (streaming)
+  - Auto-complete des commandes disponibles
+  - Affichage des resultats d'actions (confirmation, erreurs)
+
+- [ ] **Backend : Logique de traitement des commandes tickets par l'agent**
+  - Nouveau endpoint `POST /api/agent/command` pour recevoir des commandes en langage naturel
+  - Parser de commandes : detection d'intentions (fermer ticket, assigner, changer statut, chercher, resumer...)
+  - Exemples de commandes :
+    - `"Ferme le ticket #12"` -> PATCH `/api/tickets/:id` status=closed
+    - `"Assigne le ticket #42 a John"` -> POST `/api/tickets/:id/assign`
+    - `"Resume les tickets ouverts"` -> GET + AI summary
+    - `"Cherche les bugs critiques"` -> Search + Filter
+    - `"Quel est le statut du ticket #7 ?"` -> GET + format response
+  - Integration OpenAI pour NLU (Natural Language Understanding)
+  - Execution securisee des actions (verification tenant, roles, permissions)
+  - Reponse structuree avec action executee + resultat
+
+- [ ] **WebSocket : Integration temps reel du Command Center**
+  - Etendre le gateway Agent ou creer un namespace `/command`
+  - Streaming de la reponse agent (token par token)
+  - Notifications push des resultats d'actions
+
+#### Feature : Refonte UI/UX (Style "Claude" / "Linear")
+
+- [ ] **Design System : Refonte tokens visuels**
+  - Palette de couleurs epuree (gris neutres, accent subtil, mode sombre soigne)
+  - Typographie : Inter/Geist Mono, hierarchie stricte
+  - Espacements et border-radius consistent
+  - Transitions et animations microinteractions fluides
+
+- [ ] **Sidebar : Redesign style Linear**
+  - Navigation compacte avec icones Lucide uniquement (collapse = icones seules)
+  - Section "Favorites" / "Recents" epingles
+  - Indicateur de raccourci `Ctrl+K` visible
+  - Avatar + tenant switcher en bas
+
+- [ ] **Header : Simplification**
+  - Retirer la barre de recherche (remplacee par `Ctrl+K`)
+  - Breadcrumbs contextuels
+  - Actions contextuelles a droite
+
+- [ ] **Tickets : Redesign vue liste et detail**
+  - Liste style Linear (compact, hover states, actions inline)
+  - Detail : layout 2 colonnes (contenu + sidebar metadata)
+  - Timeline redesignee avec icones d'actions
+  - Video player integre avec timeline synchronisee
+
+- [ ] **Dashboard Overview : Redesign**
+  - Cards metriques epurees avec micro-sparklines
+  - Graphiques avec style sobre (pas de grilles saturees)
+  - Quick actions redesignees comme une toolbar
+
+---
+
+## 3. Journal des modifications techniques (Changelog previsionnel)
+
+### Phase 1 : Command Center (`Ctrl + K`)
+
+#### Backend (`apps/api`)
+
+| Fichier | Modification |
+|---------|-------------|
+| `src/modules/agent/agent.controller.ts` | Ajouter endpoint `POST /api/agent/command` |
+| `src/modules/agent/agent.service.ts` | Ajouter methodes `parseCommand()`, `executeCommand()`, `buildCommandPrompt()` |
+| `src/modules/agent/dto/` | Nouveau DTO `command.dto.ts` (content: string, context?: object) |
+| `src/modules/agent/agent.gateway.ts` | Ajouter event `command` avec streaming de reponse |
+| `src/ai/ai.service.ts` | Ajouter methode `generateCommandResponse()` avec function calling OpenAI |
+| `src/modules/tickets/tickets.service.ts` | Exposer methodes pour actions programmatiques (close, reopen, assign par reference) |
+
+#### Frontend (`apps/web`)
+
+| Fichier | Modification |
+|---------|-------------|
+| `src/components/command/` | **Nouveau dossier** : `command-center.tsx`, `command-input.tsx`, `command-results.tsx`, `command-history.tsx` |
+| `src/hooks/use-command-center.ts` | **Nouveau** : Hook pour la logique du command center (ouverture, historique, envoi) |
+| `src/stores/command-store.ts` | **Nouveau** : Store Zustand pour l'etat du command center (isOpen, history, loading) |
+| `src/app/(dashboard)/layout.tsx` | Ajouter `<CommandCenter />` dans le layout + event listener `Ctrl+K` |
+| `src/lib/api.ts` | Ajouter methode pour appel endpoint command |
+| `src/components/layout/header.tsx` | Ajouter indication raccourci `Ctrl+K` dans la barre de recherche |
+
+### Phase 2 : Refonte UI/UX
+
+#### Frontend (`apps/web`)
+
+| Fichier | Modification |
+|---------|-------------|
+| `src/app/globals.css` | Refonte des CSS variables (couleurs, rayons, ombres) pour le theme Claude/Linear |
+| `tailwind.config.ts` | Mise a jour des tokens Tailwind (couleurs, fonts, animations) |
+| `src/components/layout/sidebar.tsx` | Redesign complet : navigation compacte, favoris, raccourci Ctrl+K, tenant switcher |
+| `src/components/layout/header.tsx` | Simplification : breadcrumbs, suppression barre recherche, actions contextuelles |
+| `src/components/ui/*.tsx` | Raffinement des composants de base (Button, Card, Badge, Input) - border-radius, couleurs, transitions |
+| `src/components/tickets/tickets-data-table.tsx` | Redesign style Linear : hover states, actions inline, spacing compact |
+| `src/components/tickets/ticket-detail.tsx` | Layout 2 colonnes, timeline redesignee |
+| `src/components/dashboard/overview-cards.tsx` | Cards epurees avec micro-sparklines |
+| `src/components/analytics/*.tsx` | Style sobre pour les charts Recharts |
+
+### Phase 3 : Consolidation MVP
+
+| Fichier | Modification |
+|---------|-------------|
+| `apps/web/src/hooks/use-analytics.ts` | Remplacer mock data par vrais appels API (`api.get('/api/analytics/...')`) |
+| `apps/web/src/hooks/use-auth.ts` | Ajouter refresh token interceptor + gestion expiration |
+| `apps/api/prisma/schema.prisma` | Ajouter modele `Notification` (si notifications backend) |
+| `apps/web/src/app/(dashboard)/profile/page.tsx` | **Nouveau** : Page profil utilisateur |
+| `apps/web/src/components/layout/header.tsx` | Connecter bouton notifications au backend |
+
+---
+
+## 4. Stack technique detectee
+
+### Langages et runtimes
+- **TypeScript** (strict mode) partout
+- **Node.js** runtime
+
+### Backend
+- **NestJS 10** (modules, DI, guards, pipes, interceptors, gateways)
+- **Prisma ORM** (PostgreSQL 16 + pgvector)
+- **BullMQ** (queues Redis)
+- **Socket.io** (WebSocket gateway)
+- **Swagger/OpenAPI** (documentation auto)
+- **class-validator** + **Zod** (validation)
+- **bcrypt/argon2** (hashing mots de passe)
+- **crypto** (chiffrement AES pour integrations)
+
+### Frontend
+- **Next.js 14** (dashboard legacy) + **Next.js 15** (web principal, Turbopack)
+- **TailwindCSS** + **Radix UI** primitives
+- **TanStack Query** (server state) + **Zustand** (client state)
+- **Recharts** (charts analytics)
+- **TipTap** (editeur rich text)
+- **Lucide** (icones)
+- **next-themes** (dark mode)
+
+### SDK
+- **Vite** (build ESM/CJS + CDN IIFE)
+- **Web Components** + Shadow DOM
+- **MediaRecorder API** (capture video)
+- **IndexedDB** (offline queue)
+
+### Worker / AI
+- **FFmpeg** (extraction keyframes)
+- **Tesseract.js** (OCR)
+- **YOLO v11** (detection UI elements)
+- **OpenAI GPT-4o Vision** (analyse video)
+- **OpenAI text-embedding-3-large** (embeddings vectoriels)
+- **MeiliSearch** (recherche full-text)
+- **Resend** (emails transactionnels)
+
+### Infrastructure
+- **Docker Compose** (PostgreSQL, Redis, MeiliSearch, MinIO, MailHog)
+- **Turborepo** (orchestration monorepo)
+- **pnpm** (package manager)
+- **Sentry** (error tracking)
+- **PostHog** (product analytics)
+- **BetterStack** (logs)
+
+### Tests
+- **Jest** (API + Worker)
+- **Vitest** (Dashboard + Web + packages)
+- **Playwright** (E2E Web)
+
+---
+
+## 5. Metriques du projet
+
+| Metrique | Valeur |
 |----------|--------|
-| Les utilisateurs décrivent mal les bugs | Les devs passent des heures à reproduire |
-| Le triage est manuel et incohérent | Les tickets critiques sont noyés |
-| Pas de lien entre ticket et code | Le context est perdu entre support et dev |
-| Le support L1/L2 est répétitif | 70% des tickets ont déjà une solution connue |
-| Les outils sont fragmentés | Jira ici, Slack là, GitHub ailleurs, rien ne communique |
-| Données dans le cloud | L'entreprise n'a pas le contrôle de ses données |
-
----
-
-## La Solution
-
-### 1. SDK — Capture vidéo du bug
-
-Un SDK léger (`<50KB`) que le client installe dans son app. L'utilisateur clique sur un bouton, enregistre son écran, et soumet son rapport. Le SDK capture automatiquement :
-
-- **Vidéo** de l'écran (MediaRecorder API)
-- **Contexte système** : OS, navigateur, résolution, timezone
-- **URL et état** de l'application au moment du bug
-- **Logs console** et erreurs JavaScript
-
-### 2. IA — Analyse automatique
-
-La vidéo est envoyée à un pipeline IA qui :
-
-- **Extrait les keyframes** (FFmpeg)
-- **Fait de l'OCR** sur chaque frame (Tesseract)
-- **Analyse avec GPT-4 Vision** pour comprendre le bug
-- **Classifie** : type (UI, crash, perf...), sévérité (critique, haute, moyenne, basse)
-- **Génère** : résumé, étapes de reproduction, mots-clés
-- **Crée les embeddings** pour la recherche sémantique (tickets similaires)
-
-### 3. Intégrations — Connexion aux outils existants
-
-Support Helper se connecte aux outils de ticketing que l'entreprise utilise déjà :
-
-- **GitHub** → Création automatique d'issues, synchronisation bidirectionnelle
-- **Slack** → Notifications enrichies avec Block Kit
-- **Discord** → Notifications via webhooks
-- **Notion** → Création de pages dans une base de données
-- **Jira** → Synchronisation de tickets *(à venir)*
-- **HubSpot** → Intégration CRM *(à venir)*
-- **Linear** → Gestion de projets *(à venir)*
-
-### 4. Agents IA — Support autonome L1/L2/L3
-
-Des agents IA autonomes gèrent le support à différents niveaux :
-
-| Niveau | Agent | Ce qu'il fait |
-|--------|-------|---------------|
-| **L1** | Triage & Résolution rapide | Recherche de tickets similaires déjà résolus, propose une solution immédiate, répond au reporter |
-| **L2** | Investigation technique | Analyse le code lié, identifie la cause racine, propose un fix, crée une US |
-| **L3** | Code & Déploiement | Écrit le code correctif, crée une PR, demande une review, lance le déploiement |
-
-### 5. Du ticket au déploiement
-
-Si l'entreprise connecte son repo GitHub :
-
-```
-Ticket créé
-    │
-    ▼
-Agent analyse le ticket + le code source
-    │
-    ▼
-Création d'une User Story (issue GitHub)
-    │
-    ▼
-Agent écrit le fix (branche + commits)
-    │
-    ▼
-Pull Request créée automatiquement
-    │
-    ▼
-Review automatique (ou humaine si escalade)
-    │
-    ▼
-Merge + Déploiement
-    │
-    ▼
-Ticket fermé, reporter notifié
-```
-
-### 6. Tout en local — Zero cloud
-
-**Aucune donnée ne quitte l'infrastructure de l'entreprise.** Tout tourne en Docker sur les serveurs du client :
-
-- Base de données PostgreSQL locale
-- Stockage vidéo MinIO (S3-compatible) local
-- Cache Redis local
-- Recherche MeiliSearch locale
-- Les seuls appels externes sont vers l'API OpenAI (et même ça peut être remplacé par un modèle local)
-
----
-
-## Comment ça marche
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   👤 UTILISATEUR              📦 SDK                    🖥️ APP CLIENT        │
-│   ─────────────              ─────                    ──────────           │
-│   Clique "Report"  ──▶  Enregistre la vidéo  ──▶  Capture le contexte     │
-│                          + logs + erreurs         OS, browser, URL         │
-│                                                                              │
-└──────────────────────────────────┬───────────────────────────────────────────┘
-                                   │
-                                   ▼ Upload vidéo + metadata
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   🔧 API (NestJS)                                                           │
-│   ──────────────                                                            │
-│   • Authentifie (SDK key)                                                    │
-│   • Crée le ticket                                                          │
-│   • Upload vidéo vers MinIO (pre-signed URL)                                │
-│   • Met en queue le job d'analyse                                           │
-│                                                                              │
-└──────────────────────────────────┬───────────────────────────────────────────┘
-                                   │
-                                   ▼ Job BullMQ
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   🤖 WORKER (Pipeline IA)                                                   │
-│   ─────────────────────                                                     │
-│   1. Télécharge la vidéo depuis MinIO                                       │
-│   2. Extrait les keyframes (FFmpeg)                                         │
-│   3. OCR sur chaque frame (Tesseract)                                       │
-│   4. Analyse GPT-4 Vision → résumé + classification + sévérité             │
-│   5. Génère les embeddings (text-embedding-3-large)                         │
-│   6. Indexe dans MeiliSearch                                                │
-│   7. Met à jour le ticket en DB                                             │
-│                                                                              │
-└──────────────────────────────────┬───────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   🤖 AGENT IA (Support autonome)                                            │
-│   ──────────────────────────────                                            │
-│   • Analyse le ticket enrichi par l'IA                                      │
-│   • Cherche des tickets similaires (pgvector)                               │
-│   • Propose une solution ou escalade                                        │
-│   • State machine : ANALYZING → PROPOSING → RESOLVED / ESCALATED           │
-│   • Si repo GitHub connecté → crée issue, écrit le fix, ouvre une PR        │
-│                                                                              │
-└──────────────────────────────────┬───────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│                                                                              │
-│   📊 DASHBOARD (Next.js)                                                    │
-│   ──────────────────────                                                    │
-│   • Liste des tickets avec lecture vidéo                                    │
-│   • Analytics : tendances, performance, stats agents                        │
-│   • Gestion des intégrations (Slack, Discord, Notion...)                    │
-│   • Gestion des applications et SDK keys                                    │
-│   • Settings entreprise                                                     │
-│                                                                              │
-└──────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Architecture technique
-
-```mermaid
-flowchart TB
-    subgraph Client["📱 Applications Client"]
-        SDK["SDK Web<br/>npm / CDN / React / Vue"]
-    end
-
-    subgraph Frontend["🖥️ Dashboard"]
-        Dashboard["Next.js 15<br/>React 19 + Tailwind"]
-    end
-
-    subgraph Backend["⚙️ Backend"]
-        API["NestJS API<br/>REST + Swagger"]
-        Worker["Worker BullMQ<br/>Video + AI + Sync"]
-    end
-
-    subgraph AI["🤖 Pipeline IA"]
-        FFmpeg["FFmpeg<br/>Keyframes"]
-        OCR["Tesseract<br/>OCR"]
-        Vision["GPT-4 Vision<br/>Analyse"]
-        Embed["Embeddings<br/>Recherche"]
-    end
-
-    subgraph Data["💾 Stockage Local"]
-        PG["PostgreSQL 16<br/>+ pgvector"]
-        Redis["Redis 7<br/>Cache + Queue"]
-        MinIO["MinIO<br/>Vidéos (S3)"]
-        Meili["MeiliSearch<br/>Recherche"]
-    end
-
-    subgraph Integrations["🔗 Intégrations"]
-        GitHub["GitHub"]
-        Slack["Slack"]
-        Discord["Discord"]
-        Notion["Notion"]
-        Jira["Jira 🔜"]
-        HubSpot["HubSpot 🔜"]
-    end
-
-    SDK -->|"x-sdk-key"| API
-    Dashboard -->|"JWT"| API
-    API --> Worker
-    Worker --> FFmpeg --> OCR --> Vision --> Embed
-    API --> PG
-    API --> Redis
-    API --> MinIO
-    API --> Meili
-    Worker --> PG
-    Worker --> MinIO
-    API --> GitHub
-    API --> Slack
-    API --> Discord
-    API --> Notion
-```
-
----
-
-## Stack technique
-
-| Couche | Technologie | Rôle |
-|--------|-------------|------|
-| **SDK** | TypeScript, Vite, Web Components | Widget `<support-helper>` + wrappers React/Vue |
-| **API** | NestJS 10, Prisma 5, TypeScript | REST API, auth JWT/SDK key, multi-tenant |
-| **Dashboard** | Next.js 15, React 19, TailwindCSS, TanStack Query | Interface de gestion |
-| **Worker** | NestJS, BullMQ, FFmpeg, Tesseract | Traitement vidéo et IA en background |
-| **Base de données** | PostgreSQL 16 + pgvector | Données + recherche vectorielle |
-| **Cache/Queue** | Redis 7 + BullMQ | Cache, sessions, file de jobs |
-| **Stockage** | MinIO (S3-compatible) | Vidéos, screenshots, exports |
-| **Recherche** | MeiliSearch | Recherche full-text sur les tickets |
-| **IA** | OpenAI GPT-4 Vision, GPT-3.5, text-embedding-3-large | Analyse, classification, embeddings |
-| **Infra** | Docker Compose, Turborepo, pnpm | Orchestration locale |
-| **Monitoring** | Sentry, PostHog | Erreurs et analytics produit |
-
----
-
-## Fonctionnalités — Ce qui est fait
-
-### ✅ SDK Web — ~85%
-
-| Feature | Statut | Détail |
-|---------|--------|--------|
-| Widget `<support-helper>` | ✅ Fait | Web Component complet avec Shadow DOM, FAB, modal |
-| Enregistrement vidéo | ✅ Fait | MediaRecorder API avec auto-détection de codec |
-| State machine | ✅ Fait | 8 états : idle → open → recording → preview → editing → submitting → success → error |
-| Capture du contexte | ✅ Fait | URL, user agent, résolution, timezone, langue |
-| Client API | ✅ Fait | Fetch-based avec auth SDK key, timeout, upload pre-signed |
-| Wrapper React | ✅ Fait | Composant React qui wrappe le Web Component |
-| Wrapper Vue | ✅ Fait | Composant Vue qui wrappe le Web Component |
-| Build CDN (IIFE) | ✅ Fait | Script `<script>` pour intégration directe |
-| Build npm (ESM/CJS) | ✅ Fait | Package npm classique |
-
-### ✅ API Backend — ~95%
-
-| Module | Statut | Endpoints |
-|--------|--------|-----------|
-| Auth (JWT + refresh tokens) | ✅ Fait | Register, login, refresh, profil |
-| Auth SDK key | ✅ Fait | Guard `SdkKeyGuard` + header `x-sdk-key` |
-| Multi-tenant | ✅ Fait | Isolation par `tenantId`, middleware, guard, décorateur |
-| RBAC (rôles) | ✅ Fait | Guard `RolesGuard` + décorateur `@Roles()` |
-| Tickets CRUD | ✅ Fait | Create, read, update, list, search, enrichissement IA |
-| Tickets SDK | ✅ Fait | Endpoint dédié pour soumission depuis le SDK |
-| Media (vidéos) | ✅ Fait | Pre-signed URL upload, stockage MinIO |
-| Applications | ✅ Fait | CRUD + génération de SDK keys |
-| Tenants | ✅ Fait | Gestion des organisations |
-| Users | ✅ Fait | Gestion des utilisateurs |
-| Health check | ✅ Fait | Endpoint `/health` |
-| Swagger | ✅ Fait | Documentation auto à `/api/docs` |
-| Feedback IA | ✅ Fait | CRUD pour corriger les classifications IA |
-| Monitoring | ✅ Fait | Sentry + PostHog + correlation IDs |
-
-### ✅ Pipeline IA — ~80%
-
-| Étape | Statut | Détail |
-|-------|--------|--------|
-| Extraction keyframes | ✅ Fait | FFmpeg |
-| OCR | ✅ Fait | Tesseract.js |
-| Analyse GPT-4 Vision | ✅ Fait | Résumé, classification, sévérité, étapes de repro |
-| Classification AI | ✅ Fait | GPT-3.5-turbo côté API, GPT-4o côté worker |
-| Embeddings | ✅ Fait | text-embedding-3-large (3072 dims) + pgvector |
-| Recherche sémantique | ✅ Fait | Cosine similarity via pgvector |
-| Indexation MeiliSearch | ✅ Fait | Recherche full-text |
-| Cache + Rate limiting | ✅ Fait | Redis, limites par tenant, suivi des coûts |
-
-### ✅ GitHub Integration — ~95%
-
-| Feature | Statut | Détail |
-|---------|--------|--------|
-| OAuth flow | ✅ Fait | Connexion GitHub App avec tokens chiffrés |
-| Lister les repos | ✅ Fait | Repos liés à l'installation |
-| Créer une issue depuis un ticket | ✅ Fait | Formatage enrichi du body |
-| Synchronisation bidirectionnelle | ✅ Fait | Worker dédié `github-sync.worker` |
-| Webhooks | ✅ Fait | Réception et traitement via BullMQ |
-| Trouver des issues liées | ✅ Fait | Recherche de tickets similaires |
-
-### ✅ Agent IA (Support autonome) — ~80%
-
-| Feature | Statut | Détail |
-|---------|--------|--------|
-| State machine | ✅ Fait | ANALYZING → NEEDS_INFO → PROPOSING → WAITING → RESOLVED → ESCALATED |
-| Analyse de ticket | ✅ Fait | L'agent analyse le ticket enrichi + contexte |
-| Proposition de solution | ✅ Fait | Recherche de tickets similaires résolus |
-| Escalade humaine | ✅ Fait | Escalade automatique si confiance basse |
-| Historique conversation | ✅ Fait | Persisté en DB (AgentSession + AgentMessage) |
-| GPT-4o function calling | ✅ Fait | Outils : recherche similaire, classification |
-| Worker dédié | ✅ Fait | `agent.worker.ts` (926 lignes) |
-
-### ✅ Intégrations — ~40%
-
-| Provider | Statut | Détail |
-|----------|--------|--------|
-| Framework d'intégration | ✅ Fait | CRUD, config chiffrée AES-256-GCM, providers abstraits, sync BullMQ |
-| Slack | ✅ Fait | `@slack/web-api`, messages Block Kit enrichis |
-| Discord | ✅ Fait | Webhooks avec embeds riches |
-| Notion | ✅ Fait | `@notionhq/client`, création de pages DB |
-
-### ✅ Dashboard — ~50-60%
-
-| Page | Statut | Route |
-|------|--------|-------|
-| Login | ✅ Fait | `/login` |
-| Inscription | ✅ Fait | `/signup` |
-| Accueil dashboard | ✅ Fait | `/dashboard` |
-| Liste des tickets | ✅ Fait | `/dashboard/tickets` |
-| Détail d'un ticket | ✅ Fait | `/dashboard/tickets/[id]` |
-| Analytics | ✅ Fait | `/dashboard/analytics` |
-| Intégrations | ✅ Fait | `/dashboard/integrations` |
-| Applications | ✅ Fait | `/dashboard/applications` |
-| Settings | ✅ Fait | `/dashboard/settings` |
-
-### ✅ Analytics — ~85%
-
-| Feature | Statut | Détail |
-|---------|--------|--------|
-| Vue d'ensemble | ✅ Fait | Tickets total, new, resolved, par statut/sévérité/type |
-| Tendances | ✅ Fait | Série temporelle avec bucketing |
-| Performance | ✅ Fait | Temps de première réponse, taux de résolution, reopen rate |
-| Stats agents IA | ✅ Fait | Métriques par agent |
-| Stats applications | ✅ Fait | Métriques par app |
-
-### ✅ Worker — ~90%
-
-| Worker | Statut | Détail |
-|--------|--------|--------|
-| Video Analysis | ✅ Fait | Pipeline complet : S3 → FFmpeg → OCR → GPT-4 Vision → embeddings → DB |
-| GitHub Sync | ✅ Fait | Sync bidirectionnelle, webhooks (518 lignes) |
-| Agent IA | ✅ Fait | GPT-4o function calling avec outils (926 lignes) |
-| Integration Sync | ✅ Fait | Sync générique avec déchiffrement config |
-
-### ✅ Infrastructure — ~95%
-
-| Feature | Statut | Détail |
-|---------|--------|--------|
-| Docker Compose | ✅ Fait | PostgreSQL, Redis, MinIO, MeiliSearch |
-| Monorepo pnpm | ✅ Fait | Workspaces + Turborepo |
-| Base de données | ✅ Fait | Prisma schema complet, migrations, seed |
-| Stockage S3 | ✅ Fait | MinIO local |
-| Setup scripts | ✅ Fait | `setup.bat` (Windows) + `setup.sh` (Linux/Mac) |
-
----
-
-## Fonctionnalités — Ce qui reste à faire
-
-### 🔴 Priorité haute
-
-| Feature | Description | Effort estimé |
-|---------|-------------|---------------|
-| **Intégration Jira** | Provider Jira pour sync tickets bidirectionnelle | 2-3 jours |
-| **Intégration HubSpot** | Provider HubSpot pour CRM et communication | 2-3 jours |
-| **WebSocket temps réel** | Chat agent en temps réel (actuellement HTTP polling) | 3-5 jours |
-| **Agent L3 — Code Fix** | L'agent écrit du code, crée une branche, ouvre une PR | 2-3 semaines |
-| **Agent L3 — Review PR** | Review automatique des PRs avec suggestions | 1-2 semaines |
-| **Agent L3 — Déploiement** | Trigger le déploiement après merge | 1 semaine |
-| **Création auto de User Stories** | Transformer un ticket en issue GitHub structurée (US format) | 3-5 jours |
-
-### 🟡 Priorité moyenne
-
-| Feature | Description | Effort estimé |
-|---------|-------------|---------------|
-| **Intégration Linear** | Provider Linear pour les équipes produit | 2-3 jours |
-| **SDK offline queue** | File d'attente IndexedDB pour les utilisateurs hors-ligne | 3-5 jours |
-| **Dashboard — Page GitHub** | Interface pour gérer la connexion GitHub, voir les issues liées | 3-5 jours |
-| **Dashboard — Chat Agent** | Interface de conversation avec l'agent IA | 1 semaine |
-| **Dashboard — Lecture vidéo enrichie** | Timeline synchronisée avec les events, OCR overlay | 1-2 semaines |
-| **YOLO UI Detection** | Remplacer le placeholder par un vrai modèle de détection | 1 semaine |
-| **SSO (SAML/OIDC)** | Single Sign-On pour les entreprises | 1-2 semaines |
-| **Modèle IA local** | Alternative à OpenAI (Ollama, vLLM) pour zero cloud absolu | 2-3 semaines |
-
-### 🟢 Priorité basse
-
-| Feature | Description | Effort estimé |
-|---------|-------------|---------------|
-| **SDK Desktop** | Client Electron/Tauri pour capture native | 3-4 semaines |
-| **SDK Mobile** | React Native pour apps mobiles | 3-4 semaines |
-| **Extension navigateur** | Chrome/Firefox extension | 2-3 semaines |
-| **Email integration** | Provider email pour notifications et réponses | 1 semaine |
-| **Audit logs** | Journal d'audit complet pour conformité | 1 semaine |
-| **Consolidation auth** | Fusionner les 2 modules auth en un seul | 2-3 jours |
-| **RAG avancé** | Retrieval-Augmented Generation sur la documentation client | 2 semaines |
-| **Fine-tuning classifiers** | Modèles de classification entraînés sur les données du client | 2-3 semaines |
-| **Custom AI models** | Support pour des modèles IA custom par entreprise | 2-3 semaines |
-| **Multi-langue SDK** | i18n du widget et des messages | 1 semaine |
-
----
-
-## Roadmap visuelle
-
-```
-MVP (Actuel — ~75% fait)
-═══════════════════════════════════════════════════════════
-✅ SDK Web (vidéo + contexte + widget)
-✅ API complète (auth, tickets, media, analytics)
-✅ Pipeline IA (keyframes → OCR → GPT-4 Vision → embeddings)
-✅ Dashboard (tickets, analytics, settings)
-✅ GitHub integration (OAuth, issues, sync, webhooks)
-✅ Agent IA L1/L2 (analyse, proposition, escalade)
-✅ Intégrations (Slack, Discord, Notion)
-✅ Infrastructure Docker locale
-
-V1 (Prochaine étape)
-═══════════════════════════════════════════════════════════
-🔜 Intégrations Jira + HubSpot + Linear
-🔜 WebSocket temps réel (chat agent)
-🔜 Dashboard enrichi (GitHub, chat, vidéo avancée)
-🔜 SDK offline queue
-🔜 Agent L3 : création de US
-🔜 YOLO UI detection réel
-🔜 SSO entreprise
-
-V2 (Vision)
-═══════════════════════════════════════════════════════════
-🔮 Agent L3 complet : code fix → PR → review → deploy
-🔮 SDK Desktop (Electron/Tauri) + Mobile (React Native)
-🔮 Extension navigateur
-🔮 Modèle IA local (zero cloud total)
-🔮 RAG sur la documentation du client
-🔮 Fine-tuning sur les données du client
-🔮 Multi-canal email / SMS
-```
-
----
-
-## Self-hosted : Pourquoi tout est en local
-
-```
-┌──────────────────────────────────────────────────────────┐
-│               INFRASTRUCTURE CLIENT (Docker)              │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌─────────┐ │
-│  │PostgreSQL│  │  Redis   │  │  MinIO   │  │ Meili-  │ │
-│  │ + pgvec  │  │  Cache   │  │  (S3)    │  │ Search  │ │
-│  │  tor     │  │  + Queue │  │  Vidéos  │  │         │ │
-│  └──────────┘  └──────────┘  └──────────┘  └─────────┘ │
-│                                                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
-│  │   API    │  │  Worker  │  │Dashboard │              │
-│  │ NestJS   │  │ BullMQ   │  │ Next.js  │              │
-│  └──────────┘  └──────────┘  └──────────┘              │
-│                                                          │
-│  🔒 Aucune donnée ne sort du réseau de l'entreprise     │
-│  🔑 L'entreprise gère ses propres clés et secrets       │
-│  📦 Un seul `docker-compose up` pour tout lancer        │
-│                                                          │
-│  ⚡ Seul appel externe (optionnel) : API OpenAI         │
-│     → Remplaçable par Ollama / vLLM en local            │
-└──────────────────────────────────────────────────────────┘
-```
-
-**Avantages du self-hosted** :
-- **RGPD natif** — les données restent où l'entreprise le décide
-- **Pas de vendor lock-in** — c'est du Docker standard, déployable n'importe où
-- **Contrôle total** — l'entreprise gère ses clés API, ses modèles IA, ses backups
-- **Coûts prévisibles** — pas de facturation à l'usage qui explose
-- **Air-gapped possible** — avec un modèle IA local, zéro connexion internet requise
-
----
-
-## Modèle économique
-
-| Plan | Prix | Inclus |
-|------|------|--------|
-| **Free** | 0€ | 50 tickets/mois, 1 app, 5 min vidéo max |
-| **Pro** | 49€/mois | 500 tickets, 5 apps, 30 min vidéo, GitHub sync |
-| **Team** | 199€/mois | 2000 tickets, 20 apps, vidéo illimitée, Agent complet |
-| **Enterprise** | Sur mesure | Illimité, SSO, audit logs, modèle IA custom, SLA |
-
-**Note** : Le pricing est sur le nombre de tickets et features, pas sur le stockage — puisque tout est hébergé chez le client.
-
----
-
-## Démarrage rapide
-
-```bash
-# 1. Cloner
-git clone https://github.com/KJ-devs/supportHelperv2.git
-cd supportHelperv2
-
-# 2. Installer
-pnpm install
-
-# 3. Lancer l'infra Docker
-pnpm docker:up
-
-# 4. Configurer la DB
-pnpm db:migrate
-pnpm db:seed
-
-# 5. Builder
-pnpm build
-
-# 6. Lancer
-pnpm dev
-```
-
-| Service | URL |
-|---------|-----|
-| Dashboard | http://localhost:3000 |
-| API | http://localhost:3001 |
-| API Docs (Swagger) | http://localhost:3001/api/docs |
-| MinIO Console | http://localhost:9001 |
-
-**Identifiants test** : `admin@example.com` / `password123`
+| Modeles Prisma | 11 (Tenant, User, Application, Ticket, Media, VideoEvent, GithubConnection, GithubIssue, Integration, IntegrationSyncLog, AgentSession, AgentMessage, ClassificationFeedback) |
+| Endpoints API REST | ~25+ (auth, users, tenants, applications, tickets, media, agent, analytics, feedback, github, integrations) |
+| WebSocket Events | 8 (join/leave/send-message/typing + new-message/agent-typing/session-update/user-typing) |
+| Pages Frontend (web) | 10 routes |
+| Composants UI (web) | 30+ composants de base + 40+ composants metier |
+| Workers BullMQ | 4 (video-analysis, github-sync, integration-sync, agent) |
+| Integration Providers | 5 (Slack, Discord, Notion, HubSpot, Jira) + GitHub natif |
+| Fichiers de tests | ~15 |
