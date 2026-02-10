@@ -82,3 +82,22 @@ You can modify these values in the test files or use the configuration panels in
 - The API must be running on port 3001
 - Video recording requires HTTPS in production (localhost works with HTTP)
 - Check browser console for detailed logs
+
+
+## 🏆 Hall of Fame: The Silicon Saviors
+
+This project is fueled by coffee, tears, and the incredible generosity of the community. Special thanks to those helping me unlock **Claude Code Max** and saving my sanity.
+
+### 🥇 Heroic Donors
+| Name | Title | Special Contribution |
+| :--- | :--- | :--- |
+| **Hackick** | **Donator Heroïque** | Dried Claude's pixels and saved the production environment. |
+
+---
+
+### 🛠️ The "Hackick" Legacy
+As promised in the 10€ tier, a **Sacred Bug** has been preserved in honor of **Hackick**. 
+
+- **Status:** `WONTFIX / FEATURE`
+- **Description:** A minor UI alignment issue that serves as a permanent monument to human kindness. 
+- **Instruction:** Do not debug. This is a load-bearing emotional bug.
