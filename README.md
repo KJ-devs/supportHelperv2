@@ -392,6 +392,23 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 | 💬 Community | [Discord](https://discord.gg/support-helper) |
 
 ---
+## 🏆 Hall of Fame: The Silicon Saviors
+
+This project is fueled by coffee, tears, and the incredible generosity of the community. Special thanks to those helping me unlock **Claude Code Max** and saving my sanity.
+
+### 🥇 Heroic Donors
+| Name | Title | Special Contribution |
+| :--- | :--- | :--- |
+| **Hackick** | **Donator Heroïque** | Dried Claude's pixels and saved the production environment. |
+
+---
+
+### 🛠️ The "Hackick" Legacy
+As promised in the 10€ tier, a **Sacred Bug** has been preserved in honor of **Hackick**. 
+
+- **Status:** `WONTFIX / FEATURE`
+- **Description:** A minor UI alignment issue that serves as a permanent monument to human kindness. 
+- **Instruction:** Do not debug. This is a load-bearing emotional bug.
 
 <div align="center">
 
