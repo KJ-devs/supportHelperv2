@@ -6,7 +6,5 @@
     "deleteOutDir": true,
     "webpack": false,
     "tsConfigPath": "tsconfig.json"
-  },
-  "monorepo": true,
-  "root": "apps/worker"
+  }
 }

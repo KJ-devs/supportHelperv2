@@ -4,6 +4,7 @@ import ffmpeg from 'fluent-ffmpeg';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 export interface VideoMetadata {
   duration: number;
@@ -74,7 +75,7 @@ export class FFmpegService {
         totalFrames: frames.length,
       };
     } catch (error) {
-      this.logger.error(`Failed to extract keyframes: ${error.message}`, error.stack);
+      this.logger.error(`Failed to extract keyframes: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -122,7 +123,7 @@ export class FFmpegService {
             duration: metadata.format.duration || 0,
             width: videoStream.width || 0,
             height: videoStream.height || 0,
-            fps: this.parseFPS(videoStream.avg_frame_rate || videoStream.r_frame_rate),
+            fps: this.parseFPS(videoStream.avg_frame_rate || videoStream.r_frame_rate || '0'),
             codec: videoStream.codec_name || 'unknown',
             bitrate: metadata.format.bit_rate
               ? parseInt(metadata.format.bit_rate.toString(), 10)
@@ -145,8 +146,8 @@ export class FFmpegService {
 
     const parts = fpsString.split('/');
     if (parts.length === 2) {
-      const num = parseFloat(parts[0]);
-      const den = parseFloat(parts[1]);
+      const num = parseFloat(parts[0] || '0');
+      const den = parseFloat(parts[1] || '1');
       return den !== 0 ? Math.round((num / den) * 100) / 100 : 0;
     }
 
@@ -204,7 +205,7 @@ export class FFmpegService {
 
       return true;
     } catch (error) {
-      this.logger.error(`Video validation failed: ${error.message}`);
+      this.logger.error(`Video validation failed: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -217,7 +218,7 @@ export class FFmpegService {
       await fs.rm(directory, { recursive: true, force: true });
       this.logger.debug(`Cleaned up directory: ${directory}`);
     } catch (error) {
-      this.logger.warn(`Failed to cleanup directory ${directory}: ${error.message}`);
+      this.logger.warn(`Failed to cleanup directory ${directory}: ${getErrorMessage(error)}`);
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { Prisma } from '@prisma/client';
@@ -11,6 +11,7 @@ import { YoloService } from '../services/yolo.service';
 import { S3Service } from '../services/s3.service';
 import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 /**
  * VideoAnalysisWorker
@@ -179,10 +180,10 @@ export class VideoAnalysisWorker extends WorkerHost {
 
       return result;
     } catch (error) {
-      this.logger.error(`Video analysis failed for ${mediaId}: ${error.message}`, error.stack);
+      this.logger.error(`Video analysis failed for ${mediaId}: ${getErrorMessage(error)}`, getErrorStack(error));
 
       // Update media status to failed
-      await this.updateMediaStatus(mediaId, 'failed', error.message);
+      await this.updateMediaStatus(mediaId, 'failed', getErrorMessage(error));
 
       return {
         success: false,
@@ -190,7 +191,7 @@ export class VideoAnalysisWorker extends WorkerHost {
         ticketId,
         framesExtracted: 0,
         processingTimeMs: Date.now() - startTime,
-        error: error.message,
+        error: getErrorMessage(error),
       };
     } finally {
       // Cleanup temp files
@@ -228,7 +229,7 @@ export class VideoAnalysisWorker extends WorkerHost {
     const events = framePaths.map((framePath, index) => {
       // Extract timestamp from frame filename (e.g., frame-0001.png = 1000ms)
       const frameMatch = framePath.match(/frame-(\d+)\./);
-      const frameNumber = frameMatch ? parseInt(frameMatch[1], 10) : index + 1;
+      const frameNumber = frameMatch && frameMatch[1] ? parseInt(frameMatch[1], 10) : index + 1;
       const timestampMs = frameNumber * 1000; // 1 frame/sec
 
       return {
@@ -334,7 +335,7 @@ export class VideoAnalysisWorker extends WorkerHost {
         await fs.rm(outputDir, { recursive: true, force: true }).catch(() => {});
       }
     } catch (error) {
-      this.logger.warn(`Cleanup failed: ${error.message}`);
+      this.logger.warn(`Cleanup failed: ${getErrorMessage(error)}`);
     }
   }
 
@@ -342,23 +343,7 @@ export class VideoAnalysisWorker extends WorkerHost {
   // Worker Events
   // ═══════════════════════════════════════════════════════════════════════
 
-  @OnWorkerEvent('completed')
-  onCompleted(job: Job<VideoAnalysisJobData>) {
-    this.logger.log(`Job ${job.id} completed for media ${job.data.mediaId}`);
-  }
 
-  @OnWorkerEvent('failed')
-  onFailed(job: Job<VideoAnalysisJobData>, error: Error) {
-    this.logger.error(`Job ${job.id} failed for media ${job.data.mediaId}: ${error.message}`);
-  }
 
-  @OnWorkerEvent('progress')
-  onProgress(job: Job<VideoAnalysisJobData>, progress: number) {
-    this.logger.debug(`Job ${job.id} progress: ${progress}%`);
-  }
 
-  @OnWorkerEvent('stalled')
-  onStalled(jobId: string) {
-    this.logger.warn(`Job ${jobId} stalled`);
-  }
 }

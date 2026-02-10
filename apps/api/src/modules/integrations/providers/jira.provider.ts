@@ -1,6 +1,7 @@
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class JiraProvider extends BaseIntegrationProvider {
   readonly type = 'jira';
@@ -109,12 +110,12 @@ export class JiraProvider extends BaseIntegrationProvider {
     } catch (error) {
       return {
         success: false,
-        error: error.message || 'Failed to connect to Jira',
+        error: getErrorMessage(error) || 'Failed to connect to Jira',
       };
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const baseUrl = this.getBaseUrl(config);
       const priorityMapping = this.getPriorityMapping(config);
@@ -209,7 +210,7 @@ export class JiraProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const baseUrl = this.getBaseUrl(config);
       const priorityMapping = this.getPriorityMapping(config);
@@ -295,7 +296,7 @@ export class JiraProvider extends BaseIntegrationProvider {
     }
   }
 
-  async deleteTicket(externalId: string, config: IntegrationConfig): Promise<void> {
+  async deleteTicket(externalId: string, _config: IntegrationConfig): Promise<void> {
     this.logger.log(`Jira deleteTicket called for ${externalId} - returning success (no deletion)`);
   }
 }

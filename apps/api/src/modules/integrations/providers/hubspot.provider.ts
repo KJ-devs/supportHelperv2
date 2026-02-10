@@ -1,6 +1,7 @@
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class HubSpotProvider extends BaseIntegrationProvider {
   readonly type = 'hubspot';
@@ -70,7 +71,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
     } catch (error) {
       return {
         success: false,
-        error: error.message || 'Failed to connect to HubSpot',
+        error: getErrorMessage(error) || 'Failed to connect to HubSpot',
       };
     }
   }

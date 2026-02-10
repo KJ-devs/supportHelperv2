@@ -2,6 +2,7 @@ import { Ticket } from '@prisma/client';
 import { Client } from '@notionhq/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class NotionProvider extends BaseIntegrationProvider {
   readonly type = 'notion';
@@ -42,12 +43,12 @@ export class NotionProvider extends BaseIntegrationProvider {
     } catch (error) {
       return {
         success: false,
-        error: error.message || 'Failed to connect to Notion',
+        error: getErrorMessage(error) || 'Failed to connect to Notion',
       };
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const notion = new Client({ auth: config.apiToken });
 
@@ -155,7 +156,7 @@ export class NotionProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
     try {
       const notion = new Client({ auth: config.apiToken });
 

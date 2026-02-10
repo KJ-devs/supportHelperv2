@@ -22,7 +22,6 @@ export interface GithubConnection {
 export class GithubService {
   private readonly logger = new Logger(GithubService.name);
   private octokit: Octokit | null = null;
-  private currentConnection: GithubConnection | null = null;
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -30,7 +29,6 @@ export class GithubService {
    * Initialize GitHub client with connection credentials
    */
   async initialize(connection: GithubConnection): Promise<void> {
-    this.currentConnection = connection;
 
     if (connection.accessToken) {
       this.octokit = new Octokit({

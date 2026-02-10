@@ -197,7 +197,7 @@ export class SupportHelper {
 
     // Expose SDK globally
     if (typeof window !== 'undefined') {
-      (window as any).SupportHelper = sdk;
+      (window as Window & { SupportHelper?: SupportHelper }).SupportHelper = sdk;
     }
 
     return sdk;

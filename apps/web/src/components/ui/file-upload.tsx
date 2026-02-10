@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
+import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Upload, X, FileImage, FileVideo, FileText, File as FileIcon, Loader2 } from 'lucide-react';
@@ -75,7 +76,15 @@ function FilePreview({
       {/* Preview or Icon */}
       <div className="flex-shrink-0 w-12 h-12 rounded-md overflow-hidden bg-muted flex items-center justify-center">
         {isImage && file.preview ? (
-          <img src={file.preview} alt={file.name} className="w-full h-full object-cover" />
+          <div className="relative w-full h-full">
+            <Image
+              src={file.preview}
+              alt={file.name}
+              fill
+              className="object-cover"
+              unoptimized
+            />
+          </div>
         ) : (
           <Icon className="h-6 w-6 text-muted-foreground" />
         )}

@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
   },
 
   // Transpile workspace packages
-  transpilePackages: ['@repo/shared'],
+  transpilePackages: ['@support-helper/shared'],
 
   // Redirects
   async redirects() {

@@ -1,4 +1,4 @@
-import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
+import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { QUEUE_NAMES } from '../queues';
@@ -13,6 +13,7 @@ import {
 } from '../queues/queue.types';
 import { GithubService } from '../services/github.service';
 import { PrismaService } from '../services/prisma.service';
+import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 /**
  * GithubSyncWorker
@@ -43,7 +44,7 @@ export class GithubSyncWorker extends WorkerHost {
    * Main processor method - routes to specific handlers based on job type
    */
   async process(job: Job<GithubSyncJobData>): Promise<GithubSyncResult> {
-    const { type, tenantId, connectionId, payload } = job.data;
+    const { type, connectionId, payload } = job.data;
 
     this.logger.log(`Processing GitHub sync job ${job.id} of type: ${type}`);
 
@@ -81,11 +82,11 @@ export class GithubSyncWorker extends WorkerHost {
           throw new Error(`Unknown job type: ${type}`);
       }
     } catch (error) {
-      this.logger.error(`GitHub sync failed: ${error.message}`, error.stack);
+      this.logger.error(`GitHub sync failed: ${getErrorMessage(error)}`, getErrorStack(error));
       return {
         success: false,
         type,
-        error: error.message,
+        error: getErrorMessage(error),
       };
     }
   }
@@ -98,7 +99,6 @@ export class GithubSyncWorker extends WorkerHost {
     payload: GithubSyncIssuesPayload
   ): Promise<GithubSyncResult> {
     const { repo, since, state = 'all' } = payload;
-    const { tenantId } = job.data;
 
     this.logger.log(`Syncing issues from ${repo} (state: ${state})`);
     await job.updateProgress(10);
@@ -157,7 +157,6 @@ export class GithubSyncWorker extends WorkerHost {
     payload: GithubCreateIssuePayload
   ): Promise<GithubSyncResult> {
     const { ticketId, repo, title, body, labels } = payload;
-    const { tenantId } = job.data;
 
     this.logger.log(`Creating GitHub issue for ticket ${ticketId} in ${repo}`);
     await job.updateProgress(20);
@@ -406,7 +405,7 @@ export class GithubSyncWorker extends WorkerHost {
     return labels;
   }
 
-  private async processIssueWebhook(action: string, data: any, tenantId: string): Promise<number> {
+  private async processIssueWebhook(action: string, data: any, _tenantId: string): Promise<number> {
     const issue = data.issue;
     const repo = data.repository?.full_name;
 
@@ -457,26 +456,26 @@ export class GithubSyncWorker extends WorkerHost {
   private async processCommentWebhook(
     action: string,
     data: any,
-    tenantId: string
+    _tenantId: string
   ): Promise<number> {
     // Handle issue comments - could create ticket comments
     this.logger.debug(`Comment ${action} on issue #${data.issue?.number}`);
     return 1;
   }
 
-  private async processPRWebhook(action: string, data: any, tenantId: string): Promise<number> {
+  private async processPRWebhook(action: string, data: any, _tenantId: string): Promise<number> {
     // Handle PR events - could link to tickets via commit messages
     this.logger.debug(`PR ${action}: #${data.pull_request?.number}`);
     return 1;
   }
 
-  private async processPushWebhook(data: any, tenantId: string): Promise<number> {
+  private async processPushWebhook(data: any, _tenantId: string): Promise<number> {
     // Handle push events - could trigger git blame analysis
     this.logger.debug(`Push to ${data.ref} with ${data.commits?.length || 0} commits`);
     return data.commits?.length || 0;
   }
 
-  private async syncSingleIssue(repo: string, issue: any, tenantId: string): Promise<void> {
+  private async syncSingleIssue(repo: string, issue: any, _tenantId: string): Promise<void> {
     const existingLink = await this.prisma.githubIssue.findFirst({
       where: {
         githubRepo: repo,
@@ -500,18 +499,6 @@ export class GithubSyncWorker extends WorkerHost {
   // Worker Events
   // ═══════════════════════════════════════════════════════════════════════
 
-  @OnWorkerEvent('completed')
-  onCompleted(job: Job<GithubSyncJobData>) {
-    this.logger.log(`GitHub sync job ${job.id} completed: ${job.data.type}`);
-  }
 
-  @OnWorkerEvent('failed')
-  onFailed(job: Job<GithubSyncJobData>, error: Error) {
-    this.logger.error(`GitHub sync job ${job.id} failed: ${error.message}`);
-  }
 
-  @OnWorkerEvent('stalled')
-  onStalled(jobId: string) {
-    this.logger.warn(`GitHub sync job ${jobId} stalled`);
-  }
 }

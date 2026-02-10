@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { getErrorMessage } from '../utils/error.utils';
 
 export interface YoloDetection {
   class: string;
@@ -74,7 +75,7 @@ export class YoloService {
 
       return this.mockDetection(imagePath);
     } catch (error) {
-      this.logger.error(`YOLO detection failed: ${error.message}`);
+      this.logger.error(`YOLO detection failed: ${getErrorMessage(error)}`);
       return [];
     }
   }
@@ -131,7 +132,7 @@ export class YoloService {
    * Mock detection for development
    * Returns plausible UI element detections
    */
-  private mockDetection(imagePath: string): YoloDetection[] {
+  private mockDetection(_imagePath: string): YoloDetection[] {
     // In production, replace with actual YOLO inference
     // Return empty for now to indicate "no UI elements detected"
     // which is valid for many screenshot types

@@ -89,8 +89,7 @@ describe('VideoRecorder', () => {
     });
 
     it('should handle permission denied error', async () => {
-      const permissionError = new Error('Not allowed');
-      (permissionError as any).name = 'NotAllowedError';
+      const permissionError = new DOMException('Not allowed', 'NotAllowedError');
 
       vi.mocked(navigator.mediaDevices.getDisplayMedia).mockRejectedValueOnce(permissionError);
 

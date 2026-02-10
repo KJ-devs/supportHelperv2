@@ -328,3 +328,5 @@ Chaque phase doit produire un rapport dans ce format :
 ### Validation :
 - `commande executee` → Succes / Erreur (detail)
 ```
+
+Fait tout sans interruption
