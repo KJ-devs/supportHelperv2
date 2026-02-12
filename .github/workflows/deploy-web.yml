@@ -29,10 +29,24 @@ env:
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
+  check-secrets:
+    name: Check Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      has-vercel: ${{ steps.check.outputs.has-vercel }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then echo "has-vercel=true" >> $GITHUB_OUTPUT; fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && secrets.VERCEL_TOKEN != '' }}
+    needs: check-secrets
+    if: github.event_name == 'pull_request' && needs.check-secrets.outputs.has-vercel == 'true'
     outputs:
       preview-url: ${{ steps.deploy.outputs.preview-url }}
 
@@ -109,7 +123,8 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.VERCEL_TOKEN != '' }}
+    needs: check-secrets
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.check-secrets.outputs.has-vercel == 'true'
     environment:
       name: production
       url: ${{ steps.deploy.outputs.production-url }}
