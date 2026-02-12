@@ -67,42 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const userData = await authApi.getMe(token);
       setUser(userData);
     } catch (error) {
-      if (error instanceof AuthApiError) {
-        // Handle rate limiting errors with retry
-        if (error.statusCode === 429) {
-          console.warn('Rate limited on auth check, retrying in 2 seconds...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          try {
-            const userData = await authApi.getMe(token);
-            setUser(userData);
-            return;
-          } catch (retryError) {
-            console.error('Retry after rate limit failed:', retryError);
-            // If retry fails, try to refresh the token
-            if (retryError instanceof AuthApiError && retryError.statusCode === 401) {
-              try {
-                await refreshAuth();
-                return;
-              } catch {
-                clearTokens();
-                setUser(null);
-              }
-            }
-          }
-        }
-
-        // Handle 401 errors with token refresh
-        if (error.statusCode === 401) {
-          try {
-            await refreshAuth();
-          } catch {
-            clearTokens();
-            setUser(null);
-          }
+      if (error instanceof AuthApiError && error.statusCode === 401) {
+        // Try to refresh the token
+        try {
+          await refreshAuth();
+        } catch {
+          clearTokens();
+          setUser(null);
         }
       } else {
-        // For other errors, clear tokens and logout
         clearTokens();
         setUser(null);
       }
