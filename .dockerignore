@@ -1,0 +1,53 @@
+# Dependencies (will be installed inside container)
+**/node_modules
+
+# Build outputs (will be built inside container)
+**/dist
+**/.next
+**/.turbo
+
+# Test and coverage
+**/coverage
+**/__tests__
+**/*.spec.ts
+**/*.test.ts
+**/test
+
+# Environment files
+.env
+.env.local
+.env.*.local
+**/.env
+**/.env.local
+
+# IDE and OS
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Git
+.git
+.gitignore
+
+# Docker infrastructure (not needed inside images)
+docker-compose*.yml
+docker/
+
+# Documentation
+*.md
+!packages/*/README.md
+docs/
+LICENSE
+
+# CI/CD
+.github
+
+# Local data
+data/
+
+# Logs
+*.log
+npm-debug.log*
