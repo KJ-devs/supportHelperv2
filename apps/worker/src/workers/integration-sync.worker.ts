@@ -10,7 +10,7 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 @Processor('integration-sync', {
   concurrency: 10,
   limiter: {
-    max: 100,
+    max: 250, // Increased from 100 to handle large bulk syncs (e.g., 173+ tickets)
     duration: 60000,
   },
 })
