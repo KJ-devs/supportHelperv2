@@ -8,5 +8,29 @@
     "github@claude-plugins-official": true,
     "security-guidance@claude-plugins-official": true,
     "claude-md-management@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '\\.(env|env\\.local|env\\.production|credentials)'; then echo 'BLOCKED: Cannot write to sensitive files (.env, credentials)' >&2; exit 2; fi"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "file=$(echo \"$CLAUDE_TOOL_INPUT\" | grep -oP '\"file_path\"\\s*:\\s*\"\\K[^\"]+'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(ts|tsx)$'; then echo \"TypeScript file modified: $file\"; fi"
+          }
+        ]
+      }
+    ]
   }
 }
