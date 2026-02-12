@@ -1,6 +1,6 @@
 import { type Metadata } from 'next';
 import Link from 'next/link';
-import { LoginForm } from '@/components/auth/login-form';
+import { LoginFormWrapper } from '@/components/auth/login-form-wrapper';
 
 export const metadata: Metadata = {
   title: 'Login',
@@ -17,7 +17,7 @@ export default function LoginPage() {
         </div>
 
         <div className="bg-card border rounded-lg p-6 shadow-sm">
-          <LoginForm />
+          <LoginFormWrapper />
         </div>
 
         <p className="text-center text-sm text-muted-foreground">

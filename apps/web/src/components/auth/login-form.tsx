@@ -6,23 +6,36 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { useLogin } from '@/lib/hooks/use-auth';
+import { getAuthErrorMessage } from '@/lib/auth';
+import { useState } from 'react';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
-export function LoginForm() {
+interface LoginFormProps {
+  redirectUrl?: string;
+}
+
+export function LoginForm({ redirectUrl }: LoginFormProps = {}) {
+  const login = useLogin(redirectUrl);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
   const form = useForm({
     defaultValues: {
       email: '',
       password: '',
     },
     onSubmit: async ({ value }) => {
-      // TODO: Implement actual login
-      console.log('Login:', value);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setErrorMessage('');
+      try {
+        await login.mutateAsync(value);
+      } catch (error) {
+        setErrorMessage(getAuthErrorMessage(error));
+      }
     },
     validatorAdapter: zodValidator(),
   });
@@ -36,6 +49,13 @@ export function LoginForm() {
       }}
       className="space-y-4"
     >
+      {errorMessage && (
+        <div className="flex items-center gap-2 p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
+          <AlertCircle className="h-4 w-4 flex-shrink-0" />
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
       <form.Field
         name="email"
         validators={{
@@ -52,6 +72,7 @@ export function LoginForm() {
               value={field.state.value}
               onChange={e => field.handleChange(e.target.value)}
               onBlur={field.handleBlur}
+              disabled={login.isPending}
             />
             {field.state.meta.errors.length > 0 && (
               <p className="text-sm text-destructive">{field.state.meta.errors.join(', ')}</p>
@@ -76,6 +97,7 @@ export function LoginForm() {
               value={field.state.value}
               onChange={e => field.handleChange(e.target.value)}
               onBlur={field.handleBlur}
+              disabled={login.isPending}
             />
             {field.state.meta.errors.length > 0 && (
               <p className="text-sm text-destructive">{field.state.meta.errors.join(', ')}</p>
@@ -86,8 +108,12 @@ export function LoginForm() {
 
       <form.Subscribe selector={state => [state.canSubmit, state.isSubmitting]}>
         {([canSubmit, isSubmitting]) => (
-          <Button type="submit" className="w-full" disabled={!canSubmit || isSubmitting}>
-            {isSubmitting ? (
+          <Button
+            type="submit"
+            className="w-full"
+            disabled={!canSubmit || isSubmitting || login.isPending}
+          >
+            {isSubmitting || login.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Signing in...
