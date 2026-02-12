@@ -52,6 +52,10 @@ RUN pnpm --filter @support-helper/database build
 # Copy API prisma schema (worker references ../api/prisma/schema.prisma)
 COPY apps/api/prisma/ apps/api/prisma/
 
+# Copy API source code (worker imports integration providers from API)
+COPY apps/api/src/ apps/api/src/
+COPY apps/api/tsconfig.json apps/api/tsconfig.json
+
 # Copy Worker source code
 COPY apps/worker/ apps/worker/
 
