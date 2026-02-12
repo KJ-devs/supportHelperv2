@@ -58,7 +58,7 @@ COPY apps/api/tsconfig.json apps/api/tsconfig.json
 COPY apps/worker/ apps/worker/
 
 # Generate Prisma client for worker (uses api's schema)
-RUN cd apps/worker && npx prisma generate --schema=../api/prisma/schema.prisma
+RUN npx prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
 
 # Build the Worker
 RUN pnpm --filter @support-helper/worker build
@@ -105,7 +105,7 @@ COPY --from=build /app/apps/worker/dist apps/worker/dist
 
 # Copy Prisma schema and generate client in production context
 COPY --from=build /app/apps/api/prisma apps/api/prisma
-RUN cd apps/worker && npx prisma generate --schema=../api/prisma/schema.prisma
+RUN npx prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
 
 # Create non-root user
 RUN groupadd -g 1001 appgroup && \
