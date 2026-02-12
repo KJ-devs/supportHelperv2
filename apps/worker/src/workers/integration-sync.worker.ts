@@ -81,6 +81,32 @@ export class IntegrationSyncWorker extends WorkerHost {
           throw new Error(`Unsupported action: ${action}`);
         }
 
+        // Verify sync succeeded
+        if (result.success === false) {
+          this.logger.error(
+            `Integration sync failed for ticket ${ticketId} to ${integration.type}: ${result.error}`,
+          );
+
+          // Create failure log
+          await this.prisma.integrationSyncLog.create({
+            data: {
+              integrationId: integration.id,
+              ticketId: ticket.id,
+              action,
+              status: 'failed',
+              error: result.error,
+              metadata: result.metadata || {},
+              durationMs: Date.now() - startTime,
+              triggeredBy: metadata?.triggeredBy || 'auto',
+              provider: integration.type,
+              attemptCount: job.attemptsMade + 1,
+            },
+          });
+
+          throw new Error(result.error || 'Integration sync failed');
+        }
+
+        // Success - create success log
         await this.prisma.integrationSyncLog.create({
           data: {
             integrationId,
