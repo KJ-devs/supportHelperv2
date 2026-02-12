@@ -85,7 +85,8 @@
       "Bash(powershell.exe:*)",
       "Bash(taskkill:*)",
       "Bash(git pull:*)",
-      "Bash(git rebase:*)"
+      "Bash(git rebase:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
