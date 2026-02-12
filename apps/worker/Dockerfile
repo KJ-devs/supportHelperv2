@@ -106,9 +106,10 @@ COPY --from=build /app/packages/database/dist packages/database/dist
 COPY --from=build /app/apps/worker/dist apps/worker/dist
 
 # Copy Prisma schema and generated client
+# Note: Client is generated in API node_modules because schema is in apps/api/prisma/
 COPY --from=build /app/apps/api/prisma apps/api/prisma
-COPY --from=build /app/apps/worker/node_modules/.prisma apps/worker/node_modules/.prisma
-COPY --from=build /app/apps/worker/node_modules/@prisma apps/worker/node_modules/@prisma
+COPY --from=build /app/apps/api/node_modules/.prisma apps/api/node_modules/.prisma
+COPY --from=build /app/apps/api/node_modules/@prisma apps/api/node_modules/@prisma
 
 # Create non-root user
 RUN groupadd -g 1001 appgroup && \
