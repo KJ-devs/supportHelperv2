@@ -1,6 +1,6 @@
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
-import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
 import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class JiraProvider extends BaseIntegrationProvider {
@@ -298,5 +298,108 @@ export class JiraProvider extends BaseIntegrationProvider {
 
   async deleteTicket(externalId: string, _config: IntegrationConfig): Promise<void> {
     this.logger.log(`Jira deleteTicket called for ${externalId} - returning success (no deletion)`);
+  }
+
+  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult> {
+    try {
+      const baseUrl = this.getBaseUrl(config);
+      const projectKey = config.projectKey;
+      const maxResults = options?.maxResults || 100;
+      const allTickets: PulledTicket[] = [];
+      let startAt = options?.startAt || 0;
+      let total = 0;
+
+      do {
+        const jql = encodeURIComponent(`project = ${projectKey} ORDER BY created DESC`);
+        const url = `${baseUrl}/rest/api/3/search?jql=${jql}&startAt=${startAt}&maxResults=${maxResults}&fields=summary,description,status,priority,issuetype,created,updated,labels`;
+
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Authorization': this.getAuthHeader(config),
+            'Accept': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Jira API error: ${response.status} - ${errorText}`);
+        }
+
+        const data = await response.json() as {
+          startAt: number;
+          maxResults: number;
+          total: number;
+          issues: Array<{
+            key: string;
+            fields: {
+              summary: string;
+              description?: any;
+              status?: { name: string };
+              priority?: { name: string };
+              issuetype?: { name: string };
+              created: string;
+              updated: string;
+              labels?: string[];
+            };
+          }>;
+        };
+
+        total = data.total;
+
+        for (const issue of data.issues) {
+          const description = this.extractTextFromAdf(issue.fields.description);
+
+          allTickets.push({
+            externalId: issue.key,
+            externalUrl: `${baseUrl}/browse/${issue.key}`,
+            title: issue.fields.summary,
+            description,
+            status: issue.fields.status?.name?.toLowerCase(),
+            severity: this.mapJiraPriorityToSeverity(issue.fields.priority?.name),
+            type: issue.fields.issuetype?.name?.toLowerCase() || 'bug',
+            createdAt: issue.fields.created,
+            updatedAt: issue.fields.updated,
+            metadata: {
+              labels: issue.fields.labels,
+              jiraStatus: issue.fields.status?.name,
+              jiraPriority: issue.fields.priority?.name,
+              jiraIssueType: issue.fields.issuetype?.name,
+            },
+          });
+        }
+
+        startAt += data.issues.length;
+      } while (startAt < total);
+
+      this.logger.log(`Pulled ${allTickets.length}/${total} issues from Jira project ${projectKey}`);
+
+      return { success: true, tickets: allTickets, total };
+    } catch (error) {
+      this.logger.error(`pullTickets failed: ${getErrorMessage(error)}`);
+      return { success: false, tickets: [], total: 0, error: getErrorMessage(error) };
+    }
+  }
+
+  private extractTextFromAdf(adfNode: any): string {
+    if (!adfNode) return '';
+    if (typeof adfNode === 'string') return adfNode;
+    if (adfNode.type === 'text') return adfNode.text || '';
+    if (adfNode.content && Array.isArray(adfNode.content)) {
+      return adfNode.content.map((child: any) => this.extractTextFromAdf(child)).join('\n');
+    }
+    return '';
+  }
+
+  private mapJiraPriorityToSeverity(priority?: string): string {
+    if (!priority) return 'medium';
+    const map: Record<string, string> = {
+      'Highest': 'critical',
+      'High': 'high',
+      'Medium': 'medium',
+      'Low': 'low',
+      'Lowest': 'low',
+    };
+    return map[priority] || 'medium';
   }
 }

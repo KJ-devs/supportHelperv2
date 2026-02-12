@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { integrationsApi } from '@/lib/api/integrations';
 import type {
@@ -32,6 +32,9 @@ function IntegrationsPageContent() {
   const [isLogsOpen, setIsLogsOpen] = useState(false);
   const [selectedIntegrationForLogs, setSelectedIntegrationForLogs] =
     useState<Integration | null>(null);
+
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
+  const [syncTarget, setSyncTarget] = useState<Integration | null>(null);
 
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [enabledFilter, setEnabledFilter] = useState<string>('');
@@ -157,33 +160,41 @@ function IntegrationsPageContent() {
     }
   };
 
-  const handleSync = async (integration: Integration) => {
-    if (
-      !confirm(
-        `Sync all tickets to ${integration.name}?\n\nThis may take a while for large ticket databases.`
-      )
-    ) {
-      return;
-    }
-
-    setSyncingId(integration.id);
-    try {
-      const result = await integrationsApi.syncTickets(integration.id);
-      addToast({
-        type: 'success',
-        title: 'Sync queued',
-        message: `Queued ${result.queued} tickets for sync`,
-      });
-    } catch (error: any) {
-      addToast({
-        type: 'error',
-        title: 'Sync failed',
-        message: error.message,
-      });
-    } finally {
-      setSyncingId(null);
-    }
+  const handleSync = (integration: Integration) => {
+    setSyncTarget(integration);
+    setIsSyncDialogOpen(true);
   };
+
+  const executeSyncDirection = useCallback(
+    async (direction: 'push' | 'pull' | 'both') => {
+      if (!syncTarget) return;
+      setIsSyncDialogOpen(false);
+      setSyncingId(syncTarget.id);
+      try {
+        const result = await integrationsApi.syncTickets(syncTarget.id, { direction });
+        const parts: string[] = [];
+        if (result.pushed > 0) parts.push(`${result.pushed} pushed`);
+        if (result.pulled > 0) parts.push(`${result.pulled} pull queued`);
+        if (result.skipped > 0) parts.push(`${result.skipped} already synced`);
+        if (parts.length === 0) parts.push('No new tickets to sync');
+        addToast({
+          type: 'success',
+          title: `Sync queued (${direction})`,
+          message: parts.join(', '),
+        });
+      } catch (error: any) {
+        addToast({
+          type: 'error',
+          title: 'Sync failed',
+          message: error.message,
+        });
+      } finally {
+        setSyncingId(null);
+        setSyncTarget(null);
+      }
+    },
+    [syncTarget, addToast],
+  );
 
   const handleViewLogs = (integration: Integration) => {
     setSelectedIntegrationForLogs(integration);
@@ -392,6 +403,67 @@ function IntegrationsPageContent() {
             integrationId={selectedIntegrationForLogs.id}
             integrationName={selectedIntegrationForLogs.name}
           />
+        )}
+
+        {/* Sync Direction Dialog */}
+        {isSyncDialogOpen && syncTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                Sync with {syncTarget.name}
+              </h3>
+              <p className="text-sm text-gray-600 mb-6">
+                Choose the sync direction for this integration.
+              </p>
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => executeSyncDirection('push')}
+                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+                >
+                  <span className="text-2xl">&#8593;</span>
+                  <div>
+                    <p className="font-medium text-gray-900">Push to {syncTarget.name}</p>
+                    <p className="text-sm text-gray-500">
+                      Send tickets from Support Helper to {syncTarget.name}
+                    </p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => executeSyncDirection('pull')}
+                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors text-left"
+                >
+                  <span className="text-2xl">&#8595;</span>
+                  <div>
+                    <p className="font-medium text-gray-900">Pull from {syncTarget.name}</p>
+                    <p className="text-sm text-gray-500">
+                      Import tickets from {syncTarget.name} into Support Helper
+                    </p>
+                  </div>
+                </button>
+                <button
+                  onClick={() => executeSyncDirection('both')}
+                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-purple-400 hover:bg-purple-50 transition-colors text-left"
+                >
+                  <span className="text-2xl">&#8693;</span>
+                  <div>
+                    <p className="font-medium text-gray-900">Bidirectional sync</p>
+                    <p className="text-sm text-gray-500">
+                      Push and pull tickets in both directions
+                    </p>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={() => {
+                  setIsSyncDialogOpen(false);
+                  setSyncTarget(null);
+                }}
+                className="mt-4 w-full py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>

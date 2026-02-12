@@ -236,6 +236,15 @@ export interface IntegrationSyncJobData {
   };
 }
 
+export interface IntegrationPullJobData {
+  integrationId: string;
+  tenantId: string;
+  applicationId: string;
+  metadata?: {
+    triggeredBy?: 'manual' | 'auto';
+  };
+}
+
 export interface IntegrationSyncResult {
   success: boolean;
   integrationId: string;
@@ -245,5 +254,16 @@ export interface IntegrationSyncResult {
   provider: string;
   error?: string;
   attemptNumber: number;
+  processingTimeMs: number;
+}
+
+export interface IntegrationPullResult {
+  success: boolean;
+  integrationId: string;
+  imported: number;
+  skipped: number;
+  failed: number;
+  total: number;
+  error?: string;
   processingTimeMs: number;
 }

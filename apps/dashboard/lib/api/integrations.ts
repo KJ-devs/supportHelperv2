@@ -54,10 +54,24 @@ export const integrationsApi = {
     });
   },
 
-  syncTickets: async (id: string, ticketIds?: string[]): Promise<{ queued: number }> => {
+  syncTickets: async (
+    id: string,
+    options?: {
+      ticketIds?: string[];
+      direction?: 'push' | 'pull' | 'both';
+      applicationId?: string;
+    }
+  ): Promise<{
+    total: number;
+    alreadySynced: number;
+    queued: number;
+    skipped: number;
+    pushed: number;
+    pulled: number;
+  }> => {
     return apiRequest(`/api/integrations/${id}/sync`, {
       method: 'POST',
-      body: JSON.stringify({ ticketIds }),
+      body: JSON.stringify(options || {}),
     });
   },
 
