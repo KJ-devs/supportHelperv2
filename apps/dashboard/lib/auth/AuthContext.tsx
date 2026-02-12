@@ -15,6 +15,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
+  reloadUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -126,6 +127,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     router.push('/login');
   };
 
+  const reloadUser = useCallback(async () => {
+    const token = getAccessToken();
+    if (!token) {
+      return;
+    }
+    try {
+      const userData = await authApi.getMe(token);
+      setUser(userData);
+    } catch (error) {
+      // If reload fails, don't clear tokens - user is still logged in
+      console.error('Failed to reload user:', error);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -136,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         refreshAuth,
+        reloadUser,
       }}
     >
       {children}
