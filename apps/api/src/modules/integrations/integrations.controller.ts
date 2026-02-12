@@ -99,7 +99,7 @@ export class IntegrationsController {
 
   @Post(':id/sync')
   @ApiOperation({ summary: 'Manually trigger sync for all tickets' })
-  @ApiResponse({ status: 200, description: 'Sync queued' })
+  @ApiResponse({ status: 200, description: 'Sync queued with smart deduplication' })
   async syncTickets(
     @Param('id') id: string,
     @CurrentTenant() tenantId: string,
@@ -107,6 +107,7 @@ export class IntegrationsController {
   ) {
     const integration = await this.integrationsService.findOne(id, tenantId);
 
+    // Handle specific ticket IDs sync (no smart filtering for targeted syncs)
     if (body?.ticketIds && body.ticketIds.length > 0) {
       const results = await Promise.all(
         body.ticketIds.map((ticketId) =>
@@ -117,18 +118,62 @@ export class IntegrationsController {
       return { queued: results.length };
     }
 
-    const tickets = await this.prisma.ticket.findMany({
+    // Smart resync: Only queue tickets that haven't been successfully synced yet
+    // This prevents re-syncing all 173+ tickets when only a few failed
+    
+    // Step 1: Get all tickets for this tenant
+    const allTickets = await this.prisma.ticket.findMany({
       where: { tenantId },
       select: { id: true },
     });
 
+    const totalTickets = allTickets.length;
+
+    // Step 2: Find tickets with successful sync logs (with externalId)
+    // We use a raw query for better performance when dealing with large datasets
+    const successfullySyncedTickets = await this.prisma.integrationSyncLog.findMany({
+      where: {
+        integrationId: id,
+        status: 'success',
+        externalId: { not: null },
+      },
+      select: {
+        ticketId: true,
+        externalId: true,
+      },
+      distinct: ['ticketId'],
+    });
+
+    // Create a Set for O(1) lookup performance
+    const syncedTicketIds = new Set(successfullySyncedTickets.map(log => log.ticketId));
+
+    // Step 3: Filter tickets that need syncing
+    // Include tickets that:
+    // - Have never been synced (not in syncedTicketIds)
+    // - OR have no successful sync with externalId
+    const ticketsToSync = allTickets.filter(ticket => !syncedTicketIds.has(ticket.id));
+
+    // Step 4: Queue the filtered tickets
     const results = await Promise.all(
-      tickets.map((ticket) =>
+      ticketsToSync.map((ticket) =>
         this.integrationsSyncService.syncTicketToIntegration(ticket.id, id, tenantId, { priority: 3 }),
       ),
     );
 
-    return { queued: results.length };
+    const alreadySynced = totalTickets - ticketsToSync.length;
+    const queued = ticketsToSync.length;
+
+    this.logger.log(
+      `Smart resync for integration ${id}: ${totalTickets} total tickets, ` +
+      `${alreadySynced} already synced, ${queued} queued for sync`
+    );
+
+    return {
+      total: totalTickets,
+      alreadySynced,
+      queued,
+      skipped: alreadySynced,
+    };
   }
 
   @Get(':id/logs')
