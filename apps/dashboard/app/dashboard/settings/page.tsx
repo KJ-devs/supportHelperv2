@@ -11,7 +11,6 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
 import { usersApi, ApiError } from '@/lib/api/users';
 import toast, { Toaster } from 'react-hot-toast';
-import { User, Lock, Bell, Users, CreditCard, Key, Bot, Github, Shield, BarChart3 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useRequireAuth();

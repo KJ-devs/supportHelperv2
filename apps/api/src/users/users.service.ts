@@ -135,7 +135,7 @@ export class UsersService {
       }
     }
 
-    const updated = await this.prisma.user.update({
+    return this.prisma.user.update({
       where: { id: userId },
       data: {
         name: data.name,
@@ -150,9 +150,6 @@ export class UsersService {
         createdAt: true,
       },
     });
-
-    await this.invalidateUserCaches(tenantId, userId);
-    return updated;
   }
 
   async changePassword(userId: string, tenantId: string, currentPassword: string, newPassword: string) {
@@ -215,15 +212,5 @@ export class UsersService {
     // we'll return success. In production, you'd store this in a separate table or JSON field.
     // For now, this endpoint works for the frontend but doesn't persist the data.
     return { success: true, preferences };
-  }
-
-  private async invalidateUserCaches(tenantId: string, userId?: string): Promise<void> {
-    const promises: Promise<void>[] = [
-      this.cacheService.del(CacheKeys.userList(tenantId)),
-    ];
-    if (userId) {
-      promises.push(this.cacheService.del(CacheKeys.userProfile(tenantId, userId)));
-    }
-    await Promise.all(promises);
   }
 }

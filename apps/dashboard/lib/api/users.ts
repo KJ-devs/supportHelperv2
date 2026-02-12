@@ -35,13 +35,6 @@ export interface NotificationPreferences {
 
 export const usersApi = {
   /**
-   * List all users in the current tenant
-   */
-  getUsers: async (): Promise<User[]> => {
-    return apiRequest<User[]>('/api/users');
-  },
-
-  /**
    * Update current user profile
    */
   updateProfile: async (data: UpdateProfileData): Promise<User> => {
