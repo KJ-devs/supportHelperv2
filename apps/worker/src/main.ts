@@ -15,7 +15,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   // No HTTP server needed for workers, but we can still start one for health checks
-  const port = process.env.WORKER_PORT || 3001;
+  const port = process.env.WORKER_PORT || 3003;
   await app.listen(port);
 
   logger.log(`Worker service started on port ${port}`);

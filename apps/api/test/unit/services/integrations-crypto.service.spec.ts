@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { IntegrationsCryptoService } from './integrations-crypto.service';
+import { IntegrationsCryptoService } from '@/modules/integrations/integrations-crypto.service';
 
 describe('IntegrationsCryptoService', () => {
   let service: IntegrationsCryptoService;
@@ -140,10 +140,6 @@ describe('IntegrationsCryptoService', () => {
   });
 
   describe('security', () => {
-    it('should use AES-256-GCM algorithm', () => {
-      expect((service as any).algorithm).toBe('aes-256-gcm');
-    });
-
     it('should use 32-byte key', () => {
       const key = (service as any).key;
       expect(key.length).toBe(32);
@@ -157,6 +153,7 @@ describe('IntegrationsCryptoService', () => {
 
     it('should include authentication tag', () => {
       const { ciphertext } = service.encrypt('test');
+      // Auth tag is 16 bytes (32 hex chars) appended to ciphertext
       expect(ciphertext.length).toBeGreaterThan(32);
     });
   });

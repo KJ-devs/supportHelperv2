@@ -34,6 +34,9 @@
 - ConfigService: mock with `get: jest.fn()` returning config values
 - External libs (OpenAI, Octokit, ffmpeg, AWS SDK, BullMQ, ioredis): `jest.mock()` at module level
 - S3Service, FFprobeService: use `jest.spyOn()` on service methods
+- BullMQ Queue: mock with `add: jest.fn().mockResolvedValue({ id: 'job-123' })`
+- Integration providers: mock at module level with `jest.mock()`, then use `mockImplementation()` in tests to return provider instances
+- Encrypted configs: use helper function that calls `encryptAES256GCM()` to create properly encrypted test data
 
 ## Known Gaps (as of 2026-02-08)
 - ai/ai.service.ts has ZERO tests
@@ -56,6 +59,14 @@
 - Setup: Added vitest config and test setup with MediaError mock for dashboard app
 - All tests passing
 
+## Tests Added (2026-02-12 Integration Sync)
+- IntegrationsSyncService -> `apps/api/test/unit/services/integrations-sync.service.spec.ts`
+- IntegrationSyncWorker -> `apps/worker/src/workers/__tests__/integration-sync.worker.spec.ts`
+- Coverage: 36 tests total (19 API + 17 worker)
+- API tests: create/update/delete actions, SDK options filtering, priority handling
+- Worker tests: provider calls, encryption/decryption, retry logic, error handling
+- All tests passing
+
 ## Auth Test Duplication Issue
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`
 - The colocated version is more comprehensive (8 tests vs 3 tests)
@@ -68,3 +79,6 @@
 - **jsdom doesn't define MediaError** - must mock it in setup.tsx for video player tests
 - Video elements don't have accessible roles - use `container.querySelector('video')` instead of `getByRole`
 - Setup files must be .tsx (not .ts) if they contain JSX for mocking components
+- **AES-256-GCM encryption in tests**: Must use proper `encryptAES256GCM()` from @support-helper/shared to create valid encrypted configs. Base64 strings won't work - the auth tag must be appended correctly
+- **Worker tests location**: Worker tests can be colocated in `__tests__/` subdirectories within `apps/worker/src/workers/`
+- **Module mocking paths**: When mocking imports in worker tests, account for the `__tests__/` subdirectory in relative paths (e.g., `../../../../api/...` not `../../../api/...`)

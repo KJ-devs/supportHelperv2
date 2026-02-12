@@ -47,7 +47,7 @@
   - Recherche vectorielle de tickets similaires (pgvector)
   - Auto-indexation MeiliSearch a la creation
   - Lancement automatique analyse IA a la creation
-  - Sync automatique vers integrations tierces
+  - Sync automatique vers integrations tierces (create, update, delete avec lookup externalId)
 - **Media** : Upload presigne S3/MinIO, confirmation, gestion du cycle de vie (`pending` -> `processing` -> `completed` -> `failed`)
 - **Agent AI** : Sessions conversationnelles IA par ticket
   - Machine a etats : `analyzing` -> `needs_info` / `proposing` / `waiting` / `escalated`
@@ -59,10 +59,10 @@
 - **Feedback** : Corrections humaines sur les classifications IA (pour boucle d'apprentissage)
 - **GitHub** : OAuth, repos, webhooks, liaison tickets <-> GitHub Issues
 - **Integrations** : Architecture provider extensible
-  - Providers implementes : **Slack**, **Discord**, **Notion**, **HubSpot**, **Jira**
-  - Chiffrement des credentials (AES + IV)
+  - Providers implementes : **Slack**, **Discord**, **Notion**, **HubSpot**, **Jira** (tous supportent create, update, delete)
+  - Chiffrement des credentials (AES-256-GCM + IV), utils crypto partages dans `packages/shared`
   - Sync queue asynchrone (BullMQ, 3 retries, backoff exponentiel)
-  - Logs de synchronisation
+  - Logs de synchronisation avec lookup `externalId` pour eviter les doublons
 
 #### Infrastructure
 - **Rate Limiting** : Throttler global (short/medium/long)
@@ -212,6 +212,20 @@ Services worker :
   - Etendre le gateway Agent ou creer un namespace `/command`
   - Streaming de la reponse agent (token par token)
   - Notifications push des resultats d'actions
+
+### 2.3 Fix Integrations - Synchronisation tickets
+
+#### Problemes corriges
+
+- [x] **Sync automatique au update de ticket** (CRITIQUE) - `tickets.controller.ts` appelle desormais `syncTicketToAllEnabledIntegrations()` avec `action: 'update'` lors du PATCH. Le service fait un lookup de l'`externalId` existant via `IntegrationSyncLog` pour eviter les doublons.
+- [x] **Sync automatique a la suppression** (MOYEN) - `deleteTicketFromAllIntegrations()` ajoute et appele dans `remove()` AVANT la suppression du ticket. Queue un job `'delete'` pour chaque integration avec l'`externalId` correspondant.
+- [x] **deleteTicket() pour Slack, Discord, Notion** (MOYEN) - Slack utilise `chat.delete`, Discord utilise `DELETE /webhooks/.../messages/{id}`, Notion archive la page via `pages.update({ archived: true })`.
+- [x] **Fix Discord updateTicket()** (MOYEN) - Remplace l'appel a `syncTicket()` par un vrai PATCH sur le message webhook. Ajoute `?wait=true` au POST initial pour recuperer l'ID du message. Note : Slack `updateTicket()` etait deja correctement implemente.
+- [x] **Fix echec silencieux du dechiffrement** (BAS) - `decryptIntegration()` leve maintenant une `InternalServerErrorException` au lieu de retourner `config: {}`. Pour `findAll()`, utilise `throwOnError: false` avec un flag `decryptionFailed: true`.
+- [x] **Extraction crypto dans packages/shared** (BAS) - `encryptAES256GCM()`, `decryptAES256GCM()`, `parseEncryptionKey()` extraits dans `packages/shared/src/utils/encryption.ts`. API et Worker importent depuis `@support-helper/shared`.
+- [x] **Tests sync integrations** (BAS) - Tests unitaires ajoutes pour `IntegrationsSyncService` et `IntegrationSyncWorker` couvrant les flux create, update, delete et les cas d'erreur.
+
+---
 
 #### Feature : Refonte UI/UX (Style "Claude" / "Linear")
 

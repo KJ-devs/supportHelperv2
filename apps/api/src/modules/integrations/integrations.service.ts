@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ConflictException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { IntegrationsCryptoService } from './integrations-crypto.service';
 import { INTEGRATION_PROVIDERS } from './providers';
@@ -79,7 +79,7 @@ export class IntegrationsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return integrations.map((integration) => this.decryptIntegration(integration));
+    return integrations.map((integration) => this.decryptIntegration(integration, false));
   }
 
   async findOne(id: string, tenantId: string) {
@@ -194,7 +194,21 @@ export class IntegrationsService {
     });
   }
 
-  async getSyncLogs(integrationId: string, tenantId: string, page = 0, limit = 20) {
+  async getSyncLogs(
+    integrationId: string,
+    tenantId: string,
+    options: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      action?: string;
+      triggeredBy?: string;
+      from?: string;
+      to?: string;
+    } = {},
+  ) {
+    const { page = 0, limit = 20, status, action, triggeredBy, from, to } = options;
+
     const integration = await this.prisma.integration.findFirst({
       where: { id: integrationId, tenantId },
     });
@@ -203,9 +217,22 @@ export class IntegrationsService {
       throw new NotFoundException('Integration not found');
     }
 
+    const where: any = {
+      integrationId,
+      ...(status && { status }),
+      ...(action && { action }),
+      ...(triggeredBy && { triggeredBy }),
+      ...((from || to) && {
+        syncedAt: {
+          ...(from && { gte: new Date(from) }),
+          ...(to && { lte: new Date(to) }),
+        },
+      }),
+    };
+
     const [logs, total] = await Promise.all([
       this.prisma.integrationSyncLog.findMany({
-        where: { integrationId },
+        where,
         include: {
           ticket: {
             select: {
@@ -219,13 +246,53 @@ export class IntegrationsService {
         skip: page * limit,
         take: limit,
       }),
-      this.prisma.integrationSyncLog.count({ where: { integrationId } }),
+      this.prisma.integrationSyncLog.count({ where }),
     ]);
 
     return { data: logs, total, page, limit };
   }
 
-  private decryptIntegration(integration: any) {
+  async getSyncStats(integrationId: string, tenantId: string) {
+    const integration = await this.prisma.integration.findFirst({
+      where: { id: integrationId, tenantId },
+    });
+
+    if (!integration) {
+      throw new NotFoundException('Integration not found');
+    }
+
+    const [total, success, failed, retrying, recentLogs] = await Promise.all([
+      this.prisma.integrationSyncLog.count({ where: { integrationId } }),
+      this.prisma.integrationSyncLog.count({ where: { integrationId, status: 'success' } }),
+      this.prisma.integrationSyncLog.count({ where: { integrationId, status: 'failed' } }),
+      this.prisma.integrationSyncLog.count({ where: { integrationId, status: 'retrying' } }),
+      this.prisma.integrationSyncLog.findMany({
+        where: { integrationId },
+        orderBy: { syncedAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          status: true,
+          action: true,
+          durationMs: true,
+          syncedAt: true,
+          error: true,
+          provider: true,
+        },
+      }),
+    ]);
+
+    return {
+      total,
+      success,
+      failed,
+      retrying,
+      successRate: total > 0 ? Math.round((success / total) * 100) : 0,
+      recentLogs,
+    };
+  }
+
+  private decryptIntegration(integration: any, throwOnError = true) {
     try {
       const decryptedConfig = JSON.parse(this.cryptoService.decrypt(integration.config, integration.configIv));
 
@@ -236,10 +303,16 @@ export class IntegrationsService {
       };
     } catch (error) {
       this.logger.error(`Failed to decrypt integration ${integration.id}: ${error.message}`);
+      if (throwOnError) {
+        throw new InternalServerErrorException(
+          `Integration "${integration.name}" has corrupted credentials. Please reconfigure.`
+        );
+      }
       return {
         ...integration,
         config: {},
         configIv: undefined,
+        decryptionFailed: true,
       };
     }
   }

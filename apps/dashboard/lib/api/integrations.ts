@@ -2,6 +2,7 @@ import { apiRequest } from './client';
 import type {
   Integration,
   IntegrationSyncLog,
+  IntegrationSyncStats,
   IntegrationType,
   CreateIntegrationData,
 } from '../types/integration';
@@ -62,10 +63,29 @@ export const integrationsApi = {
 
   getSyncLogs: async (
     id: string,
-    page = 0,
-    limit = 20
+    options: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      action?: string;
+      triggeredBy?: string;
+      from?: string;
+      to?: string;
+    } = {}
   ): Promise<{ data: IntegrationSyncLog[]; total: number; page: number; limit: number }> => {
-    return apiRequest(`/api/integrations/${id}/logs?page=${page}&limit=${limit}`);
+    const params = new URLSearchParams();
+    if (options.page !== undefined) params.append('page', String(options.page));
+    if (options.limit !== undefined) params.append('limit', String(options.limit));
+    if (options.status) params.append('status', options.status);
+    if (options.action) params.append('action', options.action);
+    if (options.triggeredBy) params.append('triggeredBy', options.triggeredBy);
+    if (options.from) params.append('from', options.from);
+    if (options.to) params.append('to', options.to);
+    return apiRequest(`/api/integrations/${id}/logs?${params}`);
+  },
+
+  getSyncStats: async (id: string): Promise<IntegrationSyncStats> => {
+    return apiRequest(`/api/integrations/${id}/stats`);
   },
 
   getTypes: async (): Promise<IntegrationType[]> => {

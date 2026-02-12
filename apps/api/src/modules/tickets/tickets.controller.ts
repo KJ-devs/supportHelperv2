@@ -149,6 +149,9 @@ export class TicketsController {
       await this.ticketsSearchService.updateTicket(ticket);
     }
 
+    // Sync updates to integrations
+    await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(id, tenantId, { action: 'update' });
+
     return ticket;
   }
 
@@ -171,6 +174,9 @@ export class TicketsController {
     @CurrentTenant() tenantId: string,
     @Param('id') id: string,
   ) {
+    // Sync deletions to integrations BEFORE deleting the ticket
+    await this.integrationsSyncService.deleteTicketFromAllIntegrations(id, tenantId);
+
     const ticket = await this.ticketsService.remove(id, tenantId);
 
     // Remove from Meilisearch
