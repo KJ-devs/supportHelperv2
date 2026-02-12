@@ -24,4 +24,24 @@ export interface SyncResult {
   metadata?: Record<string, any>;
 }
 
+export interface PullResult {
+  success: boolean;
+  tickets: PulledTicket[];
+  total: number;
+  error?: string;
+}
+
+export interface PulledTicket {
+  externalId: string;
+  externalUrl?: string;
+  title: string;
+  description?: string;
+  status?: string;
+  severity?: string;
+  type?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  metadata?: Record<string, any>;
+}
+
 export type IntegrationConfig = Record<string, any>;
