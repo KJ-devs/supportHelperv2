@@ -10,3 +10,4 @@ export * from './constants/severity';
 
 // Utils
 export * from './utils/validation';
+export * from './utils/encryption';

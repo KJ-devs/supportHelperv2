@@ -183,4 +183,15 @@ export class SlackProvider extends BaseIntegrationProvider {
       return this.handleApiError(error, 'updateTicket');
     }
   }
+
+  async deleteTicket(externalId: string, config: IntegrationConfig): Promise<void> {
+    const client = new WebClient(config.botToken);
+    const result = await client.chat.delete({
+      channel: config.channel,
+      ts: externalId,
+    });
+    if (!result.ok) {
+      throw new Error('Failed to delete message from Slack');
+    }
+  }
 }

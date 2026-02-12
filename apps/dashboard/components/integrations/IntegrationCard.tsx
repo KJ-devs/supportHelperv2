@@ -12,16 +12,155 @@ interface IntegrationCardProps {
   onViewLogs: (integration: Integration) => void;
 }
 
-const INTEGRATION_ICONS: Record<string, string> = {
-  slack: '💬',
-  discord: '🎮',
-  notion: '📝',
-  hubspot: '🎯',
-  linear: '📐',
-  jira: '🔵',
-  zendesk: '💼',
-  github: '🐙',
+const SlackIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="none">
+    <path
+      d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313z"
+      fill="#E01E5A"
+    />
+    <path
+      d="M8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312z"
+      fill="#36C5F0"
+    />
+    <path
+      d="M18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.27 0a2.528 2.528 0 0 1-2.522 2.521 2.528 2.528 0 0 1-2.521-2.521V2.522A2.528 2.528 0 0 1 15.165 0a2.528 2.528 0 0 1 2.521 2.522v6.312z"
+      fill="#2EB67D"
+    />
+    <path
+      d="M15.165 18.956a2.528 2.528 0 0 1 2.521 2.522A2.528 2.528 0 0 1 15.165 24a2.528 2.528 0 0 1-2.521-2.522v-2.522h2.521zm0-1.27a2.528 2.528 0 0 1-2.521-2.522 2.528 2.528 0 0 1 2.521-2.521h6.313A2.528 2.528 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.521h-6.313z"
+      fill="#ECB22E"
+    />
+  </svg>
+);
+
+const DiscordIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#5865F2">
+    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+  </svg>
+);
+
+const NotionIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="currentColor">
+    <path d="M4.459 4.208c.746.606 1.026.56 2.428.466l13.215-.793c.28 0 .047-.28-.046-.326L18.417 2.21c-.42-.326-.98-.7-2.055-.607L3.39 2.713c-.467.047-.56.28-.374.466l1.443 1.029zm.793 3.08v13.904c0 .747.373 1.027 1.214.98l14.523-.84c.841-.046.934-.56.934-1.166V6.354c0-.606-.233-.933-.747-.886l-15.177.887c-.56.047-.747.327-.747.933zm14.337.745c.093.42 0 .84-.42.888l-.7.14v10.264c-.608.327-1.168.514-1.635.514-.747 0-.934-.234-1.495-.933l-4.577-7.186v6.952l1.448.327s0 .84-1.168.84l-3.222.186c-.093-.186 0-.653.327-.746l.84-.233V9.854L7.822 9.76c-.094-.42.14-1.026.793-1.073l3.456-.233 4.764 7.279v-6.44l-1.215-.14c-.093-.513.28-.886.747-.933l3.222-.186z" />
+  </svg>
+);
+
+const JiraIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#0052CC">
+    <path d="M11.571 11.513H0a5.218 5.218 0 0 0 5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.005-1.005z" />
+    <path
+      d="M6.348 6.257H17.92a5.218 5.218 0 0 0-5.233-5.215h-2.13V-.015A5.218 5.218 0 0 0 5.343 5.253v11.457a1.005 1.005 0 0 0 1.005 1.005z"
+      opacity=".65"
+    />
+  </svg>
+);
+
+const HubSpotIcon = () => (
+  <svg viewBox="0 0 24 24" className="w-8 h-8" fill="#FF7A59">
+    <path d="M18.164 7.93V5.084a2.198 2.198 0 0 0 1.267-1.984v-.066A2.198 2.198 0 0 0 17.233.836h-.066a2.198 2.198 0 0 0-2.198 2.198v.066c0 .87.51 1.62 1.247 1.974v2.856a6.152 6.152 0 0 0-2.828 1.382l-7.476-5.822a2.467 2.467 0 0 0 .07-.57 2.478 2.478 0 1 0-2.479 2.478c.39 0 .756-.097 1.084-.261l7.37 5.74a6.158 6.158 0 0 0-.086 6.217l-2.191 2.191a2.08 2.08 0 0 0-.612-.1 2.094 2.094 0 1 0 2.094 2.094 2.08 2.08 0 0 0-.1-.612l2.153-2.153a6.19 6.19 0 1 0 4.922-10.34z" />
+  </svg>
+);
+
+const PlugIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    className="w-8 h-8"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 22v-5" />
+    <path d="M9 8V2" />
+    <path d="M15 8V2" />
+    <path d="M18 8v5a6 6 0 0 1-12 0V8z" />
+  </svg>
+);
+
+const INTEGRATION_ICONS: Record<string, () => JSX.Element> = {
+  slack: SlackIcon,
+  discord: DiscordIcon,
+  notion: NotionIcon,
+  jira: JiraIcon,
+  hubspot: HubSpotIcon,
 };
+
+const ZapIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M13 2L3 14h8l-2 8 10-12h-8l2-8z" />
+  </svg>
+);
+
+const RefreshIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+  </svg>
+);
+
+const ListIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <line x1="8" y1="6" x2="21" y2="6" />
+    <line x1="8" y1="12" x2="21" y2="12" />
+    <line x1="8" y1="18" x2="21" y2="18" />
+    <line x1="3" y1="6" x2="3.01" y2="6" />
+    <line x1="3" y1="12" x2="3.01" y2="12" />
+    <line x1="3" y1="18" x2="3.01" y2="18" />
+  </svg>
+);
+
+const PencilIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+  </svg>
+);
+
+const TrashIcon = () => (
+  <svg
+    className="w-4 h-4"
+    fill="none"
+    stroke="currentColor"
+    viewBox="0 0 24 24"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+  </svg>
+);
 
 export function IntegrationCard({
   integration,
@@ -31,31 +170,49 @@ export function IntegrationCard({
   onSync,
   onViewLogs,
 }: IntegrationCardProps) {
-  const icon = INTEGRATION_ICONS[integration.type] || '🔌';
+  const IconComponent = INTEGRATION_ICONS[integration.type] || PlugIcon;
 
-  const formatDate = (date?: string) => {
-    if (!date) return 'Never';
-    return new Date(date).toLocaleString();
+  const timeAgo = (dateString?: string): string => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+
+  const isRecentlyActive = integration.lastSyncedAt
+    ? new Date().getTime() - new Date(integration.lastSyncedAt).getTime() < 3600000
+    : false;
 
   return (
     <Card padding>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className="text-4xl">{icon}</div>
+          <div className="relative">
+            <IconComponent />
+            <div
+              className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+                isRecentlyActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+              }`}
+            />
+          </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">
-              {integration.name}
-            </h3>
-            <p className="text-sm text-gray-500 capitalize">
-              {integration.type}
-            </p>
+            <h3 className="text-lg font-semibold text-gray-900">{integration.name}</h3>
+            <p className="text-sm text-gray-500 capitalize">{integration.type}</p>
           </div>
         </div>
         <div>
           {integration.enabled ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              ✓ Enabled
+              Enabled
             </span>
           ) : (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
@@ -67,22 +224,12 @@ export function IntegrationCard({
 
       <div className="space-y-2 mb-4">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Last synced:</span>
-          <span className="text-gray-900 font-medium">
-            {formatDate(integration.lastSyncedAt)}
-          </span>
+          <span className="text-gray-600">Last sync:</span>
+          <span className="text-gray-900 font-medium">{timeAgo(integration.lastSyncedAt)}</span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-600">Total syncs:</span>
-          <span className="text-gray-900 font-medium">
-            {integration._count?.syncLogs || 0}
-          </span>
-        </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Created:</span>
-          <span className="text-gray-900 font-medium">
-            {formatDate(integration.createdAt)}
-          </span>
+          <span className="text-gray-900 font-medium">{integration._count?.syncLogs || 0}</span>
         </div>
       </div>
 
@@ -91,28 +238,45 @@ export function IntegrationCard({
           size="sm"
           variant="secondary"
           onClick={() => onTest(integration)}
+          className="inline-flex items-center gap-1.5"
         >
-          🔍 Test
+          <ZapIcon />
+          Test
         </Button>
         <Button
           size="sm"
           variant="secondary"
           onClick={() => onSync(integration)}
+          className="inline-flex items-center gap-1.5"
         >
-          🔄 Sync
+          <RefreshIcon />
+          Sync
         </Button>
         <Button
           size="sm"
           variant="secondary"
           onClick={() => onViewLogs(integration)}
+          className="inline-flex items-center gap-1.5"
         >
-          📊 Logs
+          <ListIcon />
+          Logs
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => onEdit(integration)}>
-          ✏️ Edit
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => onEdit(integration)}
+          className="inline-flex items-center gap-1.5"
+        >
+          <PencilIcon />
+          Edit
         </Button>
-        <Button size="sm" variant="danger" onClick={() => onDelete(integration)}>
-          🗑️ Delete
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={() => onDelete(integration)}
+          className="inline-flex items-center gap-1.5"
+        >
+          <TrashIcon />
         </Button>
       </div>
     </Card>
