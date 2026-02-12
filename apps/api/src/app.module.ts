@@ -1,8 +1,10 @@
 import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { BullModule } from '@nestjs/bullmq';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import Redis from 'ioredis';
 
 // Configuration
 import configs, { validate } from './config';
@@ -39,13 +41,16 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 // Analytics & Reporting
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 
+// Throttler
+import { ThrottlerExceptionFilter } from './common/throttler';
+
 /**
  * Root Application Module
  *
  * Architecture: Core Services Layer
  * - Multi-tenant isolation
  * - JWT + SDK key authentication
- * - Rate limiting
+ * - Rate limiting with Redis storage
  * - Global configuration
  */
 @Module({
@@ -64,7 +69,8 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
       imports: [ConfigModule],
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const redisUrl = config.get<string>('database.redisUrl') || 'redis://localhost:6379';
+        const redisUrl =
+          config.get<string>('database.redisUrl') || 'redis://localhost:6379';
         const url = new URL(redisUrl);
         return {
           connection: {
@@ -78,24 +84,37 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
       },
     }),
 
-    // Rate Limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000, // 1 second
-        limit: 10, // 10 requests
+    // Rate Limiting with Redis Storage
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl =
+          config.get<string>('database.redisUrl') || 'redis://localhost:6379';
+        const redis = new Redis(redisUrl);
+
+        return {
+          throttlers: [
+            {
+              name: 'public',
+              ttl: 60000, // 1 minute
+              limit: 10, // 10 requests per minute per IP
+            },
+            {
+              name: 'authenticated',
+              ttl: 60000, // 1 minute
+              limit: 100, // 100 requests per minute per user
+            },
+            {
+              name: 'sdk',
+              ttl: 60000, // 1 minute
+              limit: 50, // 50 requests per minute per SDK key
+            },
+          ],
+          storage: new ThrottlerStorageRedisService(redis),
+        };
       },
-      {
-        name: 'medium',
-        ttl: 10000, // 10 seconds
-        limit: 50, // 50 requests
-      },
-      {
-        name: 'long',
-        ttl: 60000, // 1 minute
-        limit: 200, // 200 requests
-      },
-    ]),
+    }),
 
     // Core Infrastructure
     PrismaModule,
@@ -127,10 +146,15 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     AnalyticsModule,
   ],
   providers: [
-    // Global rate limiting guard
+    // Global rate limiting guard (default)
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Rate limit exception filter
+    {
+      provide: APP_FILTER,
+      useClass: ThrottlerExceptionFilter,
     },
   ],
 })
