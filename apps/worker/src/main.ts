@@ -23,6 +23,7 @@ async function bootstrap() {
   logger.log('  - VideoAnalysisWorker (video-analysis queue)');
   logger.log('  - GithubSyncWorker (github-sync queue)');
   logger.log('  - AgentWorker (agent-orchestration queue)');
+  logger.log('  - IntegrationSyncWorker (integration-sync queue)');
   logger.log(`Concurrency: ${process.env.WORKER_CONCURRENCY || 10} jobs`);
   logger.log(`Redis: ${process.env.REDIS_URL || 'redis://localhost:6379'}`);
 }

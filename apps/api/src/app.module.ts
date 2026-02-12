@@ -5,6 +5,7 @@ import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis'
 import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import Redis from 'ioredis';
+import { SmartThrottlerGuard } from './common/guards/smart-throttler.guard';
 
 // Configuration
 import configs, { validate } from './config';
@@ -149,7 +150,7 @@ import { ThrottlerExceptionFilter } from './common/throttler';
     // Global rate limiting guard (default)
     {
       provide: APP_GUARD,
-      useClass: ThrottlerGuard,
+      useClass: SmartThrottlerGuard,
     },
     // Rate limit exception filter
     {
