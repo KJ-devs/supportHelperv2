@@ -54,8 +54,28 @@
 - **Dépendances internes**: Toutes utilisent `workspace:*` ✅
 
 ## Phase 2 : Fondations (2026-02-10)
-**Status**: ✅ COMPLÉTÉE
+**Status**: COMPLETEE
 - `pnpm install` fonctionne sans erreur
 - `pnpm build` réussit pour tous les workspaces (7/7)
 - Correction appliquée : `passport-custom` retiré du root package.json
 - **Rapport complet** : `docs/audit/PHASE2_REPORT.md`
+
+## Dockerfiles (2026-02-12)
+- `apps/api/Dockerfile` - 3-stage (deps/build/prod), node:20-alpine, pnpm@9.15.4 via corepack
+- `apps/worker/Dockerfile` - 3-stage, node:20-slim (needs apt for ffmpeg+tesseract)
+- `.dockerignore` (root) - excludes node_modules, dist, .next, tests, .env, .git, docs
+- Build context = repo root (deploy-api.yml uses `context: .`)
+- Both shared packages (`shared`, `database`) extend `tsconfig.base.json` - must be copied in build stage
+- Worker references `../api/prisma/schema.prisma` - api's prisma dir must be present
+- API `start:prod` says `dist/src/main` but actual NestJS output is `dist/main.js` (possible typo in package.json)
+- Worker uses `dist/main` which is correct
+
+## Windows Prisma DLL Locking (2026-02-12)
+**Problem**: `pnpm db:generate` fails with EPERM on `query_engine-windows.dll.node` rename
+**Root cause**: Node.js process holding lock on old DLL, preventing Prisma from replacing it
+**Quick fix**: `rm -f node_modules/.pnpm/@prisma+client@5.22.0_prisma@5.22.0/node_modules/.prisma/client/query_engine-windows.dll.node && pnpm db:generate`
+**Prevention workflow**:
+1. Always stop dev servers before `pnpm db:generate`: `Ctrl+C` in all terminal tabs
+2. Check for orphaned Node processes: `powershell.exe -Command "Get-Process node -ErrorAction SilentlyContinue"`
+3. If locked, delete the DLL directly (Prisma recreates it from temp files)
+4. Alternative: Full cleanup with `pnpm clean && pnpm install` (slower)

@@ -19,6 +19,11 @@ export interface IntegrationSyncLog {
   integrationId: string;
   ticketId: string;
   externalId?: string;
+  action?: string;
+  durationMs?: number;
+  externalUrl?: string;
+  triggeredBy?: string;
+  provider?: string;
   status: string;
   attemptCount: number;
   error?: string;
@@ -55,4 +60,21 @@ export interface CreateIntegrationData {
   enabled?: boolean;
   config: Record<string, any>;
   mappings?: Record<string, any>;
+}
+
+export interface IntegrationSyncStats {
+  total: number;
+  success: number;
+  failed: number;
+  retrying: number;
+  successRate: number;
+  recentLogs: Array<{
+    id: string;
+    status: string;
+    action?: string;
+    durationMs?: number;
+    syncedAt: string;
+    error?: string;
+    provider?: string;
+  }>;
 }

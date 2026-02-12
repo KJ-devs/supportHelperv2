@@ -211,4 +211,12 @@ export class NotionProvider extends BaseIntegrationProvider {
       return this.handleApiError(error, 'updateTicket');
     }
   }
+
+  async deleteTicket(externalId: string, config: IntegrationConfig): Promise<void> {
+    const notion = new Client({ auth: config.apiToken });
+    await notion.pages.update({
+      page_id: externalId,
+      archived: true,
+    });
+  }
 }

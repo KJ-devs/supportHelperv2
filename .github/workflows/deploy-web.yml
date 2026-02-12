@@ -17,15 +17,36 @@ concurrency:
   group: deploy-web-${{ github.ref }}
   cancel-in-progress: true
 
+# Required secrets:
+#   VERCEL_TOKEN          - Vercel authentication token
+#   VERCEL_ORG_ID         - Vercel organization ID
+#   VERCEL_PROJECT_ID     - Vercel project ID
+# All three must be configured for deployment to work.
+# If VERCEL_TOKEN is not set, both jobs are skipped gracefully.
+
 env:
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
 jobs:
+  check-secrets:
+    name: Check Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      has-vercel: ${{ steps.check.outputs.has-vercel }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then echo "has-vercel=true" >> $GITHUB_OUTPUT; fi
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
   deploy-preview:
     name: Deploy Preview
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    needs: check-secrets
+    if: github.event_name == 'pull_request' && needs.check-secrets.outputs.has-vercel == 'true'
     outputs:
       preview-url: ${{ steps.deploy.outputs.preview-url }}
 
@@ -35,8 +56,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -64,11 +83,11 @@ jobs:
         with:
           script: |
             const url = '${{ steps.deploy.outputs.preview-url }}';
-            const body = `## 🚀 Preview Deployment
+            const body = `## Preview Deployment
 
             | Status | URL |
             |--------|-----|
-            | ✅ Ready | [${url}](${url}) |
+            | Ready | [${url}](${url}) |
 
             **Commit:** \`${{ github.sha }}\`
             **Branch:** \`${{ github.head_ref }}\``;
@@ -104,7 +123,8 @@ jobs:
   deploy-production:
     name: Deploy Production
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check-secrets
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.check-secrets.outputs.has-vercel == 'true'
     environment:
       name: production
       url: ${{ steps.deploy.outputs.production-url }}
@@ -115,8 +135,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -141,7 +159,7 @@ jobs:
 
       - name: Deployment summary
         run: |
-          echo "## 🎉 Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "## Production Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**URL:** ${{ steps.deploy.outputs.production-url }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

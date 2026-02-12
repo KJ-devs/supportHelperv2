@@ -139,12 +139,30 @@ export class IntegrationsController {
     @CurrentTenant() tenantId: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
+    @Query('status') status?: string,
+    @Query('action') action?: string,
+    @Query('triggeredBy') triggeredBy?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.integrationsService.getSyncLogs(
-      id,
-      tenantId,
-      page ? parseInt(page, 10) : 0,
-      limit ? parseInt(limit, 10) : 20,
-    );
+    return this.integrationsService.getSyncLogs(id, tenantId, {
+      page: page ? parseInt(page, 10) : 0,
+      limit: limit ? parseInt(limit, 10) : 20,
+      status,
+      action,
+      triggeredBy,
+      from,
+      to,
+    });
+  }
+
+  @Get(':id/stats')
+  @ApiOperation({ summary: 'Get sync statistics for an integration' })
+  @ApiResponse({ status: 200, description: 'Sync statistics' })
+  async getSyncStats(
+    @Param('id') id: string,
+    @CurrentTenant() tenantId: string,
+  ) {
+    return this.integrationsService.getSyncStats(id, tenantId);
   }
 }

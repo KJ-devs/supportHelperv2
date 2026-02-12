@@ -10,11 +10,34 @@ permissions:
   packages: write
   id-token: write
 
+# Required secrets:
+#   GITHUB_TOKEN          - Always available, used for GHCR and GitHub Release
+# Optional secrets:
+#   DOCKER_USERNAME       - Docker Hub username (enables Docker Hub push)
+#   DOCKER_TOKEN          - Docker Hub access token
+#   NPM_TOKEN             - npm publish token (enables SDK publish)
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  check-secrets:
+    name: Check Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      has-docker-hub: ${{ steps.check.outputs.has-docker-hub }}
+      has-npm: ${{ steps.check.outputs.has-npm }}
+    steps:
+      - id: check
+        shell: bash
+        run: |
+          if [ -n "$DOCKER_USERNAME" ]; then echo "has-docker-hub=true" >> $GITHUB_OUTPUT; fi
+          if [ -n "$NPM_TOKEN" ]; then echo "has-npm=true" >> $GITHUB_OUTPUT; fi
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   validate:
     name: Validate Release
     runs-on: ubuntu-latest
@@ -80,7 +103,7 @@ jobs:
   build-docker:
     name: Build Docker Images
     runs-on: ubuntu-latest
-    needs: validate
+    needs: [validate, check-secrets]
     permissions:
       contents: read
       packages: write
@@ -100,10 +123,38 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
+        if: needs.check-secrets.outputs.has-docker-hub == 'true'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
+
+      # Compute image tags dynamically: always include GHCR, add Docker Hub only if configured
+      - name: Compute API image tags
+        id: api-tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ needs.validate.outputs.version }}"
+          TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:latest"
+          if [ -n "$DOCKER_USERNAME" ]; then
+            TAGS="$TAGS,$DOCKER_USERNAME/support-helper-api:${{ needs.validate.outputs.version }}"
+            TAGS="$TAGS,$DOCKER_USERNAME/support-helper-api:latest"
+          fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+
+      - name: Compute Worker image tags
+        id: worker-tags
+        run: |
+          TAGS="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:${{ needs.validate.outputs.version }}"
+          TAGS="$TAGS,${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:latest"
+          if [ -n "$DOCKER_USERNAME" ]; then
+            TAGS="$TAGS,$DOCKER_USERNAME/support-helper-worker:${{ needs.validate.outputs.version }}"
+            TAGS="$TAGS,$DOCKER_USERNAME/support-helper-worker:latest"
+          fi
+          echo "tags=$TAGS" >> $GITHUB_OUTPUT
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -111,11 +162,7 @@ jobs:
           context: .
           file: ./apps/api/Dockerfile
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:${{ needs.validate.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/api:latest
-            ${{ secrets.DOCKER_USERNAME }}/support-helper-api:${{ needs.validate.outputs.version }}
-            ${{ secrets.DOCKER_USERNAME }}/support-helper-api:latest
+          tags: ${{ steps.api-tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -125,18 +172,15 @@ jobs:
           context: .
           file: ./apps/worker/Dockerfile
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:${{ needs.validate.outputs.version }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/worker:latest
-            ${{ secrets.DOCKER_USERNAME }}/support-helper-worker:${{ needs.validate.outputs.version }}
-            ${{ secrets.DOCKER_USERNAME }}/support-helper-worker:latest
+          tags: ${{ steps.worker-tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
   publish-sdk:
     name: Publish SDK to npm
     runs-on: ubuntu-latest
-    needs: validate
+    needs: [validate, check-secrets]
+    if: needs.check-secrets.outputs.has-npm == 'true'
 
     steps:
       - name: Checkout
@@ -144,8 +188,6 @@ jobs:
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -176,6 +218,8 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [validate, changelog, build-docker, publish-sdk]
+    # Run even if publish-sdk was skipped (NPM_TOKEN not set)
+    if: ${{ !failure() && !cancelled() }}
 
     steps:
       - name: Checkout
@@ -194,13 +238,11 @@ jobs:
             ## Docker Images
 
             ```bash
-            # API
+            # API (GHCR)
             docker pull ghcr.io/${{ github.repository }}/api:${{ needs.validate.outputs.version }}
-            docker pull ${{ secrets.DOCKER_USERNAME }}/support-helper-api:${{ needs.validate.outputs.version }}
 
-            # Worker
+            # Worker (GHCR)
             docker pull ghcr.io/${{ github.repository }}/worker:${{ needs.validate.outputs.version }}
-            docker pull ${{ secrets.DOCKER_USERNAME }}/support-helper-worker:${{ needs.validate.outputs.version }}
             ```
 
             ## SDK
@@ -214,9 +256,17 @@ jobs:
 
       - name: Release summary
         run: |
-          echo "## 🎉 Release ${{ github.ref_name }} Published" >> $GITHUB_STEP_SUMMARY
+          echo "## Release ${{ github.ref_name }} Published" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "- 🐳 Docker images pushed to GHCR and Docker Hub" >> $GITHUB_STEP_SUMMARY
-          echo "- 📦 SDK published to npm" >> $GITHUB_STEP_SUMMARY
-          echo "- 📋 GitHub Release created" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker images pushed to GHCR" >> $GITHUB_STEP_SUMMARY
+          if [ -n "$DOCKER_USERNAME" ]; then
+            echo "- Docker images also pushed to Docker Hub" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -n "$NPM_TOKEN" ]; then
+            echo "- SDK published to npm" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "- GitHub Release created" >> $GITHUB_STEP_SUMMARY
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

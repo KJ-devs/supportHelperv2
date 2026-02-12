@@ -99,7 +99,10 @@ export class DiscordProvider extends BaseIntegrationProvider {
         });
       }
 
-      const response = await fetch(config.webhookUrl, {
+      const url = new URL(config.webhookUrl);
+      url.searchParams.set('wait', 'true');
+
+      const response = await fetch(url.toString(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -114,11 +117,11 @@ export class DiscordProvider extends BaseIntegrationProvider {
         throw new Error(`Discord API error: ${response.status} - ${errorText}`);
       }
 
-      const messageId = response.headers.get('x-message-id');
+      const data = await response.json() as { id: string };
 
       return {
         success: true,
-        externalId: messageId || undefined,
+        externalId: data.id,
         message: 'Ticket posted to Discord',
       };
     } catch (error) {
@@ -126,8 +129,85 @@ export class DiscordProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(_externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult> {
-    return this.syncTicket(ticket, config, mappings);
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+    try {
+      const severityColor = this.getSeverityColor(ticket.severity);
+
+      const embed = {
+        title: `🐛 ${ticket.title || 'Bug Report'} (Updated)`,
+        description: ticket.description || 'No description provided',
+        color: severityColor,
+        fields: [
+          {
+            name: 'Severity',
+            value: ticket.severity || 'Unknown',
+            inline: true,
+          },
+          {
+            name: 'Type',
+            value: ticket.type || 'Unknown',
+            inline: true,
+          },
+          {
+            name: 'Status',
+            value: ticket.status || 'new',
+            inline: true,
+          },
+        ],
+        footer: {
+          text: `Ticket ID: ${ticket.id}`,
+        },
+        timestamp: new Date().toISOString(),
+      };
+
+      if (ticket.aiSummary) {
+        embed.fields.push({
+          name: 'AI Summary',
+          value: ticket.aiSummary.substring(0, 1024),
+          inline: false,
+        });
+      }
+
+      const url = new URL(config.webhookUrl);
+      url.pathname += `/messages/${externalId}`;
+
+      const response = await fetch(url.toString(), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embeds: [embed],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json() as { id: string };
+
+      return {
+        success: true,
+        externalId: data.id,
+        message: 'Ticket updated in Discord',
+      };
+    } catch (error) {
+      return this.handleApiError(error, 'updateTicket');
+    }
+  }
+
+  async deleteTicket(externalId: string, config: IntegrationConfig): Promise<void> {
+    const url = new URL(config.webhookUrl);
+    url.pathname += `/messages/${externalId}`;
+
+    const response = await fetch(url.toString(), {
+      method: 'DELETE',
+    });
+
+    if (!response.ok && response.status !== 404) {
+      const errorText = await response.text();
+      throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+    }
   }
 
   private getSeverityColor(severity: string | null): number {

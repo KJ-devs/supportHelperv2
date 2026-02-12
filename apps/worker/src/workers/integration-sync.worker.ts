@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { IntegrationSyncJobData, IntegrationSyncResult } from '../queues/queue.types';
 import { PrismaService } from '../services/prisma.service';
-import { createDecipheriv } from 'crypto';
+import { decryptAES256GCM, parseEncryptionKey } from '@support-helper/shared';
 import { INTEGRATION_PROVIDERS } from '../../../api/src/modules/integrations/providers';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
@@ -16,7 +16,6 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 })
 export class IntegrationSyncWorker extends WorkerHost {
   private readonly logger = new Logger(IntegrationSyncWorker.name);
-  private readonly algorithm = 'aes-256-gcm';
   private readonly key: Buffer;
 
   constructor(private readonly prisma: PrismaService) {
@@ -27,10 +26,7 @@ export class IntegrationSyncWorker extends WorkerHost {
       throw new Error('INTEGRATION_ENCRYPTION_KEY not configured');
     }
 
-    this.key = Buffer.from(keyString, 'hex');
-    if (this.key.length !== 32) {
-      throw new Error('INTEGRATION_ENCRYPTION_KEY must be 32 bytes (64 hex chars)');
-    }
+    this.key = parseEncryptionKey(keyString);
   }
 
   async process(job: Job<IntegrationSyncJobData>): Promise<IntegrationSyncResult> {
@@ -62,7 +58,7 @@ export class IntegrationSyncWorker extends WorkerHost {
         throw new Error(`Integration ${integration.name} is disabled`);
       }
 
-      const config = JSON.parse(this.decrypt(integration.config, integration.configIv));
+      const config = JSON.parse(decryptAES256GCM(integration.config, integration.configIv, this.key));
 
       const Provider = INTEGRATION_PROVIDERS[integration.type as keyof typeof INTEGRATION_PROVIDERS];
       if (!Provider) {
@@ -90,9 +86,17 @@ export class IntegrationSyncWorker extends WorkerHost {
             integrationId,
             ticketId,
             externalId: result.externalId,
+            action,
+            durationMs: Date.now() - startTime,
+            externalUrl: result.externalUrl,
+            triggeredBy: metadata?.triggeredBy || 'auto',
+            provider: integration.type,
             status: 'success',
             attemptCount: job.attemptsMade + 1,
-            metadata: result.metadata || {},
+            metadata: {
+              ...(result.metadata || {}),
+              ticketTitle: ticket.title,
+            },
           },
         });
 
@@ -118,9 +122,16 @@ export class IntegrationSyncWorker extends WorkerHost {
           data: {
             integrationId,
             ticketId,
+            action,
+            durationMs: Date.now() - startTime,
+            triggeredBy: metadata?.triggeredBy || 'auto',
+            provider: integration.type,
             status: job.attemptsMade >= 2 ? 'failed' : 'retrying',
             error: getErrorMessage(error),
             attemptCount: job.attemptsMade + 1,
+            metadata: {
+              ticketTitle: ticket.title,
+            },
           },
         });
 
@@ -131,21 +142,5 @@ export class IntegrationSyncWorker extends WorkerHost {
       throw error;
     }
   }
-
-  private decrypt(ciphertext: string, ivHex: string): string {
-    const iv = Buffer.from(ivHex, 'hex');
-    const authTag = Buffer.from(ciphertext.slice(-32), 'hex');
-    const encrypted = ciphertext.slice(0, -32);
-
-    const decipher = createDecipheriv(this.algorithm, this.key, iv);
-    decipher.setAuthTag(authTag);
-
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-
-    return decrypted;
-  }
-
-
 
 }

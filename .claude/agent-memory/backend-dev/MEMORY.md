@@ -52,17 +52,19 @@
 - Strict mode enabled via `tsconfig.base.json` inheritance
 - NO `any` types, NO `@ts-ignore`, NO `@ts-nocheck` -- all strict rules enforced
 - Test files (*.spec.ts, *.test.ts) excluded from build via tsconfig
-- Exports: types (Ticket, User, Tenant, Media), constants (severity, ticket-status), utils (validation)
+- Exports: types (Ticket, User, Tenant, Media), constants (severity, ticket-status), utils (validation, encryption)
+- Encryption utils: `encryptAES256GCM`, `decryptAES256GCM`, `parseEncryptionKey` -- AES-256-GCM shared between API and Worker
 - Used by: API, Worker, SDK, Dashboard, Web
 - Build: `pnpm --filter @support-helper/shared build` (tsc)
-- Tests: `pnpm --filter @support-helper/shared test` (vitest, 45 tests)
+- Tests: `pnpm --filter @support-helper/shared test` (vitest, 57 tests)
 
 ### Testing
 - Test framework: Jest for API (*.spec.ts files)
 - Test command: `pnpm --filter @support-helper/api test`
-- 129 total tests: 109 passed, 20 skipped, 0 failed
-- Tests located in `apps/api/test/unit/` directory
+- 142 total tests: 122 passed, 20 skipped, 0 failed
+- Tests located in `apps/api/test/unit/` and `apps/api/test/integration/` directories
 - ConfigService must be mocked in tests that inject AuthService (required dependency)
+- Test files in `src/` directory are NOT picked up by Jest -- move to `test/unit/` or `test/integration/`
 
 ### Key Notes
 - `modules/auth/` directory still exists with guards, strategies, middleware -- used by feature modules
@@ -96,3 +98,25 @@ All controllers have appropriate guards:
 - Public controllers: @Public() decorator (auth, health probes, OAuth callbacks, webhooks) ✅
 - GitHub webhooks: @Public() but validates GitHub signature ✅
 - Health sensitive endpoints (/full, /db, /redis, etc.): @UseGuards(JwtAuthGuard) ✅
+
+### Integration Providers (2026-02-12)
+Location: `apps/api/src/modules/integrations/providers/`
+
+**Discord Provider:**
+- `syncTicket()` adds `?wait=true` to webhook URL to receive message ID in response (data.id)
+- `updateTicket()` uses PATCH on `/webhooks/{webhook.id}/{webhook.token}/messages/{externalId}`
+- `deleteTicket()` uses DELETE on same endpoint, ignores 404 status
+
+**Slack Provider:**
+- Uses `@slack/web-api` WebClient
+- `externalId` = message timestamp (ts)
+- `updateTicket()` uses `chat.update` API
+- `deleteTicket()` uses `chat.delete` API
+
+**Notion Provider:**
+- Uses `@notionhq/client` Client
+- `externalId` = page ID
+- `updateTicket()` uses `pages.update` API
+- `deleteTicket()` archives page via `pages.update` with `archived: true`
+
+Worker checks `'deleteTicket' in provider` before calling, so adding method is sufficient.
