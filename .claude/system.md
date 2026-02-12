@@ -23,7 +23,8 @@ Available subagents:
 | File | Name | Role | Model |
 |------|------|------|-------|
 | `backend-dev.md` | backend-dev | NestJS, Prisma, auth, workers | sonnet |
-| `frontend-dev.md` | frontend-dev | Next.js 14, React, Tailwind, TanStack Query | sonnet |
+| `frontend-dev.md` | frontend-dev | Next.js 14 Dashboard, React, Tailwind, TanStack Query | sonnet |
+| `web-dev.md` | web-dev | Next.js 15 Web App, Radix UI, TipTap, Recharts | sonnet |
 | `sdk-dev.md` | sdk-dev | Web SDK, Web Components, packaging | sonnet |
 | `dba.md` | dba | PostgreSQL, Prisma migrations, indexes | sonnet |
 | `qa-engineer.md` | qa-engineer | Unit tests, integration, e2e | sonnet |
@@ -120,6 +121,7 @@ The user does NOT need to specify which mechanism — Forge decides automaticall
 |----------|------|
 | backend-dev | `apps/api/src/**`, `apps/worker/src/**` |
 | frontend-dev | `apps/dashboard/**` |
+| web-dev | `apps/web/**` |
 | sdk-dev | `packages/sdk-web/**` |
 | dba | `apps/api/prisma/**`, `packages/database/**` |
 | qa-engineer | `**/*.spec.ts`, `**/*.test.ts`, `**/test/**` |
