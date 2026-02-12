@@ -207,4 +207,25 @@ export class IntegrationsSyncService {
 
     this.logger.log(`Queued integration update job for ticket ${ticketId}`);
   }
+
+  async pullTicketsFromIntegration(
+    integrationId: string,
+    tenantId: string,
+    applicationId: string,
+  ) {
+    await this.integrationSyncQueue.add(
+      'pull-tickets',
+      {
+        integrationId,
+        tenantId,
+        applicationId,
+        metadata: { triggeredBy: 'manual' as const },
+      },
+      { priority: 2 },
+    );
+
+    this.logger.log(`Queued pull-tickets job for integration ${integrationId}`);
+
+    return { queued: 1 };
+  }
 }

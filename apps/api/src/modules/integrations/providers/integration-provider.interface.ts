@@ -1,5 +1,5 @@
 import { Ticket } from '@prisma/client';
-import { IntegrationConfig, SyncResult, ConfigField, FieldMapping } from '../types/integration.types';
+import { IntegrationConfig, SyncResult, PullResult, ConfigField, FieldMapping } from '../types/integration.types';
 
 export interface IntegrationProvider {
   readonly type: string;
@@ -19,6 +19,8 @@ export interface IntegrationProvider {
   updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult>;
 
   deleteTicket?(externalId: string, config: IntegrationConfig): Promise<void>;
+
+  pullTickets?(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult>;
 
   getAuthorizationUrl?(state: string, config: IntegrationConfig): string;
 
