@@ -16,18 +16,17 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if echo \"$CLAUDE_TOOL_INPUT\" | grep -qE '\\.(env|env\\.local|env\\.production|credentials)'; then echo 'BLOCKED: Cannot write to sensitive files (.env, credentials)' >&2; exit 2; fi"
+            "command": "bash .claude/hooks/protect-files.sh"
           }
         ]
       }
     ],
-    "PostToolUse": [
+    "Stop": [
       {
-        "matcher": "Write|Edit",
         "hooks": [
           {
-            "type": "command",
-            "command": "file=$(echo \"$CLAUDE_TOOL_INPUT\" | grep -oP '\"file_path\"\\s*:\\s*\"\\K[^\"]+'); if [ -n \"$file\" ] && echo \"$file\" | grep -qE '\\.(ts|tsx)$'; then echo \"TypeScript file modified: $file\"; fi"
+            "type": "prompt",
+            "prompt": "Si du code a ete modifie dans cette session sans verification de stabilite (build, tests, lint), recommande de lancer /stabilizer ou `bash scripts/stability-check.sh` avant de terminer."
           }
         ]
       }
