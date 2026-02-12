@@ -201,7 +201,7 @@ export class IntegrationSyncWorker extends WorkerHost {
         select: { externalId: true },
       });
 
-      const existingExternalIds = new Set(existingLogs.map((l) => l.externalId));
+      const existingExternalIds = new Set(existingLogs.map((l: { externalId: string | null }) => l.externalId));
 
       for (const pulledTicket of pullResult.tickets) {
         if (existingExternalIds.has(pulledTicket.externalId)) {
@@ -219,7 +219,7 @@ export class IntegrationSyncWorker extends WorkerHost {
               type: pulledTicket.type || 'bug',
               tenantId,
               applicationId,
-              metadata: {
+              userContext: {
                 importedFrom: integration.type,
                 externalId: pulledTicket.externalId,
                 externalUrl: pulledTicket.externalUrl,
