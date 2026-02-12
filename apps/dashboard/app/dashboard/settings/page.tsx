@@ -5,25 +5,36 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRequireAuth, useAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
+import { usersApi, ApiError } from '@/lib/api/users';
+import toast, { Toaster } from 'react-hot-toast';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
-  const { logout } = useAuth();
+  const { logout, reloadUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'team'>('profile');
 
   const [isUpdating, setIsUpdating] = useState(false);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Profile form
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
   });
+
+  // Update profile data when user changes
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name || '',
+        email: user.email || '',
+      });
+    }
+  }, [user]);
 
   // Password form
   const [passwordData, setPasswordData] = useState({
@@ -43,14 +54,17 @@ export default function SettingsPage() {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdating(true);
-    setSuccessMessage(null);
 
     try {
-      // TODO: Implement profile update API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccessMessage('Profil mis à jour avec succès !');
+      await usersApi.updateProfile(profileData);
+      await reloadUser();
+      toast.success('Profil mis à jour avec succès !');
     } catch (error) {
-      alert('Erreur lors de la mise à jour du profil');
+      if (error instanceof ApiError) {
+        toast.error(error.message || 'Erreur lors de la mise à jour du profil');
+      } else {
+        toast.error('Erreur lors de la mise à jour du profil');
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -60,29 +74,38 @@ export default function SettingsPage() {
     e.preventDefault();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('Les mots de passe ne correspondent pas');
+      toast.error('Les mots de passe ne correspondent pas');
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
-      alert('Le mot de passe doit contenir au moins 8 caractères');
+      toast.error('Le mot de passe doit contenir au moins 8 caractères');
       return;
     }
 
     setIsUpdating(true);
-    setSuccessMessage(null);
 
     try {
-      // TODO: Implement password update API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccessMessage('Mot de passe mis à jour avec succès !');
+      await usersApi.changePassword({
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword,
+      });
+      toast.success('Mot de passe mis à jour avec succès !');
       setPasswordData({
         currentPassword: '',
         newPassword: '',
         confirmPassword: '',
       });
     } catch (error) {
-      alert('Erreur lors de la mise à jour du mot de passe');
+      if (error instanceof ApiError) {
+        if (error.statusCode === 401) {
+          toast.error('Le mot de passe actuel est incorrect');
+        } else {
+          toast.error(error.message || 'Erreur lors de la mise à jour du mot de passe');
+        }
+      } else {
+        toast.error('Erreur lors de la mise à jour du mot de passe');
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -91,14 +114,16 @@ export default function SettingsPage() {
   const handleNotificationsUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUpdating(true);
-    setSuccessMessage(null);
 
     try {
-      // TODO: Implement notifications update API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setSuccessMessage('Préférences de notifications mises à jour !');
+      await usersApi.updateNotifications(notificationsData);
+      toast.success('Préférences de notifications mises à jour !');
     } catch (error) {
-      alert('Erreur lors de la mise à jour des notifications');
+      if (error instanceof ApiError) {
+        toast.error(error.message || 'Erreur lors de la mise à jour des notifications');
+      } else {
+        toast.error('Erreur lors de la mise à jour des notifications');
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -117,6 +142,7 @@ export default function SettingsPage() {
 
   return (
     <DashboardLayout>
+      <Toaster position="top-right" />
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -125,16 +151,6 @@ export default function SettingsPage() {
             Gérez votre compte et vos préférences
           </p>
         </div>
-
-        {/* Success Message */}
-        {successMessage && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <span className="text-green-600 text-xl mr-3">✅</span>
-              <p className="text-sm text-green-700">{successMessage}</p>
-            </div>
-          </div>
-        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Sidebar */}
