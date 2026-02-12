@@ -4,6 +4,9 @@ import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateNotificationsDto } from './dto/update-notifications.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -91,5 +94,45 @@ export class UsersController {
       throw new ForbiddenException('Cannot delete yourself');
     }
     return this.usersService.delete(id, req.user.tenantId);
+  }
+
+  @Patch('profile')
+  @ApiOperation({ summary: 'Update current user profile (name, email)' })
+  @ApiResponse({ status: 200, description: 'Profile updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 409, description: 'Email already exists' })
+  async updateProfile(
+    @Body() dto: UpdateProfileDto,
+    @Request() req: { user: { id: string; tenantId: string } }
+  ) {
+    return this.usersService.updateProfile(req.user.id, req.user.tenantId, dto);
+  }
+
+  @Patch('password')
+  @ApiOperation({ summary: 'Change current user password' })
+  @ApiResponse({ status: 200, description: 'Password changed successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized or current password incorrect' })
+  @ApiResponse({ status: 400, description: 'Invalid request or OAuth user cannot change password' })
+  async changePassword(
+    @Body() dto: ChangePasswordDto,
+    @Request() req: { user: { id: string; tenantId: string } }
+  ) {
+    return this.usersService.changePassword(
+      req.user.id,
+      req.user.tenantId,
+      dto.currentPassword,
+      dto.newPassword
+    );
+  }
+
+  @Patch('notifications')
+  @ApiOperation({ summary: 'Update notification preferences' })
+  @ApiResponse({ status: 200, description: 'Notification preferences updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateNotifications(
+    @Body() dto: UpdateNotificationsDto,
+    @Request() req: { user: { id: string; tenantId: string } }
+  ) {
+    return this.usersService.updateNotifications(req.user.id, req.user.tenantId, dto);
   }
 }
