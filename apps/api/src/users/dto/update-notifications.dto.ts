@@ -1,23 +1,23 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsOptional } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateNotificationsDto {
-  @ApiPropertyOptional({ example: true })
+  @ApiProperty({ description: 'Enable email notifications for new tickets', required: false })
   @IsOptional()
   @IsBoolean()
   emailOnNewTicket?: boolean;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiProperty({ description: 'Enable email notifications for ticket status changes', required: false })
   @IsOptional()
   @IsBoolean()
   emailOnStatusChange?: boolean;
 
-  @ApiPropertyOptional({ example: false })
+  @ApiProperty({ description: 'Enable email notifications for new comments', required: false })
   @IsOptional()
   @IsBoolean()
   emailOnComment?: boolean;
 
-  @ApiPropertyOptional({ example: true })
+  @ApiProperty({ description: 'Enable weekly email report', required: false })
   @IsOptional()
   @IsBoolean()
   emailWeeklyReport?: boolean;
