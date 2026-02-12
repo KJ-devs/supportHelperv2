@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+.turbo/
+out/
+coverage/
+
+# Generated files
+apps/api/prisma/migrations/
+*.prisma-client/
+.prisma/
+
+# IDE & OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment & secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Large binary files
+*.mp4
+*.webm
+*.mov
+*.avi
+*.zip
+*.tar.gz
+
+# Lock files (large)
+pnpm-lock.yaml
+
+# Test artifacts
+playwright-report/
+test-results/
+.nyc_output/
