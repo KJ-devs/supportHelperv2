@@ -152,14 +152,21 @@ describe('IntegrationSyncWorker', () => {
       );
 
       expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           integrationId: 'integration-1',
           ticketId: 'ticket-1',
           externalId: 'external-123',
+          action: 'create',
+          durationMs: expect.any(Number),
+          triggeredBy: 'auto',
+          provider: 'slack',
           status: 'success',
           attemptCount: 1,
-          metadata: { channel: '#bugs' },
-        },
+          metadata: expect.objectContaining({
+            channel: '#bugs',
+            ticketTitle: 'Test Bug',
+          }),
+        }),
       });
 
       expect(prisma.integration.update).toHaveBeenCalledWith({
@@ -339,14 +346,20 @@ describe('IntegrationSyncWorker', () => {
       );
 
       expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           integrationId: 'integration-1',
           ticketId: 'ticket-1',
           externalId: undefined,
+          action: 'delete',
+          durationMs: expect.any(Number),
+          triggeredBy: 'auto',
+          provider: 'slack',
           status: 'success',
           attemptCount: 1,
-          metadata: {},
-        },
+          metadata: expect.objectContaining({
+            ticketTitle: 'Test Bug',
+          }),
+        }),
       });
 
       expect(result.success).toBe(true);
@@ -399,13 +412,20 @@ describe('IntegrationSyncWorker', () => {
       await expect(worker.process(job)).rejects.toThrow('Network error');
 
       expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           integrationId: 'integration-1',
           ticketId: 'ticket-1',
+          action: 'create',
+          durationMs: expect.any(Number),
+          triggeredBy: 'auto',
+          provider: 'slack',
           status: 'retrying',
           error: 'Network error',
           attemptCount: 1,
-        },
+          metadata: {
+            ticketTitle: 'Test Bug',
+          },
+        }),
       });
     });
 
@@ -427,13 +447,20 @@ describe('IntegrationSyncWorker', () => {
       await expect(worker.process(job)).rejects.toThrow('Timeout');
 
       expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           integrationId: 'integration-1',
           ticketId: 'ticket-1',
+          action: 'create',
+          durationMs: expect.any(Number),
+          triggeredBy: 'auto',
+          provider: 'slack',
           status: 'retrying',
           error: 'Timeout',
           attemptCount: 2,
-        },
+          metadata: {
+            ticketTitle: 'Test Bug',
+          },
+        }),
       });
     });
 
@@ -455,13 +482,20 @@ describe('IntegrationSyncWorker', () => {
       await expect(worker.process(job)).rejects.toThrow('Permanent failure');
 
       expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
-        data: {
+        data: expect.objectContaining({
           integrationId: 'integration-1',
           ticketId: 'ticket-1',
+          action: 'create',
+          durationMs: expect.any(Number),
+          triggeredBy: 'auto',
+          provider: 'slack',
           status: 'failed',
           error: 'Permanent failure',
           attemptCount: 3,
-        },
+          metadata: {
+            ticketTitle: 'Test Bug',
+          },
+        }),
       });
     });
 

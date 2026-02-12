@@ -51,7 +51,7 @@ RUN pnpm --filter @support-helper/database build
 # Copy API source code and Prisma schema
 COPY apps/api/ apps/api/
 
-# Generate Prisma client
+# Generate Prisma client (this creates node_modules/.prisma and node_modules/@prisma)
 RUN cd apps/api && npx prisma generate
 
 # Build the API
@@ -82,7 +82,10 @@ COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
 COPY packages/sdk-web/package.json packages/sdk-web/package.json
 
-# Install production dependencies only
+# Copy Prisma schema BEFORE install (needed for @prisma/client postinstall)
+COPY --from=build /app/apps/api/prisma apps/api/prisma
+
+# Install production dependencies only (this will run prisma generate via postinstall)
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy built shared packages
@@ -91,11 +94,6 @@ COPY --from=build /app/packages/database/dist packages/database/dist
 
 # Copy API build output
 COPY --from=build /app/apps/api/dist apps/api/dist
-
-# Copy Prisma schema and generated client
-COPY --from=build /app/apps/api/prisma apps/api/prisma
-COPY --from=build /app/apps/api/node_modules/.prisma apps/api/node_modules/.prisma
-COPY --from=build /app/apps/api/node_modules/@prisma apps/api/node_modules/@prisma
 
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
