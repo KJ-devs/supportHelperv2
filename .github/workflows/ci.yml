@@ -146,6 +146,22 @@ jobs:
       - name: Build all packages
         run: pnpm build
 
+      - name: Build SDK CDN bundle
+        run: pnpm --filter @support-helper/sdk-web build:cdn
+
+      - name: Verify SDK CDN artifacts
+        run: |
+          if [ ! -f "packages/sdk-web/dist/cdn/sdk.iife.js" ]; then
+            echo "Error: SDK CDN bundle not found"
+            exit 1
+          fi
+          if [ ! -f "packages/sdk-web/dist/cdn/sdk.iife.js.map" ]; then
+            echo "Error: SDK CDN sourcemap not found"
+            exit 1
+          fi
+          echo "SDK CDN build verified successfully"
+          ls -lh packages/sdk-web/dist/cdn/
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -154,3 +170,12 @@ jobs:
             apps/*/dist
             packages/*/dist
           retention-days: 7
+
+      - name: Upload SDK CDN artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-cdn-bundle
+          path: |
+            packages/sdk-web/dist/cdn/
+            packages/sdk-web/package.json
+          retention-days: 30
