@@ -182,6 +182,9 @@ jobs:
     needs: [validate, check-secrets]
     if: needs.check-secrets.outputs.has-npm == 'true'
 
+    outputs:
+      cdn-url: ${{ steps.s3-upload.outputs.cdn-url }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -199,8 +202,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build SDK
+      - name: Build SDK (npm packages)
         run: pnpm --filter @support-helper/sdk-web build
+
+      - name: Build SDK CDN bundle
+        run: pnpm --filter @support-helper/sdk-web build:cdn
+
+      - name: Verify CDN artifacts
+        run: |
+          if [ ! -f "packages/sdk-web/dist/cdn/sdk.iife.js" ]; then
+            echo "Error: SDK CDN bundle not found"
+            exit 1
+          fi
+          echo "SDK CDN bundle size: $(du -h packages/sdk-web/dist/cdn/sdk.iife.js | cut -f1)"
+          ls -lh packages/sdk-web/dist/cdn/
 
       - name: Update SDK version
         run: |
@@ -213,6 +228,73 @@ jobs:
           npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Configure AWS credentials
+        if: env.AWS_ACCESS_KEY_ID != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+
+      - name: Upload CDN bundle to S3
+        id: s3-upload
+        if: env.AWS_ACCESS_KEY_ID != ''
+        run: |
+          VERSION="${{ needs.validate.outputs.version }}"
+          BUCKET="${{ secrets.S3_CDN_BUCKET || 'support-helper-sdk' }}"
+          CDN_DOMAIN="${{ secrets.CDN_DOMAIN || format('{0}.s3.amazonaws.com', secrets.S3_CDN_BUCKET) }}"
+
+          # Upload versioned files
+          aws s3 cp packages/sdk-web/dist/cdn/sdk.iife.js \
+            "s3://${BUCKET}/sdk@${VERSION}.js" \
+            --content-type "application/javascript" \
+            --cache-control "public, max-age=31536000, immutable"
+
+          aws s3 cp packages/sdk-web/dist/cdn/sdk.iife.js.map \
+            "s3://${BUCKET}/sdk@${VERSION}.js.map" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=31536000, immutable"
+
+          # Upload as 'latest' (cache for 5 minutes)
+          aws s3 cp packages/sdk-web/dist/cdn/sdk.iife.js \
+            "s3://${BUCKET}/sdk@latest.js" \
+            --content-type "application/javascript" \
+            --cache-control "public, max-age=300"
+
+          aws s3 cp packages/sdk-web/dist/cdn/sdk.iife.js.map \
+            "s3://${BUCKET}/sdk@latest.js.map" \
+            --content-type "application/json" \
+            --cache-control "public, max-age=300"
+
+          # Set CDN URL in output
+          CDN_URL="https://${CDN_DOMAIN}/sdk@${VERSION}.js"
+          echo "cdn-url=${CDN_URL}" >> $GITHUB_OUTPUT
+
+          echo "Uploaded SDK to CDN:"
+          echo "  Versioned: ${CDN_URL}"
+          echo "  Latest: https://${CDN_DOMAIN}/sdk@latest.js"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+
+      - name: Invalidate CloudFront cache
+        if: env.AWS_ACCESS_KEY_ID != '' && env.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/sdk@latest.js" "/sdk@latest.js.map"
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+
+      - name: Upload CDN artifacts to GitHub Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-cdn-${{ needs.validate.outputs.version }}
+          path: packages/sdk-web/dist/cdn/
+          retention-days: 90
 
   create-release:
     name: Create GitHub Release
@@ -247,8 +329,18 @@ jobs:
 
             ## SDK
 
+            ### npm Package
             ```bash
             npm install @support-helper/sdk-web@${{ needs.validate.outputs.version }}
+            ```
+
+            ### CDN (Script Tag)
+            ```html
+            <!-- Versioned (recommended for production) -->
+            <script src="${{ needs.publish-sdk.outputs.cdn-url || format('https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@{0}/dist/cdn/sdk.iife.js', needs.validate.outputs.version) }}"></script>
+
+            <!-- Or via jsDelivr (fallback) -->
+            <script src="https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@${{ needs.validate.outputs.version }}/dist/cdn/sdk.iife.js"></script>
             ```
           draft: false
           prerelease: ${{ needs.validate.outputs.is-prerelease == 'true' }}

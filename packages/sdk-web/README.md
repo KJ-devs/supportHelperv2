@@ -41,14 +41,39 @@ yarn add @support-helper/sdk-web
 pnpm add @support-helper/sdk-web
 ```
 
-### CDN
+### CDN (Script Tag)
+
+For non-bundled projects, use the CDN-hosted IIFE bundle:
 
 ```html
-<script src="https://cdn.support-helper.com/sdk/v1/support-helper.min.js"></script>
+<!-- Versioned (recommended for production) -->
+<script src="https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@0.1.0/dist/cdn/sdk.iife.js"></script>
+
+<!-- Latest version (development only) -->
+<script src="https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@latest/dist/cdn/sdk.iife.js"></script>
+
 <script>
-  const sdk = new SupportHelper.default({ sdkKey: '...', apiUrl: '...' });
+  // Available as global SupportHelper
+  const sdk = new SupportHelper({
+    sdkKey: 'sk_live_your_sdk_key',
+    apiUrl: 'https://api.support-helper.com'
+  });
 </script>
 ```
+
+**With Subresource Integrity (SRI) for security:**
+
+```html
+<script
+  src="https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@0.1.0/dist/cdn/sdk.iife.js"
+  integrity="sha384-..."
+  crossorigin="anonymous">
+</script>
+```
+
+Generate SRI hash: [https://www.srihash.org/](https://www.srihash.org/)
+
+See [CDN_SETUP.md](./CDN_SETUP.md) for custom S3/CloudFront deployment.
 
 ## 🚀 Quick Start
 
