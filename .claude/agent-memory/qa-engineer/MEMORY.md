@@ -67,6 +67,15 @@
 - Worker tests: provider calls, encryption/decryption, retry logic, error handling
 - All tests passing
 
+## Tests Added (2026-02-13 Environment Validation)
+- API env validation -> `apps/api/test/unit/config/validate-env.spec.ts` (23 tests)
+- Worker env validation -> `apps/worker/src/config/__tests__/validate-env.spec.ts` (11 tests)
+- Coverage: 34 tests total covering missing vars, invalid values, valid configs, error messages, edge cases
+- Validates: DATABASE_URL, REDIS_URL, JWT secrets, OPENAI_API_KEY, S3 config, INTEGRATION_ENCRYPTION_KEY
+- Security: Rejects insecure defaults for JWT_SECRET ("secret", "change-me", example default)
+- Format validation: OPENAI_API_KEY must start with "sk-", encryption key must be 64 hex chars
+- All tests passing - validation is production-ready
+
 ## Auth Test Duplication Issue
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`
 - The colocated version is more comprehensive (8 tests vs 3 tests)
@@ -82,3 +91,5 @@
 - **AES-256-GCM encryption in tests**: Must use proper `encryptAES256GCM()` from @support-helper/shared to create valid encrypted configs. Base64 strings won't work - the auth tag must be appended correctly
 - **Worker tests location**: Worker tests can be colocated in `__tests__/` subdirectories within `apps/worker/src/workers/`
 - **Module mocking paths**: When mocking imports in worker tests, account for the `__tests__/` subdirectory in relative paths (e.g., `../../../../api/...` not `../../../api/...`)
+- **Testing environment validation**: Must set ALL required env vars when testing optional var validation (e.g., API_PORT) - validation checks all required vars first
+- **Environment variable testing**: Save and restore `process.env` using beforeEach/afterAll to isolate tests
