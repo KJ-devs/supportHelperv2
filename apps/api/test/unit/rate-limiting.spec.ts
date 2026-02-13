@@ -106,7 +106,8 @@ describe('Rate Limiting (Unit)', () => {
 
   afterAll(async () => {
     await redisClient.flushdb();
-    await redisClient.quit();
+    // app.close() triggers ThrottlerStorageRedisService.onApplicationShutdown()
+    // which quits the shared Redis client, so no separate quit is needed
     await app.close();
   });
 
@@ -133,13 +134,14 @@ describe('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      expect(response.headers).toHaveProperty('x-ratelimit-limit');
-      expect(response.headers).toHaveProperty('x-ratelimit-remaining');
-      expect(response.headers).toHaveProperty('x-ratelimit-reset');
+      // With multiple named throttlers, headers are suffixed by throttler name
+      expect(response.headers).toHaveProperty('x-ratelimit-limit-public');
+      expect(response.headers).toHaveProperty('x-ratelimit-remaining-public');
+      expect(response.headers).toHaveProperty('x-ratelimit-reset-public');
     });
 
     it('should return 429 when limit exceeded', async () => {
-      // Make 10 requests (the limit)
+      // Make 10 requests (the public throttler limit)
       for (let i = 0; i < 10; i++) {
         await request(app.getHttpServer())
           .post('/auth/login')
@@ -172,6 +174,7 @@ describe('Rate Limiting (Unit)', () => {
         .expect(429);
 
       expect(response.headers).toHaveProperty('retry-after');
+      // On 429, the ThrottlerExceptionFilter sets the generic X-RateLimit-Remaining header
       expect(response.headers['x-ratelimit-remaining']).toBe('0');
     });
   });
@@ -221,8 +224,8 @@ describe('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      // Should have 4 remaining (10 - 6)
-      const remaining = parseInt(response.headers['x-ratelimit-remaining'], 10);
+      // Should have 4 remaining (10 - 6) for the public throttler
+      const remaining = parseInt(response.headers['x-ratelimit-remaining-public'], 10);
       expect(remaining).toBeLessThan(10);
       expect(remaining).toBeGreaterThanOrEqual(0);
     });
