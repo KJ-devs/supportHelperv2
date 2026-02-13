@@ -17,13 +17,7 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage, OnApplica
     await this.redis.quit();
   }
 
-  async increment(
-    key: string,
-    ttl: number,
-    limit: number,
-    blockDuration: number,
-    throttlerName: string,
-  ): Promise<ThrottlerStorageRecord> {
+  async increment(key: string, ttl: number): Promise<ThrottlerStorageRecord> {
     const results = await this.redis
       .multi()
       .incr(key)
@@ -46,13 +40,10 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage, OnApplica
     }
 
     const actualTtl = timeToExpire === -1 ? ttl : (timeToExpire as number);
-    const isBlocked = (totalHits as number) > limit;
 
     return {
       totalHits: totalHits as number,
       timeToExpire: actualTtl,
-      isBlocked,
-      timeToBlockExpire: isBlocked ? actualTtl : 0,
     };
   }
 }
