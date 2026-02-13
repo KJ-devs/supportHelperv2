@@ -104,12 +104,10 @@ jobs:
 
       - name: Run integration tests
         if: matrix.node-version == 20
-        continue-on-error: true
         run: pnpm --filter @support-helper/api test:e2e
 
       - name: Collect coverage
         if: matrix.node-version == 20
-        continue-on-error: true
         run: pnpm test:coverage
 
       - name: Upload coverage to Codecov
@@ -118,7 +116,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           flags: unittests
-          fail_ci_if_error: false
+          fail_ci_if_error: true
 
   build:
     name: Build
