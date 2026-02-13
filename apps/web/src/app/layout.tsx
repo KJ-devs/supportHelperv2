@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { GeistSans } from 'geist/font/sans';
+import { GeistSans } from 'geist/font';
 import { Providers } from './providers';
 import { SkipLink } from '@/components/ui/skip-link';
 import './globals.css';
