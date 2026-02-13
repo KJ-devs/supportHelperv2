@@ -1,0 +1,120 @@
+name: Database Backup
+
+on:
+  schedule:
+    # Daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  
+  workflow_dispatch:
+    inputs:
+      skip_cleanup:
+        description: 'Skip retention cleanup after backup'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+jobs:
+  backup:
+    name: Backup Database
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          pg_dump --version
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Verify AWS configuration
+        run: |
+          aws sts get-caller-identity
+          aws s3 ls s3://${{ secrets.BACKUP_BUCKET }}/ || echo "Bucket empty or inaccessible"
+      
+      - name: Run backup script
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+          POSTGRES_PORT: ${{ secrets.POSTGRES_PORT || '5432' }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          NODE_ENV: production
+        run: |
+          chmod +x scripts/backup-database.sh
+          ./scripts/backup-database.sh
+      
+      - name: Verify backup uploaded
+        env:
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+        run: |
+          # Get latest backup from S3
+          LATEST_BACKUP=$(aws s3 ls s3://$BACKUP_BUCKET/ --region $AWS_REGION | \
+            grep "support-helper-db-backup-" | \
+            sort | \
+            tail -n 1 | \
+            awk '{print $4}')
+          
+          if [ -z "$LATEST_BACKUP" ]; then
+            echo "Error: No backup found in S3"
+            exit 1
+          fi
+          
+          # Get backup size
+          BACKUP_SIZE=$(aws s3 ls s3://$BACKUP_BUCKET/$LATEST_BACKUP --region $AWS_REGION | \
+            awk '{print $3}')
+          
+          echo "Latest backup: $LATEST_BACKUP"
+          echo "Size: $BACKUP_SIZE bytes"
+          
+          # Verify minimum size (1KB = 1024 bytes)
+          if [ "$BACKUP_SIZE" -lt 1024 ]; then
+            echo "Error: Backup size too small ($BACKUP_SIZE bytes)"
+            exit 1
+          fi
+          
+          echo "Backup verified successfully"
+      
+      - name: Run retention cleanup
+        if: ${{ !inputs.skip_cleanup }}
+        env:
+          BACKUP_BUCKET: ${{ secrets.BACKUP_BUCKET }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ env.AWS_REGION }}
+        run: |
+          chmod +x scripts/cleanup-old-backups.sh
+          ./scripts/cleanup-old-backups.sh
+      
+      - name: Notify on failure
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -n "$SLACK_WEBHOOK_URL" ]; then
+            curl -X POST -H 'Content-type: application/json' \
+              --data "{\"attachments\":[{\"color\":\"danger\",\"title\":\"Database Backup Failed\",\"text\":\"GitHub Actions workflow failed. Check logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\",\"fields\":[{\"title\":\"Workflow\",\"value\":\"${{ github.workflow }}\",\"short\":true},{\"title\":\"Run ID\",\"value\":\"${{ github.run_id }}\",\"short\":true}],\"footer\":\"Support Helper CI/CD\"}]}" \
+              "$SLACK_WEBHOOK_URL"
+          fi
