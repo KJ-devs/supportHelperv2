@@ -9,6 +9,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
@@ -23,6 +24,7 @@ export class AuthController {
 
   @Post('register')
   @Public()
+  @Throttle({ public: { limit: 10, ttl: 60000 } })
   @ApiOperation({ summary: 'Register a new user and tenant' })
   async register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -30,6 +32,7 @@ export class AuthController {
 
   @Post('login')
   @Public()
+  @Throttle({ public: { limit: 10, ttl: 60000 } })
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   async login(@Body() dto: LoginDto) {
