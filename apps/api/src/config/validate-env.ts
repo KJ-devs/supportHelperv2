@@ -106,30 +106,6 @@ const OPTIONAL_VARIABLES = [
  * @throws Error if validation fails
  */
 export function validateEnvironmentVariables(): void {
-  // Load .env.local before validation (dotenv is already in ConfigModule dependencies)
-  const path = require('path');
-  const fs = require('fs');
-  const dotenv = require('dotenv');
-
-  // Try to load .env.local from multiple possible locations
-  const envPaths = [
-    path.resolve(process.cwd(), '.env.local'),
-    path.resolve(process.cwd(), '../../.env.local'),
-    path.resolve(__dirname, '../../../.env.local'),
-    path.resolve(__dirname, '../../../../.env.local'),
-  ];
-
-  for (const envPath of envPaths) {
-    if (fs.existsSync(envPath)) {
-      const result = dotenv.config({ path: envPath, override: true });
-      // Debug: check if JWT_SECRET is loaded
-      console.log('[validate-env] Loaded from:', envPath);
-      console.log('[validate-env] JWT_SECRET present:', !!process.env.JWT_SECRET);
-      console.log('[validate-env] JWT_SECRET length:', process.env.JWT_SECRET?.length || 0);
-      break;
-    }
-  }
-
   const errors: ValidationError[] = [];
 
   // Validate required variables
