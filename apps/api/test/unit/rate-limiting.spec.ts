@@ -106,7 +106,8 @@ describe('Rate Limiting (Unit)', () => {
 
   afterAll(async () => {
     await redisClient.flushdb();
-    await redisClient.quit();
+    // app.close() triggers ThrottlerStorageRedisService.onApplicationShutdown()
+    // which quits the shared Redis client, so no separate quit is needed
     await app.close();
   });
 
@@ -133,9 +134,10 @@ describe('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      expect(response.headers).toHaveProperty('x-ratelimit-limit');
-      expect(response.headers).toHaveProperty('x-ratelimit-remaining');
-      expect(response.headers).toHaveProperty('x-ratelimit-reset');
+      // Named throttlers in @nestjs/throttler v5 produce suffixed headers
+      expect(response.headers).toHaveProperty('x-ratelimit-limit-public');
+      expect(response.headers).toHaveProperty('x-ratelimit-remaining-public');
+      expect(response.headers).toHaveProperty('x-ratelimit-reset-public');
     });
 
     it('should return 429 when limit exceeded', async () => {
@@ -221,8 +223,8 @@ describe('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      // Should have 4 remaining (10 - 6)
-      const remaining = parseInt(response.headers['x-ratelimit-remaining'], 10);
+      // Should have 4 remaining (10 - 6), using suffixed header for named throttler
+      const remaining = parseInt(response.headers['x-ratelimit-remaining-public'], 10);
       expect(remaining).toBeLessThan(10);
       expect(remaining).toBeGreaterThanOrEqual(0);
     });
