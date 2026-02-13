@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiConsumes } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
@@ -48,6 +49,7 @@ function mapAiType(aiType: string): string {
 @ApiTags('SDK - Tickets')
 @ApiSecurity('sdk-key')
 @Controller('sdk/tickets')
+@Throttle({ sdk: { limit: 50, ttl: 60000 } })
 export class SdkTicketsController {
   private readonly logger = new Logger(SdkTicketsController.name);
   private readonly s3Client: S3Client;
