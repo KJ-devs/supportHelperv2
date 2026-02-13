@@ -106,9 +106,9 @@ describe('Rate Limiting (Unit)', () => {
 
   afterAll(async () => {
     await redisClient.flushdb();
-    // Close app first to let ThrottlerStorageRedisService clean up its own Redis connection
+    // app.close() triggers ThrottlerStorageRedisService.onApplicationShutdown()
+    // which quits the shared Redis client, so no separate quit is needed
     await app.close();
-    await redisClient.quit();
   });
 
   beforeEach(async () => {
