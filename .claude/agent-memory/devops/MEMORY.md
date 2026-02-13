@@ -126,3 +126,87 @@
 **Documentation**:
 - `CDN_SETUP.md`: Complete setup guide for S3/CloudFront, versioning strategy, troubleshooting
 - README.md: Updated with CDN usage examples, SRI hash generation, framework integration
+
+## Database Backups (2026-02-13) - US-007
+**Implementation**: Fully automated PostgreSQL backup system with S3 storage and retention
+**Status**: ✅ COMPLETE - All 5 components implemented
+
+**Files created**:
+- `scripts/backup-database.sh` - Production-ready backup script (5.9KB, executable)
+- `scripts/cleanup-old-backups.sh` - Retention policy enforcement (4.9KB, executable)
+- `.github/workflows/database-backup.yml` - Automated daily backup workflow (4.2KB)
+- `docs/runbooks/database-restore.md` - Comprehensive restore runbook (6.8KB)
+- `docs/DATABASE_BACKUPS.md` - System documentation (3.1KB)
+- `.env.example` - Added BACKUP_BUCKET and SLACK_WEBHOOK_URL variables
+
+**Backup Script Features**:
+- Uses pg_dump with gzip compression (plain SQL format)
+- Parses DATABASE_URL or individual POSTGRES_* variables
+- Uploads to S3 with AES256 server-side encryption
+- STANDARD_IA storage class (cost-optimized for infrequent access)
+- Sends Slack notifications (success/failure with details)
+- Validates backup before and after upload (size check, S3 ls verification)
+- Color-coded console output (RED/GREEN/YELLOW)
+- Exit codes: 0=Success, 1=Missing env, 2=pg_dump failed, 3=S3 upload failed
+
+**Retention Policy** (implemented in cleanup script):
+- Daily: Keep last 7 days (all backups)
+- Weekly: Keep last 4 Sundays
+- Monthly: Keep last 12 first-of-month backups
+- Auto-cleanup runs after each backup (configurable)
+
+**GitHub Actions Workflow**:
+- Schedule: Daily at 2 AM UTC (cron '0 2 * * *')
+- Manual trigger: workflow_dispatch with skip_cleanup option
+- Installs PostgreSQL client tools
+- Configures AWS credentials via aws-actions/configure-aws-credentials@v4
+- Runs backup script with full env vars
+- Verifies backup uploaded to S3 (size >1KB check)
+- Runs retention cleanup (unless skipped)
+- Sends Slack notification on failure
+
+**Required GitHub Secrets**:
+- BACKUP_BUCKET (S3 bucket name)
+- PRODUCTION_DATABASE_URL (or individual POSTGRES_* vars)
+- AWS_ACCESS_KEY_ID
+- AWS_SECRET_ACCESS_KEY
+- AWS_REGION (optional, defaults to us-east-1)
+- SLACK_WEBHOOK_URL (optional)
+
+**Backup Format**:
+- Filename: `support-helper-db-backup-YYYYMMDD_HHMMSS.sql.gz`
+- Format: Plain SQL (--format=plain --no-owner --no-acl)
+- Compression: gzip
+- S3 encryption: AES256 (server-side)
+- S3 metadata: database name, timestamp, hostname
+
+**Restore Runbook Includes**:
+- Prerequisites checklist
+- Backup listing and download procedures
+- Integrity verification (gunzip -t)
+- Test restore on test database (mandatory before production)
+- Production restore with pre-backup creation
+- Post-restore verification checklist (health checks, smoke tests)
+- Rollback procedure (restore from pre-backup)
+- Troubleshooting: "database being accessed", "extension vector not available", "gzip CRC error"
+
+**Estimated Costs** (AWS):
+- 30 backups @ 150MB compressed = ~$0.07/month (STANDARD_IA)
+- 30 backups @ 1GB compressed = ~$0.38/month
+- Negligible PUT/GET/transfer costs for normal usage
+
+**Testing Checklist** (from TODO):
+- [ ] Run backup script on staging
+- [ ] Verify S3 upload
+- [ ] Test restore on test database
+- [ ] Verify Slack notifications
+- [ ] Test GitHub Action manual trigger
+- [ ] Verify retention policy (run cleanup script)
+
+**Next Steps** (manual testing required):
+1. Create S3 bucket for backups
+2. Create IAM user with S3 permissions
+3. Configure GitHub Secrets
+4. Run manual workflow trigger to test
+5. Verify Slack webhook integration
+6. Perform test restore to validate backup integrity
