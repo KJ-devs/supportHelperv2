@@ -2,7 +2,6 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { validateEnvironmentVariables } from './config/validate-env';
-import { PinoLoggerService } from './common/logger/pino-logger.service';
 
 async function bootstrap() {
   // Validate environment variables BEFORE NestJS initialization

@@ -8,7 +8,6 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RateLimitLoggingInterceptor } from './common/interceptors/rate-limit-logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { validateEnvironmentVariables } from './config/validate-env';
-import { PinoLoggerService } from './common/logger/pino-logger.service';
 
 // BigInt cannot be serialized by JSON.stringify by default.
 // This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
@@ -25,17 +24,8 @@ async function bootstrap() {
   // Validate environment variables BEFORE NestJS initialization
   validateEnvironmentVariables();
 
-  // Create the app with Pino logger
-  const app = await NestFactory.create(AppModule, {
-    bufferLogs: true, // Buffer logs until logger is attached
-  });
-
-  // Get and attach the Pino logger
-  const pinoLogger = app.get(PinoLoggerService);
-  app.useLogger(pinoLogger);
-
-  // Enable graceful shutdown hooks
-  app.enableShutdownHooks();
+  // Create the app
+  const app = await NestFactory.create(AppModule);
 
   const config = app.get(ConfigService);
   const reflector = app.get(Reflector);
