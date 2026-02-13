@@ -10,13 +10,9 @@ import { ThrottlerExceptionFilter } from '../../src/common/filters/throttler-exc
 import { AuthController } from '../../src/auth/auth.controller';
 import { AuthService } from '../../src/auth/auth.service';
 
-// Skip if Redis is not available (integration test)
-const describeIfRedis = process.env.REDIS_URL || process.env.CI ? describe : describe.skip;
-
-describeIfRedis('Rate Limiting (Unit)', () => {
+describe('Rate Limiting (Unit)', () => {
   let app: INestApplication;
   let redisClient: Redis;
-  let redisAvailable = false;
 
   // Mock AuthService
   const mockAuthService = {
@@ -44,18 +40,7 @@ describeIfRedis('Rate Limiting (Unit)', () => {
       host: url.hostname,
       port: parseInt(url.port || '6379', 10),
       db: 15, // Use separate DB for tests
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
     });
-
-    // Check if Redis is actually available
-    try {
-      await redisClient.ping();
-      redisAvailable = true;
-    } catch {
-      console.warn('Redis not available, skipping rate-limiting tests');
-      return;
-    }
 
     // Flush test DB before tests
     await redisClient.flushdb();
@@ -120,13 +105,8 @@ describeIfRedis('Rate Limiting (Unit)', () => {
   });
 
   afterAll(async () => {
-    if (!redisAvailable) {
-      try { await redisClient.quit(); } catch { /* ignore */ }
-      return;
-    }
     await redisClient.flushdb();
-    // app.close() triggers ThrottlerStorageRedisService.onApplicationShutdown()
-    // which quits the shared Redis client, so no separate quit is needed
+    await redisClient.quit();
     await app.close();
   });
 
@@ -153,14 +133,13 @@ describeIfRedis('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      // With multiple named throttlers, headers are suffixed by throttler name
-      expect(response.headers).toHaveProperty('x-ratelimit-limit-public');
-      expect(response.headers).toHaveProperty('x-ratelimit-remaining-public');
-      expect(response.headers).toHaveProperty('x-ratelimit-reset-public');
+      expect(response.headers).toHaveProperty('x-ratelimit-limit');
+      expect(response.headers).toHaveProperty('x-ratelimit-remaining');
+      expect(response.headers).toHaveProperty('x-ratelimit-reset');
     });
 
     it('should return 429 when limit exceeded', async () => {
-      // Make 10 requests (the public throttler limit)
+      // Make 10 requests (the limit)
       for (let i = 0; i < 10; i++) {
         await request(app.getHttpServer())
           .post('/auth/login')
@@ -193,7 +172,6 @@ describeIfRedis('Rate Limiting (Unit)', () => {
         .expect(429);
 
       expect(response.headers).toHaveProperty('retry-after');
-      // On 429, the ThrottlerExceptionFilter sets the generic X-RateLimit-Remaining header
       expect(response.headers['x-ratelimit-remaining']).toBe('0');
     });
   });
@@ -243,8 +221,8 @@ describeIfRedis('Rate Limiting (Unit)', () => {
         .send({ email: 'test@example.com', password: 'password123' })
         .expect(200);
 
-      // Should have 4 remaining (10 - 6) for the public throttler
-      const remaining = parseInt(response.headers['x-ratelimit-remaining-public'], 10);
+      // Should have 4 remaining (10 - 6)
+      const remaining = parseInt(response.headers['x-ratelimit-remaining'], 10);
       expect(remaining).toBeLessThan(10);
       expect(remaining).toBeGreaterThanOrEqual(0);
     });

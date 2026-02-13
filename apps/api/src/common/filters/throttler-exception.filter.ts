@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
-import { Request, Response } from 'express';
+import { Response } from 'express';
 
 /**
  * Custom exception filter for rate limiting
@@ -24,10 +24,10 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
   catch(exception: ThrottlerException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest<Request & { __throttler__?: { limit?: number; ttl?: number } }>();
+    const request = ctx.getRequest();
 
     // Extract throttler context from request metadata
-    const throttlerContext = request.__throttler__;
+    const throttlerContext = (request as any).__throttler__;
     const limit = throttlerContext?.limit || 0;
     const ttl = throttlerContext?.ttl || 60000; // default 1 minute
     const resetTime = Math.ceil(Date.now() / 1000) + Math.ceil(ttl / 1000);

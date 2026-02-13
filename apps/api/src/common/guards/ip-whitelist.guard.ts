@@ -1,7 +1,6 @@
 import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { Request } from 'express';
 
 /**
  * IP Whitelist Guard
@@ -39,13 +38,13 @@ export class IpWhitelistGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request & { __rateLimit_bypassed?: boolean; connection?: { remoteAddress?: string } }>();
+    const request = context.switchToHttp().getRequest();
     const clientIp = this.getClientIp(request);
 
     if (this.whitelist.has(clientIp)) {
       this.logger.debug(`Rate limiting bypassed for whitelisted IP: ${clientIp}`);
       // Mark request as whitelisted to skip throttler
-      request.__rateLimit_bypassed = true;
+      (request as any).__rateLimit_bypassed = true;
       return true;
     }
 
@@ -56,11 +55,12 @@ export class IpWhitelistGuard implements CanActivate {
    * Extract client IP from request
    * Handles proxies via X-Forwarded-For header
    */
-  private getClientIp(request: Request & { connection?: { remoteAddress?: string } }): string {
+  private getClientIp(request: any): string {
     const forwarded = request.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string' && forwarded) {
+    if (forwarded) {
+      // X-Forwarded-For can be comma-separated list, take first
       return forwarded.split(',')[0].trim();
     }
-    return request.ip || request.connection?.remoteAddress || '';
+    return request.ip || request.connection.remoteAddress || '';
   }
 }
