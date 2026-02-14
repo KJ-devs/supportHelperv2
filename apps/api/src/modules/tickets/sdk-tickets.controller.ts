@@ -14,7 +14,6 @@ import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiConsumes } from '@n
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
-import { TicketsGateway } from './tickets.gateway';
 import { AIService } from '../../ai/ai.service';
 import { CreateTicketDto, createTicketSchema } from './dto';
 import { SdkAuth } from '../../common/decorators/sdk-auth.decorator';
@@ -58,7 +57,6 @@ export class SdkTicketsController {
     private readonly ticketsService: TicketsService,
     private readonly ticketsSearchService: TicketsSearchService,
     private readonly ticketsAIService: TicketsAIService,
-    private readonly ticketsGateway: TicketsGateway,
     private readonly aiService: AIService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -106,9 +104,6 @@ export class SdkTicketsController {
 
     // Trigger integration syncs
     await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, { priority: 2 });
-
-    // Emit real-time event
-    this.ticketsGateway.emitTicketCreated(tenantId, ticket);
 
     return {
       success: true,
@@ -180,9 +175,6 @@ export class SdkTicketsController {
 
     const ticket = await this.ticketsService.create(tenantId, ticketDto, undefined);
 
-    // Emit real-time event for ticket creation
-    this.ticketsGateway.emitTicketCreated(tenantId, ticket);
-
     // Update ticket with AI analysis fields
     const mappedType = mapAiType(aiResult.type);
     const validSeverities = ['critical', 'high', 'medium', 'low'];
@@ -215,10 +207,6 @@ export class SdkTicketsController {
       const updatedTicket = await this.ticketsService.findOne(ticket.id, tenantId);
       await this.ticketsSearchService.indexTicket(updatedTicket);
     }
-
-    // Emit AI analysis completed event
-    const analyzedTicket = await this.ticketsService.findOne(ticket.id, tenantId);
-    this.ticketsGateway.emitAiAnalysisCompleted(tenantId, analyzedTicket);
 
     // If video was uploaded, save to S3 and create Media record
     let mediaRecord = null;

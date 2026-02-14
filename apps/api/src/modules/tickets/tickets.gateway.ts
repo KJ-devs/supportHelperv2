@@ -104,31 +104,31 @@ export class TicketsGateway
   emitTicketCreated(tenantId: string, ticket: any) {
     this.server
       .to(this.tenantRoom(tenantId))
-      .emit('ticket:created', { ticket });
+      .emit('ticket:created', { event: 'ticket:created', ticket, timestamp: new Date() });
   }
 
   emitTicketUpdated(tenantId: string, ticket: any) {
     this.server
       .to(this.tenantRoom(tenantId))
-      .emit('ticket:updated', { ticket });
+      .emit('ticket:updated', { event: 'ticket:updated', ticket, timestamp: new Date() });
   }
 
   emitTicketAssigned(tenantId: string, ticket: any) {
     this.server
       .to(this.tenantRoom(tenantId))
-      .emit('ticket:assigned', { ticket });
+      .emit('ticket:assigned', { event: 'ticket:assigned', ticket, timestamp: new Date() });
   }
 
   emitTicketDeleted(tenantId: string, ticketId: string) {
     this.server
       .to(this.tenantRoom(tenantId))
-      .emit('ticket:deleted', { ticketId });
+      .emit('ticket:deleted', { event: 'ticket:deleted', ticket: { id: ticketId }, timestamp: new Date() });
   }
 
   emitAiAnalysisCompleted(tenantId: string, ticket: any) {
     this.server
       .to(this.tenantRoom(tenantId))
-      .emit('ticket:ai-analysis-completed', { ticket });
+      .emit('ticket:ai-analysis-completed', { event: 'ticket:ai-analysis-completed', ticket, timestamp: new Date() });
   }
 
   // ----------------------------------------------------------------

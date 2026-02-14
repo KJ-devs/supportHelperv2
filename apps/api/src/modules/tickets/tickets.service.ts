@@ -2,17 +2,24 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  Inject,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto } from './dto';
+import { TicketsGateway } from './tickets.gateway';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => TicketsGateway))
+    private readonly ticketsGateway: TicketsGateway,
+  ) {}
 
   /**
    * Create a new ticket
@@ -62,6 +69,9 @@ export class TicketsService {
     });
 
     this.logger.log(`Created ticket ${ticket.id} for tenant ${tenantId}`);
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketCreated(tenantId, ticket);
 
     return ticket;
   }
@@ -284,11 +294,16 @@ export class TicketsService {
 
     this.logger.log(`Updated ticket ${ticketId}`);
 
-    return {
+    const result = {
       ...ticket,
       typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
     };
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketUpdated(tenantId, result);
+
+    return result;
   }
 
   /**
@@ -308,6 +323,9 @@ export class TicketsService {
     });
 
     this.logger.log(`Deleted (closed) ticket ${ticketId}`);
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketDeleted(tenantId, ticketId);
 
     return {
       ...ticket,
@@ -360,11 +378,16 @@ export class TicketsService {
       `${userId ? 'Assigned' : 'Unassigned'} ticket ${ticketId} ${userId ? `to user ${userId}` : ''}`,
     );
 
-    return {
+    const result = {
       ...ticket,
       typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
     };
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketAssigned(tenantId, result);
+
+    return result;
   }
 
   /**
