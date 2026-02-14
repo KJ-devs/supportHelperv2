@@ -236,7 +236,7 @@ export class SlackProvider extends BaseIntegrationProvider {
           const text = message.text || '';
           if (!text.trim()) continue;
 
-          const firstLine = text.split('\n')[0];
+          const firstLine = text.split('\n')[0] ?? '';
           const title = firstLine.length > 200 ? firstLine.substring(0, 200) : firstLine;
           const ts = message.ts || '';
 
