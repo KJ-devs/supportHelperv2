@@ -1,7 +1,7 @@
 import { Ticket } from '@prisma/client';
 import { Client } from '@notionhq/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
-import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
 import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class NotionProvider extends BaseIntegrationProvider {
@@ -218,5 +218,82 @@ export class NotionProvider extends BaseIntegrationProvider {
       page_id: externalId,
       archived: true,
     });
+  }
+
+  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult> {
+    try {
+      const notion = new Client({ auth: config.apiToken });
+      const maxResults = options?.maxResults || 100;
+      const allTickets: PulledTicket[] = [];
+      let startCursor: string | undefined;
+      let hasMore = true;
+
+      while (hasMore && allTickets.length < maxResults) {
+        const pageSize = Math.min(maxResults - allTickets.length, 100);
+
+        const response = await notion.databases.query({
+          database_id: config.databaseId,
+          start_cursor: startCursor,
+          page_size: pageSize,
+          sorts: [{ timestamp: 'created_time', direction: 'descending' }],
+        });
+
+        for (const page of response.results) {
+          const p = page as any;
+          const props = p.properties || {};
+
+          const title = props.Name?.title?.[0]?.plain_text || 'Untitled';
+          const status = props.Status?.select?.name;
+          const severity = props.Severity?.select?.name;
+          const type = props.Type?.select?.name;
+
+          let description = '';
+          try {
+            const blocks = await notion.blocks.children.list({
+              block_id: p.id,
+              page_size: 3,
+            });
+            description = blocks.results
+              .filter((b: any) => b.type === 'paragraph')
+              .map((b: any) => {
+                const richText = b.paragraph?.rich_text || [];
+                return richText.map((t: any) => t.plain_text || '').join('');
+              })
+              .join('\n')
+              .trim();
+          } catch {
+            // Page content not accessible - skip description
+          }
+
+          allTickets.push({
+            externalId: p.id,
+            externalUrl: p.url,
+            title,
+            description: description || undefined,
+            status: status?.toLowerCase(),
+            severity: severity?.toLowerCase(),
+            type: type?.toLowerCase(),
+            createdAt: p.created_time,
+            updatedAt: p.last_edited_time,
+            metadata: {
+              notionStatus: status,
+              notionSeverity: severity,
+              notionType: type,
+              parentDatabaseId: config.databaseId,
+            },
+          });
+        }
+
+        hasMore = response.has_more;
+        startCursor = response.next_cursor ?? undefined;
+      }
+
+      this.logger.log(`Pulled ${allTickets.length} pages from Notion database ${config.databaseId}`);
+
+      return { success: true, tickets: allTickets, total: allTickets.length };
+    } catch (error) {
+      this.logger.error(`pullTickets failed: ${getErrorMessage(error)}`);
+      return { success: false, tickets: [], total: 0, error: getErrorMessage(error) };
+    }
   }
 }
