@@ -14,12 +14,18 @@ jest.mock('@octokit/webhooks', () => ({
 }));
 
 import { GithubWebhooksService } from '../../../src/modules/github/services/github-webhooks.service';
+import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('GithubWebhooksService', () => {
   let service: GithubWebhooksService;
   let prisma: jest.Mocked<PrismaService>;
   let mockQueue: any;
+
+  const mockIssuesService = {
+    isSyncFromPlatform: jest.fn().mockResolvedValue(false),
+    setSyncOrigin: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     mockQueue = {
@@ -34,6 +40,8 @@ describe('GithubWebhooksService', () => {
           provide: PrismaService,
           useValue: {
             githubIssue: { findFirst: jest.fn(), update: jest.fn() },
+            githubInstallation: { findUnique: jest.fn(), delete: jest.fn(), update: jest.fn() },
+            githubWebhookEvent: { create: jest.fn().mockResolvedValue({ id: 'event-1' }), update: jest.fn(), deleteMany: jest.fn() },
             ticket: { update: jest.fn() },
           },
         },
@@ -49,6 +57,10 @@ describe('GithubWebhooksService', () => {
         {
           provide: getQueueToken('github'),
           useValue: mockQueue,
+        },
+        {
+          provide: GithubIssuesService,
+          useValue: mockIssuesService,
         },
       ],
     }).compile();
@@ -92,9 +104,10 @@ describe('GithubWebhooksService', () => {
       const freshModule = await Test.createTestingModule({
         providers: [
           GithubWebhooksService,
-          { provide: PrismaService, useValue: { githubIssue: { findFirst: jest.fn() }, ticket: { update: jest.fn() } } },
+          { provide: PrismaService, useValue: { githubIssue: { findFirst: jest.fn() }, githubInstallation: { findUnique: jest.fn(), delete: jest.fn(), update: jest.fn() }, githubWebhookEvent: { create: jest.fn().mockResolvedValue({ id: 'ev-1' }), update: jest.fn(), deleteMany: jest.fn() }, ticket: { update: jest.fn() } } },
           { provide: ConfigService, useValue: { get: jest.fn(() => 'secret') } },
           { provide: getQueueToken('github'), useValue: mockQueue },
+          { provide: GithubIssuesService, useValue: mockIssuesService },
         ],
       }).compile();
 
