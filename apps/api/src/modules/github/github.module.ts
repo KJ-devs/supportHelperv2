@@ -14,6 +14,9 @@ import {
   GithubIssuesService,
   GithubWebhooksService,
   GithubUserstoryService,
+  GithubAppService,
+  GithubInstallationService,
+  ProjectGithubConfigService,
 } from './services';
 
 // Controllers
@@ -22,6 +25,9 @@ import {
   GithubReposController,
   GithubWebhooksController,
   TicketGithubController,
+  GithubAppController,
+  GithubInstallationController,
+  ProjectGithubController,
 } from './controllers';
 
 // Processors
@@ -79,6 +85,9 @@ import { GithubWebhookProcessor } from './processors';
     GithubReposController,
     GithubWebhooksController,
     TicketGithubController,
+    GithubAppController,
+    GithubInstallationController,
+    ProjectGithubController,
   ],
   providers: [
     // New modular services
@@ -87,6 +96,9 @@ import { GithubWebhookProcessor } from './processors';
     GithubIssuesService,
     GithubWebhooksService,
     GithubUserstoryService,
+    GithubAppService,
+    GithubInstallationService,
+    ProjectGithubConfigService,
     // BullMQ processor
     GithubWebhookProcessor,
   ],
@@ -96,6 +108,9 @@ import { GithubWebhookProcessor } from './processors';
     GithubIssuesService,
     GithubWebhooksService,
     GithubUserstoryService,
+    GithubAppService,
+    GithubInstallationService,
+    ProjectGithubConfigService,
   ],
 })
 export class GithubModule {}

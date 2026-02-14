@@ -90,6 +90,19 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   GITHUB_WEBHOOK_SECRET?: string;
+
+  // GitHub App (optional)
+  @IsString()
+  @IsOptional()
+  GITHUB_APP_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  GITHUB_PRIVATE_KEY?: string;
+
+  @IsString()
+  @IsOptional()
+  GITHUB_APP_NAME?: string;
 }
 
 /**
