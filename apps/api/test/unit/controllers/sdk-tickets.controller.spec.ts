@@ -5,7 +5,6 @@ import { SdkTicketsController } from '../../../src/modules/tickets/sdk-tickets.c
 import { TicketsService } from '../../../src/modules/tickets/tickets.service';
 import { TicketsSearchService } from '../../../src/modules/tickets/tickets-search.service';
 import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.service';
-import { TicketsGateway } from '../../../src/modules/tickets/tickets.gateway';
 import { AIService } from '../../../src/ai/ai.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { IntegrationsSyncService } from '../../../src/modules/integrations/integrations-sync.service';
@@ -96,14 +95,6 @@ describe('SdkTicketsController', () => {
     syncTicketToAllEnabledIntegrations: jest.fn().mockResolvedValue(undefined),
   };
 
-  const mockTicketsGateway = {
-    emitTicketCreated: jest.fn(),
-    emitTicketUpdated: jest.fn(),
-    emitTicketAssigned: jest.fn(),
-    emitTicketDeleted: jest.fn(),
-    emitAiAnalysisCompleted: jest.fn(),
-  };
-
   const mockPrismaService = {
     media: {
       create: jest.fn(),
@@ -117,7 +108,6 @@ describe('SdkTicketsController', () => {
         { provide: TicketsService, useValue: mockTicketsService },
         { provide: TicketsSearchService, useValue: mockSearchService },
         { provide: TicketsAIService, useValue: mockAIService },
-        { provide: TicketsGateway, useValue: mockTicketsGateway },
         { provide: AIService, useValue: mockAIProcessingService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: ConfigService, useValue: mockConfigService },

@@ -18,7 +18,6 @@ import {
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
-import { TicketsGateway } from './tickets.gateway';
 import { IntegrationsSyncService } from '../integrations/integrations-sync.service';
 import {
   CreateTicketDto,
@@ -49,7 +48,6 @@ export class TicketsController {
     private readonly ticketsSearchService: TicketsSearchService,
     private readonly ticketsAIService: TicketsAIService,
     private readonly integrationsSyncService: IntegrationsSyncService,
-    private readonly ticketsGateway: TicketsGateway,
   ) {}
 
   @Post()
@@ -77,9 +75,6 @@ export class TicketsController {
 
     // Trigger integration syncs
     await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, { priority: 2 });
-
-    // Emit real-time event
-    this.ticketsGateway.emitTicketCreated(tenantId, ticket);
 
     return ticket;
   }
@@ -182,9 +177,6 @@ export class TicketsController {
     // Sync updates to integrations
     await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(id, tenantId, { action: 'update' });
 
-    // Emit real-time event
-    this.ticketsGateway.emitTicketUpdated(tenantId, ticket);
-
     return ticket;
   }
 
@@ -197,12 +189,7 @@ export class TicketsController {
     @Body(new ZodValidationPipe(assignTicketSchema))
     assignDto: AssignTicketDto,
   ) {
-    const ticket = await this.ticketsService.assign(id, tenantId, assignDto.userId);
-
-    // Emit real-time event
-    this.ticketsGateway.emitTicketAssigned(tenantId, ticket);
-
-    return ticket;
+    return this.ticketsService.assign(id, tenantId, assignDto.userId);
   }
 
   @Delete(':id')
@@ -221,9 +208,6 @@ export class TicketsController {
     if (this.ticketsSearchService.isEnabled()) {
       await this.ticketsSearchService.removeTicket(id);
     }
-
-    // Emit real-time event
-    this.ticketsGateway.emitTicketDeleted(tenantId, id);
 
     return ticket;
   }
