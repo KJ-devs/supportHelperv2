@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { HealthController } from '../../../src/health/health.controller';
 import { HealthService } from '../../../src/monitoring/health.service';
+import { CacheService } from '../../../src/cache/cache.service';
 
 describe('HealthController', () => {
   let controller: HealthController;
@@ -23,6 +24,12 @@ describe('HealthController', () => {
             getCronJobsStatus: jest.fn(),
             getQueueStatus: jest.fn(),
             getDeadLetterQueueCount: jest.fn(),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            getMetrics: jest.fn().mockReturnValue({ hits: 0, misses: 0, hitRate: '0%', total: 0 }),
           },
         },
       ],

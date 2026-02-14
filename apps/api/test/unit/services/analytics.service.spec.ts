@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AnalyticsService } from '../../../src/modules/analytics/analytics.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { CacheService } from '../../../src/cache/cache.service';
 
 describe('AnalyticsService', () => {
   let service: AnalyticsService;
@@ -28,6 +29,15 @@ describe('AnalyticsService', () => {
             application: {
               findMany: jest.fn(),
             },
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn().mockResolvedValue(undefined),
+            set: jest.fn().mockResolvedValue(undefined),
+            del: jest.fn().mockResolvedValue(undefined),
+            getOrSet: jest.fn().mockImplementation((_key, _ttl, factory) => factory()),
           },
         },
       ],

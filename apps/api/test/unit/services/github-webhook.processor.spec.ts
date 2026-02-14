@@ -3,6 +3,11 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { GithubWebhookProcessor, GithubWebhookJobData } from '../../../src/modules/github/processors/github-webhook.processor';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
+
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
 
 describe('GithubWebhookProcessor', () => {
   let processor: GithubWebhookProcessor;
@@ -10,6 +15,13 @@ describe('GithubWebhookProcessor', () => {
 
   const mockPrisma = {
     $executeRaw: jest.fn(),
+    githubIssue: { findFirst: jest.fn() },
+    projectGithubConfig: { deleteMany: jest.fn() },
+  };
+
+  const mockIssuesService = {
+    autoCreateIssueFromTicket: jest.fn(),
+    syncTicketStatusToGithub: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -19,6 +31,10 @@ describe('GithubWebhookProcessor', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: GithubIssuesService,
+          useValue: mockIssuesService,
         },
       ],
     }).compile();
