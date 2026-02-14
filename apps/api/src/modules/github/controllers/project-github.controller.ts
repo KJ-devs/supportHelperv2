@@ -14,9 +14,7 @@ import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../../common/decorators/current-tenant.decorator';
 import { GithubReposService } from '../services/github-repos.service';
 import { ProjectGithubConfigService } from '../services/project-github-config.service';
-import { TemplateRendererService } from '../services/template-renderer.service';
 import { ConnectRepoDto, UpdateProjectGithubSettingsDto } from '../dto/project-github-config.dto';
-import { UpdateIssueTemplateDto, PreviewIssueTemplateDto } from '../dto/github-template.dto';
 
 @ApiTags('GitHub Project Config')
 @ApiBearerAuth()
@@ -26,7 +24,6 @@ export class ProjectGithubController {
   constructor(
     private readonly reposService: GithubReposService,
     private readonly configService: ProjectGithubConfigService,
-    private readonly templateRenderer: TemplateRendererService,
   ) {}
 
   /**
@@ -119,112 +116,5 @@ export class ProjectGithubController {
     @Body() dto: UpdateProjectGithubSettingsDto,
   ) {
     return this.configService.updateSettings(applicationId, tenantId, dto);
-  }
-
-  // ── Issue Template Endpoints ──────────────────────────────────────
-
-  /**
-   * GET /applications/:id/github/template
-   * Get the current issue template (or the default).
-   */
-  @Get('applications/:id/github/template')
-  @ApiOperation({ summary: 'Get issue template for an application' })
-  @ApiParam({ name: 'id', description: 'Application UUID' })
-  async getTemplate(
-    @Param('id') applicationId: string,
-    @CurrentTenant() tenantId: string,
-  ) {
-    const config = await this.configService.getConfig(applicationId, tenantId);
-    const settings = (config?.settings as Record<string, any>) ?? {};
-    const customTemplate = settings.issueBodyTemplate as string | undefined;
-    const isDefault = !customTemplate;
-    const template = customTemplate || this.templateRenderer.getDefaultTemplate();
-
-    return {
-      template,
-      isDefault,
-      placeholders: this.templateRenderer.getPlaceholders(),
-    };
-  }
-
-  /**
-   * PATCH /applications/:id/github/template
-   * Update the issue template for an application.
-   */
-  @Patch('applications/:id/github/template')
-  @ApiOperation({ summary: 'Update issue template for an application' })
-  @ApiParam({ name: 'id', description: 'Application UUID' })
-  async updateTemplate(
-    @Param('id') applicationId: string,
-    @CurrentTenant() tenantId: string,
-    @Body() dto: UpdateIssueTemplateDto,
-  ) {
-    const validation = this.templateRenderer.validate(dto.template);
-
-    await this.configService.updateSettings(applicationId, tenantId, {
-      issueBodyTemplate: dto.template,
-    });
-
-    return {
-      template: dto.template,
-      isDefault: false,
-      validation,
-    };
-  }
-
-  /**
-   * POST /applications/:id/github/template/preview
-   * Preview a rendered template with sample data.
-   */
-  @Post('applications/:id/github/template/preview')
-  @ApiOperation({ summary: 'Preview rendered issue template' })
-  @ApiParam({ name: 'id', description: 'Application UUID' })
-  async previewTemplate(
-    @Param('id') applicationId: string,
-    @CurrentTenant() tenantId: string,
-    @Body() dto: PreviewIssueTemplateDto,
-  ) {
-    let template: string;
-
-    if (dto.template) {
-      template = dto.template;
-    } else {
-      const config = await this.configService.getConfig(applicationId, tenantId);
-      const settings = (config?.settings as Record<string, any>) ?? {};
-      template =
-        (settings.issueBodyTemplate as string) ||
-        this.templateRenderer.getDefaultTemplate();
-    }
-
-    const sampleData = this.templateRenderer.getSampleData();
-    const rendered = this.templateRenderer.render(template, sampleData);
-
-    return {
-      rendered,
-      template,
-      sampleData,
-    };
-  }
-
-  /**
-   * DELETE /applications/:id/github/template
-   * Reset the template back to default.
-   */
-  @Delete('applications/:id/github/template')
-  @ApiOperation({ summary: 'Reset issue template to default' })
-  @ApiParam({ name: 'id', description: 'Application UUID' })
-  async resetTemplate(
-    @Param('id') applicationId: string,
-    @CurrentTenant() tenantId: string,
-  ) {
-    await this.configService.updateSettings(applicationId, tenantId, {
-      issueBodyTemplate: null,
-    });
-
-    return {
-      template: this.templateRenderer.getDefaultTemplate(),
-      isDefault: true,
-      placeholders: this.templateRenderer.getPlaceholders(),
-    };
   }
 }

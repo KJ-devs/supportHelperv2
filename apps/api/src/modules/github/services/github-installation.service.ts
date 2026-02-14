@@ -77,7 +77,7 @@ export class GithubInstallationService {
           data: {
             accountLogin,
             accountType,
-            permissions: permissions,
+            permissions: permissions as any,
             suspendedAt: null,
           },
         });
@@ -96,7 +96,7 @@ export class GithubInstallationService {
         installationId: BigInt(installationId),
         accountLogin,
         accountType,
-        permissions: permissions,
+        permissions: permissions as any,
       },
     });
 

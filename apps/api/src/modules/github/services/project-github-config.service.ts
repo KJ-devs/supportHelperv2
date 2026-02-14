@@ -182,12 +182,12 @@ export class ProjectGithubConfigService {
     }
 
     // Merge new settings with existing
-    const existingSettings = (config.settings as Record<string, unknown>) ?? {};
+    const existingSettings = (config.settings as Record<string, any>) ?? {};
     const mergedSettings = { ...existingSettings, ...settings };
 
     const updated = await this.prisma.projectGithubConfig.update({
       where: { id: config.id },
-      data: { settings: mergedSettings },
+      data: { settings: mergedSettings as any },
     });
 
     return this.serializeConfig(updated);
