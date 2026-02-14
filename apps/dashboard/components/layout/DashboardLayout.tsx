@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
+import { ThemeToggle } from '@/components/layout/ThemeToggle';
 
 interface NavItem {
   href: string;
@@ -41,22 +42,22 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 bg-white shadow-lg transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 shadow-lg dark:shadow-gray-800/20 transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } w-64`}
       >
         {/* Logo */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
           <Link href="/dashboard" className="flex items-center space-x-2">
             <span className="text-2xl">🐛</span>
-            <span className="font-bold text-gray-900">Support Helper</span>
+            <span className="font-bold text-gray-900 dark:text-gray-100">Support Helper</span>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-gray-500 hover:text-gray-700"
+            className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
           >
             ✕
           </button>
@@ -72,8 +73,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 href={item.href}
                 className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-blue-50 text-blue-600 font-medium'
-                    : 'text-gray-700 hover:bg-gray-100'
+                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
                 <span className="text-xl">{item.icon}</span>
@@ -84,15 +85,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </nav>
 
         {/* User Info */}
-        <div className="absolute bottom-0 left-0 right-0 border-t p-4">
+        <div className="absolute bottom-0 left-0 right-0 border-t dark:border-gray-700 p-4">
           <div className="flex items-center justify-between">
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user.name || user.email}</p>
-              <p className="text-xs text-gray-500 truncate">{user.role}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user.name || user.email}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.role}</p>
             </div>
             <button
               onClick={() => logout()}
-              className="ml-2 text-gray-500 hover:text-gray-700"
+              className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               title="Se déconnecter"
             >
               🚪
@@ -104,11 +105,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* Main Content */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'ml-0'}`}>
         {/* Header */}
-        <header className="bg-white shadow-sm sticky top-0 z-40">
+        <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-gray-800/20 sticky top-0 z-40 border-b border-transparent dark:border-gray-700">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
             >
               {sidebarOpen ? '◀' : '☰'}
             </button>
@@ -118,7 +119,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <div className="flex items-center space-x-4">
-              <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">
+              <ThemeToggle />
+              <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full">
                 {user.role}
               </span>
             </div>

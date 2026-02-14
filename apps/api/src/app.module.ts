@@ -9,6 +9,7 @@ import configs, { validate } from './config';
 
 // Core Modules
 import { PrismaModule } from './prisma/prisma.module';
+import { RedisCacheModule } from './cache/cache.module';
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
@@ -99,6 +100,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 
     // Core Infrastructure
     PrismaModule,
+    RedisCacheModule,
     MonitoringModule,
     HealthModule,
 

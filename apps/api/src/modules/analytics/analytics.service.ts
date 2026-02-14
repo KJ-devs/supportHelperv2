@@ -1,100 +1,128 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { CacheService, CacheKeys, CacheTTL } from '../../cache';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   /**
-   * Get dashboard overview statistics
+   * Get dashboard overview statistics (cached for 1 hour)
    */
   async getOverview(tenantId: string, period: 'day' | 'week' | 'month' = 'week') {
-    const startDate = this.getStartDate(period);
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsOverview(tenantId, period),
+      CacheTTL.ANALYTICS,
+      async () => {
+        const startDate = this.getStartDate(period);
 
-    const [
-      totalTickets,
-      newTickets,
-      resolvedTickets,
-      avgResolutionTime,
-      ticketsByStatus,
-      ticketsBySeverity,
-      ticketsByType,
-    ] = await Promise.all([
-      this.getTotalTickets(tenantId),
-      this.getNewTickets(tenantId, startDate),
-      this.getResolvedTickets(tenantId, startDate),
-      this.getAvgResolutionTime(tenantId, startDate),
-      this.getTicketsByStatus(tenantId),
-      this.getTicketsBySeverity(tenantId),
-      this.getTicketsByType(tenantId),
-    ]);
+        const [
+          totalTickets,
+          newTickets,
+          resolvedTickets,
+          avgResolutionTime,
+          ticketsByStatus,
+          ticketsBySeverity,
+          ticketsByType,
+        ] = await Promise.all([
+          this.getTotalTickets(tenantId),
+          this.getNewTickets(tenantId, startDate),
+          this.getResolvedTickets(tenantId, startDate),
+          this.getAvgResolutionTime(tenantId, startDate),
+          this.getTicketsByStatus(tenantId),
+          this.getTicketsBySeverity(tenantId),
+          this.getTicketsByType(tenantId),
+        ]);
 
-    return {
-      totalTickets,
-      newTickets,
-      resolvedTickets,
-      avgResolutionTime,
-      ticketsByStatus,
-      ticketsBySeverity,
-      ticketsByType,
-      period,
-    };
+        return {
+          totalTickets,
+          newTickets,
+          resolvedTickets,
+          avgResolutionTime,
+          ticketsByStatus,
+          ticketsBySeverity,
+          ticketsByType,
+          period,
+        };
+      },
+    );
   }
 
   /**
-   * Get ticket trends over time
+   * Get ticket trends over time (cached for 1 hour)
    */
   async getTrends(tenantId: string, period: 'day' | 'week' | 'month' = 'week', days: number = 30) {
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsTrends(tenantId, period, days),
+      CacheTTL.ANALYTICS,
+      async () => {
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
 
-    // Fetch individual tickets and bucket them in application code,
-    // since Prisma groupBy on timestamps creates one group per ms.
-    const tickets = await this.prisma.ticket.findMany({
-      where: {
-        tenantId,
-        createdAt: { gte: startDate },
+        const tickets = await this.prisma.ticket.findMany({
+          where: {
+            tenantId,
+            createdAt: { gte: startDate },
+          },
+          select: {
+            createdAt: true,
+            status: true,
+          },
+        });
+
+        const trendData = this.groupByDate(tickets, period);
+
+        return {
+          period,
+          days,
+          data: trendData,
+        };
       },
-      select: {
-        createdAt: true,
-        status: true,
-      },
-    });
-
-    const trendData = this.groupByDate(tickets, period);
-
-    return {
-      period,
-      days,
-      data: trendData,
-    };
+    );
   }
 
   /**
-   * Get performance metrics
+   * Get performance metrics (cached for 1 hour)
    */
   async getPerformanceMetrics(tenantId: string) {
-    const [firstResponseTime, resolutionRate, reopenRate, customerSatisfaction] = await Promise.all(
-      [
-        this.getAvgFirstResponseTime(tenantId),
-        this.getResolutionRate(tenantId),
-        this.getReopenRate(tenantId),
-        this.getCustomerSatisfaction(tenantId),
-      ]
-    );
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsPerformance(tenantId),
+      CacheTTL.ANALYTICS,
+      async () => {
+        const [firstResponseTime, resolutionRate, reopenRate, customerSatisfaction] = await Promise.all(
+          [
+            this.getAvgFirstResponseTime(tenantId),
+            this.getResolutionRate(tenantId),
+            this.getReopenRate(tenantId),
+            this.getCustomerSatisfaction(tenantId),
+          ]
+        );
 
-    return {
-      firstResponseTime,
-      resolutionRate,
-      reopenRate,
-      customerSatisfaction,
-    };
+        return {
+          firstResponseTime,
+          resolutionRate,
+          reopenRate,
+          customerSatisfaction,
+        };
+      },
+    );
   }
 
   /**
-   * Get agent performance statistics
+   * Get agent performance statistics (cached for 1 hour)
    */
   async getAgentStats(tenantId: string) {
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsAgentStats(tenantId),
+      CacheTTL.ANALYTICS,
+      () => this.getAgentStatsUncached(tenantId),
+    );
+  }
+
+  private async getAgentStatsUncached(tenantId: string) {
     const agents = await this.prisma.user.findMany({
       where: {
         tenantId,
@@ -144,9 +172,17 @@ export class AnalyticsService {
   }
 
   /**
-   * Get application statistics
+   * Get application statistics (cached for 1 hour)
    */
   async getApplicationStats(tenantId: string) {
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsAppStats(tenantId),
+      CacheTTL.ANALYTICS,
+      () => this.getApplicationStatsUncached(tenantId),
+    );
+  }
+
+  private async getApplicationStatsUncached(tenantId: string) {
     const applications = await this.prisma.application.findMany({
       where: { tenantId },
       include: {
@@ -162,12 +198,14 @@ export class AnalyticsService {
           this.prisma.ticket.count({
             where: {
               applicationId: app.id,
+              tenantId,
               status: 'resolved',
             },
           }),
           this.prisma.ticket.count({
             where: {
               applicationId: app.id,
+              tenantId,
               severity: 'critical',
             },
           }),

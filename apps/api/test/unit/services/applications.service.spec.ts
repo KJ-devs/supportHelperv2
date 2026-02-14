@@ -1,12 +1,23 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ApplicationsService } from '../../../src/applications/applications.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { CacheService } from '../../../src/cache';
 import { NotFoundException } from '@nestjs/common';
 
 // Mock the shared package
 jest.mock('@support-helper/shared', () => ({
   generateSDKKey: jest.fn(() => 'sk_test_mock_key_123'),
 }));
+
+const mockCacheService = {
+  get: jest.fn().mockResolvedValue(undefined),
+  set: jest.fn().mockResolvedValue(undefined),
+  del: jest.fn().mockResolvedValue(undefined),
+  getOrSet: jest.fn().mockImplementation((_key: string, _ttl: number, factory: () => any) => factory()),
+  invalidateByPrefix: jest.fn().mockResolvedValue(undefined),
+  hashFilters: jest.fn().mockReturnValue('abc123'),
+  getMetrics: jest.fn().mockReturnValue({ hits: 0, misses: 0, hitRate: '0%', total: 0 }),
+};
 
 describe('ApplicationsService', () => {
   let service: ApplicationsService;
@@ -42,6 +53,7 @@ describe('ApplicationsService', () => {
             },
           },
         },
+        { provide: CacheService, useValue: mockCacheService },
       ],
     }).compile();
 

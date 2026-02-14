@@ -152,16 +152,16 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       </Button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
           <button
             onClick={exportToCSV}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="flex items-center gap-2">
               <span>📊</span>
               <div>
                 <div className="font-medium">Exporter en CSV</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Format tableur
                 </div>
               </div>
@@ -170,22 +170,22 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
 
           <button
             onClick={exportToJSON}
-            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="flex items-center gap-2">
               <span>📄</span>
               <div>
                 <div className="font-medium">Exporter en JSON</div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Format développeur
                 </div>
               </div>
             </div>
           </button>
 
-          <div className="border-t my-1" />
+          <div className="border-t dark:border-gray-700 my-1" />
 
-          <div className="px-4 py-2 text-xs text-gray-500">
+          <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400">
             {tickets.length} ticket(s) à exporter
           </div>
         </div>

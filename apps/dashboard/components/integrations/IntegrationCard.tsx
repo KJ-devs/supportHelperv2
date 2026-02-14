@@ -199,23 +199,23 @@ export function IntegrationCard({
           <div className="relative">
             <IconComponent />
             <div
-              className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
+              className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white dark:border-gray-900 ${
                 isRecentlyActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
               }`}
             />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">{integration.name}</h3>
-            <p className="text-sm text-gray-500 capitalize">{integration.type}</p>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{integration.name}</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 capitalize">{integration.type}</p>
           </div>
         </div>
         <div>
           {integration.enabled ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
               Enabled
             </span>
           ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300">
               Disabled
             </span>
           )}
@@ -224,12 +224,12 @@ export function IntegrationCard({
 
       <div className="space-y-2 mb-4">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Last sync:</span>
-          <span className="text-gray-900 font-medium">{timeAgo(integration.lastSyncedAt)}</span>
+          <span className="text-gray-600 dark:text-gray-400">Last sync:</span>
+          <span className="text-gray-900 dark:text-gray-100 font-medium">{timeAgo(integration.lastSyncedAt)}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Total syncs:</span>
-          <span className="text-gray-900 font-medium">{integration._count?.syncLogs || 0}</span>
+          <span className="text-gray-600 dark:text-gray-400">Total syncs:</span>
+          <span className="text-gray-900 dark:text-gray-100 font-medium">{integration._count?.syncLogs || 0}</span>
         </div>
       </div>
 
