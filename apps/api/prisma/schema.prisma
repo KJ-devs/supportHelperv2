@@ -22,22 +22,12 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users                   User[]
-  applications            Application[]
-  tickets                 Ticket[]
-  githubConnections       GithubConnection[]
-  githubInstallations     GithubInstallation[]
-  integrations            Integration[]
-  aiConfig                AiConfig?
-  codebaseEmbeddings      CodebaseEmbedding[]
-  agentTasks              AgentTask[]
-  ticketEvents            TicketEvent[]
-  notificationPreferences NotificationPreference[]
-  notificationLogs        NotificationLog[]
-  licenseUsage            LicenseUsage[]
-  auditLogs               AuditLog[]
-  ssoConfig               SsoConfig?
-  archivedDeadLetterJobs  ArchivedDeadLetterJob[]
+  users               User[]
+  applications        Application[]
+  tickets             Ticket[]
+  githubConnections   GithubConnection[]
+  githubInstallations GithubInstallation[]
+  integrations        Integration[]
 
   @@map("tenants")
 }
@@ -73,13 +63,9 @@ model Application {
   githubRepo String?  @map("github_repo") @db.VarChar(255)
   createdAt  DateTime @default(now()) @map("created_at")
 
-  tenant                  Tenant               @relation(fields: [tenantId], references: [id])
-  tickets                 Ticket[]
-  githubConfig            ProjectGithubConfig?
-  codebaseEmbeddings      CodebaseEmbedding[]
-  codebaseIndexStatus     CodebaseIndexStatus?
-  agentTasks              AgentTask[]
-  notificationPreferences NotificationPreference[]
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  tickets      Ticket[]
+  githubConfig ProjectGithubConfig?
 
   @@map("applications")
 }
