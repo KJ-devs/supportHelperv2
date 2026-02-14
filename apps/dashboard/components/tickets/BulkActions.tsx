@@ -138,19 +138,19 @@ export function BulkActions({ selectedTickets, onComplete, onCancel }: BulkActio
 
   return (
     <>
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
         <div className="flex items-center gap-4 flex-wrap">
           {/* Selection Info */}
           <div className="flex items-center gap-2">
             <svg
-              className="w-5 h-5 text-blue-600"
+              className="w-5 h-5 text-blue-600 dark:text-blue-400"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
               <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
               <path d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
             </svg>
-            <span className="font-medium text-blue-900">
+            <span className="font-medium text-blue-900 dark:text-blue-200">
               {selectedTickets.length} ticket(s) selected
             </span>
           </div>
@@ -225,7 +225,7 @@ export function BulkActions({ selectedTickets, onComplete, onCancel }: BulkActio
 
           {/* Delete Warning */}
           {action === 'delete' && (
-            <span className="text-sm text-red-600 font-medium">
+            <span className="text-sm text-red-600 dark:text-red-400 font-medium">
               Irreversible action!
             </span>
           )}
@@ -257,8 +257,8 @@ export function BulkActions({ selectedTickets, onComplete, onCancel }: BulkActio
           <div
             className={`mt-3 p-3 rounded-md text-sm ${
               result.failed === 0
-                ? 'bg-green-50 text-green-800 border border-green-200'
-                : 'bg-yellow-50 text-yellow-800 border border-yellow-200'
+                ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800'
+                : 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800'
             }`}
           >
             <div className="flex items-center justify-between">
@@ -311,7 +311,7 @@ export function BulkActions({ selectedTickets, onComplete, onCancel }: BulkActio
           </>
         }
       >
-        <p className="text-gray-700">
+        <p className="text-gray-700 dark:text-gray-300">
           {action === 'delete' ? (
             <>
               Are you sure you want to <strong>delete</strong>{' '}

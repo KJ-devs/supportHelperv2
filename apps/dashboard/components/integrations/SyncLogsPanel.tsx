@@ -173,15 +173,31 @@ export function SyncLogsPanel({
   const statusFilters = ['all', 'success', 'failed', 'retrying'];
 
   return (
-    <>
-      {/* Backdrop */}
-      <div
-        className={`fixed inset-0 z-40 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${
-          visible ? 'opacity-100' : 'opacity-0'
-        }`}
-        onClick={handleClose}
-        aria-hidden="true"
-      />
+    <Modal isOpen={isOpen} onClose={onClose} title={`Sync Logs - ${integrationName}`} size="xl">
+      <div className="space-y-4">
+        {/* Stats Bar */}
+        {stats && (
+          <div className="grid grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Syncs</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{stats.total}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Success Rate</p>
+              <p className={`text-2xl font-bold mt-1 ${getSuccessRateColor(stats.successRate)}`}>
+                {stats.successRate.toFixed(1)}%
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Successful</p>
+              <p className="text-2xl font-bold text-green-600 mt-1">{stats.success}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Failed</p>
+              <p className="text-2xl font-bold text-red-600 mt-1">{stats.failed}</p>
+            </div>
+          </div>
+        )}
 
       {/* Drawer */}
       <div
@@ -243,125 +259,69 @@ export function SyncLogsPanel({
                   </span>
                 </div>
 
-                {/* Stats Grid */}
-                <div className="grid grid-cols-1 gap-1.5 text-sm">
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.total}</span>
-                    <span>total syncs</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.success}</span>
-                    <span>successful</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
-                    <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.failed}</span>
-                    <span>failed</span>
-                  </div>
-                </div>
-              </div>
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!isLoading && !error && logs.length === 0 && (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-2">📊</div>
+            <p className="text-gray-600 dark:text-gray-400">No sync logs found</p>
+            {(statusFilter || actionFilter) && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Try adjusting your filters</p>
             )}
 
-            {/* Filter Chips */}
-            <div className="flex gap-2 flex-wrap">
-              {statusFilters.map((s) => {
-                const isActive = s === 'all' ? statusFilter === '' : statusFilter === s;
-                return (
-                  <button
-                    key={s}
-                    onClick={() => handleFilterChange(s === 'all' ? '' : s)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors capitalize ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700'
-                    }`}
-                  >
-                    {s}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Loading State */}
-            {isLoading && (
-              <div className="flex justify-center py-12">
-                <Loader size="md" text="Loading sync logs..." />
-              </div>
-            )}
-
-            {/* Error State */}
-            {error && (
-              <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-                <p className="text-sm text-red-800 dark:text-red-400">{error}</p>
-                <button
-                  onClick={fetchData}
-                  className="mt-2 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline"
-                >
-                  Retry
-                </button>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {!isLoading && !error && logs.length === 0 && (
-              <div className="text-center py-12">
-                <svg
-                  className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                  />
-                </svg>
-                <p className="text-gray-600 dark:text-gray-400 font-medium">No sync logs found</p>
-                {statusFilter && (
-                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Try adjusting your filters</p>
-                )}
-              </div>
-            )}
-
-            {/* Timeline Log Entries */}
-            {!isLoading && !error && logs.length > 0 && (
-              <div className="relative pl-6 border-l-2 border-gray-200 dark:border-gray-700">
+        {/* Logs Table */}
+        {!isLoading && !error && logs.length > 0 && (
+          <div className="overflow-x-auto border dark:border-gray-700 rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-800/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Time
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Ticket
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Action
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Duration
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Link
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {logs.map((log) => (
-                  <div key={log.id} className="relative pb-6 last:pb-0">
-                    {/* Timeline Dot */}
-                    <div
-                      className={`absolute -left-[9px] w-4 h-4 rounded-full bg-white dark:bg-gray-900 border-2 ${getTimelineDotBorderColor(
-                        log.status
-                      )}`}
-                    />
-
-                    <div className="ml-4">
-                      {/* Timestamp */}
-                      <p className="text-xs text-gray-500 dark:text-gray-500">{timeAgo(log.syncedAt)}</p>
-
-                      {/* Ticket Title */}
-                      <p
-                        className="text-sm font-medium text-gray-900 dark:text-gray-100 mt-0.5 truncate max-w-xs"
-                        title={log.ticket?.title || 'Unknown Ticket'}
-                      >
-                        {log.ticket?.title || 'Unknown Ticket'}
-                      </p>
-
-                      {/* Badges Row */}
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {log.action && (
-                          <span
-                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getActionBadgeStyles(
-                              log.action
-                            )}`}
-                          >
-                            {log.action}
-                          </span>
-                        )}
+                  <Fragment key={log.id}>
+                    <tr
+                      onClick={() => handleRowClick(log)}
+                      className={`${
+                        log.status === 'failed' && log.error ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''
+                      }`}
+                    >
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                        {timeAgo(log.syncedAt)}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                        <div
+                          className="max-w-xs truncate"
+                          title={log.ticket?.title || 'Unknown Ticket'}
+                        >
+                          {log.ticket?.title || 'Unknown Ticket'}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeStyles(
                             log.status
@@ -369,10 +329,12 @@ export function SyncLogsPanel({
                         >
                           {log.status}
                         </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500">
-                          {formatDuration(log.durationMs)}
-                        </span>
-                        {log.externalUrl && (
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                        {formatDuration(log.durationMs)}
+                      </td>
+                      <td className="px-4 py-3 text-sm whitespace-nowrap">
+                        {log.externalUrl ? (
                           <a
                             href={log.externalUrl}
                             target="_blank"
@@ -389,8 +351,29 @@ export function SyncLogsPanel({
                               />
                             </svg>
                           </a>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500">-</span>
                         )}
-                      </div>
+                      </td>
+                    </tr>
+                    {expandedLogId === log.id && log.error && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-3 bg-red-50 dark:bg-red-900/20">
+                          <div className="text-sm">
+                            <p className="font-medium text-red-800 dark:text-red-300 mb-1">Error Details:</p>
+                            <p className="text-red-700 dark:text-red-400 font-mono text-xs whitespace-pre-wrap">
+                              {log.error}
+                            </p>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
                       {/* Expandable Error Details */}
                       {log.status === 'failed' && log.error && (
@@ -441,13 +424,10 @@ export function SyncLogsPanel({
               disabled={page === 1}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-              Prev
-            </button>
-            <span className="text-sm text-gray-500 dark:text-gray-400">
-              {page} / {totalPages}
+              Previous
+            </Button>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              Page {page} of {totalPages}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
