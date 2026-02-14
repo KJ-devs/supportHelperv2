@@ -4,7 +4,6 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CacheService } from '../../../cache/cache.service';
 import { GithubOAuthService } from './github-oauth.service';
 import { GithubAppService } from './github-app.service';
-import { TemplateRendererService } from './template-renderer.service';
 import {
   CreateGithubIssueDto,
   GithubIssueResponseDto,
@@ -33,7 +32,6 @@ export class GithubIssuesService {
     private cacheService: CacheService,
     private oauthService: GithubOAuthService,
     private appService: GithubAppService,
-    private templateRenderer: TemplateRendererService,
   ) {
     this.apiUrl = this.config.get('app.apiUrl') || 'http://localhost:3000';
   }
@@ -438,18 +436,13 @@ export class GithubIssuesService {
     if (existing) return;
 
     const octokit = await this.appService.getInstallationOctokit(Number(installationId));
-    const configSettings = (settings as Record<string, any>) ?? {};
-    const customTemplate = configSettings.issueBodyTemplate as string | undefined;
-    const issueBody = this.formatTicketAsIssueBody(
-      ticket as TicketWithRelations,
-      {
-        repository,
-        includeAiAnalysis: true,
-        includeVideoLink: true,
-      },
-      customTemplate || undefined,
-    );
+    const issueBody = this.formatTicketAsIssueBody(ticket as TicketWithRelations, {
+      repository,
+      includeAiAnalysis: true,
+      includeVideoLink: true,
+    });
 
+    const configSettings = (settings as Record<string, any>) ?? {};
     const defaultLabels = configSettings.defaultLabels
       ? (configSettings.defaultLabels as string).split(',').map((l: string) => l.trim())
       : [];

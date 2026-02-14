@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';

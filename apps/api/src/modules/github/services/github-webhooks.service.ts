@@ -63,6 +63,8 @@ export class GithubWebhooksService {
     private prisma: PrismaService,
     private config: ConfigService,
     @InjectQueue('github') private githubQueue: Queue,
+    @Inject(forwardRef(() => GithubIssuesService))
+    private issuesService: GithubIssuesService,
   ) {
     this.webhookSecret = this.config.get('github.webhookSecret') || '';
 
