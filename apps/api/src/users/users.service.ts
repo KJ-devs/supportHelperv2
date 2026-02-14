@@ -1,26 +1,38 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CacheService, CacheKeys, CacheTTL } from '../cache';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   async findByTenant(tenantId: string) {
-    return this.prisma.user.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    return this.cacheService.getOrSet(
+      CacheKeys.userList(tenantId),
+      CacheTTL.USER_PROFILE,
+      () => this.prisma.user.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+          createdAt: true,
+        },
+      }),
+    );
   }
 
   async findOne(id: string, tenantId: string) {
+    const cacheKey = CacheKeys.userProfile(tenantId, id);
+    const cached = await this.cacheService.get<any>(cacheKey);
+    if (cached) return cached;
+
     const user = await this.prisma.user.findFirst({
       where: { id, tenantId },
       select: {
@@ -37,6 +49,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    await this.cacheService.set(cacheKey, user, CacheTTL.USER_PROFILE);
     return user;
   }
 
@@ -72,13 +85,14 @@ export class UsersService {
       },
     });
 
+    await this.invalidateUserCaches(tenantId);
     return user;
   }
 
   async update(id: string, tenantId: string, data: { name?: string; role?: string }) {
     const user = await this.findOne(id, tenantId);
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: user.id },
       data,
       select: {
@@ -90,11 +104,15 @@ export class UsersService {
         createdAt: true,
       },
     });
+
+    await this.invalidateUserCaches(tenantId, id);
+    return updated;
   }
 
   async delete(id: string, tenantId: string) {
     const user = await this.findOne(id, tenantId);
     await this.prisma.user.delete({ where: { id: user.id } });
+    await this.invalidateUserCaches(tenantId, id);
     return { success: true };
   }
 
@@ -117,7 +135,7 @@ export class UsersService {
       }
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         name: data.name,
@@ -132,6 +150,9 @@ export class UsersService {
         createdAt: true,
       },
     });
+
+    await this.invalidateUserCaches(tenantId, userId);
+    return updated;
   }
 
   async changePassword(userId: string, tenantId: string, currentPassword: string, newPassword: string) {
@@ -194,5 +215,15 @@ export class UsersService {
     // we'll return success. In production, you'd store this in a separate table or JSON field.
     // For now, this endpoint works for the frontend but doesn't persist the data.
     return { success: true, preferences };
+  }
+
+  private async invalidateUserCaches(tenantId: string, userId?: string): Promise<void> {
+    const promises: Promise<void>[] = [
+      this.cacheService.del(CacheKeys.userList(tenantId)),
+    ];
+    if (userId) {
+      promises.push(this.cacheService.del(CacheKeys.userProfile(tenantId, userId)));
+    }
+    await Promise.all(promises);
   }
 }
