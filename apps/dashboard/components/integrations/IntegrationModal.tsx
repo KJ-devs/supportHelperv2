@@ -185,14 +185,14 @@ export function IntegrationModal({
 
         {/* Dynamic Config Fields */}
         {selectedType && (
-          <div className="border-t pt-4 space-y-4">
-            <h4 className="font-medium text-gray-900">Configuration</h4>
+          <div className="border-t dark:border-gray-700 pt-4 space-y-4">
+            <h4 className="font-medium text-gray-900 dark:text-gray-100">Configuration</h4>
 
             {selectedType.requiredConfig.map(renderConfigField)}
 
             {selectedType.optionalConfig.length > 0 && (
               <>
-                <h5 className="text-sm font-medium text-gray-700 mt-4">
+                <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">
                   Optional Settings
                 </h5>
                 {selectedType.optionalConfig.map(renderConfigField)}
@@ -210,11 +210,11 @@ export function IntegrationModal({
             onChange={(e) =>
               setFormData({ ...formData, enabled: e.target.checked })
             }
-            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+            className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
           />
           <label
             htmlFor="enabled"
-            className="ml-2 text-sm font-medium text-gray-900"
+            className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100"
           >
             Enable this integration
           </label>
@@ -222,7 +222,7 @@ export function IntegrationModal({
 
         {/* Submit Error */}
         {errors.submit && (
-          <div className="text-sm text-red-600">{errors.submit}</div>
+          <div className="text-sm text-red-600 dark:text-red-400">{errors.submit}</div>
         )}
       </div>
 

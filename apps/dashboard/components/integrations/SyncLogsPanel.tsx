@@ -133,23 +133,23 @@ export function SyncLogsPanel({
       <div className="space-y-4">
         {/* Stats Bar */}
         {stats && (
-          <div className="grid grid-cols-4 gap-4 bg-gray-50 rounded-lg p-4">
+          <div className="grid grid-cols-4 gap-4 bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total Syncs</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Total Syncs</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-1">{stats.total}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Success Rate</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Success Rate</p>
               <p className={`text-2xl font-bold mt-1 ${getSuccessRateColor(stats.successRate)}`}>
                 {stats.successRate.toFixed(1)}%
               </p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Successful</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Successful</p>
               <p className="text-2xl font-bold text-green-600 mt-1">{stats.success}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Failed</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wide">Failed</p>
               <p className="text-2xl font-bold text-red-600 mt-1">{stats.failed}</p>
             </div>
           </div>
@@ -190,8 +190,8 @@ export function SyncLogsPanel({
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <p className="text-sm text-red-800">{error}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+            <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
           </div>
         )}
 
@@ -199,52 +199,52 @@ export function SyncLogsPanel({
         {!isLoading && !error && logs.length === 0 && (
           <div className="text-center py-12">
             <div className="text-4xl mb-2">📊</div>
-            <p className="text-gray-600">No sync logs found</p>
+            <p className="text-gray-600 dark:text-gray-400">No sync logs found</p>
             {(statusFilter || actionFilter) && (
-              <p className="text-sm text-gray-500 mt-1">Try adjusting your filters</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Try adjusting your filters</p>
             )}
           </div>
         )}
 
         {/* Logs Table */}
         {!isLoading && !error && logs.length > 0 && (
-          <div className="overflow-x-auto border rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="overflow-x-auto border dark:border-gray-700 rounded-lg">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+              <thead className="bg-gray-50 dark:bg-gray-800/50">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Time
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Ticket
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Action
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Duration
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Link
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {logs.map((log) => (
                   <Fragment key={log.id}>
                     <tr
                       onClick={() => handleRowClick(log)}
                       className={`${
-                        log.status === 'failed' && log.error ? 'cursor-pointer hover:bg-gray-50' : ''
+                        log.status === 'failed' && log.error ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''
                       }`}
                     >
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                         {timeAgo(log.syncedAt)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900">
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
                         <div
                           className="max-w-xs truncate"
                           title={log.ticket?.title || 'Unknown Ticket'}
@@ -270,7 +270,7 @@ export function SyncLogsPanel({
                           {log.status}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">
+                      <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100 whitespace-nowrap">
                         {formatDuration(log.durationMs)}
                       </td>
                       <td className="px-4 py-3 text-sm whitespace-nowrap">
@@ -297,16 +297,16 @@ export function SyncLogsPanel({
                             </svg>
                           </a>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400 dark:text-gray-500">-</span>
                         )}
                       </td>
                     </tr>
                     {expandedLogId === log.id && log.error && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-3 bg-red-50">
+                        <td colSpan={6} className="px-4 py-3 bg-red-50 dark:bg-red-900/20">
                           <div className="text-sm">
-                            <p className="font-medium text-red-800 mb-1">Error Details:</p>
-                            <p className="text-red-700 font-mono text-xs whitespace-pre-wrap">
+                            <p className="font-medium text-red-800 dark:text-red-300 mb-1">Error Details:</p>
+                            <p className="text-red-700 dark:text-red-400 font-mono text-xs whitespace-pre-wrap">
                               {log.error}
                             </p>
                           </div>
@@ -331,7 +331,7 @@ export function SyncLogsPanel({
             >
               Previous
             </Button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-600 dark:text-gray-400">
               Page {page} of {totalPages}
             </span>
             <Button

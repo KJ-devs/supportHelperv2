@@ -22,14 +22,14 @@ export function TicketCard({ ticket }: TicketCardProps) {
 
   return (
     <Link href={`/dashboard/tickets/${ticket.id}`}>
-      <div className="bg-white rounded-lg shadow hover:shadow-md transition-shadow p-4 border border-gray-200 hover:border-blue-300 cursor-pointer">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow hover:shadow-md transition-shadow p-4 border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 cursor-pointer">
         {/* Header */}
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 truncate mb-1">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate mb-1">
               {ticket.title}
             </h3>
-            <p className="text-sm text-gray-600 line-clamp-2">{ticket.description}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{ticket.description}</p>
           </div>
           <SeverityBadge severity={ticket.severity} />
         </div>
@@ -41,7 +41,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t">
+        <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-3 border-t dark:border-gray-700">
           <div className="flex items-center space-x-2">
             {ticket.application && (
               <span className="flex items-center">
@@ -54,7 +54,7 @@ export function TicketCard({ ticket }: TicketCardProps) {
 
         {/* AI Summary */}
         {ticket.aiSummary && (
-          <div className="mt-2 text-xs text-gray-600 bg-blue-50 rounded p-2">
+          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 rounded p-2">
             <span className="font-medium">🤖 IA:</span> {ticket.aiSummary.substring(0, 100)}
             {ticket.aiSummary.length > 100 && '...'}
           </div>

@@ -16,11 +16,11 @@ interface StatsCardProps {
 }
 
 const variantStyles = {
-  default: 'bg-gray-50 text-gray-900',
-  primary: 'bg-blue-50 text-blue-900',
-  success: 'bg-green-50 text-green-900',
-  warning: 'bg-yellow-50 text-yellow-900',
-  danger: 'bg-red-50 text-red-900',
+  default: 'bg-gray-50 text-gray-900 dark:bg-gray-800/50 dark:text-gray-100',
+  primary: 'bg-blue-50 text-blue-900 dark:bg-blue-900/20 dark:text-blue-100',
+  success: 'bg-green-50 text-green-900 dark:bg-green-900/20 dark:text-green-100',
+  warning: 'bg-yellow-50 text-yellow-900 dark:bg-yellow-900/20 dark:text-yellow-100',
+  danger: 'bg-red-50 text-red-900 dark:bg-red-900/20 dark:text-red-100',
 };
 
 export function StatsCard({
@@ -38,7 +38,7 @@ export function StatsCard({
         {trend && (
           <span
             className={`text-sm font-medium ${
-              trend.isPositive ? 'text-green-600' : 'text-red-600'
+              trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}
           >
             {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
