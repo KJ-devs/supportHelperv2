@@ -1,749 +1,1216 @@
 # API Reference
 
-<div align="center">
+Complete REST API documentation for Support Helper Platform.
 
-Complete REST API documentation for Support Helper.
-
-[![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0-85EA2D?style=flat-square&logo=openapi-initiative&logoColor=white)](http://localhost:3001/api/docs)
-[![Swagger](https://img.shields.io/badge/Swagger-UI-85EA2D?style=flat-square&logo=swagger&logoColor=white)](http://localhost:3001/api/docs)
-
-**Interactive Documentation**: Access Swagger UI at `http://localhost:3001/api/docs` when running locally.
-
-</div>
+**Base URL**: `http://localhost:3001/api`
+**Interactive Docs**: [Swagger UI](http://localhost:3001/api/docs)
 
 ---
 
 ## Table of Contents
 
-- [Overview](#overview)
 - [Authentication](#authentication)
-- [Endpoints](#endpoints)
-  - [Auth](#auth)
-  - [Tickets](#tickets)
-  - [Media](#media)
-  - [Applications](#applications)
-  - [Users](#users)
-  - [GitHub](#github)
-  - [SDK](#sdk-endpoints)
-- [Error Handling](#error-handling)
-- [Rate Limiting](#rate-limiting)
-- [Webhooks](#webhooks)
+- [Auth](#auth)
+- [Users](#users)
+- [Tenants](#tenants)
+- [Applications](#applications)
+- [Tickets](#tickets)
+- [SDK Tickets](#sdk-tickets)
+- [Media](#media)
+- [AI Agent](#ai-agent)
+- [Analytics](#analytics)
+- [Classification Feedback](#classification-feedback)
+- [GitHub OAuth](#github-oauth)
+- [GitHub Repositories](#github-repositories)
+- [GitHub Webhooks](#github-webhooks)
+- [Ticket GitHub Integration](#ticket-github-integration)
+- [Integrations](#integrations)
+- [Health](#health)
+- [Error Responses](#error-responses)
 
-## Overview
-
-### Base URL
-
-```
-Development: http://localhost:3001/api
-Production:  https://api.support-helper.com/api
-```
-
-### Request Format
-
-- Content-Type: `application/json`
-- All timestamps in ISO 8601 format
-- UUIDs for all IDs
-
-### Response Format
-
-```json
-{
-  "data": { ... },
-  "meta": {
-    "timestamp": "2024-01-15T10:30:00Z",
-    "requestId": "req_abc123"
-  }
-}
-```
+---
 
 ## Authentication
 
 ### JWT Authentication (Dashboard)
 
-Used for dashboard users.
+Most endpoints require a JWT Bearer token obtained via login:
 
-**Headers:**
-```
-Authorization: Bearer <jwt_token>
-```
+```bash
+# 1. Login to get tokens
+TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"password123"}' | jq -r '.accessToken')
 
-**Obtaining a token:**
-```http
-POST /api/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "password123"
-}
-```
-
-**Response:**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "role": "admin",
-    "tenantId": "uuid"
-  }
-}
+# 2. Use token in subsequent requests
+curl http://localhost:3001/api/tickets \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ### SDK Key Authentication
 
-Used for SDK clients (web applications).
+SDK endpoints use an API key passed via the `x-sdk-key` header:
 
-**Headers:**
+```bash
+curl -X POST http://localhost:3001/api/sdk/tickets/report \
+  -H "x-sdk-key: sk_live_your-sdk-key-here" \
+  -F "title=Bug report" \
+  -F "description=Something is broken"
 ```
-x-sdk-key: sk_live_abc123...
-```
 
-SDK keys are obtained from the Applications settings in the dashboard.
+---
 
-## Endpoints
+## Auth
 
-### Auth
-
-#### POST /api/auth/register
+### POST /api/auth/register
 
 Register a new user and tenant.
 
-**Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securePassword123",
-  "name": "John Doe",
-  "tenantName": "Acme Corp"
-}
+```bash
+curl -X POST http://localhost:3001/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "john@example.com",
+    "password": "SecurePass123!",
+    "name": "John Doe",
+    "tenantName": "Acme Corp"
+  }'
 ```
 
-**Response:** `201 Created`
+**Response** `201`:
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs...",
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs...",
   "user": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
-    "email": "user@example.com",
+    "email": "john@example.com",
     "name": "John Doe",
-    "role": "admin",
-    "tenantId": "550e8400-e29b-41d4-a716-446655440001"
+    "role": "owner"
   }
 }
 ```
 
-#### POST /api/auth/login
+### POST /api/auth/login
 
-Authenticate and get JWT token.
+Login with email and password.
 
-**Request:**
-```json
-{
-  "email": "user@example.com",
-  "password": "securePassword123"
-}
+```bash
+curl -X POST http://localhost:3001/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"john@example.com","password":"SecurePass123!"}'
 ```
 
-**Response:** `200 OK`
+**Response** `200`:
 ```json
 {
   "accessToken": "eyJhbGciOiJIUzI1NiIs...",
-  "user": { ... }
+  "refreshToken": "eyJhbGciOiJIUzI1NiIs..."
 }
 ```
 
-#### GET /api/auth/me
+### POST /api/auth/refresh
 
-Get current authenticated user.
+Refresh access token.
 
-**Headers:** `Authorization: Bearer <token>`
+```bash
+curl -X POST http://localhost:3001/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken":"eyJhbGciOiJIUzI1NiIs..."}'
+```
 
-**Response:** `200 OK`
+### POST /api/auth/logout
+
+Logout user (client should discard tokens). **Requires JWT.**
+
+```bash
+curl -X POST http://localhost:3001/api/auth/logout \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/auth/me
+
+Get current user info. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/auth/me \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response** `200`:
 ```json
 {
-  "id": "uuid",
-  "email": "user@example.com",
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "tenantId": "660e8400-e29b-41d4-a716-446655440000",
+  "email": "john@example.com",
   "name": "John Doe",
-  "role": "admin",
-  "tenantId": "uuid"
-}
-```
-
----
-
-### Tickets
-
-#### GET /api/tickets
-
-List tickets with filtering and pagination.
-
-**Headers:** `Authorization: Bearer <token>`
-
-**Query Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `page` | number | Page number (default: 1) |
-| `limit` | number | Items per page (default: 20, max: 100) |
-| `status` | string | Filter by status: `new`, `open`, `in_progress`, `resolved`, `closed` |
-| `type` | string | Filter by type: `bug`, `feature`, `question`, `other` |
-| `severity` | string | Filter by severity: `low`, `medium`, `high`, `critical` |
-| `assignedTo` | uuid | Filter by assignee |
-| `applicationId` | uuid | Filter by application |
-| `search` | string | Search in title and description |
-| `sortBy` | string | Sort field (default: `createdAt`) |
-| `sortOrder` | string | `asc` or `desc` (default: `desc`) |
-
-**Response:** `200 OK`
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "title": "Login button not working",
-      "description": "When I click the login button...",
-      "status": "new",
-      "type": "bug",
-      "severity": "high",
-      "priority": 1,
-      "aiSummary": "User unable to login due to...",
-      "applicationId": "uuid",
-      "reporterId": "uuid",
-      "assignedTo": null,
-      "createdAt": "2024-01-15T10:30:00Z",
-      "updatedAt": "2024-01-15T10:30:00Z"
-    }
-  ],
-  "meta": {
-    "total": 150,
-    "page": 1,
-    "limit": 20,
-    "totalPages": 8
+  "role": "owner",
+  "tenant": {
+    "id": "660e8400-e29b-41d4-a716-446655440000",
+    "name": "Acme Corp",
+    "slug": "acme-corp",
+    "plan": "free"
   }
 }
 ```
 
-#### GET /api/tickets/:id
+---
 
-Get a single ticket with all details.
+## Users
 
-**Response:** `200 OK`
-```json
-{
-  "id": "uuid",
-  "title": "Login button not working",
-  "description": "When I click the login button...",
-  "status": "new",
-  "type": "bug",
-  "typeConfidence": 0.95,
-  "severity": "high",
-  "severityConfidence": 0.87,
-  "priority": 1,
-  "reproductionSteps": [
-    "Go to login page",
-    "Enter credentials",
-    "Click login button",
-    "Nothing happens"
-  ],
-  "userContext": {
-    "os": "Windows 11",
-    "browser": "Chrome 120",
-    "viewport": { "width": 1920, "height": 1080 },
-    "url": "https://app.example.com/login"
-  },
-  "aiSummary": "User unable to login. The login button appears unresponsive...",
-  "aiAnalysis": {
-    "errorType": "UI interaction failure",
-    "possibleCauses": ["JavaScript error", "Event handler not attached"],
-    "suggestedFix": "Check browser console for errors"
-  },
-  "keywords": ["login", "button", "unresponsive"],
-  "media": [
-    {
-      "id": "uuid",
-      "type": "video",
-      "storageUrl": "https://...",
-      "durationMs": 15000,
-      "processingStatus": "completed"
-    }
-  ],
-  "application": {
-    "id": "uuid",
-    "name": "My Web App"
-  },
-  "reporter": {
-    "id": "uuid",
-    "name": "John Doe"
-  },
-  "assignee": null,
-  "createdAt": "2024-01-15T10:30:00Z",
-  "updatedAt": "2024-01-15T10:30:00Z"
-}
+All endpoints require JWT authentication.
+
+### GET /api/users
+
+List all users in tenant.
+
+```bash
+curl http://localhost:3001/api/users \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-#### POST /api/tickets
+### GET /api/users/:id
 
-Create a new ticket (dashboard users).
+Get user by ID.
 
-**Request:**
-```json
-{
-  "title": "Feature request: Dark mode",
-  "description": "It would be great to have a dark mode option...",
-  "applicationId": "uuid",
-  "type": "feature",
-  "severity": "low"
-}
+```bash
+curl http://localhost:3001/api/users/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-**Response:** `201 Created`
+### POST /api/users
 
-#### PATCH /api/tickets/:id
+Create/invite a new user (requires owner or admin role).
 
-Update a ticket.
-
-**Request:**
-```json
-{
-  "status": "in_progress",
-  "assignedTo": "uuid",
-  "priority": 2
-}
+```bash
+curl -X POST http://localhost:3001/api/users \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "jane@example.com",
+    "name": "Jane Smith",
+    "password": "TempPass123!",
+    "role": "agent"
+  }'
 ```
 
-**Response:** `200 OK`
+### PATCH /api/users/:id
 
-#### POST /api/tickets/:id/assign
+Update user (role changes require owner or admin).
 
-Assign ticket to a user.
-
-**Request:**
-```json
-{
-  "userId": "uuid"
-}
+```bash
+curl -X PATCH http://localhost:3001/api/users/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"role": "admin"}'
 ```
 
-#### GET /api/tickets/search
+### DELETE /api/users/:id
 
-Semantic search across tickets.
+Delete user (requires owner or admin role).
 
-**Query Parameters:**
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `q` | string | Search query |
-| `limit` | number | Max results (default: 10) |
+```bash
+curl -X DELETE http://localhost:3001/api/users/550e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
 
-**Response:** `200 OK`
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "title": "...",
-      "score": 0.95
-    }
-  ]
-}
+### PATCH /api/users/profile
+
+Update current user profile.
+
+```bash
+curl -X PATCH http://localhost:3001/api/users/profile \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "John D.", "email": "newemail@example.com"}'
+```
+
+### PATCH /api/users/password
+
+Change current user password.
+
+```bash
+curl -X PATCH http://localhost:3001/api/users/password \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword": "OldPass123!", "newPassword": "NewPass456!"}'
+```
+
+### PATCH /api/users/notifications
+
+Update notification preferences.
+
+```bash
+curl -X PATCH http://localhost:3001/api/users/notifications \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"emailNotifications": true, "slackNotifications": false}'
 ```
 
 ---
 
-### Media
+## Tenants
 
-#### POST /api/media/upload-url
+All endpoints require JWT authentication.
 
-Request a pre-signed URL for direct S3 upload.
+### GET /api/tenants/current
 
-**Request:**
-```json
-{
-  "ticketId": "uuid",
-  "type": "video",
-  "filename": "recording.webm",
-  "contentType": "video/webm",
-  "size": 5242880
-}
+Get current tenant info.
+
+```bash
+curl http://localhost:3001/api/tenants/current \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-**Response:** `200 OK`
-```json
-{
-  "uploadUrl": "https://s3.../presigned-url",
-  "mediaId": "uuid",
-  "storageKey": "videos/uuid/recording.webm",
-  "expiresAt": "2024-01-15T11:00:00Z"
-}
+### GET /api/tenants/current/stats
+
+Get current tenant statistics.
+
+```bash
+curl http://localhost:3001/api/tenants/current/stats \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-#### POST /api/media/:id/confirm
+### PATCH /api/tenants/current
 
-Confirm upload completion and trigger processing.
+Update current tenant.
 
-**Response:** `200 OK`
-```json
-{
-  "success": true,
-  "processingStatus": "pending"
-}
-```
-
-#### GET /api/media/:id
-
-Get media details.
-
-**Response:** `200 OK`
-```json
-{
-  "id": "uuid",
-  "ticketId": "uuid",
-  "type": "video",
-  "storageUrl": "https://...",
-  "fileSize": 5242880,
-  "mimeType": "video/webm",
-  "durationMs": 15000,
-  "processingStatus": "completed",
-  "metadata": {
-    "width": 1920,
-    "height": 1080,
-    "fps": 30
-  },
-  "createdAt": "2024-01-15T10:30:00Z"
-}
-```
-
-#### GET /api/media/:id/download-url
-
-Get a temporary download URL.
-
-**Response:** `200 OK`
-```json
-{
-  "downloadUrl": "https://s3.../presigned-download-url",
-  "expiresAt": "2024-01-15T11:00:00Z"
-}
+```bash
+curl -X PATCH http://localhost:3001/api/tenants/current \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Acme Corp Updated"}'
 ```
 
 ---
 
-### Applications
+## Applications
 
-#### GET /api/applications
+All endpoints require JWT authentication.
 
-List all applications for the tenant.
-
-**Response:** `200 OK`
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "name": "My Web App",
-      "platform": "web",
-      "sdkKey": "sk_live_abc123...",
-      "githubRepo": "owner/repo",
-      "settings": {},
-      "createdAt": "2024-01-15T10:30:00Z"
-    }
-  ]
-}
-```
-
-#### POST /api/applications
+### POST /api/applications
 
 Create a new application.
 
-**Request:**
+```bash
+curl -X POST http://localhost:3001/api/applications \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Web App", "url": "https://myapp.example.com"}'
+```
+
+**Response** `201`:
 ```json
 {
+  "id": "770e8400-e29b-41d4-a716-446655440000",
   "name": "My Web App",
-  "platform": "web",
-  "githubRepo": "owner/repo"
+  "url": "https://myapp.example.com",
+  "sdkKey": "sk_live_abc123def456...",
+  "tenantId": "660e8400-e29b-41d4-a716-446655440000",
+  "createdAt": "2024-01-16T12:00:00Z"
 }
 ```
 
-**Response:** `201 Created`
+### GET /api/applications
 
-#### PATCH /api/applications/:id
+List all applications.
 
-Update an application.
+```bash
+curl http://localhost:3001/api/applications \
+  -H "Authorization: Bearer $TOKEN"
+```
 
-#### DELETE /api/applications/:id
+### GET /api/applications/:id
 
-Delete an application.
+Get application by ID.
 
-#### POST /api/applications/:id/regenerate-key
+```bash
+curl http://localhost:3001/api/applications/770e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/applications/:id/stats
+
+Get application statistics.
+
+```bash
+curl http://localhost:3001/api/applications/770e8400-e29b-41d4-a716-446655440000/stats \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### PATCH /api/applications/:id
+
+Update application.
+
+```bash
+curl -X PATCH http://localhost:3001/api/applications/770e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "My Updated App"}'
+```
+
+### POST /api/applications/:id/regenerate-key
 
 Regenerate SDK key.
 
-**Response:** `200 OK`
+```bash
+curl -X POST http://localhost:3001/api/applications/770e8400-e29b-41d4-a716-446655440000/regenerate-key \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### DELETE /api/applications/:id
+
+Delete application.
+
+```bash
+curl -X DELETE http://localhost:3001/api/applications/770e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Tickets
+
+All endpoints require JWT authentication. Rate limited: 100 req/min.
+
+### POST /api/tickets
+
+Create a new ticket.
+
+```bash
+curl -X POST http://localhost:3001/api/tickets \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Login button not working",
+    "description": "Clicking the login button does nothing on Chrome 120",
+    "applicationId": "770e8400-e29b-41d4-a716-446655440000",
+    "type": "bug",
+    "severity": "high"
+  }'
+```
+
+### GET /api/tickets
+
+Get all tickets with filters and pagination.
+
+```bash
+# Basic list
+curl "http://localhost:3001/api/tickets" \
+  -H "Authorization: Bearer $TOKEN"
+
+# With filters
+curl "http://localhost:3001/api/tickets?status=open&severity=high&page=1&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/tickets/stats
+
+Get ticket statistics.
+
+```bash
+curl http://localhost:3001/api/tickets/stats \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/tickets/search
+
+Search tickets using MeiliSearch.
+
+```bash
+curl "http://localhost:3001/api/tickets/search?q=login+button&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/tickets/:id
+
+Get a ticket by ID.
+
+```bash
+curl http://localhost:3001/api/tickets/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/tickets/:id/similar
+
+Find similar tickets using vector search.
+
+```bash
+curl "http://localhost:3001/api/tickets/880e8400-e29b-41d4-a716-446655440000/similar?limit=5" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### PATCH /api/tickets/:id
+
+Update a ticket.
+
+```bash
+curl -X PATCH http://localhost:3001/api/tickets/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "in_progress", "severity": "critical"}'
+```
+
+### POST /api/tickets/:id/assign
+
+Assign ticket to a user.
+
+```bash
+curl -X POST http://localhost:3001/api/tickets/880e8400-e29b-41d4-a716-446655440000/assign \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"userId": "550e8400-e29b-41d4-a716-446655440000"}'
+```
+
+### DELETE /api/tickets/:id
+
+Delete a ticket (soft delete).
+
+```bash
+curl -X DELETE http://localhost:3001/api/tickets/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## SDK Tickets
+
+SDK endpoints use `x-sdk-key` authentication. Rate limited: 50 req/min.
+
+### POST /api/sdk/tickets
+
+Create a ticket from SDK (client application).
+
+```bash
+curl -X POST http://localhost:3001/api/sdk/tickets \
+  -H "x-sdk-key: sk_live_your-sdk-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Bug in checkout flow",
+    "description": "Payment form crashes on submit"
+  }'
+```
+
+**Response** `201`:
 ```json
 {
-  "sdkKey": "sk_live_new_key..."
+  "success": true,
+  "ticket": {
+    "id": "880e8400-e29b-41d4-a716-446655440000",
+    "title": "Bug in checkout flow",
+    "status": "open",
+    "createdAt": "2024-01-16T12:00:00Z"
+  }
+}
+```
+
+### POST /api/sdk/tickets/report
+
+Submit a full bug report with video, description, and AI processing. Accepts multipart form data.
+
+```bash
+curl -X POST http://localhost:3001/api/sdk/tickets/report \
+  -H "x-sdk-key: sk_live_your-sdk-key" \
+  -F "title=Login page crashes" \
+  -F "description=The login page shows a white screen after entering credentials" \
+  -F "video=@recording.webm" \
+  -F 'userContext={"os":"Windows 11","browser":"Chrome 120","viewport":"1920x1080"}'
+```
+
+**Response** `201`:
+```json
+{
+  "success": true,
+  "ticket": {
+    "id": "880e8400-e29b-41d4-a716-446655440000",
+    "title": "Login page crashes",
+    "status": "open",
+    "createdAt": "2024-01-16T12:00:00Z"
+  },
+  "aiAnalysis": {
+    "summary": "User reports white screen on login page after credential entry",
+    "enrichedDescription": "...",
+    "severity": "high",
+    "severityConfidence": 0.85,
+    "type": "bug",
+    "typeConfidence": 0.92,
+    "keywords": ["login", "white-screen", "crash"],
+    "reproductionSteps": ["Navigate to login page", "Enter credentials", "Click submit"]
+  },
+  "video": {
+    "received": true,
+    "filename": "recording.webm",
+    "size": 2456789,
+    "mimeType": "video/webm",
+    "mediaId": "990e8400-e29b-41d4-a716-446655440000",
+    "storageKey": "tenant-id/ticket-id/video-1705401600.webm"
+  }
 }
 ```
 
 ---
 
-### Users
+## Media
 
-#### GET /api/users
+All endpoints require JWT authentication.
 
-List users in tenant.
+### POST /api/media/presigned-url
 
-#### GET /api/users/:id
+Request presigned URL for file upload.
 
-Get user details.
+```bash
+curl -X POST http://localhost:3001/api/media/presigned-url \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticketId": "880e8400-e29b-41d4-a716-446655440000",
+    "fileName": "screenshot.png",
+    "mimeType": "image/png",
+    "fileSize": 245678
+  }'
+```
 
-#### PATCH /api/users/:id
+**Response** `201`:
+```json
+{
+  "mediaId": "990e8400-e29b-41d4-a716-446655440000",
+  "uploadUrl": "http://localhost:9000/videos/...",
+  "storageKey": "tenant-id/ticket-id/screenshot.png",
+  "expiresIn": 3600,
+  "maxSize": 104857600
+}
+```
 
-Update user.
+### POST /api/media/complete
 
-#### DELETE /api/users/:id
+Complete upload and trigger AI analysis.
 
-Remove user from tenant.
+```bash
+curl -X POST http://localhost:3001/api/media/complete \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"mediaId": "990e8400-e29b-41d4-a716-446655440000"}'
+```
+
+### GET /api/media/ticket/:ticketId
+
+Get all media for a ticket.
+
+```bash
+curl http://localhost:3001/api/media/ticket/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/media/:id
+
+Get media by ID with download URL.
+
+```bash
+curl http://localhost:3001/api/media/990e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/media/:id/url
+
+Get presigned download URL for media.
+
+```bash
+curl http://localhost:3001/api/media/990e8400-e29b-41d4-a716-446655440000/url \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/media/:mediaId/events
+
+Get video events for a media item.
+
+```bash
+curl "http://localhost:3001/api/media/990e8400-e29b-41d4-a716-446655440000/events?limit=50&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### DELETE /api/media/:id
+
+Delete media file and record.
+
+```bash
+curl -X DELETE http://localhost:3001/api/media/990e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ---
 
-### GitHub
+## AI Agent
 
-#### GET /api/github/repos
+All endpoints require JWT authentication.
 
-List connected GitHub repositories.
+### POST /api/agent/sessions/:ticketId
 
-#### POST /api/github/connect
+Start AI agent session for a ticket.
 
-Initiate GitHub OAuth flow.
+```bash
+curl -X POST http://localhost:3001/api/agent/sessions/880e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
 
-#### POST /api/github/issues
+### GET /api/agent/sessions/:sessionId
+
+Get agent session with messages.
+
+```bash
+curl http://localhost:3001/api/agent/sessions/aa0e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/agent/sessions/:sessionId/messages
+
+Send message to agent.
+
+```bash
+curl -X POST http://localhost:3001/api/agent/sessions/aa0e8400-e29b-41d4-a716-446655440000/messages \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Can you analyze the crash logs for this ticket?"}'
+```
+
+---
+
+## Analytics
+
+All endpoints require JWT authentication.
+
+### GET /api/analytics/overview
+
+Get dashboard overview statistics.
+
+```bash
+curl "http://localhost:3001/api/analytics/overview?period=week" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/analytics/trends
+
+Get ticket trends over time.
+
+```bash
+curl "http://localhost:3001/api/analytics/trends?period=week&days=30" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/analytics/performance
+
+Get performance metrics.
+
+```bash
+curl http://localhost:3001/api/analytics/performance \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/analytics/agents
+
+Get agent performance statistics.
+
+```bash
+curl http://localhost:3001/api/analytics/agents \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/analytics/applications
+
+Get application statistics.
+
+```bash
+curl http://localhost:3001/api/analytics/applications \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Classification Feedback
+
+All endpoints require JWT authentication.
+
+### POST /api/feedback
+
+Create classification feedback for a ticket.
+
+```bash
+curl -X POST http://localhost:3001/api/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "ticketId": "880e8400-e29b-41d4-a716-446655440000",
+    "field": "severity",
+    "originalValue": "medium",
+    "correctedValue": "critical",
+    "reason": "This affects all users in production"
+  }'
+```
+
+### GET /api/feedback?ticketId=:ticketId
+
+List feedback for a ticket.
+
+```bash
+curl "http://localhost:3001/api/feedback?ticketId=880e8400-e29b-41d4-a716-446655440000" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/feedback/:id
+
+Get single feedback by ID.
+
+```bash
+curl http://localhost:3001/api/feedback/bb0e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### PATCH /api/feedback/:id
+
+Update feedback.
+
+```bash
+curl -X PATCH http://localhost:3001/api/feedback/bb0e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"correctedValue": "high"}'
+```
+
+### DELETE /api/feedback/:id
+
+Delete feedback.
+
+```bash
+curl -X DELETE http://localhost:3001/api/feedback/bb0e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## GitHub OAuth
+
+### GET /api/github/oauth/authorize
+
+Get GitHub OAuth authorization URL. **Requires JWT.**
+
+```bash
+curl "http://localhost:3001/api/github/oauth/authorize?redirect=http://localhost:3000/dashboard/github" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response** `200`:
+```json
+{
+  "url": "https://github.com/login/oauth/authorize?client_id=...&state=...",
+  "state": "encrypted-state-token"
+}
+```
+
+### GET /api/github/oauth/callback
+
+GitHub OAuth callback handler (called by GitHub, public endpoint).
+
+### GET /api/github/oauth/status
+
+Check GitHub connection status. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/github/oauth/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Response** `200`:
+```json
+{
+  "connected": true,
+  "connectionId": "cc0e8400-e29b-41d4-a716-446655440000",
+  "repoCount": 5,
+  "createdAt": "2024-01-16T12:00:00Z"
+}
+```
+
+### DELETE /api/github/oauth/disconnect
+
+Disconnect GitHub integration. **Requires JWT.**
+
+```bash
+curl -X DELETE http://localhost:3001/api/github/oauth/disconnect \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## GitHub Repositories
+
+All endpoints require JWT authentication.
+
+### GET /api/github/repos
+
+List user repositories from GitHub.
+
+```bash
+curl "http://localhost:3001/api/github/repos?page=1&perPage=30" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/github/repos/connected
+
+List connected repositories.
+
+```bash
+curl http://localhost:3001/api/github/repos/connected \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/github/repos/:owner/:repo
+
+Get repository details.
+
+```bash
+curl http://localhost:3001/api/github/repos/octocat/hello-world \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/github/repos/link
+
+Link repository to application.
+
+```bash
+curl -X POST http://localhost:3001/api/github/repos/link \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"applicationId": "770e8400-...", "repository": "octocat/hello-world"}'
+```
+
+### DELETE /api/github/repos/link/:applicationId
+
+Unlink repository from application.
+
+```bash
+curl -X DELETE http://localhost:3001/api/github/repos/link/770e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## GitHub Webhooks
+
+### POST /api/github/webhooks
+
+Handle incoming GitHub webhook events (public, signature-verified).
+
+```bash
+curl -X POST http://localhost:3001/api/github/webhooks \
+  -H "Content-Type: application/json" \
+  -H "x-github-event: issues" \
+  -H "x-hub-signature-256: sha256=..." \
+  -H "x-github-delivery: abc-123" \
+  -d '{"action":"opened","issue":{...}}'
+```
+
+---
+
+## Ticket GitHub Integration
+
+All endpoints require JWT authentication. URLs are nested under `/api/tickets/:ticketId/github`.
+
+### POST /api/tickets/:ticketId/github/create-issue
 
 Create GitHub issue from ticket.
 
-**Request:**
-```json
-{
-  "ticketId": "uuid",
-  "repo": "owner/repo",
-  "title": "Bug: Login button not working",
-  "body": "...",
-  "labels": ["bug", "high-priority"]
-}
+```bash
+curl -X POST http://localhost:3001/api/tickets/880e8400-.../github/create-issue \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"repository": "octocat/hello-world", "labels": ["bug"]}'
 ```
 
-#### GET /api/github/issues/:ticketId
+### GET /api/tickets/:ticketId/github/issues
 
-Get linked GitHub issues for a ticket.
+Get linked GitHub issues.
+
+```bash
+curl http://localhost:3001/api/tickets/880e8400-.../github/issues \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/tickets/:ticketId/github/related
+
+Search related GitHub issues.
+
+```bash
+curl "http://localhost:3001/api/tickets/880e8400-.../github/related?repository=octocat/hello-world" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/tickets/:ticketId/github/sync
+
+Sync ticket to GitHub issues.
+
+```bash
+curl -X POST http://localhost:3001/api/tickets/880e8400-.../github/sync \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### DELETE /api/tickets/:ticketId/github/issues/:issueId
+
+Unlink GitHub issue from ticket.
+
+```bash
+curl -X DELETE http://localhost:3001/api/tickets/880e8400-.../github/issues/dd0e8400-... \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/tickets/:ticketId/github/user-story
+
+Create GitHub User Story from ticket.
+
+```bash
+curl -X POST http://localhost:3001/api/tickets/880e8400-.../github/user-story \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"repository": "octocat/hello-world"}'
+```
 
 ---
 
-### SDK Endpoints
+## Integrations
 
-These endpoints use SDK key authentication (`x-sdk-key` header).
+All endpoints require JWT authentication. Supports Jira, HubSpot, Slack, Notion, Discord.
 
-#### POST /api/sdk/tickets
+### POST /api/integrations
 
-Create a ticket from SDK.
+Create a new integration.
 
-**Headers:** `x-sdk-key: sk_live_...`
-
-**Request:**
-```json
-{
-  "title": "Bug report",
-  "description": "Something went wrong...",
-  "userContext": {
-    "os": "Windows 11",
-    "browser": "Chrome 120",
-    "viewport": { "width": 1920, "height": 1080 },
-    "url": "https://app.example.com/dashboard"
-  },
-  "sessionId": "session_abc123"
-}
+```bash
+curl -X POST http://localhost:3001/api/integrations \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "jira",
+    "name": "Jira Cloud",
+    "config": {
+      "baseUrl": "https://mycompany.atlassian.net",
+      "email": "user@example.com",
+      "apiToken": "jira-api-token",
+      "projectKey": "SUP"
+    }
+  }'
 ```
 
-**Response:** `201 Created`
-```json
-{
-  "id": "uuid",
-  "status": "new"
-}
+### GET /api/integrations
+
+List all integrations.
+
+```bash
+curl "http://localhost:3001/api/integrations?type=jira&enabled=true" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-#### POST /api/sdk/media/upload-url
+### GET /api/integrations/types
 
-Request upload URL for SDK uploads.
+Get available integration types.
 
-**Headers:** `x-sdk-key: sk_live_...`
-
-**Request:**
-```json
-{
-  "ticketId": "uuid",
-  "type": "video",
-  "filename": "recording.webm",
-  "contentType": "video/webm",
-  "size": 5242880
-}
+```bash
+curl http://localhost:3001/api/integrations/types \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
-#### POST /api/sdk/media/:id/confirm
+### GET /api/integrations/:id
 
-Confirm SDK upload.
+Get integration details.
 
-**Headers:** `x-sdk-key: sk_live_...`
+```bash
+curl http://localhost:3001/api/integrations/ee0e8400-e29b-41d4-a716-446655440000 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### PATCH /api/integrations/:id
+
+Update an integration.
+
+```bash
+curl -X PATCH http://localhost:3001/api/integrations/ee0e8400-... \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Updated Jira", "enabled": false}'
+```
+
+### DELETE /api/integrations/:id
+
+Delete an integration.
+
+```bash
+curl -X DELETE http://localhost:3001/api/integrations/ee0e8400-... \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/integrations/:id/test
+
+Test integration connection.
+
+```bash
+curl -X POST http://localhost:3001/api/integrations/ee0e8400-.../test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### POST /api/integrations/:id/sync
+
+Manually trigger sync (push, pull, or both).
+
+```bash
+curl -X POST http://localhost:3001/api/integrations/ee0e8400-.../sync \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"direction": "both", "ticketIds": ["880e8400-..."]}'
+```
+
+### GET /api/integrations/:id/logs
+
+Get sync logs for an integration.
+
+```bash
+curl "http://localhost:3001/api/integrations/ee0e8400-.../logs?page=0&limit=20&status=success" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/integrations/:id/stats
+
+Get sync statistics for an integration.
+
+```bash
+curl http://localhost:3001/api/integrations/ee0e8400-.../stats \
+  -H "Authorization: Bearer $TOKEN"
+```
 
 ---
 
-## Error Handling
+## Health
 
-### Error Response Format
+### GET /api/health
+
+Basic health check (public, no auth required).
+
+```bash
+curl http://localhost:3001/api/health
+```
+
+**Response** `200`:
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-01-16T12:00:00Z",
+  "uptime": 12345,
+  "version": "0.1.0"
+}
+```
+
+### GET /api/health/live
+
+Kubernetes liveness probe (public).
+
+```bash
+curl http://localhost:3001/api/health/live
+```
+
+### GET /api/health/ready
+
+Kubernetes readiness probe (public).
+
+```bash
+curl http://localhost:3001/api/health/ready
+```
+
+### GET /api/health/full
+
+Full health check with all dependencies. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/full \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/health/db
+
+Database health check. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/db \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/health/redis
+
+Redis health check. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/redis \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/health/cron
+
+Cron jobs status. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/cron \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/health/queues
+
+Queue status. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/queues \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GET /api/health/metrics
+
+Basic process metrics. **Requires JWT.**
+
+```bash
+curl http://localhost:3001/api/health/metrics \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+---
+
+## Error Responses
+
+All errors follow this format:
 
 ```json
 {
   "statusCode": 400,
   "message": "Validation failed",
-  "error": "Bad Request",
-  "details": [
-    {
-      "field": "email",
-      "message": "Invalid email format"
-    }
-  ]
+  "error": "Bad Request"
 }
 ```
 
-### HTTP Status Codes
+### Common Status Codes
 
 | Code | Description |
 |------|-------------|
-| `200` | Success |
-| `201` | Created |
-| `400` | Bad Request - Invalid input |
-| `401` | Unauthorized - Missing/invalid auth |
+| `400` | Bad Request - Invalid input or validation error |
+| `401` | Unauthorized - Missing or invalid authentication |
 | `403` | Forbidden - Insufficient permissions |
-| `404` | Not Found |
-| `409` | Conflict - Resource already exists |
-| `422` | Unprocessable Entity - Validation error |
-| `429` | Too Many Requests - Rate limited |
+| `404` | Not Found - Resource does not exist |
+| `409` | Conflict - Resource already exists (e.g., duplicate email) |
+| `429` | Too Many Requests - Rate limit exceeded |
 | `500` | Internal Server Error |
 
-### Common Errors
+### Rate Limiting
 
-**Invalid JWT:**
-```json
-{
-  "statusCode": 401,
-  "message": "Invalid or expired token",
-  "error": "Unauthorized"
-}
+| Scope | Limit |
+|-------|-------|
+| Public endpoints (login, register) | 10 req/min |
+| Authenticated endpoints | 100 req/min |
+| SDK endpoints | 50 req/min |
+
+Rate limit headers are included in responses:
 ```
-
-**Invalid SDK Key:**
-```json
-{
-  "statusCode": 401,
-  "message": "Invalid SDK key",
-  "error": "Unauthorized"
-}
-```
-
-**Resource Not Found:**
-```json
-{
-  "statusCode": 404,
-  "message": "Ticket not found",
-  "error": "Not Found"
-}
-```
-
----
-
-## Rate Limiting
-
-Rate limits are applied per IP and per API key.
-
-### Limits
-
-| Endpoint | Limit |
-|----------|-------|
-| Auth endpoints | 10 requests/minute |
-| SDK endpoints | 100 requests/minute |
-| General API | 200 requests/minute |
-| File uploads | 20 requests/minute |
-
-### Headers
-
-```
-X-RateLimit-Limit: 200
-X-RateLimit-Remaining: 195
-X-RateLimit-Reset: 1705315800
-```
-
-### Rate Limit Exceeded
-
-```json
-{
-  "statusCode": 429,
-  "message": "Rate limit exceeded. Try again in 60 seconds.",
-  "error": "Too Many Requests"
-}
-```
-
----
-
-## Webhooks
-
-Configure webhooks to receive real-time notifications.
-
-### Events
-
-| Event | Description |
-|-------|-------------|
-| `ticket.created` | New ticket created |
-| `ticket.updated` | Ticket updated |
-| `ticket.assigned` | Ticket assigned |
-| `ticket.resolved` | Ticket resolved |
-| `media.processed` | Video processing complete |
-
-### Payload Format
-
-```json
-{
-  "event": "ticket.created",
-  "timestamp": "2024-01-15T10:30:00Z",
-  "data": {
-    "ticket": { ... }
-  },
-  "signature": "sha256=..."
-}
-```
-
-### Verifying Signatures
-
-```typescript
-import crypto from 'crypto';
-
-function verifySignature(payload: string, signature: string, secret: string): boolean {
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(payload)
-    .digest('hex');
-  return `sha256=${expected}` === signature;
-}
-```
-
----
-
-## OpenAPI Specification
-
-The full OpenAPI 3.0 specification is available at:
-- **JSON**: `/api/docs-json`
-- **YAML**: `/api/docs-yaml`
-- **Swagger UI**: `/api/docs`
-
-Export for use with API clients:
-```bash
-curl http://localhost:3001/api/docs-json > openapi.json
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1705401660
 ```
