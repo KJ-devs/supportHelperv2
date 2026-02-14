@@ -27,7 +27,7 @@ Chaque subagent a son **propre context window isole** et une **memoire persistan
 | `sdk-dev` | SDK TypeScript, Web Components | `packages/sdk-web/` |
 | `dba` | PostgreSQL, Prisma, migrations | `apps/api/prisma/` |
 | `qa-engineer` | Tests unitaires, integration, e2e | `**/*.spec.ts`, `test/` |
-| `devops` | Docker, CI/CD, Turborepo, pnpm | `docker/`, `turbo.json` |
+| `devops` | Docker, Turborepo, pnpm, infra | `docker/`, `turbo.json` |
 | `ai-engineer` | OpenAI, prompts, embeddings, RAG | `apps/api/src/ai/` |
 | `security-auditor` | OWASP, auth/authz (READ-ONLY) | cross-cutting |
 | `doc-writer` | Documentation, API docs | `docs/`, `*.md` |

@@ -242,7 +242,7 @@ Key variables (see `.env.example` for full list):
 
 ## Common Pitfalls
 
-1. **SDK CDN build** - CDN bundle is now automatically built and verified in CI/CD pipeline. For local testing, run `pnpm --filter @support-helper/sdk-web build:cdn`. See `packages/sdk-web/CDN_SETUP.md` for deployment details.
+1. **SDK CDN build** - Must be built separately: `pnpm --filter @support-helper/sdk-web build:cdn`. Verify `dist/cdn/sdk.iife.js` exists after build. See `packages/sdk-web/CDN_SETUP.md` for details.
 2. **Prisma Client not generated** - Run `pnpm db:generate` after schema changes (generates for both API and Worker)
 3. **Worker Prisma schema path** - Worker references `../api/prisma/schema.prisma`, not its own copy
 4. **Port conflicts** - API=3001, Dashboard=3000, Web=3002, PostgreSQL=5432, Redis=6379, MinIO=9000/9001, MeiliSearch=7700, MailHog=8025(UI)/1025(SMTP)
