@@ -1,0 +1,603 @@
+{
+  "info": {
+    "name": "Support Helper API",
+    "description": "Complete API collection for Support Helper Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\",\n  \"name\": \"John Doe\",\n  \"tenantName\": \"Acme Corp\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.accessToken) {",
+                  "  pm.environment.set('accessToken', jsonData.accessToken);",
+                  "}",
+                  "if (jsonData.refreshToken) {",
+                  "  pm.environment.set('refreshToken', jsonData.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/auth/refresh", "host": ["{{baseUrl}}"], "path": ["auth", "refresh"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/logout", "host": ["{{baseUrl}}"], "path": ["auth", "logout"] }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/auth/me", "host": ["{{baseUrl}}"], "path": ["auth", "me"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Get User",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"jane@example.com\",\n  \"name\": \"Jane Smith\",\n  \"password\": \"TempPass123!\",\n  \"role\": \"agent\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users", "host": ["{{baseUrl}}"], "path": ["users"] }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"admin\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"John Updated\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/profile", "host": ["{{baseUrl}}"], "path": ["users", "profile"] }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"OldPass123!\",\n  \"newPassword\": \"NewPass456!\"\n}" },
+            "url": { "raw": "{{baseUrl}}/users/password", "host": ["{{baseUrl}}"], "path": ["users", "password"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "Get Current Tenant",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/current", "host": ["{{baseUrl}}"], "path": ["tenants", "current"] }
+          }
+        },
+        {
+          "name": "Get Tenant Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tenants/current/stats", "host": ["{{baseUrl}}"], "path": ["tenants", "current", "stats"] }
+          }
+        },
+        {
+          "name": "Update Tenant",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Acme Corp Updated\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tenants/current", "host": ["{{baseUrl}}"], "path": ["tenants", "current"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Create Application",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Web App\",\n  \"url\": \"https://myapp.example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/applications", "host": ["{{baseUrl}}"], "path": ["applications"] }
+          }
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/applications", "host": ["{{baseUrl}}"], "path": ["applications"] }
+          }
+        },
+        {
+          "name": "Get Application",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}"] }
+          }
+        },
+        {
+          "name": "Get Application Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}/stats", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}", "stats"] }
+          }
+        },
+        {
+          "name": "Update Application",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Updated App\"\n}" },
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}"] }
+          }
+        },
+        {
+          "name": "Regenerate SDK Key",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}/regenerate-key", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}", "regenerate-key"] }
+          }
+        },
+        {
+          "name": "Delete Application",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/applications/{{applicationId}}", "host": ["{{baseUrl}}"], "path": ["applications", "{{applicationId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tickets",
+      "item": [
+        {
+          "name": "Create Ticket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Login button broken\",\n  \"description\": \"Cannot click login on Chrome\",\n  \"applicationId\": \"{{applicationId}}\",\n  \"type\": \"bug\",\n  \"severity\": \"high\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets", "host": ["{{baseUrl}}"], "path": ["tickets"] }
+          }
+        },
+        {
+          "name": "List Tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets?page=1&limit=20", "host": ["{{baseUrl}}"], "path": ["tickets"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Get Ticket Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/stats", "host": ["{{baseUrl}}"], "path": ["tickets", "stats"] }
+          }
+        },
+        {
+          "name": "Search Tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/search?q=login&limit=10", "host": ["{{baseUrl}}"], "path": ["tickets", "search"], "query": [{ "key": "q", "value": "login" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "Get Ticket",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}"] }
+          }
+        },
+        {
+          "name": "Find Similar Tickets",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/similar?limit=5", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "similar"], "query": [{ "key": "limit", "value": "5" }] }
+          }
+        },
+        {
+          "name": "Update Ticket",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"in_progress\",\n  \"severity\": \"critical\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}"] }
+          }
+        },
+        {
+          "name": "Assign Ticket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": \"{{userId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}/assign", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}", "assign"] }
+          }
+        },
+        {
+          "name": "Delete Ticket",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["tickets", "{{ticketId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SDK Tickets",
+      "item": [
+        {
+          "name": "Create SDK Ticket",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-sdk-key", "value": "{{sdkKey}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Bug in checkout\",\n  \"description\": \"Payment crashes on submit\"\n}" },
+            "url": { "raw": "{{baseUrl}}/sdk/tickets", "host": ["{{baseUrl}}"], "path": ["sdk", "tickets"] }
+          }
+        },
+        {
+          "name": "Submit Bug Report with Video",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "x-sdk-key", "value": "{{sdkKey}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Login page crashes", "type": "text" },
+                { "key": "description", "value": "White screen after entering credentials", "type": "text" },
+                { "key": "video", "type": "file", "src": "" },
+                { "key": "userContext", "value": "{\"os\":\"Windows 11\",\"browser\":\"Chrome 120\"}", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/sdk/tickets/report", "host": ["{{baseUrl}}"], "path": ["sdk", "tickets", "report"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "Request Upload URL",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"ticketId\": \"{{ticketId}}\",\n  \"fileName\": \"screenshot.png\",\n  \"mimeType\": \"image/png\",\n  \"fileSize\": 245678\n}" },
+            "url": { "raw": "{{baseUrl}}/media/presigned-url", "host": ["{{baseUrl}}"], "path": ["media", "presigned-url"] }
+          }
+        },
+        {
+          "name": "Complete Upload",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"mediaId\": \"{{mediaId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/media/complete", "host": ["{{baseUrl}}"], "path": ["media", "complete"] }
+          }
+        },
+        {
+          "name": "Get Media for Ticket",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/media/ticket/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["media", "ticket", "{{ticketId}}"] }
+          }
+        },
+        {
+          "name": "Get Media by ID",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/media/{{mediaId}}", "host": ["{{baseUrl}}"], "path": ["media", "{{mediaId}}"] }
+          }
+        },
+        {
+          "name": "Get Media Download URL",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/media/{{mediaId}}/url", "host": ["{{baseUrl}}"], "path": ["media", "{{mediaId}}", "url"] }
+          }
+        },
+        {
+          "name": "Get Video Events",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/media/{{mediaId}}/events?limit=50", "host": ["{{baseUrl}}"], "path": ["media", "{{mediaId}}", "events"], "query": [{ "key": "limit", "value": "50" }] }
+          }
+        },
+        {
+          "name": "Delete Media",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/media/{{mediaId}}", "host": ["{{baseUrl}}"], "path": ["media", "{{mediaId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AI Agent",
+      "item": [
+        {
+          "name": "Start Session",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agent/sessions/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["agent", "sessions", "{{ticketId}}"] }
+          }
+        },
+        {
+          "name": "Get Session",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/agent/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["agent", "sessions", "{{sessionId}}"] }
+          }
+        },
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Analyze the crash logs for this ticket\"\n}" },
+            "url": { "raw": "{{baseUrl}}/agent/sessions/{{sessionId}}/messages", "host": ["{{baseUrl}}"], "path": ["agent", "sessions", "{{sessionId}}", "messages"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Analytics",
+      "item": [
+        {
+          "name": "Overview",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/analytics/overview?period=week", "host": ["{{baseUrl}}"], "path": ["analytics", "overview"], "query": [{ "key": "period", "value": "week" }] }
+          }
+        },
+        {
+          "name": "Trends",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/analytics/trends?period=week&days=30", "host": ["{{baseUrl}}"], "path": ["analytics", "trends"], "query": [{ "key": "period", "value": "week" }, { "key": "days", "value": "30" }] }
+          }
+        },
+        {
+          "name": "Performance",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/analytics/performance", "host": ["{{baseUrl}}"], "path": ["analytics", "performance"] }
+          }
+        },
+        {
+          "name": "Agent Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/analytics/agents", "host": ["{{baseUrl}}"], "path": ["analytics", "agents"] }
+          }
+        },
+        {
+          "name": "Application Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/analytics/applications", "host": ["{{baseUrl}}"], "path": ["analytics", "applications"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integrations",
+      "item": [
+        {
+          "name": "Create Integration",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"jira\",\n  \"name\": \"Jira Cloud\",\n  \"config\": {\n    \"baseUrl\": \"https://mycompany.atlassian.net\",\n    \"email\": \"user@example.com\",\n    \"apiToken\": \"jira-api-token\",\n    \"projectKey\": \"SUP\"\n  }\n}" },
+            "url": { "raw": "{{baseUrl}}/integrations", "host": ["{{baseUrl}}"], "path": ["integrations"] }
+          }
+        },
+        {
+          "name": "List Integrations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations", "host": ["{{baseUrl}}"], "path": ["integrations"] }
+          }
+        },
+        {
+          "name": "Get Integration Types",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations/types", "host": ["{{baseUrl}}"], "path": ["integrations", "types"] }
+          }
+        },
+        {
+          "name": "Get Integration",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations/{{integrationId}}", "host": ["{{baseUrl}}"], "path": ["integrations", "{{integrationId}}"] }
+          }
+        },
+        {
+          "name": "Test Connection",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations/{{integrationId}}/test", "host": ["{{baseUrl}}"], "path": ["integrations", "{{integrationId}}", "test"] }
+          }
+        },
+        {
+          "name": "Trigger Sync",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"direction\": \"push\"\n}" },
+            "url": { "raw": "{{baseUrl}}/integrations/{{integrationId}}/sync", "host": ["{{baseUrl}}"], "path": ["integrations", "{{integrationId}}", "sync"] }
+          }
+        },
+        {
+          "name": "Get Sync Logs",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations/{{integrationId}}/logs?page=0&limit=20", "host": ["{{baseUrl}}"], "path": ["integrations", "{{integrationId}}", "logs"], "query": [{ "key": "page", "value": "0" }, { "key": "limit", "value": "20" }] }
+          }
+        },
+        {
+          "name": "Get Sync Stats",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/integrations/{{integrationId}}/stats", "host": ["{{baseUrl}}"], "path": ["integrations", "{{integrationId}}", "stats"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Basic Health",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] } }
+        },
+        {
+          "name": "Liveness",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/live", "host": ["{{baseUrl}}"], "path": ["health", "live"] } }
+        },
+        {
+          "name": "Readiness",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health", "ready"] } }
+        },
+        {
+          "name": "Full Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/health/full", "host": ["{{baseUrl}}"], "path": ["health", "full"] }
+          }
+        },
+        {
+          "name": "Database Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/health/db", "host": ["{{baseUrl}}"], "path": ["health", "db"] }
+          }
+        },
+        {
+          "name": "Redis Health",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/health/redis", "host": ["{{baseUrl}}"], "path": ["health", "redis"] }
+          }
+        },
+        {
+          "name": "Metrics",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": { "raw": "{{baseUrl}}/health/metrics", "host": ["{{baseUrl}}"], "path": ["health", "metrics"] }
+          }
+        }
+      ]
+    }
+  ]
+}
