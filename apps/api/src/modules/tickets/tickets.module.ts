@@ -30,6 +30,10 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
         removeOnFail: 500,
       },
     }),
+    // GitHub queue for auto-issue creation on ticket create
+    BullModule.registerQueue({
+      name: 'github',
+    }),
   ],
   controllers: [TicketsController, SdkTicketsController],
   providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketsGateway, WsJwtGuard],

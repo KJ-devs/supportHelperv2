@@ -1,9 +1,10 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, UnauthorizedException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { Webhooks } from '@octokit/webhooks';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { GithubIssuesService } from './github-issues.service';
 
 export interface WebhookPayload {
   event: string;
@@ -62,6 +63,8 @@ export class GithubWebhooksService {
     private prisma: PrismaService,
     private config: ConfigService,
     @InjectQueue('github') private githubQueue: Queue,
+    @Inject(forwardRef(() => GithubIssuesService))
+    private issuesService: GithubIssuesService,
   ) {
     this.webhookSecret = this.config.get('github.webhookSecret') || '';
 
@@ -199,6 +202,9 @@ export class GithubWebhooksService {
 
   /**
    * Handle issue events (opened, closed, reopened, etc.)
+   * Includes anti-loop protection: if the change originated from the platform
+   * (i.e., a reverse sync), the sync-origin flag will be set to 'platform'
+   * and we skip updating the ticket to avoid an infinite loop.
    */
   private async handleIssueEvent(payload: any): Promise<void> {
     const { action, issue, repository } = payload;
@@ -221,9 +227,27 @@ export class GithubWebhooksService {
       return;
     }
 
+    // Anti-loop: check if this webhook was triggered by a platform-side reverse sync
+    if (await this.issuesService.isSyncFromPlatform(githubIssue.ticketId)) {
+      this.logger.debug(
+        `Skipping GitHub->ticket sync for ${githubIssue.ticketId} — change originated from platform`,
+      );
+      // Still update sync status on the GithubIssue record
+      await this.prisma.githubIssue.update({
+        where: { id: githubIssue.id },
+        data: {
+          syncStatus: 'synced',
+          lastSyncedAt: new Date(),
+        },
+      });
+      return;
+    }
+
     // Bidirectional sync: Update ticket based on issue state
     switch (action) {
       case 'closed':
+        // Set sync-origin BEFORE updating ticket so reverse sync is suppressed
+        await this.issuesService.setSyncOrigin(githubIssue.ticketId, 'github');
         await this.prisma.ticket.update({
           where: { id: githubIssue.ticketId },
           data: {
@@ -237,6 +261,8 @@ export class GithubWebhooksService {
         break;
 
       case 'reopened':
+        // Set sync-origin BEFORE updating ticket so reverse sync is suppressed
+        await this.issuesService.setSyncOrigin(githubIssue.ticketId, 'github');
         await this.prisma.ticket.update({
           where: { id: githubIssue.ticketId },
           data: {

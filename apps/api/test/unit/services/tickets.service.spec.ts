@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, ForbiddenException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { TicketsService } from '../../../src/modules/tickets/tickets.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { TicketsGateway } from '../../../src/modules/tickets/tickets.gateway';
+import { CacheService } from '../../../src/cache/cache.service';
 
 describe('TicketsService', () => {
   let service: TicketsService;
@@ -70,11 +73,38 @@ describe('TicketsService', () => {
               findFirst: jest.fn(),
               count: jest.fn(),
               update: jest.fn(),
+              updateMany: jest.fn(),
               groupBy: jest.fn(),
             },
             user: {
               findFirst: jest.fn(),
             },
+          },
+        },
+        {
+          provide: TicketsGateway,
+          useValue: {
+            emitTicketCreated: jest.fn(),
+            emitTicketUpdated: jest.fn(),
+            emitTicketDeleted: jest.fn(),
+            emitTicketAssigned: jest.fn(),
+          },
+        },
+        {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+            getOrSet: jest.fn().mockImplementation((_key: string, _ttl: number, factory: () => Promise<any>) => factory()),
+            invalidateByPrefix: jest.fn(),
+            hashFilters: jest.fn().mockReturnValue('mock-hash'),
+          },
+        },
+        {
+          provide: getQueueToken('github'),
+          useValue: {
+            add: jest.fn().mockResolvedValue({}),
           },
         },
       ],
