@@ -1,0 +1,19 @@
+{
+  "id": "support-helper-local",
+  "name": "Support Helper - Local",
+  "values": [
+    { "key": "baseUrl", "value": "http://localhost:3001/api", "type": "default", "enabled": true },
+    { "key": "accessToken", "value": "", "type": "secret", "enabled": true },
+    { "key": "refreshToken", "value": "", "type": "secret", "enabled": true },
+    { "key": "sdkKey", "value": "", "type": "secret", "enabled": true },
+    { "key": "tenantId", "value": "", "type": "default", "enabled": true },
+    { "key": "userId", "value": "", "type": "default", "enabled": true },
+    { "key": "ticketId", "value": "", "type": "default", "enabled": true },
+    { "key": "applicationId", "value": "", "type": "default", "enabled": true },
+    { "key": "mediaId", "value": "", "type": "default", "enabled": true },
+    { "key": "sessionId", "value": "", "type": "default", "enabled": true },
+    { "key": "integrationId", "value": "", "type": "default", "enabled": true },
+    { "key": "feedbackId", "value": "", "type": "default", "enabled": true }
+  ],
+  "_postman_variable_scope": "environment"
+}
