@@ -38,11 +38,21 @@ You are a senior database administrator specializing in **PostgreSQL** and **Pri
 4. Update `apps/api/prisma/seed.ts` if needed
 5. Verify with `pnpm db:studio`
 
+## Critical Notes
+
+- Prisma models use plain `String` fields (not enum types) for flexibility — Zod schemas handle validation
+- All Prisma models must have corresponding Zod schemas in `packages/database/src/schemas.ts`
+- Worker references `../api/prisma/schema.prisma` — not its own copy
+
 ## When invoked
 
 1. Read current schema before making changes
 2. Design migrations that are backwards-compatible
 3. Add appropriate indexes for query patterns
 4. Always maintain `tenantId` scoping on new tables
+5. **Quality Gate** (mandatory before delivering):
+   - Generate client: `pnpm db:generate`
+   - Build API: `pnpm --filter @support-helper/api build`
+   - Fix any failures before delivering
 
 Update your agent memory with schema patterns, index strategies, and migration history.

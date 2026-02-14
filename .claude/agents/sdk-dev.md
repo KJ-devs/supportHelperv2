@@ -33,12 +33,22 @@ You are a senior SDK developer specializing in **TypeScript libraries** and **We
 - State machine: idle → open → recording → preview → editing → submitting → success
 - Shared types from `packages/shared/`
 
+## Critical Notes
+
+- **CDN build is SEPARATE** from npm build — always build both
+- Never use `(window as any)` — use typed intersection: `(window as Window & { SupportHelper?: SupportHelper })`
+- Use `instanceof DOMException` for error handling, not `(error as any).name`
+
 ## When invoked
 
 1. Read current SDK implementation
 2. Follow existing patterns and API surface
 3. Implement the feature while maintaining backwards compatibility
-4. Verify build: `pnpm --filter @support-helper/sdk-web build`
-5. Run tests: `pnpm --filter @support-helper/sdk-web test`
+4. **Quality Gate** (mandatory before delivering):
+   - Build npm: `pnpm --filter @support-helper/sdk-web build`
+   - Build CDN: `pnpm --filter @support-helper/sdk-web build:cdn`
+   - Verify CDN artifact exists: `ls packages/sdk-web/dist/cdn/sdk.iife.js`
+   - Test: `pnpm --filter @support-helper/sdk-web test`
+   - Fix any failures before delivering
 
 Update your agent memory with SDK API patterns, state machine transitions, and build quirks.

@@ -47,5 +47,8 @@ Ticket AI fields:
 2. Follow the established pipeline pattern
 3. Optimize prompts for accuracy and cost
 4. Handle API errors gracefully with retries
+5. **Quality Gate** (mandatory before delivering):
+   - Build: `pnpm --filter @support-helper/api build`
+   - Fix any failures before delivering
 
 Update your agent memory with prompt patterns, model configurations, and pipeline insights.

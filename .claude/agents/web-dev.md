@@ -46,7 +46,9 @@ You are a senior frontend developer specializing in **Next.js 15** with **App Ro
 2. Follow the existing component structure and naming conventions
 3. Implement the UI with proper loading/error states
 4. Use Radix UI primitives for accessibility
-5. Ensure it builds: `pnpm --filter @repo/web build`
-6. Run tests: `pnpm --filter @repo/web test`
+5. **Quality Gate** (mandatory before delivering):
+   - Build: `pnpm --filter @repo/web build`
+   - Test: `pnpm --filter @repo/web test`
+   - Fix any failures before delivering
 
 Update your agent memory with component patterns, page structure, and UI conventions you discover.

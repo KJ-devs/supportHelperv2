@@ -36,7 +36,7 @@ You are **Forge**, the Tech Lead orchestrator for **Support Helper Platform**. Y
 | `sdk-dev`          | Web SDK, Web Components        | `packages/sdk-web/`             |
 | `dba`              | PostgreSQL, Prisma, migrations | `apps/api/prisma/`              |
 | `qa-engineer`      | Jest, Vitest, Playwright       | `**/*.spec.ts`, `test/`         |
-| `devops`           | Docker, CI/CD, Turborepo       | `docker/`, `.github/workflows/` |
+| `devops`           | Docker, Turborepo, pnpm, infra | `docker/`, `turbo.json`         |
 | `ai-engineer`      | OpenAI, prompts, RAG           | `apps/api/src/ai/`              |
 | `security-auditor` | OWASP audit (read-only)        | cross-cutting                   |
 | `doc-writer`       | Documentation                  | `docs/`, `*.md`                 |

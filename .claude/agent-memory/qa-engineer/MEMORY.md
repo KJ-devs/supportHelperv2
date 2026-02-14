@@ -30,13 +30,23 @@
 - Web app tests: `apps/web/tests/`
 
 ## Mock Patterns
-- PrismaService: mock object with `jest.fn()` for each Prisma model method
+- PrismaService: mock object with `jest.fn()` for each Prisma model method, `$executeRaw` returns number (affected rows)
 - ConfigService: mock with `get: jest.fn()` returning config values
 - External libs (OpenAI, Octokit, ffmpeg, AWS SDK, BullMQ, ioredis): `jest.mock()` at module level
+- Winston logger: mock with `jest.mock('winston')` and `createLogger` returning mock logger object
+- Logtail: mock with `jest.mock('@logtail/node')` and `jest.mock('@logtail/winston')`
 - S3Service, FFprobeService: use `jest.spyOn()` on service methods
 - BullMQ Queue: mock with `add: jest.fn().mockResolvedValue({ id: 'job-123' })`
 - Integration providers: mock at module level with `jest.mock()`, then use `mockImplementation()` in tests to return provider instances
 - Encrypted configs: use helper function that calls `encryptAES256GCM()` to create properly encrypted test data
+- WebSocket gateways: mock with `emitSessionUpdate`, `emitNewMessage`, `emitAgentTyping` as `jest.fn()`
+- Circular dependencies: use `forwardRef()` in production code, plain mocks in tests (no need to replicate forwardRef)
+- Passport strategies: extend from PassportStrategy, mock AuthService for validate() method testing
+- Express Request: use `as unknown as Request` for partial mock objects (more strict than `as any as Request`)
+- ExecutionContext: create mock with switchToHttp().getRequest/getResponse for interceptors/guards
+- CallHandler: mock with `handle: jest.fn().mockReturnValue(of(data))` for interceptors
+- ArgumentsHost: mock with switchToHttp().getRequest/getResponse for exception filters
+- NestJS Logger: spy on `Logger.prototype` methods in beforeEach, reuse spies across tests (don't recreate per test)
 
 ## Known Gaps (as of 2026-02-08)
 - ai/ai.service.ts has ZERO tests
@@ -76,6 +86,80 @@
 - Format validation: OPENAI_API_KEY must start with "sk-", encryption key must be 64 hex chars
 - All tests passing - validation is production-ready
 
+## Tests Added (2026-02-14 Agent & Auth Modules)
+- AgentService -> `apps/api/test/unit/services/agent.service.spec.ts` (9 tests)
+- AuthService (modules/auth) -> `apps/api/test/unit/services/auth-module.service.spec.ts` (17 tests)
+- Coverage: 26 tests total covering session management, message handling, authentication flows
+- AgentService tests: startSession, getSession, sendMessage with WebSocket gateway integration
+- AuthService tests: register, login, refresh, validateUser, validateApiKey (JWT + SDK key auth)
+- All tests passing
+
+## Tests Added (2026-02-14 Tickets Module)
+- TicketsService -> `apps/api/test/unit/services/tickets.service.spec.ts` (25 tests)
+- TicketsController -> `apps/api/test/unit/controllers/tickets.controller.spec.ts` (17 tests)
+- Coverage: 42 tests total covering CRUD operations, filtering, pagination, stats, search integration
+- Service tests: create, findAll (with filters/pagination/search), findOne, update, remove, assign, getStats
+- Controller tests: create with AI analysis + search indexing + integration sync, findAll, findOne, findSimilar, update, assign, remove
+- Patterns: Zod schema DTOs with strict enum types (must use `as const`), FilterTicketsDto has required fields with defaults
+- Gotcha: `findOne` is called internally by update/remove/assign - mocks must include `media`, `githubIssues`, `agentSessions` arrays
+- All tests passing
+
+## Tests Added (2026-02-14 Media Module)
+- S3Service -> `apps/api/test/unit/services/s3.service.spec.ts` (16 tests)
+- MediaService -> `apps/api/test/unit/services/media.service.spec.ts` (29 tests)
+- MediaController -> `apps/api/test/unit/controllers/media.controller.spec.ts` (20 tests)
+- Coverage: 65 tests total covering S3 operations, file upload flow, media CRUD, video analysis queueing
+- S3 tests: presigned URLs (upload/download), object exists/metadata/delete, storage key generation, public URLs
+- Service tests: requestUploadUrl (with plan limits), completeUpload (checksum verification, metadata extraction, video analysis queue), findByTicket, findOne, remove, video events, cleanup
+- Controller tests: all endpoints including redirect download, pagination for video events
+- **Source fix required**: Fixed FFprobe service TypeScript errors - changed from `import * as ffmpeg` to default `import ffmpeg` (namespace imports not callable)
+- Patterns: Mock BullMQ queue with `getQueueToken('video-analysis')`, S3Service mocked at module level with `jest.mock()`, BigInt handling in Prisma models
+- Gotcha: `completeUpload` calls `prisma.media.update` 3 times (duration + completion + processing status), not 2
+- All 65 tests passing
+
+## Tests Added (2026-02-14 Analytics, Health, Integrations Services)
+- AnalyticsService -> `apps/api/test/unit/services/analytics.service.spec.ts` (16 tests)
+- HealthService -> `apps/api/test/unit/services/health.service.spec.ts` (24 tests)
+- IntegrationsService -> `apps/api/test/unit/services/integrations.service.spec.ts` (30 tests)
+- Coverage: 70 tests total covering dashboard analytics, service health monitoring, third-party integrations
+- Analytics tests: getOverview (period filters: day/week/month), getTrends (date grouping), getPerformanceMetrics (resolution rate), getAgentStats (per-agent metrics), getApplicationStats (per-app metrics)
+- Health tests: getBasicHealth, getFullHealth (degraded/unhealthy states), checkDatabase, checkRedis (with ioredis mock), checkMemory (heap threshold), cron job tracking, BullMQ queue monitoring, isAlive/isReady
+- Integrations tests: create (validation, encryption), findAll (filtering), findOne, update (re-encryption), delete, testConnection, getAvailableTypes, getSyncLogs (pagination, filters), getSyncStats
+- Patterns: Mock ioredis with module-level `jest.mock('ioredis')`, mock integration providers with `jest.mock()` on providers index, isolate ConfigService instances for "not configured" scenarios
+- Gotchas: HealthService lazy-initializes Redis - tests that mock config.get(null) must create new service instance to avoid shared state pollution. Mock rejections in Redis tests need `Promise.reject()` wrapper to avoid sync throw.
+- All 70 tests passing
+
+## Tests Added (2026-02-14 Logger, Auth Strategies & Guards)
+- LoggerService -> `apps/api/test/unit/services/logger.service.spec.ts` (31 tests)
+- JwtStrategy (modules/auth) -> `apps/api/test/unit/auth/jwt.strategy.spec.ts` (7 tests)
+- ApiKeyStrategy -> `apps/api/test/unit/auth/api-key.strategy.spec.ts` (7 tests)
+- ApiKeyGuard -> `apps/api/test/unit/auth/api-key.guard.spec.ts` (5 tests)
+- JwtAuthGuard (modules/auth) -> `apps/api/test/unit/auth/jwt-auth-module.guard.spec.ts` (6 tests)
+- TenantGuard -> `apps/api/test/unit/auth/tenant.guard.spec.ts` (10 tests)
+- Coverage: 66 tests total covering logging with correlation IDs, passport strategies, auth guards, tenant isolation
+- Logger tests: log levels (info/error/warn/debug/verbose), correlation ID utilities, structured logging helpers (HTTP, DB, external services, security events), BetterStack/Logtail integration, message formatting (string/Error/object)
+- Strategy tests: JWT validation with access/refresh token types, API key validation from x-api-key and x-sdk-key headers (backwards compat), user/application lookup
+- Guard tests: @Public decorator handling, super.canActivate delegation, ExecutionContext mocking, tenant isolation enforcement
+- Patterns: Mock winston with `jest.mock('winston')`, mock Express Request with `as any as Request` for partial objects, use `any` type for request objects that get mutated (e.g., `request.tenantId` assignment)
+- Gotchas: Guards must check both handler and class for @Public metadata. TenantGuard stores `tenantId` in request object for downstream services. ApiKeyStrategy supports both x-api-key and x-sdk-key headers.
+- All 66 tests passing
+
+## Tests Added (2026-02-14 Interceptors, Filters, Middleware)
+- GithubWebhookProcessor -> `apps/api/test/unit/services/github-webhook.processor.spec.ts` (11 tests)
+- HttpExceptionFilter -> `apps/api/test/unit/common/http-exception.filter.spec.ts` (13 tests)
+- LoggingInterceptor -> `apps/api/test/unit/common/logging.interceptor.spec.ts` (10 tests)
+- TransformInterceptor -> `apps/api/test/unit/common/transform.interceptor.spec.ts` (11 tests)
+- CorrelationIdMiddleware -> `apps/api/test/unit/common/correlation-id.middleware.spec.ts` (9 tests)
+- TenantContextMiddleware -> `apps/api/test/unit/auth/tenant-context.middleware.spec.ts` (13 tests)
+- Coverage: 67 tests total covering webhook processing, exception filtering, request logging, response transformation, correlation IDs, tenant context
+- Webhook tests: issue/PR/push/comment events, unhandled events, error handling, lifecycle hooks (onCompleted, onFailed)
+- Filter tests: HttpException handling (string/object response), standard Error, unknown exceptions, logging, timestamp formatting, HTTP methods
+- Interceptor tests: LoggingInterceptor (request/response logging, elapsed time, user-agent, body logging), TransformInterceptor (data wrapping, timestamp, path, primitives/objects/arrays/null/undefined)
+- Middleware tests: CorrelationIdMiddleware (header extraction, UUID generation, response header), TenantContextMiddleware (PostgreSQL session variable, RLS, SQL injection prevention via parameterized queries)
+- Patterns: Mock ExecutionContext with switchToHttp().getRequest/getResponse, CallHandler with handle().pipe(of(data)), ArgumentsHost for filters, Express Request/Response with `as unknown as Request`
+- Gotchas: NestJS Logger.prototype spies must be managed in beforeEach - create once and reuse. HttpException with string message doesn't set `error` field (stays default). Prisma $executeRaw with template literals is called with array + values as separate arguments (not object with strings/values). Express partial mocks need `as unknown as Type` to avoid TypeScript strict errors.
+- All 67 tests passing
+
 ## Auth Test Duplication Issue
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`
 - The colocated version is more comprehensive (8 tests vs 3 tests)
@@ -93,3 +177,9 @@
 - **Module mocking paths**: When mocking imports in worker tests, account for the `__tests__/` subdirectory in relative paths (e.g., `../../../../api/...` not `../../../api/...`)
 - **Testing environment validation**: Must set ALL required env vars when testing optional var validation (e.g., API_PORT) - validation checks all required vars first
 - **Environment variable testing**: Save and restore `process.env` using beforeEach/afterAll to isolate tests
+- **Error handling in try-catch**: Some services (like modules/auth refresh) catch all errors and re-throw with generic message - test for the actual thrown message, not intermediate error details
+- **Two auth services**: Root `apps/api/src/auth/auth.service.ts` vs nested `apps/api/src/modules/auth/auth.service.ts` - different responsibilities, separate test files
+- **Zod DTO types**: FilterTicketsDto and similar DTOs with defaults still require all fields in TypeScript - use defaults in tests or cast enums with `as const`
+- **Internal method calls**: When service methods call other methods (like `update` calling `findOne`), mocks must include all fields needed by both methods
+- **TypeScript type assertions for partial mocks**: Use `as any as TargetType` for Express Request objects, `as any` for request objects that get properties added dynamically (e.g., `request.tenantId`)
+- **Auth guard super.canActivate**: Guards extending AuthGuard must call super.canActivate() which triggers passport strategy validation - need to spy on parent class method for testing

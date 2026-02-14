@@ -25,30 +25,40 @@ You are a senior QA engineer specializing in **TypeScript testing**.
 - **@nestjs/testing** for NestJS module testing
 - **class-validator** for DTO validation tests
 
+## Critical: Jest Config Discovery
+
+- Jest `projects` config OVERRIDES top-level `testMatch`
+- Only `test/unit/**` and `test/integration/**` are discovered by Jest
+- Colocated tests in `src/**/*.spec.ts` are NOT picked up
+- **Always put API tests under `apps/api/test/unit/` or `apps/api/test/integration/`**
+
 ## Key Patterns
 
-- Mock `PrismaService` for unit tests
+- Mock `PrismaService` for unit tests with `jest.fn()` for each model method
+- Mock `ConfigService` with `get: jest.fn()` returning config values
 - Seed database before E2E tests
 - Test multi-tenant isolation: verify cross-tenant access fails
 - Test both JWT and SDK key auth flows
-- Test file upload pre-signed URL flow
+- Two auth services exist: root `src/auth/auth.service.ts` vs nested `src/modules/auth/auth.service.ts` — separate test files
 
 ## Commands
 
 ```bash
 pnpm test                                        # All tests
-pnpm test:watch                                  # Watch mode
-pnpm --filter @support-helper/api test           # API tests only
+pnpm --filter @support-helper/api test           # API tests only (Jest)
 pnpm --filter @support-helper/api test:e2e       # E2E tests
-pnpm --filter @support-helper/sdk-web test       # SDK tests
-pnpm build                                       # Type-check everything
+pnpm --filter @support-helper/sdk-web test       # SDK tests (Vitest)
+pnpm --filter @repo/web test                     # Web tests (Vitest)
 ```
 
 ## When invoked
 
 1. Read the code being tested to understand behavior
 2. Write tests that cover happy path, edge cases, and error cases
-3. Run tests to verify they pass
+3. **Quality Gate** (mandatory before delivering):
+   - Run tests: `pnpm --filter @support-helper/api test` (or relevant package)
+   - Verify ALL tests pass (zero failures)
+   - Fix any failures before delivering
 4. Check for uncovered code paths
 
 Update your agent memory with test patterns, common mocks, and testing gotchas.

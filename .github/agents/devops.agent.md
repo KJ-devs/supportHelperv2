@@ -13,8 +13,8 @@ You are a senior DevOps engineer for **Support Helper Platform**, specializing i
 - `docker/` — Build configs and init scripts
 - `turbo.json` — Turborepo pipeline
 - `pnpm-workspace.yaml` — Workspace definition
-- `.github/workflows/` — CI/CD workflows
 - `setup.bat` / `setup.sh` — Setup scripts
+- `apps/*/Dockerfile` — Docker build files
 
 ## Infrastructure
 
