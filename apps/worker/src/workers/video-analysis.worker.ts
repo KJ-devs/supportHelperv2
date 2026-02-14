@@ -1,6 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { Prisma } from '@prisma/client';
 import { QUEUE_NAMES } from '../queues';
 import { VideoAnalysisJobData, VideoAnalysisResult } from '../queues/queue.types';
@@ -25,12 +25,22 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
  * 6. Generate embeddings (text-embedding-3-large)
  * 7. Update ticket in DB
  * 8. Index Meilisearch
+ *
+ * Retry Strategy: Exponential backoff (1min, 5min, 15min, 1hr)
+ * After 4 failed attempts, job moves to dead-letter queue
  */
 @Processor(QUEUE_NAMES.VIDEO_ANALYSIS, {
   concurrency: 10,
   limiter: {
     max: 100,
     duration: 60000,
+  },
+  settings: {
+    backoffStrategy: (attemptsMade: number): number => {
+      const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+      const index = Math.max(0, Math.min(attemptsMade - 1, delays.length - 1));
+      return delays[index]!;
+    },
   },
 })
 export class VideoAnalysisWorker extends WorkerHost {
@@ -43,7 +53,9 @@ export class VideoAnalysisWorker extends WorkerHost {
     private readonly yoloService: YoloService,
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,
-    private readonly meilisearch: MeilisearchService
+    private readonly meilisearch: MeilisearchService,
+    @InjectQueue('dead-letter')
+    private readonly deadLetterQueue: Queue,
   ) {
     super();
   }
@@ -343,7 +355,70 @@ export class VideoAnalysisWorker extends WorkerHost {
   // Worker Events
   // ═══════════════════════════════════════════════════════════════════════
 
+  @OnWorkerEvent('active')
+  onActive(job: Job<VideoAnalysisJobData>) {
+    this.logger.log(`Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+  }
 
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job<VideoAnalysisJobData>, result: VideoAnalysisResult) {
+    const duration = result.processingTimeMs;
+    this.logger.log(`Job ${job.id} completed successfully in ${duration}ms`);
+  }
 
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job<VideoAnalysisJobData> | undefined, error: Error) {
+    if (!job) {
+      this.logger.error(`Job failed without job context: ${error.message}`);
+      return;
+    }
 
+    const { mediaId } = job.data;
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts || 4;
+
+    this.logger.error(
+      `Job ${job.id} failed (attempt ${attemptsMade}/${maxAttempts}): ${getErrorMessage(error)}`,
+      getErrorStack(error),
+    );
+
+    // If this was the last attempt, move to dead letter queue
+    if (attemptsMade >= maxAttempts) {
+      this.logger.error(`Job ${job.id} exceeded max retries - moving to dead letter queue`);
+
+      await this.deadLetterQueue.add(
+        'failed-video-analysis',
+        {
+          originalJobId: job.id,
+          queueName: QUEUE_NAMES.VIDEO_ANALYSIS,
+          jobData: job.data,
+          failedReason: error.message,
+          stacktrace: error.stack,
+          attemptsMade,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          removeOnComplete: {
+            age: 90 * 24 * 60 * 60, // 90 days
+          },
+        },
+      );
+
+      // Update media status to failed with retry information
+      await this.updateMediaStatus(mediaId, 'failed', `Failed after ${attemptsMade} retries: ${error.message}`);
+    } else {
+      // Job will be retried
+      const nextDelay = this.getNextRetryDelay(attemptsMade);
+      this.logger.warn(`Job ${job.id} will retry in ${Math.round(nextDelay / 1000)}s`);
+    }
+  }
+
+  /**
+   * Calculate next retry delay based on attempt number
+   */
+  private getNextRetryDelay(attemptsMade: number): number {
+    const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+    const index = Math.max(0, Math.min(attemptsMade, delays.length - 1));
+    return delays[index]!;
+  }
 }
