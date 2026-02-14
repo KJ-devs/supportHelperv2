@@ -2,17 +2,25 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
+  Inject,
   Logger,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto } from './dto';
+import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
+import { TicketsGateway } from './tickets.gateway';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Inject(forwardRef(() => TicketsGateway))
+    private readonly ticketsGateway: TicketsGateway,
+  ) {}
 
   /**
    * Create a new ticket
@@ -62,6 +70,9 @@ export class TicketsService {
     });
 
     this.logger.log(`Created ticket ${ticket.id} for tenant ${tenantId}`);
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketCreated(tenantId, ticket);
 
     return ticket;
   }
@@ -284,11 +295,16 @@ export class TicketsService {
 
     this.logger.log(`Updated ticket ${ticketId}`);
 
-    return {
+    const result = {
       ...ticket,
       typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
     };
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketUpdated(tenantId, result);
+
+    return result;
   }
 
   /**
@@ -308,6 +324,9 @@ export class TicketsService {
     });
 
     this.logger.log(`Deleted (closed) ticket ${ticketId}`);
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketDeleted(tenantId, ticketId);
 
     return {
       ...ticket,
@@ -360,10 +379,157 @@ export class TicketsService {
       `${userId ? 'Assigned' : 'Unassigned'} ticket ${ticketId} ${userId ? `to user ${userId}` : ''}`,
     );
 
-    return {
+    const result = {
       ...ticket,
       typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
+    };
+
+    // Emit real-time event
+    this.ticketsGateway.emitTicketAssigned(tenantId, result);
+
+    return result;
+  }
+
+  /**
+   * Bulk ticket operations
+   */
+  async bulkAction(
+    tenantId: string,
+    dto: BulkTicketDto,
+  ): Promise<{ processed: number; failed: number; errors: string[] }> {
+    const { ticketIds, action, value } = dto;
+    const errors: string[] = [];
+
+    // Verify all ticket IDs belong to this tenant
+    const existingTickets = await this.prisma.ticket.findMany({
+      where: {
+        id: { in: ticketIds },
+        tenantId,
+      },
+      select: { id: true },
+    });
+
+    const existingIds = new Set(existingTickets.map((t) => t.id));
+    const missingIds = ticketIds.filter((id) => !existingIds.has(id));
+
+    if (missingIds.length > 0) {
+      errors.push(
+        `Tickets not found or not accessible: ${missingIds.join(', ')}`,
+      );
+    }
+
+    const validIds = ticketIds.filter((id) => existingIds.has(id));
+
+    if (validIds.length === 0) {
+      return { processed: 0, failed: ticketIds.length, errors };
+    }
+
+    // For assign action, verify user belongs to tenant
+    if (action === 'assign' && value) {
+      const user = await this.prisma.user.findFirst({
+        where: { id: value as string, tenantId },
+      });
+      if (!user) {
+        throw new BadRequestException(
+          'User not found or does not belong to this tenant',
+        );
+      }
+    }
+
+    // Execute bulk operation in a transaction
+    let processed = 0;
+
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        switch (action) {
+          case 'update_status': {
+            const data: Prisma.TicketUpdateManyMutationInput = {
+              status: value as string,
+            };
+            if (value === 'resolved') {
+              data.resolvedAt = new Date();
+            } else {
+              data.resolvedAt = null;
+            }
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data,
+            });
+            processed = result.count;
+            break;
+          }
+
+          case 'assign': {
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data: {
+                assignedTo: value as string,
+                assignedAt: new Date(),
+              },
+            });
+            processed = result.count;
+            break;
+          }
+
+          case 'unassign': {
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data: {
+                assignedTo: null,
+                assignedAt: null,
+              },
+            });
+            processed = result.count;
+            break;
+          }
+
+          case 'change_priority': {
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data: { priority: value as number },
+            });
+            processed = result.count;
+            break;
+          }
+
+          case 'change_severity': {
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data: { severity: value as string },
+            });
+            processed = result.count;
+            break;
+          }
+
+          case 'delete': {
+            // Soft delete: set status to closed
+            const result = await tx.ticket.updateMany({
+              where: { id: { in: validIds }, tenantId },
+              data: {
+                status: 'closed',
+                resolvedAt: new Date(),
+              },
+            });
+            processed = result.count;
+            break;
+          }
+        }
+      });
+    } catch (error) {
+      this.logger.error(`Bulk action failed: ${error}`);
+      errors.push('Transaction failed: an unexpected error occurred');
+      return { processed: 0, failed: validIds.length, errors };
+    }
+
+    this.logger.log(
+      `Bulk ${action}: processed ${processed}/${ticketIds.length} tickets for tenant ${tenantId}`,
+    );
+
+    return {
+      processed,
+      failed: ticketIds.length - processed,
+      errors,
     };
   }
 
