@@ -13,7 +13,7 @@ import { IntegrationCard } from '@/components/integrations/IntegrationCard';
 import { IntegrationModal } from '@/components/integrations/IntegrationModal';
 import { SyncLogsPanel } from '@/components/integrations/SyncLogsPanel';
 import { ToastProvider, useToast } from '@/components/integrations/IntegrationToast';
-import { PageLoader, Button, Card, Select } from '@/components/ui';
+import { PageLoader } from '@/components/ui';
 
 function IntegrationsPageContent() {
   const { addToast } = useToast();
@@ -236,131 +236,193 @@ function IntegrationsPageContent() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
+        {/* Header - Gradient Hero */}
+        <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Integrations</h1>
-              <p className="text-gray-600 mt-1">
-                Connect your support tickets to external platforms
+              <h1 className="text-3xl font-bold">Integrations</h1>
+              <p className="mt-2 text-blue-100 max-w-lg">
+                Connect Support Helper with your favorite tools. Push tickets out, pull them in, or sync both ways.
               </p>
             </div>
-            <Button onClick={handleCreate}>Add Integration</Button>
+            <button
+              onClick={handleCreate}
+              className="px-5 py-2.5 bg-white text-indigo-600 font-semibold rounded-xl hover:bg-blue-50 transition-colors shadow-lg shadow-indigo-500/25"
+            >
+              + Add Integration
+            </button>
           </div>
         </div>
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="mb-8 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
             <div className="flex items-center">
-              <span className="text-red-600 text-xl mr-3">⚠️</span>
-              <div>
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+              <div className="w-10 h-10 rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center mr-3 flex-shrink-0">
+                <svg className="w-5 h-5 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Something went wrong</h3>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-0.5">{error}</p>
+              </div>
+              <button
                 onClick={fetchData}
-                className="ml-auto"
+                className="ml-4 px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
               >
                 Retry
-              </Button>
+              </button>
             </div>
           </div>
         )}
 
         {/* Empty State */}
-        {!isLoading && integrations.length === 0 && (
-          <Card className="text-center py-12">
-            <svg
-              className="w-16 h-16 mx-auto mb-4 text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 22v-5" />
-              <path d="M9 8V2" />
-              <path d="M15 8V2" />
-              <path d="M18 8v5a6 6 0 0 1-12 0V8z" />
-            </svg>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No integrations yet</h3>
-            <p className="text-gray-600 mb-6">
-              Connect to Slack, Discord, Notion, and more to automatically sync your tickets.
+        {!isLoading && integrations.length === 0 && !error && (
+          <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+              <svg className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No integrations yet</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
+              Connect to Slack, Discord, Notion, Jira or HubSpot to automatically sync your support tickets.
             </p>
-            <Button onClick={handleCreate}>Add Your First Integration</Button>
-          </Card>
+            <button
+              onClick={handleCreate}
+              className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
+            >
+              Add Your First Integration
+            </button>
+          </div>
         )}
 
-        {/* Integrations Grid */}
+        {/* Integrations Content */}
         {integrations.length > 0 && (
           <>
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-4 mb-6">
-              <div className="bg-white rounded-lg shadow p-4">
-                <p className="text-sm text-gray-500">Total Integrations</p>
-                <p className="text-2xl font-bold text-gray-900">{integrations.length}</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              {/* Total */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{integrations.length}</p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <p className="text-sm text-gray-500">Active</p>
-                <p className="text-2xl font-bold text-green-600">
-                  {integrations.filter((i) => i.enabled).length}
-                </p>
+
+              {/* Active */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Active</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {integrations.filter((i) => i.enabled).length}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <p className="text-sm text-gray-500">Total Syncs</p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {integrations.reduce((sum, i) => sum + (i._count?.syncLogs || 0), 0)}
-                </p>
+
+              {/* Total Syncs */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total Syncs</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                      {integrations.reduce((sum, i) => sum + (i._count?.syncLogs || 0), 0)}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="bg-white rounded-lg shadow p-4">
-                <p className="text-sm text-gray-500">Last Activity</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{getMostRecentSync()}</p>
+
+              {/* Last Activity */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">Last Activity</p>
+                    <p className="text-2xl font-bold text-gray-900 dark:text-white">{getMostRecentSync()}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
-            {/* Filters */}
-            <div className="flex gap-3 mb-6">
-              <Select
-                value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
-                options={[
-                  { value: '', label: 'All Types' },
-                  ...types.map((t) => ({ value: t.type, label: t.name })),
-                ]}
-                placeholder="Filter by type"
-              />
-              <Select
-                value={enabledFilter}
-                onChange={(e) => setEnabledFilter(e.target.value)}
-                options={[
+            {/* Filter Bar - Pill Style */}
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              {/* Type Filter Chips */}
+              <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1.5">
+                {[{ value: '', label: 'All Types' }, ...types.map((t) => ({ value: t.type, label: t.name }))].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setTypeFilter(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      typeFilter === opt.value
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Status Filter Chips */}
+              <div className="flex items-center gap-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-1.5">
+                {[
                   { value: '', label: 'All Status' },
                   { value: 'true', label: 'Enabled' },
                   { value: 'false', label: 'Disabled' },
-                ]}
-                placeholder="Filter by status"
-              />
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setEnabledFilter(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      enabledFilter === opt.value
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Grid */}
             {filteredIntegrations.length === 0 ? (
-              <Card className="text-center py-12">
-                <p className="text-gray-600">No integrations match your filters</p>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="mt-4"
+              <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                <p className="text-gray-500 dark:text-gray-400">No integrations match your filters</p>
+                <button
                   onClick={() => {
                     setTypeFilter('');
                     setEnabledFilter('');
                   }}
+                  className="mt-4 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
                 >
                   Clear filters
-                </Button>
-              </Card>
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredIntegrations.map((integration) => (
@@ -407,49 +469,65 @@ function IntegrationsPageContent() {
 
         {/* Sync Direction Dialog */}
         {isSyncDialogOpen && syncTarget && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              onClick={() => {
+                setIsSyncDialogOpen(false);
+                setSyncTarget(null);
+              }}
+            />
+            <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-md w-full border border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
                 Sync with {syncTarget.name}
               </h3>
-              <p className="text-sm text-gray-600 mb-6">
-                Choose the sync direction for this integration.
-              </p>
-              <div className="flex flex-col gap-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Choose sync direction</p>
+              <div className="space-y-3">
+                {/* Push */}
                 <button
                   onClick={() => executeSyncDirection('push')}
-                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50 transition-colors text-left"
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-all text-left group"
                 >
-                  <span className="text-2xl">&#8593;</span>
+                  <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 10.5 12 3m0 0 7.5 7.5M12 3v18" />
+                    </svg>
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-900">Push to {syncTarget.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Send tickets from Support Helper to {syncTarget.name}
-                    </p>
+                    <p className="font-medium text-gray-900 dark:text-white">Push</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Send tickets to {syncTarget.name}</p>
                   </div>
                 </button>
+
+                {/* Pull */}
                 <button
                   onClick={() => executeSyncDirection('pull')}
-                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-green-400 hover:bg-green-50 transition-colors text-left"
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-green-400 hover:bg-green-50/50 dark:hover:bg-green-900/20 transition-all text-left group"
                 >
-                  <span className="text-2xl">&#8595;</span>
+                  <div className="w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5 12 21m0 0-7.5-7.5M12 21V3" />
+                    </svg>
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-900">Pull from {syncTarget.name}</p>
-                    <p className="text-sm text-gray-500">
-                      Import tickets from {syncTarget.name} into Support Helper
-                    </p>
+                    <p className="font-medium text-gray-900 dark:text-white">Pull</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Import tickets from {syncTarget.name}</p>
                   </div>
                 </button>
+
+                {/* Both */}
                 <button
                   onClick={() => executeSyncDirection('both')}
-                  className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-purple-400 hover:bg-purple-50 transition-colors text-left"
+                  className="w-full flex items-center gap-4 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-400 hover:bg-purple-50/50 dark:hover:bg-purple-900/20 transition-all text-left group"
                 >
-                  <span className="text-2xl">&#8693;</span>
+                  <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center flex-shrink-0">
+                    <svg className="w-5 h-5 text-purple-600 dark:text-purple-400" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+                    </svg>
+                  </div>
                   <div>
-                    <p className="font-medium text-gray-900">Bidirectional sync</p>
-                    <p className="text-sm text-gray-500">
-                      Push and pull tickets in both directions
-                    </p>
+                    <p className="font-medium text-gray-900 dark:text-white">Bidirectional</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Push and pull in both directions</p>
                   </div>
                 </button>
               </div>
@@ -458,7 +536,7 @@ function IntegrationsPageContent() {
                   setIsSyncDialogOpen(false);
                   setSyncTarget(null);
                 }}
-                className="mt-4 w-full py-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
+                className="mt-4 w-full py-2.5 text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
               >
                 Cancel
               </button>
