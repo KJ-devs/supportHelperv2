@@ -2,7 +2,6 @@
 
 <div align="center">
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/your-org/support-helper/ci.yml?branch=main&style=for-the-badge)](https://github.com/your-org/support-helper/actions)
 [![Coverage](https://img.shields.io/codecov/c/github/your-org/support-helper?style=for-the-badge)](https://codecov.io/gh/your-org/support-helper)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)

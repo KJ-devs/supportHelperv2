@@ -83,46 +83,11 @@
 3. If locked, delete the DLL directly (Prisma recreates it from temp files)
 4. Alternative: Full cleanup with `pnpm clean && pnpm install` (slower)
 
-## SDK CDN Automation (2026-02-12) - US-004
-**Implementation**: Fully automated SDK CDN build and deployment
-**Files modified**:
-- `.github/workflows/ci.yml` - Added CDN build + verification step to CI pipeline
-- `.github/workflows/release.yml` - Enhanced SDK publish job with CDN build + S3 upload
-- `.github/workflows/deploy-sdk-cdn.yml` - NEW: Dedicated workflow for CDN deployment
-- `packages/sdk-web/CDN_SETUP.md` - NEW: Complete setup and deployment documentation
-- `packages/sdk-web/README.md` - Updated CDN usage section with jsDelivr URLs
-- `CLAUDE.md` - Updated "Common Pitfalls" to reflect automated CDN build
+## SDK CDN Build
+- CDN build is separate: `pnpm --filter @support-helper/sdk-web build:cdn`
+- Output: `packages/sdk-web/dist/cdn/sdk.iife.js`
+- Documentation: `packages/sdk-web/CDN_SETUP.md`
 
-**CI Pipeline Changes**:
-1. `ci.yml` build job now runs `pnpm --filter @support-helper/sdk-web build:cdn`
-2. Verification step ensures `dist/cdn/sdk.iife.js` and sourcemap exist (fails CI if missing)
-3. Uploads SDK CDN artifacts separately (30-day retention)
-
-**Release Pipeline Changes**:
-1. `release.yml` publish-sdk job builds both npm packages + CDN bundle
-2. Optional S3 upload with versioned URLs: `sdk@{version}.js` (immutable, 1-year cache)
-3. Optional `@latest` tag update (5-minute cache)
-4. CloudFront cache invalidation support
-5. GitHub Release notes include CDN URLs (S3 + jsDelivr)
-
-**Dedicated CDN Deployment**:
-- `deploy-sdk-cdn.yml` workflow for standalone CDN deployments
-- Triggers: pushes to main affecting SDK, manual workflow_dispatch
-- Supports custom versioning via manual trigger
-- Graceful degradation: works without AWS secrets (jsDelivr-only)
-- Optional secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, S3_CDN_BUCKET, CDN_DOMAIN, CLOUDFRONT_DISTRIBUTION_ID
-
-**CDN Strategy**:
-- **Primary (zero-config)**: jsDelivr automatically serves from npm publish
-- **Secondary (optional)**: Custom S3/CloudFront for enterprise deployments
-- **Versioning**: Semantic versioning with immutable versioned URLs + mutable @latest tag
-- **Security**: SRI hash support documented, CORS configured
-
-**Key URLs**:
-- Versioned (jsDelivr): `https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@{version}/dist/cdn/sdk.iife.js`
-- Latest (jsDelivr): `https://cdn.jsdelivr.net/npm/@support-helper/sdk-web@latest/dist/cdn/sdk.iife.js`
-- Custom S3 (if configured): `https://{CDN_DOMAIN}/sdk@{version}.js`
-
-**Documentation**:
-- `CDN_SETUP.md`: Complete setup guide for S3/CloudFront, versioning strategy, troubleshooting
-- README.md: Updated with CDN usage examples, SRI hash generation, framework integration
+## Note
+- GitHub Actions workflows were removed (2026-02-14) to streamline development
+- Quality is now enforced locally via agent quality gates (build + test before delivering)
