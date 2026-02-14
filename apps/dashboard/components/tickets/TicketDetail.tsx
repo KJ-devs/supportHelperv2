@@ -78,7 +78,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       <Card>
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">{ticket.title}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{ticket.title}</h1>
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={ticket.status} />
               <TypeBadge type={ticket.type} />
@@ -105,24 +105,24 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         </div>
 
         {/* Metadata */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t dark:border-gray-700">
           <div>
-            <p className="text-xs text-gray-500 mb-1">Créé le</p>
-            <p className="text-sm font-medium">{createdAt}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Créé le</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{createdAt}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Mis à jour</p>
-            <p className="text-sm font-medium">{updatedAt}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Mis à jour</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{updatedAt}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">Application</p>
-            <p className="text-sm font-medium">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Application</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {ticket.application?.name || 'N/A'}
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 mb-1">ID</p>
-            <p className="text-sm font-mono text-gray-600 truncate" title={ticket.id}>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">ID</p>
+            <p className="text-sm font-mono text-gray-600 dark:text-gray-400 truncate" title={ticket.id}>
               {ticket.id.substring(0, 8)}...
             </p>
           </div>
@@ -131,30 +131,30 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
       {/* Description Card */}
       <Card>
-        <h2 className="text-lg font-semibold mb-3">📝 Description</h2>
-        <p className="text-gray-700 whitespace-pre-wrap">{ticket.description}</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">📝 Description</h2>
+        <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ticket.description}</p>
       </Card>
 
       {/* AI Analysis Card */}
       {ticket.aiSummary && (
         <Card>
-          <h2 className="text-lg font-semibold mb-3">🤖 Analyse IA</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">🤖 Analyse IA</h2>
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-medium text-gray-700 mb-1">Résumé</p>
-              <p className="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Résumé</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
                 {ticket.aiSummary}
               </p>
             </div>
 
             {ticket.keywords && ticket.keywords.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Mots-clés</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mots-clés</p>
                 <div className="flex flex-wrap gap-2">
                   {ticket.keywords.map((keyword, index) => (
                     <span
                       key={index}
-                      className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs"
+                      className="px-2 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded text-xs"
                     >
                       {keyword}
                     </span>
@@ -165,8 +165,8 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
             {ticket.aiAnalysis && (
               <div>
-                <p className="text-sm font-medium text-gray-700 mb-2">Analyse détaillée</p>
-                <pre className="text-xs bg-gray-50 p-3 rounded overflow-x-auto">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Analyse détaillée</p>
+                <pre className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 p-3 rounded overflow-x-auto">
                   {JSON.stringify(ticket.aiAnalysis, null, 2)}
                 </pre>
               </div>
@@ -178,14 +178,14 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       {/* User Context Card */}
       {ticket.userContext && (
         <Card>
-          <h2 className="text-lg font-semibold mb-3">💻 Contexte Utilisateur</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">💻 Contexte Utilisateur</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {Object.entries(ticket.userContext).map(([key, value]) => (
-              <div key={key} className="bg-gray-50 p-3 rounded">
-                <p className="text-xs text-gray-500 mb-1 capitalize">
+              <div key={key} className="bg-gray-50 dark:bg-gray-800 p-3 rounded">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-1 capitalize">
                   {key.replace(/([A-Z])/g, ' $1').trim()}
                 </p>
-                <p className="text-sm font-medium text-gray-900 break-all">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
                   {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                 </p>
               </div>
@@ -197,7 +197,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       {/* Media Card */}
       {ticket.media && ticket.media.length > 0 && (
         <Card>
-          <h2 className="text-lg font-semibold mb-3">🎥 Médias</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">🎥 Médias</h2>
           <div className="space-y-4">
             {ticket.media.map((media) => {
               const filename = getFilename(media);
@@ -210,8 +210,8 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <p className="text-sm font-medium">{filename}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{filename}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             {media.type} • {(fileSize / 1024 / 1024).toFixed(2)} MB
                           </p>
                         </div>
@@ -224,11 +224,11 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                           onError={(error) => console.error('Video error:', error)}
                         />
                       ) : (
-                        <div className="border rounded-lg p-8 text-center bg-gray-50">
+                        <div className="border dark:border-gray-700 rounded-lg p-8 text-center bg-gray-50 dark:bg-gray-800">
                           {loadingUrls[media.id] ? (
                             <div className="space-y-2">
                               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                              <p className="text-sm text-gray-600">Loading video...</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">Loading video...</p>
                             </div>
                           ) : (
                             <Button
@@ -243,11 +243,11 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                       )}
                     </div>
                   ) : (
-                    <div className="border rounded-lg p-3">
+                    <div className="border dark:border-gray-700 rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium">{filename}</p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{filename}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             {media.type} • {(fileSize / 1024 / 1024).toFixed(2)} MB •{' '}
                             {media.processingStatus}
                           </p>
