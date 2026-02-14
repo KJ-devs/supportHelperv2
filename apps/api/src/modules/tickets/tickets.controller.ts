@@ -25,11 +25,13 @@ import {
   FilterTicketsDto,
   SearchTicketsDto,
   AssignTicketDto,
+  BulkTicketDto,
   createTicketSchema,
   updateTicketSchema,
   filterTicketsSchema,
   searchTicketsSchema,
   assignTicketSchema,
+  bulkTicketSchema,
 } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -86,6 +88,29 @@ export class TicketsController {
     filterDto: FilterTicketsDto,
   ) {
     return this.ticketsService.findAll(tenantId, filterDto);
+  }
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Perform bulk operations on tickets' })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk operation completed',
+    schema: {
+      type: 'object',
+      properties: {
+        processed: { type: 'number', description: 'Number of tickets successfully processed' },
+        failed: { type: 'number', description: 'Number of tickets that failed' },
+        errors: { type: 'array', items: { type: 'string' }, description: 'Error messages' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Validation failed' })
+  async bulk(
+    @CurrentTenant() tenantId: string,
+    @Body(new ZodValidationPipe(bulkTicketSchema))
+    bulkDto: BulkTicketDto,
+  ) {
+    return this.ticketsService.bulkAction(tenantId, bulkDto);
   }
 
   @Get('stats')
