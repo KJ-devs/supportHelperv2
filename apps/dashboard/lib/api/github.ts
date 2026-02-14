@@ -110,16 +110,6 @@ export interface GitHubAppConfig {
   autoCreateIssues?: boolean;
   syncEnabled?: boolean;
   labelSync?: boolean;
-  settings?: {
-    agentMode?: 'auto' | 'review_plan' | 'review_all';
-    maxRetries?: number;
-    timeoutMinutes?: number;
-    autoMergeEnabled?: boolean;
-    mergeStrategy?: 'squash' | 'merge' | 'rebase';
-    requiredReviews?: number;
-    issueBodyTemplate?: string;
-    [key: string]: any;
-  };
 }
 
 export interface ConnectRepoData {
@@ -127,26 +117,6 @@ export interface ConnectRepoData {
   owner: string;
   repo: string;
   defaultBranch?: string;
-}
-
-// Issue template types
-
-export interface IssueTemplateResponse {
-  template: string;
-  isDefault: boolean;
-  placeholders: Record<string, string>;
-}
-
-export interface TemplateValidation {
-  valid: boolean;
-  placeholders: string[];
-  missingPlaceholders: string[];
-}
-
-export interface TemplatePreviewResponse {
-  rendered: string;
-  template: string;
-  sampleData: Record<string, string>;
 }
 
 export const githubApi = {
@@ -312,59 +282,11 @@ export const githubApi = {
    */
   async updateGithubSettings(
     appId: string,
-    settings: Record<string, any>
+    settings: Partial<GitHubAppConfig>
   ): Promise<GitHubAppConfig> {
     return apiRequest(`/api/applications/${appId}/github/settings`, {
       method: 'PATCH',
       body: JSON.stringify(settings),
-    });
-  },
-
-  // ── Issue Template Endpoints ──────────────────────────────────────
-
-  /**
-   * Get the current issue template for an application
-   */
-  async getIssueTemplate(
-    appId: string
-  ): Promise<IssueTemplateResponse> {
-    return apiRequest(`/api/applications/${appId}/github/template`);
-  },
-
-  /**
-   * Update the issue template for an application
-   */
-  async updateIssueTemplate(
-    appId: string,
-    template: string
-  ): Promise<{ template: string; isDefault: boolean; validation: TemplateValidation }> {
-    return apiRequest(`/api/applications/${appId}/github/template`, {
-      method: 'PATCH',
-      body: JSON.stringify({ template }),
-    });
-  },
-
-  /**
-   * Preview a rendered template with sample data
-   */
-  async previewIssueTemplate(
-    appId: string,
-    template?: string
-  ): Promise<TemplatePreviewResponse> {
-    return apiRequest(`/api/applications/${appId}/github/template/preview`, {
-      method: 'POST',
-      body: JSON.stringify({ template }),
-    });
-  },
-
-  /**
-   * Reset the issue template to default
-   */
-  async resetIssueTemplate(
-    appId: string
-  ): Promise<IssueTemplateResponse> {
-    return apiRequest(`/api/applications/${appId}/github/template`, {
-      method: 'DELETE',
     });
   },
 };
