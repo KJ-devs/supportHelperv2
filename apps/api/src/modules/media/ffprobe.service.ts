@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import * as ffmpeg from 'fluent-ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
 import * as ffmpegPath from '@ffmpeg-installer/ffmpeg';
 import * as ffprobePath from '@ffprobe-installer/ffprobe';
 
@@ -133,7 +133,7 @@ export class FFprobeService {
           this.logger.log(`Thumbnail extracted: ${outputPath}`);
           resolve(outputPath);
         })
-        .on('error', (err) => {
+        .on('error', (err: Error) => {
           this.logger.error(`Thumbnail extraction failed:`, err);
           reject(err);
         });
