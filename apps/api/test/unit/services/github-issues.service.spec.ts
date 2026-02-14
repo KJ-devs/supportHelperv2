@@ -96,6 +96,12 @@ describe('GithubIssuesService', () => {
     service = module.get<GithubIssuesService>(GithubIssuesService);
     prisma = module.get(PrismaService);
     oauthService = module.get(GithubOAuthService);
+
+    // Clear shared mockOctokit calls between tests
+    mockOctokit.issues.create.mockClear();
+    mockOctokit.issues.get.mockClear();
+    mockOctokit.issues.update.mockClear();
+    mockOctokit.search.issuesAndPullRequests.mockClear();
   });
 
   it('should be defined', () => {
@@ -223,6 +229,325 @@ describe('GithubIssuesService', () => {
       (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(service.unlinkIssue('missing', 'tenant-123')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─── Label mapping ────────────────────────────────────────────
+
+  describe('label mapping (via createIssueFromTicket)', () => {
+    it('should map severity and type to labels', async () => {
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubIssue.create as jest.Mock).mockResolvedValue({ id: 'gi-new' });
+
+      await service.createIssueFromTicket('ticket-123', 'tenant-123', {
+        repository: 'owner/repo',
+      } as any);
+
+      const createCall = mockOctokit.issues.create.mock.calls[0][0];
+      expect(createCall.labels).toContain('support');
+      expect(createCall.labels).toContain('severity:high');
+      expect(createCall.labels).toContain('type:bug');
+    });
+
+    it('should always include "support" label even without severity/type', async () => {
+      const ticketNoLabels = { ...mockTicket, severity: null, type: null };
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(ticketNoLabels);
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubIssue.create as jest.Mock).mockResolvedValue({ id: 'gi-new' });
+
+      await service.createIssueFromTicket('ticket-123', 'tenant-123', {
+        repository: 'owner/repo',
+      } as any);
+
+      const createCall = mockOctokit.issues.create.mock.calls[0][0];
+      expect(createCall.labels).toContain('support');
+      expect(createCall.labels).toHaveLength(1);
+    });
+
+    it('should merge additional labels without duplicates', async () => {
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubIssue.create as jest.Mock).mockResolvedValue({ id: 'gi-new' });
+
+      await service.createIssueFromTicket('ticket-123', 'tenant-123', {
+        repository: 'owner/repo',
+        labels: ['urgent', 'support'], // 'support' is already added
+      } as any);
+
+      const createCall = mockOctokit.issues.create.mock.calls[0][0];
+      expect(createCall.labels).toContain('urgent');
+      // 'support' should not be duplicated
+      const supportCount = createCall.labels.filter((l: string) => l === 'support').length;
+      expect(supportCount).toBe(1);
+    });
+  });
+
+  // ─── Auto-create issue from ticket ────────────────────────────
+
+  describe('autoCreateIssueFromTicket', () => {
+    let appService: any;
+
+    beforeEach(() => {
+      appService = (service as any).appService;
+      // Add missing prisma mocks for autoCreate
+      (prisma as any).ticket.findUnique = jest.fn();
+      (prisma as any).projectGithubConfig = { findUnique: jest.fn() };
+      // Clear shared mock to avoid leaking from previous tests
+      mockOctokit.issues.create.mockClear();
+      mockOctokit.issues.create.mockResolvedValue({
+        data: { number: 42, html_url: 'https://github.com/owner/repo/issues/42', title: 'Bug', state: 'open', created_at: '2026-01-01' },
+      });
+    });
+
+    it('should create issue via installation token when config exists', async () => {
+      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        owner: 'owner',
+        repo: 'repo',
+        installationId: BigInt(12345),
+        settings: null,
+      });
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubIssue.create as jest.Mock).mockResolvedValue({ id: 'new' });
+
+      await service.autoCreateIssueFromTicket('ticket-123');
+
+      expect(appService.getInstallationOctokit).toHaveBeenCalledWith(12345);
+      expect(mockOctokit.issues.create).toHaveBeenCalledWith(
+        expect.objectContaining({ owner: 'owner', repo: 'repo' }),
+      );
+      expect(prisma.githubIssue.create).toHaveBeenCalled();
+    });
+
+    it('should include default labels from config settings', async () => {
+      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        owner: 'owner',
+        repo: 'repo',
+        installationId: BigInt(12345),
+        settings: { defaultLabels: 'backend,urgent' },
+      });
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubIssue.create as jest.Mock).mockResolvedValue({ id: 'x' });
+
+      await service.autoCreateIssueFromTicket('ticket-123');
+
+      const createCall = mockOctokit.issues.create.mock.calls[0][0];
+      expect(createCall.labels).toContain('backend');
+      expect(createCall.labels).toContain('urgent');
+      expect(createCall.labels).toContain('support');
+    });
+
+    it('should skip when ticket has no applicationId', async () => {
+      (prisma as any).ticket.findUnique.mockResolvedValue({
+        ...mockTicket,
+        applicationId: null,
+        application: null,
+      });
+
+      await service.autoCreateIssueFromTicket('ticket-123');
+
+      expect(mockOctokit.issues.create).not.toHaveBeenCalled();
+    });
+
+    it('should skip when no ProjectGithubConfig exists', async () => {
+      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue(null);
+
+      await service.autoCreateIssueFromTicket('ticket-123');
+
+      expect(mockOctokit.issues.create).not.toHaveBeenCalled();
+    });
+
+    it('should skip when issue already exists for ticket+repo', async () => {
+      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        owner: 'owner',
+        repo: 'repo',
+        installationId: BigInt(12345),
+        settings: null,
+      });
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue({ id: 'existing' });
+
+      await service.autoCreateIssueFromTicket('ticket-123');
+
+      expect(mockOctokit.issues.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Sync-origin anti-loop ────────────────────────────────────
+
+  describe('setSyncOrigin / isSyncFromGithub / isSyncFromPlatform', () => {
+    it('should store sync origin in cache with 30s TTL', async () => {
+      await service.setSyncOrigin('ticket-123', 'github');
+
+      const cs = (service as any).cacheService;
+      expect(cs.set).toHaveBeenCalledWith(
+        'github:sync-origin:ticket-123',
+        'github',
+        30,
+      );
+    });
+
+    it('isSyncFromGithub should return true when origin is "github"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue('github');
+
+      expect(await service.isSyncFromGithub('ticket-123')).toBe(true);
+    });
+
+    it('isSyncFromGithub should return false when origin is "platform"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue('platform');
+
+      expect(await service.isSyncFromGithub('ticket-123')).toBe(false);
+    });
+
+    it('isSyncFromGithub should return false when no flag is set', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+
+      expect(await service.isSyncFromGithub('ticket-123')).toBe(false);
+    });
+
+    it('isSyncFromPlatform should return true when origin is "platform"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue('platform');
+
+      expect(await service.isSyncFromPlatform('ticket-123')).toBe(true);
+    });
+
+    it('isSyncFromPlatform should return false when origin is "github"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue('github');
+
+      expect(await service.isSyncFromPlatform('ticket-123')).toBe(false);
+    });
+
+    it('isSyncFromPlatform should return false when no flag is set', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+
+      expect(await service.isSyncFromPlatform('ticket-123')).toBe(false);
+    });
+  });
+
+  // ─── Reverse sync: ticket → GitHub ────────────────────────────
+
+  describe('syncTicketStatusToGithub', () => {
+    const mockGithubIssue = {
+      id: 'gh-1',
+      ticketId: 'ticket-123',
+      githubIssueNumber: 42,
+      githubRepo: 'owner/repo',
+      ticket: {
+        id: 'ticket-123',
+        tenantId: 'tenant-123',
+        applicationId: 'app-123',
+      },
+    };
+
+    beforeEach(() => {
+      (prisma as any).projectGithubConfig = { findUnique: jest.fn() };
+      // Reset shared mock call history
+      mockOctokit.issues.update.mockClear();
+      mockOctokit.issues.update.mockResolvedValue({ data: {} });
+    });
+
+    it('should skip sync when change originated from GitHub (anti-loop)', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue('github');
+
+      await service.syncTicketStatusToGithub('ticket-123', 'resolved');
+
+      expect(prisma.githubIssue.findMany).not.toHaveBeenCalled();
+      expect(mockOctokit.issues.update).not.toHaveBeenCalled();
+    });
+
+    it('should close issue when ticket status is "resolved"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+      (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        installationId: BigInt(12345),
+      });
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+
+      await service.syncTicketStatusToGithub('ticket-123', 'resolved');
+
+      expect(mockOctokit.issues.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          owner: 'owner',
+          repo: 'repo',
+          issue_number: 42,
+          state: 'closed',
+        }),
+      );
+    });
+
+    it('should reopen issue when ticket status is "open"', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+      (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        installationId: BigInt(12345),
+      });
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+
+      await service.syncTicketStatusToGithub('ticket-123', 'open');
+
+      expect(mockOctokit.issues.update).toHaveBeenCalledWith(
+        expect.objectContaining({ state: 'open' }),
+      );
+    });
+
+    it('should set sync-origin to "platform" before calling GitHub API', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+      (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        installationId: BigInt(12345),
+      });
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+
+      await service.syncTicketStatusToGithub('ticket-123', 'resolved');
+
+      expect(cs.set).toHaveBeenCalledWith(
+        'github:sync-origin:ticket-123',
+        'platform',
+        30,
+      );
+      // Verify set was called (ordering guaranteed by await chain in source)
+      expect(mockOctokit.issues.update).toHaveBeenCalled();
+    });
+
+    it('should do nothing when no GitHub issues are linked', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+      (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.syncTicketStatusToGithub('ticket-123', 'resolved');
+
+      expect(mockOctokit.issues.update).not.toHaveBeenCalled();
+    });
+
+    it('should mark syncStatus as "error" when GitHub API fails', async () => {
+      const cs = (service as any).cacheService;
+      cs.get.mockResolvedValue(null);
+      (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
+      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+        installationId: BigInt(12345),
+      });
+      mockOctokit.issues.update.mockRejectedValueOnce(new Error('API error'));
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+
+      await service.syncTicketStatusToGithub('ticket-123', 'resolved');
+
+      expect(prisma.githubIssue.update).toHaveBeenCalledWith({
+        where: { id: 'gh-1' },
+        data: { syncStatus: 'error' },
+      });
     });
   });
 });

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import ffmpeg from 'fluent-ffmpeg';
-import * as ffmpegPath from '@ffmpeg-installer/ffmpeg';
-import * as ffprobePath from '@ffprobe-installer/ffprobe';
+import ffmpeg = require('fluent-ffmpeg');
+import ffmpegPath = require('@ffmpeg-installer/ffmpeg');
+import ffprobePath = require('@ffprobe-installer/ffprobe');
 
 // Configure ffmpeg paths
 ffmpeg.setFfmpegPath(ffmpegPath.path);
