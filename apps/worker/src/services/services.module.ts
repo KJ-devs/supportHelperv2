@@ -11,6 +11,7 @@ import {
   EmailService,
   AgentService,
 } from './index';
+import { JobMonitoringService } from './job-monitoring.service';
 
 /**
  * Services Module
@@ -30,6 +31,7 @@ import {
     MeilisearchService,
     EmailService,
     AgentService,
+    JobMonitoringService,
   ],
   exports: [
     PrismaService,
@@ -42,6 +44,7 @@ import {
     MeilisearchService,
     EmailService,
     AgentService,
+    JobMonitoringService,
   ],
 })
 export class ServicesModule {}

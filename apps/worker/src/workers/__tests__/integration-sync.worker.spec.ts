@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { IntegrationSyncWorker } from '../integration-sync.worker';
 import { PrismaService } from '../../services/prisma.service';
@@ -110,12 +111,20 @@ describe('IntegrationSyncWorker', () => {
       },
     };
 
+    const mockDeadLetterQueue = {
+      add: jest.fn().mockResolvedValue({}),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         IntegrationSyncWorker,
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: getQueueToken('dead-letter'),
+          useValue: mockDeadLetterQueue,
         },
       ],
     }).compile();
@@ -569,7 +578,8 @@ describe('IntegrationSyncWorker', () => {
     it('should throw error when INTEGRATION_ENCRYPTION_KEY not set', () => {
       delete process.env.INTEGRATION_ENCRYPTION_KEY;
 
-      expect(() => new IntegrationSyncWorker(prisma)).toThrow('INTEGRATION_ENCRYPTION_KEY not configured');
+      const mockDeadLetterQueue = {} as any;
+      expect(() => new IntegrationSyncWorker(prisma, mockDeadLetterQueue)).toThrow('INTEGRATION_ENCRYPTION_KEY not configured');
 
       // Restore for other tests
       process.env.INTEGRATION_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
