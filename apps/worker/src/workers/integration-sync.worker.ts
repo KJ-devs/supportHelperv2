@@ -1,11 +1,12 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { IntegrationSyncJobData, IntegrationSyncResult, IntegrationPullJobData, IntegrationPullResult } from '../queues/queue.types';
 import { PrismaService } from '../services/prisma.service';
 import { decryptAES256GCM, parseEncryptionKey } from '@support-helper/shared';
 import { INTEGRATION_PROVIDERS } from '../../../api/src/modules/integrations/providers';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+import { QUEUE_NAMES } from '../queues';
 
 @Processor('integration-sync', {
   concurrency: 10,
@@ -13,12 +14,23 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
     max: 250, // Increased from 100 to handle large bulk syncs (e.g., 173+ tickets)
     duration: 60000,
   },
+  settings: {
+    backoffStrategy: (attemptsMade: number): number => {
+      const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+      const index = Math.max(0, Math.min(attemptsMade - 1, delays.length - 1));
+      return delays[index]!;
+    },
+  },
 })
 export class IntegrationSyncWorker extends WorkerHost {
   private readonly logger = new Logger(IntegrationSyncWorker.name);
   private readonly key: Buffer;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue('dead-letter')
+    private readonly deadLetterQueue: Queue,
+  ) {
     super();
 
     const keyString = process.env.INTEGRATION_ENCRYPTION_KEY;
@@ -294,5 +306,72 @@ export class IntegrationSyncWorker extends WorkerHost {
       this.logger.error(`Pull-tickets failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Worker Events
+  // ═══════════════════════════════════════════════════════════════════════
+
+  @OnWorkerEvent('active')
+  onActive(job: Job) {
+    this.logger.log(`Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+  }
+
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job, result: IntegrationSyncResult | IntegrationPullResult) {
+    if ('processingTimeMs' in result) {
+      this.logger.log(`Job ${job.id} completed successfully in ${result.processingTimeMs}ms`);
+    }
+  }
+
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job | undefined, error: Error) {
+    if (!job) {
+      this.logger.error(`Job failed without job context: ${error.message}`);
+      return;
+    }
+
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts || 4;
+
+    this.logger.error(
+      `Job ${job.id} failed (attempt ${attemptsMade}/${maxAttempts}): ${getErrorMessage(error)}`,
+      getErrorStack(error),
+    );
+
+    // If this was the last attempt, move to dead letter queue
+    if (attemptsMade >= maxAttempts) {
+      this.logger.error(`Job ${job.id} exceeded max retries - moving to dead letter queue`);
+
+      await this.deadLetterQueue.add(
+        'failed-integration-sync',
+        {
+          originalJobId: job.id,
+          queueName: QUEUE_NAMES.INTEGRATION_SYNC,
+          jobData: job.data,
+          failedReason: error.message,
+          stacktrace: error.stack,
+          attemptsMade,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          removeOnComplete: {
+            age: 90 * 24 * 60 * 60, // 90 days
+          },
+        },
+      );
+    } else {
+      const nextDelay = this.getNextRetryDelay(attemptsMade);
+      this.logger.warn(`Job ${job.id} will retry in ${Math.round(nextDelay / 1000)}s`);
+    }
+  }
+
+  /**
+   * Calculate next retry delay based on attempt number
+   */
+  private getNextRetryDelay(attemptsMade: number): number {
+    const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+    const index = Math.max(0, Math.min(attemptsMade, delays.length - 1));
+    return delays[index]!;
   }
 }

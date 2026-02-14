@@ -3,6 +3,17 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { UsersController } from '../../../src/users/users.controller';
 import { UsersService } from '../../../src/users/users.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { CacheService } from '../../../src/cache';
+
+const mockCacheService = {
+  get: jest.fn().mockResolvedValue(undefined),
+  set: jest.fn().mockResolvedValue(undefined),
+  del: jest.fn().mockResolvedValue(undefined),
+  getOrSet: jest.fn().mockImplementation((_key: string, _ttl: number, factory: () => any) => factory()),
+  invalidateByPrefix: jest.fn().mockResolvedValue(undefined),
+  hashFilters: jest.fn().mockReturnValue('abc123'),
+  getMetrics: jest.fn().mockReturnValue({ hits: 0, misses: 0, hitRate: '0%', total: 0 }),
+};
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -32,6 +43,7 @@ describe('UsersController', () => {
       providers: [
         UsersService,
         { provide: PrismaService, useValue: mockPrismaService },
+        { provide: CacheService, useValue: mockCacheService },
       ],
     }).compile();
 

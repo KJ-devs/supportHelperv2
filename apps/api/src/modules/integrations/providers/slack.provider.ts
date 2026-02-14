@@ -1,7 +1,7 @@
 import { Ticket } from '@prisma/client';
 import { WebClient } from '@slack/web-api';
 import { BaseIntegrationProvider } from './base-provider.abstract';
-import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
 import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class SlackProvider extends BaseIntegrationProvider {
@@ -192,6 +192,81 @@ export class SlackProvider extends BaseIntegrationProvider {
     });
     if (!result.ok) {
       throw new Error('Failed to delete message from Slack');
+    }
+  }
+
+  /**
+   * Pull messages from a Slack channel and convert them to tickets.
+   *
+   * Requires the bot to have `channels:history` (public channels)
+   * or `groups:history` (private channels) OAuth scope.
+   *
+   * Uses cursor-based pagination. Limited to 200 messages max to
+   * avoid excessive API calls.
+   */
+  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult> {
+    try {
+      const client = new WebClient(config.botToken);
+      const maxMessages = Math.min(options?.maxResults || 200, 200);
+      const allTickets: PulledTicket[] = [];
+      let cursor: string | undefined;
+      let total = 0;
+
+      do {
+        const batchSize = Math.min(100, maxMessages - allTickets.length);
+
+        const response = await client.conversations.history({
+          channel: config.channel,
+          limit: batchSize,
+          ...(cursor ? { cursor } : {}),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch channel history from Slack');
+        }
+
+        const messages = response.messages || [];
+
+        for (const message of messages) {
+          // Skip bot messages and system messages (join/leave/etc.)
+          if (message.bot_id || message.subtype) {
+            continue;
+          }
+
+          const text = message.text || '';
+          if (!text.trim()) continue;
+
+          const firstLine = text.split('\n')[0];
+          const title = firstLine.length > 200 ? firstLine.substring(0, 200) : firstLine;
+          const ts = message.ts || '';
+
+          allTickets.push({
+            externalId: ts,
+            title,
+            description: text,
+            status: 'open',
+            severity: 'medium',
+            type: 'bug',
+            createdAt: ts ? new Date(parseFloat(ts) * 1000).toISOString() : undefined,
+            metadata: {
+              source: 'slack-message',
+              channel: config.channel,
+              threadTs: message.thread_ts,
+              replyCount: message.reply_count,
+            },
+          });
+        }
+
+        cursor = response.response_metadata?.next_cursor || undefined;
+        total = allTickets.length;
+      } while (cursor && allTickets.length < maxMessages);
+
+      this.logger.log(`Pulled ${allTickets.length} messages from Slack channel ${config.channel}`);
+
+      return { success: true, tickets: allTickets, total };
+    } catch (error) {
+      this.logger.error(`pullTickets failed: ${getErrorMessage(error)}`);
+      return { success: false, tickets: [], total: 0, error: getErrorMessage(error) };
     }
   }
 }

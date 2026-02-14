@@ -3,16 +3,20 @@ import { BullModule } from '@nestjs/bullmq';
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
+import { TicketsGateway } from './tickets.gateway';
 import { TicketsController } from './tickets.controller';
 import { SdkTicketsController } from './sdk-tickets.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
+import { AuthModule } from '../../auth/auth.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
+import { WsJwtGuard } from '../agent/ws-jwt.guard';
 
 @Module({
   imports: [
     PrismaModule,
     AIModule,
+    AuthModule,
     IntegrationsModule,
     BullModule.registerQueue({
       name: 'ticket-analysis',
@@ -28,7 +32,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
     }),
   ],
   controllers: [TicketsController, SdkTicketsController],
-  providers: [TicketsService, TicketsSearchService, TicketsAIService],
-  exports: [TicketsService, TicketsSearchService, TicketsAIService],
+  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketsGateway, WsJwtGuard],
+  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketsGateway],
 })
 export class TicketsModule {}

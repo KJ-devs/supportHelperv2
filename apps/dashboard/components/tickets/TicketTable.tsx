@@ -28,7 +28,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
   };
 
   const SortIcon = ({ field }: { field: string }) => {
-    if (sortField !== field) return <span className="text-gray-400">⇅</span>;
+    if (sortField !== field) return <span className="text-gray-400 dark:text-gray-500">⇅</span>;
     return sortOrder === 'asc' ? <span>↑</span> : <span>↓</span>;
   };
 
@@ -38,16 +38,16 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🎫</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">Aucun ticket trouvé</h3>
-        <p className="text-gray-600">Modifiez vos filtres pour voir plus de résultats.</p>
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Aucun ticket trouvé</h3>
+        <p className="text-gray-600 dark:text-gray-400">Modifiez vos filtres pour voir plus de résultats.</p>
       </div>
     );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
+      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <thead className="bg-gray-50 dark:bg-gray-800/50">
           <tr>
             {onSelectAll && (
               <th className="px-6 py-3 text-left">
@@ -58,7 +58,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
               </th>
             )}
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('title')}
             >
               <div className="flex items-center space-x-1">
@@ -66,14 +66,14 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                 <SortIcon field="title" />
               </div>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Status
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Type
             </th>
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('severity')}
             >
               <div className="flex items-center space-x-1">
@@ -81,11 +81,11 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                 <SortIcon field="severity" />
               </div>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Application
             </th>
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('createdAt')}
             >
               <div className="flex items-center space-x-1">
@@ -93,12 +93,12 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                 <SortIcon field="createdAt" />
               </div>
             </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Actions
             </th>
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
+        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
           {tickets.map((ticket) => {
             const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
               day: 'numeric',
@@ -108,7 +108,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
             });
 
             return (
-              <tr key={ticket.id} className="hover:bg-gray-50">
+              <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 {onSelectTicket && (
                   <td className="px-6 py-4">
                     <TicketCheckbox
@@ -121,11 +121,11 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                   <div className="max-w-xs">
                     <Link
                       href={`/dashboard/tickets/${ticket.id}`}
-                      className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                      className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
                     >
                       {ticket.title}
                     </Link>
-                    <p className="text-xs text-gray-500 line-clamp-1 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">
                       {ticket.description}
                     </p>
                   </div>
@@ -139,16 +139,16 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                 <td className="px-6 py-4 whitespace-nowrap">
                   <SeverityBadge severity={ticket.severity} />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                   {ticket.application?.name || '-'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {createdAt}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <Link
                     href={`/dashboard/tickets/${ticket.id}`}
-                    className="text-blue-600 hover:text-blue-800"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                   >
                     Voir →
                   </Link>

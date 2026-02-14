@@ -8,6 +8,7 @@ export interface GithubWebhookJobData {
   eventData: any;
   payload: any;
   deliveryId: string;
+  webhookEventId?: string;
   receivedAt: string;
 }
 
@@ -20,7 +21,7 @@ export class GithubWebhookProcessor extends WorkerHost {
   }
 
   async process(job: Job<GithubWebhookJobData>): Promise<any> {
-    const { event, eventData, deliveryId } = job.data;
+    const { event, deliveryId } = job.data;
 
     this.logger.log(`Processing GitHub webhook job: ${event} (${deliveryId})`);
 
@@ -38,6 +39,12 @@ export class GithubWebhookProcessor extends WorkerHost {
         case 'issue_comment':
           return this.processIssueCommentEvent(job.data);
 
+        case 'check_run':
+          return this.processCheckRunEvent(job.data);
+
+        case 'installation':
+          return this.processInstallationEvent(job.data);
+
         default:
           this.logger.debug(`Unhandled event type: ${event}`);
           return { handled: false, event };
@@ -49,7 +56,7 @@ export class GithubWebhookProcessor extends WorkerHost {
   }
 
   private async processIssueEvent(data: GithubWebhookJobData) {
-    const { payload, eventData } = data;
+    const { payload } = data;
     const { action, issue, repository } = payload;
 
     // Additional async processing for issue events
@@ -85,7 +92,7 @@ export class GithubWebhookProcessor extends WorkerHost {
     const { repository, commits, ref } = payload;
 
     this.logger.log(
-      `Processed push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`
+      `Processed push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`,
     );
 
     return {
@@ -98,7 +105,7 @@ export class GithubWebhookProcessor extends WorkerHost {
 
   private async processIssueCommentEvent(data: GithubWebhookJobData) {
     const { payload } = data;
-    const { action, issue, comment, repository } = payload;
+    const { action, issue, repository } = payload;
 
     this.logger.log(`Processed comment on ${repository.full_name}#${issue.number}`);
 
@@ -108,6 +115,128 @@ export class GithubWebhookProcessor extends WorkerHost {
       issueNumber: issue.number,
       repository: repository.full_name,
     };
+  }
+
+  /**
+   * Process check_run events (CI status feedback)
+   */
+  private async processCheckRunEvent(data: GithubWebhookJobData) {
+    const { payload } = data;
+    const { action, check_run, repository } = payload;
+
+    this.logger.log(
+      `Processed check_run ${action}: ${check_run.name} on ${repository.full_name} - ${check_run.conclusion || 'pending'}`,
+    );
+
+    // On completed check runs with failure, find linked tickets
+    if (action === 'completed' && check_run.conclusion === 'failure') {
+      const linkedTickets: string[] = [];
+
+      for (const pr of check_run.pull_requests || []) {
+        const githubIssue = await this.prisma.githubIssue.findFirst({
+          where: {
+            githubRepo: repository.full_name,
+            githubIssueNumber: pr.number,
+          },
+        });
+
+        if (githubIssue?.ticketId) {
+          linkedTickets.push(githubIssue.ticketId);
+        }
+      }
+
+      if (linkedTickets.length > 0) {
+        this.logger.log(
+          `CI failure for "${check_run.name}" linked to tickets: ${linkedTickets.join(', ')}`,
+        );
+      }
+
+      return {
+        handled: true,
+        action,
+        checkName: check_run.name,
+        conclusion: check_run.conclusion,
+        repository: repository.full_name,
+        linkedTickets,
+      };
+    }
+
+    return {
+      handled: true,
+      action,
+      checkName: check_run.name,
+      conclusion: check_run.conclusion,
+      repository: repository.full_name,
+    };
+  }
+
+  /**
+   * Process installation lifecycle events
+   */
+  private async processInstallationEvent(data: GithubWebhookJobData) {
+    const { payload } = data;
+    const { action, installation, sender } = payload;
+
+    this.logger.log(
+      `Processed installation ${action}: ${installation.account.login} (ID: ${installation.id})`,
+    );
+
+    switch (action) {
+      case 'created': {
+        // The synchronous handler logs the event. The actual GithubInstallation
+        // record is created during the installation callback flow (US-1.2)
+        // when the tenant mapping is known.
+        return {
+          handled: true,
+          action,
+          installationId: installation.id,
+          accountLogin: installation.account.login,
+          accountType: installation.account.type,
+          senderLogin: sender.login,
+        };
+      }
+
+      case 'deleted': {
+        // Synchronous handler already removes the record.
+        // Async processor handles any additional cleanup.
+        // Remove related project configs that reference this installation.
+        const installationIdBigInt = BigInt(installation.id);
+        try {
+          const deleted = await this.prisma.projectGithubConfig.deleteMany({
+            where: { installationId: installationIdBigInt },
+          });
+          if (deleted.count > 0) {
+            this.logger.log(
+              `Cleaned up ${deleted.count} project configs for deleted installation ${installation.id}`,
+            );
+          }
+        } catch {
+          this.logger.debug(
+            `No project configs to clean up for installation ${installation.id}`,
+          );
+        }
+
+        return {
+          handled: true,
+          action,
+          installationId: installation.id,
+        };
+      }
+
+      case 'suspend':
+      case 'unsuspend': {
+        // Synchronous handler already updates suspendedAt.
+        return {
+          handled: true,
+          action,
+          installationId: installation.id,
+        };
+      }
+
+      default:
+        this.logger.debug(`Unhandled installation action: ${action}`);
+        return { handled: false, action, installationId: installation.id };
+    }
   }
 
   @OnWorkerEvent('completed')

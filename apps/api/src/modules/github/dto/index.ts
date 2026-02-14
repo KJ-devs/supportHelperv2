@@ -9,3 +9,6 @@ export * from './github-issues.dto';
 
 // User Story DTOs
 export * from './github-userstory.dto';
+
+// Project GitHub Config DTOs
+export * from './project-github-config.dto';

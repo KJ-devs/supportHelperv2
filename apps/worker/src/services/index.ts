@@ -8,3 +8,4 @@ export * from './meilisearch.service';
 export * from './prisma.service';
 export * from './email.service';
 export * from './agent.service';
+export * from './job-monitoring.service';

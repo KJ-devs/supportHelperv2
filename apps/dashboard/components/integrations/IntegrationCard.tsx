@@ -1,7 +1,6 @@
 'use client';
 
 import { Integration } from '@/lib/types/integration';
-import { Button, Card } from '@/components/ui';
 
 interface IntegrationCardProps {
   integration: Integration;
@@ -86,6 +85,14 @@ const INTEGRATION_ICONS: Record<string, () => JSX.Element> = {
   hubspot: HubSpotIcon,
 };
 
+const ICON_BG: Record<string, string> = {
+  slack: 'bg-[#4A154B]/10',
+  discord: 'bg-[#5865F2]/10',
+  notion: 'bg-gray-100 dark:bg-gray-700',
+  jira: 'bg-[#0052CC]/10',
+  hubspot: 'bg-[#FF7A59]/10',
+};
+
 const ZapIcon = () => (
   <svg
     className="w-4 h-4"
@@ -162,6 +169,59 @@ const TrashIcon = () => (
   </svg>
 );
 
+function getStatus(integration: Integration): {
+  label: string;
+  dotClass: string;
+  textClass: string;
+} {
+  if (!integration.enabled) {
+    return {
+      label: 'Disabled',
+      dotClass: 'bg-gray-400',
+      textClass: 'text-gray-500 dark:text-gray-400',
+    };
+  }
+  const isRecent = integration.lastSyncedAt
+    ? Date.now() - new Date(integration.lastSyncedAt).getTime() < 3600000
+    : false;
+  if (isRecent) {
+    return {
+      label: 'Connected',
+      dotClass: 'bg-green-500 animate-pulse',
+      textClass: 'text-green-600 dark:text-green-400',
+    };
+  }
+  return {
+    label: 'Idle',
+    dotClass: 'bg-yellow-500',
+    textClass: 'text-yellow-600 dark:text-yellow-400',
+  };
+}
+
+function timeAgo(dateString?: string): string {
+  if (!dateString) return 'Never';
+  const date = new Date(dateString);
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function getSuccessRate(integration: Integration): number | null {
+  const total = integration._count?.syncLogs ?? 0;
+  if (total === 0) return null;
+  // Without detailed success/fail counts, we show total syncs as a proxy.
+  // In a real scenario this would come from the API. For now, assume 94% default
+  // or derive from available data. We return null when we can't compute.
+  return null;
+}
+
 export function IntegrationCard({
   integration,
   onEdit,
@@ -171,114 +231,123 @@ export function IntegrationCard({
   onViewLogs,
 }: IntegrationCardProps) {
   const IconComponent = INTEGRATION_ICONS[integration.type] || PlugIcon;
-
-  const timeAgo = (dateString?: string): string => {
-    if (!dateString) return 'Never';
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 7) return `${days}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
-
-  const isRecentlyActive = integration.lastSyncedAt
-    ? new Date().getTime() - new Date(integration.lastSyncedAt).getTime() < 3600000
-    : false;
+  const iconBg = ICON_BG[integration.type] || 'bg-gray-100 dark:bg-gray-700';
+  const status = getStatus(integration);
+  const totalSyncs = integration._count?.syncLogs ?? 0;
+  const successRate = getSuccessRate(integration);
 
   return (
-    <Card padding>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="relative">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-600 hover:-translate-y-0.5 transition-all duration-300">
+      {/* Header section */}
+      <div className="p-5 pb-0">
+        <div className="flex items-start gap-4">
+          {/* Provider icon with colored background */}
+          <div className={`flex-shrink-0 w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
             <IconComponent />
-            <div
-              className={`absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white ${
-                isRecentlyActive ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-              }`}
-            />
           </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">{integration.name}</h3>
-            <p className="text-sm text-gray-500 capitalize">{integration.type}</p>
+
+          {/* Name + status */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
+              {integration.name}
+            </h3>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-sm text-gray-400 dark:text-gray-500 capitalize">
+                {integration.type}
+              </span>
+              <span className="text-gray-300 dark:text-gray-600">&middot;</span>
+              <span className={`flex items-center gap-1.5 text-sm font-medium ${status.textClass}`}>
+                <span className={`w-2 h-2 rounded-full ${status.dotClass}`} />
+                {status.label}
+              </span>
+            </div>
           </div>
-        </div>
-        <div>
-          {integration.enabled ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Enabled
-            </span>
-          ) : (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-              Disabled
-            </span>
-          )}
         </div>
       </div>
 
-      <div className="space-y-2 mb-4">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Last sync:</span>
-          <span className="text-gray-900 font-medium">{timeAgo(integration.lastSyncedAt)}</span>
+      {/* Stats section */}
+      <div className="px-5 py-4 mt-3 border-t border-gray-100 dark:border-gray-700/50">
+        <div className="grid grid-cols-2 gap-y-2 text-sm">
+          <span className="text-gray-500 dark:text-gray-400">Last sync</span>
+          <span className="text-right font-medium text-gray-900 dark:text-gray-100">
+            {timeAgo(integration.lastSyncedAt)}
+          </span>
+          <span className="text-gray-500 dark:text-gray-400">Total syncs</span>
+          <span className="text-right font-medium text-gray-900 dark:text-gray-100">
+            {totalSyncs.toLocaleString()}
+          </span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Total syncs:</span>
-          <span className="text-gray-900 font-medium">{integration._count?.syncLogs || 0}</span>
-        </div>
+
+        {/* Success rate bar (shown only when we have data) */}
+        {successRate !== null && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400">Success rate</span>
+              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                {successRate}%
+              </span>
+            </div>
+            <div className="h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  successRate >= 90
+                    ? 'bg-green-500'
+                    : successRate >= 70
+                      ? 'bg-yellow-500'
+                      : 'bg-red-500'
+                }`}
+                style={{ width: `${successRate}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => onTest(integration)}
-          className="inline-flex items-center gap-1.5"
-        >
-          <ZapIcon />
-          Test
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => onSync(integration)}
-          className="inline-flex items-center gap-1.5"
-        >
-          <RefreshIcon />
-          Sync
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => onViewLogs(integration)}
-          className="inline-flex items-center gap-1.5"
-        >
-          <ListIcon />
-          Logs
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          onClick={() => onEdit(integration)}
-          className="inline-flex items-center gap-1.5"
-        >
-          <PencilIcon />
-          Edit
-        </Button>
-        <Button
-          size="sm"
-          variant="danger"
-          onClick={() => onDelete(integration)}
-          className="inline-flex items-center gap-1.5"
-        >
-          <TrashIcon />
-        </Button>
+      {/* Actions section */}
+      <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-700/50 flex items-center justify-between">
+        {/* Left actions: Test, Sync, Logs */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onTest(integration)}
+            title="Test connection"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 transition-colors"
+          >
+            <ZapIcon />
+          </button>
+          <button
+            onClick={() => onSync(integration)}
+            title="Sync now"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-colors"
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            onClick={() => onViewLogs(integration)}
+            title="View logs"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400 transition-colors"
+          >
+            <ListIcon />
+          </button>
+        </div>
+
+        {/* Right actions: Edit, Delete */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => onEdit(integration)}
+            title="Edit integration"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-colors"
+          >
+            <PencilIcon />
+          </button>
+          <button
+            onClick={() => onDelete(integration)}
+            title="Delete integration"
+            className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
+          >
+            <TrashIcon />
+          </button>
+        </div>
       </div>
-    </Card>
+    </div>
   );
 }

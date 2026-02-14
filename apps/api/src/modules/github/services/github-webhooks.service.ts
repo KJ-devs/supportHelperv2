@@ -1,7 +1,7 @@
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { Webhooks, EmitterWebhookEvent } from '@octokit/webhooks';
+import { Webhooks } from '@octokit/webhooks';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 
@@ -35,6 +35,17 @@ export interface WebhookEventData {
     headBranch: string;
     baseBranch: string;
   };
+  checkRun?: {
+    name: string;
+    conclusion: string | null;
+    headSha: string;
+    pullRequests: Array<{ number: number }>;
+  };
+  installation?: {
+    id: number;
+    accountLogin: string;
+    accountType: string;
+  };
   sender: {
     login: string;
     id: number;
@@ -50,7 +61,7 @@ export class GithubWebhooksService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    @InjectQueue('github') private githubQueue: Queue
+    @InjectQueue('github') private githubQueue: Queue,
   ) {
     this.webhookSecret = this.config.get('github.webhookSecret') || '';
 
@@ -68,7 +79,10 @@ export class GithubWebhooksService {
   /**
    * Verify webhook signature
    */
-  async verifySignature(payload: string, signature: string): Promise<boolean> {
+  async verifySignature(
+    payload: string,
+    signature: string,
+  ): Promise<boolean> {
     if (!this.webhooks) {
       throw new UnauthorizedException('Webhook verification not configured');
     }
@@ -81,13 +95,13 @@ export class GithubWebhooksService {
   }
 
   /**
-   * Process incoming webhook
+   * Process incoming webhook with event logging
    */
   async processWebhook(
     event: string,
     payload: any,
     signature: string,
-    deliveryId: string
+    deliveryId: string,
   ): Promise<void> {
     // Verify signature
     const payloadString = JSON.stringify(payload);
@@ -99,30 +113,60 @@ export class GithubWebhooksService {
 
     this.logger.log(`Processing webhook: ${event} (${deliveryId})`);
 
-    // Extract event data
-    const eventData = this.extractEventData(event, payload);
-
-    // Queue for async processing
-    await this.githubQueue.add(
-      'webhook',
-      {
-        event,
-        eventData,
-        payload,
-        deliveryId,
-        receivedAt: new Date().toISOString(),
+    // Log the webhook event to the database BEFORE processing
+    const webhookEvent = await this.prisma.githubWebhookEvent.create({
+      data: {
+        installationId: payload.installation?.id
+          ? BigInt(payload.installation.id)
+          : null,
+        eventType: event,
+        action: payload.action || null,
+        payload: payload as any,
+        processed: false,
       },
-      {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 1000,
-        },
-      }
-    );
+    });
 
-    // Also process synchronously for immediate sync
-    await this.handleEvent(event, payload);
+    try {
+      // Extract event data
+      const eventData = this.extractEventData(event, payload);
+
+      // Queue for async processing
+      await this.githubQueue.add(
+        'webhook',
+        {
+          event,
+          eventData,
+          payload,
+          deliveryId,
+          webhookEventId: webhookEvent.id,
+          receivedAt: new Date().toISOString(),
+        },
+        {
+          attempts: 3,
+          backoff: {
+            type: 'exponential',
+            delay: 1000,
+          },
+        },
+      );
+
+      // Also process synchronously for immediate sync
+      await this.handleEvent(event, payload);
+
+      // Mark webhook event as processed
+      await this.prisma.githubWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: { processed: true },
+      });
+    } catch (error) {
+      // Store error on the webhook event record
+      await this.prisma.githubWebhookEvent.update({
+        where: { id: webhookEvent.id },
+        data: { error: error.message },
+      });
+
+      throw error;
+    }
   }
 
   /**
@@ -142,6 +186,12 @@ export class GithubWebhooksService {
       case 'issue_comment':
         await this.handleIssueCommentEvent(payload);
         break;
+      case 'check_run':
+        await this.handleCheckRunEvent(payload);
+        break;
+      case 'installation':
+        await this.handleInstallationEvent(payload);
+        break;
       default:
         this.logger.debug(`Unhandled webhook event: ${event}`);
     }
@@ -153,7 +203,9 @@ export class GithubWebhooksService {
   private async handleIssueEvent(payload: any): Promise<void> {
     const { action, issue, repository } = payload;
 
-    this.logger.log(`Issue ${action}: ${repository.full_name}#${issue.number}`);
+    this.logger.log(
+      `Issue ${action}: ${repository.full_name}#${issue.number}`,
+    );
 
     // Find linked ticket
     const githubIssue = await this.prisma.githubIssue.findFirst({
@@ -179,7 +231,9 @@ export class GithubWebhooksService {
             resolvedAt: new Date(),
           },
         });
-        this.logger.log(`Closed ticket ${githubIssue.ticketId} from GitHub issue`);
+        this.logger.log(
+          `Closed ticket ${githubIssue.ticketId} from GitHub issue`,
+        );
         break;
 
       case 'reopened':
@@ -190,7 +244,9 @@ export class GithubWebhooksService {
             resolvedAt: null,
           },
         });
-        this.logger.log(`Reopened ticket ${githubIssue.ticketId} from GitHub issue`);
+        this.logger.log(
+          `Reopened ticket ${githubIssue.ticketId} from GitHub issue`,
+        );
         break;
 
       case 'labeled':
@@ -221,11 +277,13 @@ export class GithubWebhooksService {
   private async handlePullRequestEvent(payload: any): Promise<void> {
     const { action, pull_request, repository } = payload;
 
-    this.logger.log(`Pull Request ${action}: ${repository.full_name}#${pull_request.number}`);
+    this.logger.log(
+      `Pull Request ${action}: ${repository.full_name}#${pull_request.number}`,
+    );
 
     // Check if PR references any tickets (by searching PR body for ticket IDs)
     const ticketRefs = this.extractTicketReferences(
-      `${pull_request.title} ${pull_request.body || ''}`
+      `${pull_request.title} ${pull_request.body || ''}`,
     );
 
     if (ticketRefs.length === 0) {
@@ -257,7 +315,9 @@ export class GithubWebhooksService {
   private async handlePushEvent(payload: any): Promise<void> {
     const { repository, commits, ref } = payload;
 
-    this.logger.log(`Push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`);
+    this.logger.log(
+      `Push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`,
+    );
 
     // Check commit messages for ticket references
     if (!commits) return;
@@ -267,7 +327,9 @@ export class GithubWebhooksService {
 
       for (const ticketId of ticketRefs) {
         // Add a note about the commit to the ticket
-        this.logger.debug(`Commit ${commit.id.slice(0, 7)} references ticket ${ticketId}`);
+        this.logger.debug(
+          `Commit ${commit.id.slice(0, 7)} references ticket ${ticketId}`,
+        );
         // Could add comment to ticket or update metadata
       }
     }
@@ -283,7 +345,9 @@ export class GithubWebhooksService {
       return;
     }
 
-    this.logger.log(`Comment on ${repository.full_name}#${issue.number} by ${comment.user.login}`);
+    this.logger.log(
+      `Comment on ${repository.full_name}#${issue.number} by ${comment.user.login}`,
+    );
 
     // Find linked ticket
     const githubIssue = await this.prisma.githubIssue.findFirst({
@@ -302,11 +366,154 @@ export class GithubWebhooksService {
   }
 
   /**
+   * Handle check_run events (CI status feedback)
+   */
+  private async handleCheckRunEvent(payload: any): Promise<void> {
+    const { action, check_run, repository } = payload;
+
+    this.logger.log(
+      `Check run ${action}: ${check_run.name} on ${repository.full_name} - ${check_run.conclusion || 'in_progress'}`,
+    );
+
+    // Only process completed check runs
+    if (action !== 'completed') {
+      return;
+    }
+
+    const { conclusion, head_sha, pull_requests } = check_run;
+
+    // On failure, find related PR -> ticket for future CI feedback (US-4.3)
+    if (conclusion === 'failure') {
+      for (const pr of pull_requests || []) {
+        const ticketRefs = await this.findTicketsForPR(
+          repository.full_name,
+          pr.number,
+        );
+        for (const ticketId of ticketRefs) {
+          this.logger.log(
+            `CI failure for check "${check_run.name}" (sha: ${head_sha.slice(0, 7)}) linked to ticket ${ticketId}`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Handle installation events (lifecycle management)
+   */
+  private async handleInstallationEvent(payload: any): Promise<void> {
+    const { action, installation, sender } = payload;
+    const installationId = BigInt(installation.id);
+
+    this.logger.log(
+      `Installation ${action}: ${installation.account.login} (ID: ${installation.id})`,
+    );
+
+    switch (action) {
+      case 'created': {
+        // Check if installation already exists (idempotency)
+        const existing =
+          await this.prisma.githubInstallation.findUnique({
+            where: { installationId },
+          });
+
+        if (!existing) {
+          // Note: tenantId mapping handled later (US-1.2 installation flow).
+          // For now, we only log the event. The actual GithubInstallation record
+          // will be created during the installation callback flow when we know
+          // which tenant it belongs to.
+          this.logger.log(
+            `New GitHub App installation ${installation.id} by ${sender.login} (account: ${installation.account.login}, type: ${installation.account.type}). Tenant mapping will be handled during installation flow.`,
+          );
+        }
+        break;
+      }
+
+      case 'deleted': {
+        // Remove the installation record if it exists
+        try {
+          await this.prisma.githubInstallation.delete({
+            where: { installationId },
+          });
+          this.logger.log(
+            `Deleted installation record for ${installation.id}`,
+          );
+        } catch {
+          // Record may not exist yet (no tenant mapping)
+          this.logger.debug(
+            `No installation record found for ${installation.id} to delete`,
+          );
+        }
+        break;
+      }
+
+      case 'suspend': {
+        try {
+          await this.prisma.githubInstallation.update({
+            where: { installationId },
+            data: { suspendedAt: new Date() },
+          });
+          this.logger.log(`Suspended installation ${installation.id}`);
+        } catch {
+          this.logger.debug(
+            `No installation record found for ${installation.id} to suspend`,
+          );
+        }
+        break;
+      }
+
+      case 'unsuspend': {
+        try {
+          await this.prisma.githubInstallation.update({
+            where: { installationId },
+            data: { suspendedAt: null },
+          });
+          this.logger.log(`Unsuspended installation ${installation.id}`);
+        } catch {
+          this.logger.debug(
+            `No installation record found for ${installation.id} to unsuspend`,
+          );
+        }
+        break;
+      }
+
+      default:
+        this.logger.debug(
+          `Unhandled installation action: ${action}`,
+        );
+    }
+  }
+
+  /**
+   * Find tickets linked to a PR by PR number
+   */
+  private async findTicketsForPR(
+    repoFullName: string,
+    prNumber: number,
+  ): Promise<string[]> {
+    // GitHub issues and PRs share the same number space,
+    // but our GithubIssue model tracks issues. For now, check
+    // if there's a linked issue with that number.
+    const githubIssue = await this.prisma.githubIssue.findFirst({
+      where: {
+        githubRepo: repoFullName,
+        githubIssueNumber: prNumber,
+      },
+    });
+
+    if (githubIssue?.ticketId) {
+      return [githubIssue.ticketId];
+    }
+
+    return [];
+  }
+
+  /**
    * Sync GitHub labels to ticket type/severity
    */
   private async syncLabelsToTicket(
     ticketId: string,
-    labels: Array<{ name: string }>
+    labels: Array<{ name: string }>,
   ): Promise<void> {
     const updates: any = {};
 
@@ -342,7 +549,8 @@ export class GithubWebhooksService {
     }
 
     // Match full UUIDs
-    const uuidPattern = /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
+    const uuidPattern =
+      /[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi;
     while ((match = uuidPattern.exec(text)) !== null) {
       refs.push(match[0]);
     }
@@ -389,7 +597,47 @@ export class GithubWebhooksService {
       };
     }
 
+    if (payload.check_run) {
+      data.checkRun = {
+        name: payload.check_run.name,
+        conclusion: payload.check_run.conclusion || null,
+        headSha: payload.check_run.head_sha,
+        pullRequests:
+          payload.check_run.pull_requests?.map((pr: any) => ({
+            number: pr.number,
+          })) || [],
+      };
+    }
+
+    if (payload.installation && event === 'installation') {
+      data.installation = {
+        id: payload.installation.id,
+        accountLogin: payload.installation.account?.login || '',
+        accountType: payload.installation.account?.type || '',
+      };
+    }
+
     return data;
+  }
+
+  /**
+   * Delete webhook events older than the specified number of days
+   */
+  async cleanupOldEvents(olderThanDays: number = 30): Promise<number> {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - olderThanDays);
+
+    const result = await this.prisma.githubWebhookEvent.deleteMany({
+      where: {
+        createdAt: { lt: cutoff },
+      },
+    });
+
+    this.logger.log(
+      `Cleaned up ${result.count} webhook events older than ${olderThanDays} days`,
+    );
+
+    return result.count;
   }
 
   /**

@@ -24,9 +24,12 @@ async function bootstrap() {
 
   logger.log(`Worker service started on port ${port}`);
   logger.log('Workers active:');
-  logger.log('  - VideoAnalysisWorker (video-analysis queue)');
-  logger.log('  - GithubSyncWorker (github-sync queue)');
-  logger.log('  - AgentWorker (agent-orchestration queue)');
+  logger.log('  - VideoAnalysisWorker (video-analysis queue, 4 retries)');
+  logger.log('  - GithubSyncWorker (github-sync queue, 4 retries)');
+  logger.log('  - AgentWorker (agent-orchestration queue, 5 retries)');
+  logger.log('  - IntegrationSyncWorker (integration-sync queue, 4 retries)');
+  logger.log('  - DeadLetterWorker (dead-letter queue)');
+  logger.log('Retry Strategy: Exponential backoff (1min, 5min, 15min, 1hr)');
   logger.log(`Concurrency: ${process.env.WORKER_CONCURRENCY || 10} jobs`);
   logger.log(`Redis: ${process.env.REDIS_URL || 'redis://localhost:6379'}`);
 }

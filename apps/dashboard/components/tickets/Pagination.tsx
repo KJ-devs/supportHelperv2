@@ -37,10 +37,10 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-white border-t sm:px-6">
+    <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700 sm:px-6">
       <div className="flex items-center justify-between w-full">
         <div>
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             Page <span className="font-medium">{currentPage}</span> sur{' '}
             <span className="font-medium">{totalPages}</span>
           </p>
@@ -51,7 +51,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             ← Précédent
           </button>
@@ -63,7 +63,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
                 return (
                   <span
                     key={`ellipsis-${index}`}
-                    className="px-3 py-2 text-sm text-gray-700"
+                    className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
                   >
                     ...
                   </span>
@@ -77,7 +77,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
                   className={`px-3 py-2 text-sm font-medium rounded-md ${
                     currentPage === page
                       ? 'bg-blue-600 text-white'
-                      : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                      : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
                 >
                   {page}
@@ -90,7 +90,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Suivant →
           </button>

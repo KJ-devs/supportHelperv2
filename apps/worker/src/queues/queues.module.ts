@@ -103,9 +103,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
           defaultJobOptions: {
             ...queueConf.defaultJobOptions,
             priority: 2,
-            attempts: 3,
+            attempts: 4,
           },
         };
+      },
+    }),
+
+    // Dead Letter Queue
+    BullModule.registerQueueAsync({
+      name: 'dead-letter',
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => {
+        const queueConf = configService.get('queue');
+        return queueConf.deadLetterQueue;
       },
     }),
   ],

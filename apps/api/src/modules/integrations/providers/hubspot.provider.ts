@@ -1,6 +1,6 @@
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
-import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
+import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
 import { getErrorMessage } from '../../../common/utils/error.utils';
 
 export class HubSpotProvider extends BaseIntegrationProvider {
@@ -147,6 +147,141 @@ export class HubSpotProvider extends BaseIntegrationProvider {
     if (!response.ok) {
       const errorBody = await response.text();
       throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+    }
+  }
+
+  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number; since?: string }): Promise<PullResult> {
+    try {
+      const allTickets: PulledTicket[] = [];
+      const properties = 'subject,content,hs_ticket_priority,hs_pipeline_stage,hs_pipeline,createdate,hs_lastmodifieddate';
+      let total = 0;
+
+      if (options?.since) {
+        // Use search API for incremental sync
+        const searchUrl = 'https://api.hubapi.com/crm/v3/objects/tickets/search';
+        let after: string | undefined;
+
+        do {
+          const searchBody: Record<string, any> = {
+            filterGroups: [
+              {
+                filters: [
+                  {
+                    propertyName: 'hs_lastmodifieddate',
+                    operator: 'GTE',
+                    value: new Date(options.since).getTime().toString(),
+                  },
+                ],
+              },
+            ],
+            properties: properties.split(','),
+            limit: 100,
+            sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }],
+          };
+
+          if (after) {
+            searchBody.after = after;
+          }
+
+          const response = await fetch(searchUrl, {
+            method: 'POST',
+            headers: this.getHeaders(config),
+            body: JSON.stringify(searchBody),
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`HubSpot search API error: ${response.status} - ${errorBody}`);
+          }
+
+          const data = await response.json() as {
+            total: number;
+            results: Array<{ id: string; properties: Record<string, string | null> }>;
+            paging?: { next?: { after: string } };
+          };
+
+          total = data.total;
+
+          for (const item of data.results) {
+            allTickets.push(this.mapHubSpotTicket(item));
+          }
+
+          after = data.paging?.next?.after;
+        } while (after);
+      } else {
+        // Use list API for full sync
+        let after: string | undefined;
+
+        do {
+          let url = `${this.baseUrl}?limit=100&properties=${properties}`;
+          if (after) {
+            url += `&after=${after}`;
+          }
+
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: this.getHeaders(config),
+          });
+
+          if (!response.ok) {
+            const errorBody = await response.text();
+            throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+          }
+
+          const data = await response.json() as {
+            total: number;
+            results: Array<{ id: string; properties: Record<string, string | null> }>;
+            paging?: { next?: { after: string } };
+          };
+
+          total = data.total;
+
+          for (const item of data.results) {
+            allTickets.push(this.mapHubSpotTicket(item));
+          }
+
+          after = data.paging?.next?.after;
+        } while (after);
+      }
+
+      this.logger.log(`Pulled ${allTickets.length}/${total} tickets from HubSpot`);
+
+      return { success: true, tickets: allTickets, total };
+    } catch (error) {
+      this.logger.error(`pullTickets failed: ${getErrorMessage(error)}`);
+      return { success: false, tickets: [], total: 0, error: getErrorMessage(error) };
+    }
+  }
+
+  private mapHubSpotTicket(item: { id: string; properties: Record<string, string | null> }): PulledTicket {
+    return {
+      externalId: item.id,
+      externalUrl: `https://app.hubspot.com/contacts/tickets/${item.id}`,
+      title: item.properties.subject || 'Untitled Ticket',
+      description: item.properties.content || undefined,
+      status: 'open',
+      severity: this.mapPriorityToSeverity(item.properties.hs_ticket_priority),
+      createdAt: item.properties.createdate || undefined,
+      updatedAt: item.properties.hs_lastmodifieddate || undefined,
+      metadata: {
+        hubspotPipelineStage: item.properties.hs_pipeline_stage,
+        hubspotPipeline: item.properties.hs_pipeline,
+        hubspotPriority: item.properties.hs_ticket_priority,
+      },
+    };
+  }
+
+  private mapPriorityToSeverity(priority?: string | null): string {
+    if (!priority) return 'medium';
+    switch (priority.toUpperCase()) {
+      case 'HIGH':
+        return 'high';
+      case 'MEDIUM':
+        return 'medium';
+      case 'LOW':
+        return 'low';
+      default:
+        return 'medium';
     }
   }
 

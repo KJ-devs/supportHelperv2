@@ -22,11 +22,12 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users             User[]
-  applications      Application[]
-  tickets           Ticket[]
-  githubConnections GithubConnection[]
-  integrations      Integration[]
+  users               User[]
+  applications        Application[]
+  tickets             Ticket[]
+  githubConnections   GithubConnection[]
+  githubInstallations GithubInstallation[]
+  integrations        Integration[]
 
   @@map("tenants")
 }
@@ -62,8 +63,9 @@ model Application {
   githubRepo String?  @map("github_repo") @db.VarChar(255)
   createdAt  DateTime @default(now()) @map("created_at")
 
-  tenant  Tenant   @relation(fields: [tenantId], references: [id])
-  tickets Ticket[]
+  tenant       Tenant              @relation(fields: [tenantId], references: [id])
+  tickets      Ticket[]
+  githubConfig ProjectGithubConfig?
 
   @@map("applications")
 }
@@ -216,6 +218,57 @@ model GithubIssue {
   @@unique([githubRepo, githubIssueNumber])
   @@index([ticketId])
   @@map("github_issues")
+}
+
+model GithubInstallation {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId       String    @map("tenant_id") @db.Uuid
+  installationId BigInt    @unique @map("installation_id")
+  accountLogin   String    @map("account_login")
+  accountType    String    @map("account_type")
+  permissions    Json      @default("{}")
+  suspendedAt    DateTime? @map("suspended_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  tenant         Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  projectConfigs ProjectGithubConfig[]
+
+  @@map("github_installations")
+}
+
+model ProjectGithubConfig {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  applicationId  String   @unique @map("application_id") @db.Uuid
+  installationId BigInt   @map("installation_id")
+  owner          String
+  repo           String
+  defaultBranch  String   @default("main") @map("default_branch")
+  settings       Json     @default("{}")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  application    Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  installation   GithubInstallation @relation(fields: [installationId], references: [installationId])
+
+  @@map("project_github_configs")
+}
+
+model GithubWebhookEvent {
+  id             String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  installationId BigInt?   @map("installation_id")
+  eventType      String    @map("event_type")
+  action         String?
+  payload        Json
+  processed      Boolean   @default(false)
+  error          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@index([eventType])
+  @@index([installationId])
+  @@index([processed])
+  @@index([createdAt])
+  @@map("github_webhook_events")
 }
 
 // ═══════════════════════════════════════════════════════════════════════

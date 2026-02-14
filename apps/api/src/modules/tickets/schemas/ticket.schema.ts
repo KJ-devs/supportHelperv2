@@ -349,6 +349,105 @@ export const assignTicketSchema = z
   .strict();
 
 /**
+ * Bulk action types
+ */
+export const BULK_ACTIONS = [
+  'update_status',
+  'assign',
+  'unassign',
+  'change_priority',
+  'change_severity',
+  'delete',
+] as const;
+
+/**
+ * Bulk ticket operations schema
+ */
+export const bulkTicketSchema = z
+  .object({
+    ticketIds: z
+      .array(
+        z
+          .string({ invalid_type_error: 'Each ticket ID must be a string' })
+          .uuid('Each ticket ID must be a valid UUID'),
+      )
+      .min(1, 'At least one ticket ID is required')
+      .max(100, 'Maximum 100 tickets per bulk operation'),
+
+    action: z.enum(BULK_ACTIONS, {
+      errorMap: () => ({
+        message: `Action must be one of: ${BULK_ACTIONS.join(', ')}`,
+      }),
+    }),
+
+    value: z.any().optional(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    switch (data.action) {
+      case 'update_status':
+        if (
+          !data.value ||
+          typeof data.value !== 'string' ||
+          !(TICKET_STATUSES as readonly string[]).includes(data.value)
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `value must be a valid status: ${TICKET_STATUSES.join(', ')}`,
+            path: ['value'],
+          });
+        }
+        break;
+      case 'assign':
+        if (
+          !data.value ||
+          typeof data.value !== 'string' ||
+          !z.string().uuid().safeParse(data.value).success
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'value must be a valid user UUID for assign action',
+            path: ['value'],
+          });
+        }
+        break;
+      case 'change_priority':
+        if (
+          data.value === undefined ||
+          data.value === null ||
+          typeof data.value !== 'number' ||
+          !Number.isInteger(data.value) ||
+          data.value < 0 ||
+          data.value > 10
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'value must be an integer between 0 and 10 for change_priority action',
+            path: ['value'],
+          });
+        }
+        break;
+      case 'change_severity':
+        if (
+          !data.value ||
+          typeof data.value !== 'string' ||
+          !(TICKET_SEVERITIES as readonly string[]).includes(data.value)
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `value must be a valid severity: ${TICKET_SEVERITIES.join(', ')}`,
+            path: ['value'],
+          });
+        }
+        break;
+      case 'unassign':
+      case 'delete':
+        // No value required
+        break;
+    }
+  });
+
+/**
  * TypeScript types inferred from schemas
  */
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
@@ -356,3 +455,4 @@ export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
 export type FilterTicketsInput = z.infer<typeof filterTicketsSchema>;
 export type SearchTicketsInput = z.infer<typeof searchTicketsSchema>;
 export type AssignTicketInput = z.infer<typeof assignTicketSchema>;
+export type BulkTicketInput = z.infer<typeof bulkTicketSchema>;

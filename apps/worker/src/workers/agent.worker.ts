@@ -1,6 +1,6 @@
-import { Processor, WorkerHost } from '@nestjs/bullmq';
+import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { Job, Queue } from 'bullmq';
 import { Octokit } from '@octokit/rest';
 import { QUEUE_NAMES } from '../queues';
 import {
@@ -139,12 +139,22 @@ const AGENT_TOOLS = [
  * - Automatic responses
  * - Escalation management
  * - GPT-4o function calling for tool use
+ *
+ * Retry Strategy: Exponential backoff (1min, 5min, 15min, 1hr)
+ * Agent jobs get 5 retry attempts (vs 4 for others)
  */
 @Processor(QUEUE_NAMES.AGENT_ORCHESTRATION, {
   concurrency: 10,
   limiter: {
     max: 100,
     duration: 60000,
+  },
+  settings: {
+    backoffStrategy: (attemptsMade: number): number => {
+      const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+      const index = Math.max(0, Math.min(attemptsMade - 1, delays.length - 1));
+      return delays[index]!;
+    },
   },
 })
 export class AgentWorker extends WorkerHost {
@@ -154,7 +164,9 @@ export class AgentWorker extends WorkerHost {
     private readonly openaiService: OpenAIService,
     private readonly prisma: PrismaService,
     private readonly meilisearch: MeilisearchService,
-    private readonly agentService: AgentService
+    private readonly agentService: AgentService,
+    @InjectQueue('dead-letter')
+    private readonly deadLetterQueue: Queue,
   ) {
     super();
   }
@@ -1134,15 +1146,69 @@ Keep responses concise but thorough.`,
   // Worker Events
   // ═══════════════════════════════════════════════════════════════════════
 
-  onCompleted(job: Job<AgentJobData>) {
-    this.logger.log(`Agent job ${job.id} completed: ${job.data.type}`);
+  @OnWorkerEvent('active')
+  onActive(job: Job<AgentJobData>) {
+    this.logger.log(`Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
   }
 
-  onFailed(job: Job<AgentJobData>, error: Error) {
-    this.logger.error(`Agent job ${job.id} failed: ${getErrorMessage(error)}`);
+  @OnWorkerEvent('completed')
+  onCompleted(job: Job<AgentJobData>, result: AgentResult) {
+    this.logger.log(`Job ${job.id} completed successfully - ${result.type}`);
   }
 
+  @OnWorkerEvent('failed')
+  async onFailed(job: Job<AgentJobData> | undefined, error: Error) {
+    if (!job) {
+      this.logger.error(`Job failed without job context: ${error.message}`);
+      return;
+    }
+
+    const attemptsMade = job.attemptsMade;
+    const maxAttempts = job.opts.attempts || 5;
+
+    this.logger.error(
+      `Job ${job.id} failed (attempt ${attemptsMade}/${maxAttempts}): ${getErrorMessage(error)}`,
+      getErrorStack(error),
+    );
+
+    // If this was the last attempt, move to dead letter queue
+    if (attemptsMade >= maxAttempts) {
+      this.logger.error(`Job ${job.id} exceeded max retries - moving to dead letter queue`);
+
+      await this.deadLetterQueue.add(
+        'failed-agent-orchestration',
+        {
+          originalJobId: job.id,
+          queueName: QUEUE_NAMES.AGENT_ORCHESTRATION,
+          jobData: job.data,
+          failedReason: error.message,
+          stacktrace: error.stack,
+          attemptsMade,
+          timestamp: new Date().toISOString(),
+        },
+        {
+          removeOnComplete: {
+            age: 90 * 24 * 60 * 60, // 90 days
+          },
+        },
+      );
+    } else {
+      const nextDelay = this.getNextRetryDelay(attemptsMade);
+      this.logger.warn(`Job ${job.id} will retry in ${Math.round(nextDelay / 1000)}s`);
+    }
+  }
+
+  @OnWorkerEvent('stalled')
   onStalled(jobId: string) {
-    this.logger.warn(`Agent job ${jobId} stalled`);
+    this.logger.warn(`Agent job ${jobId} stalled - will be retried automatically`);
+  }
+
+  /**
+   * Calculate next retry delay based on attempt number
+   */
+  private getNextRetryDelay(attemptsMade: number): number {
+    const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
+    const index = Math.max(0, Math.min(attemptsMade, delays.length - 1));
+    return delays[index]!;
   }
 }
