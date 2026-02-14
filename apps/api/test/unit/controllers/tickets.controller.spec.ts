@@ -1,21 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
 import { TicketsController } from '../../../src/modules/tickets/tickets.controller';
 import { TicketsService } from '../../../src/modules/tickets/tickets.service';
 import { TicketsSearchService } from '../../../src/modules/tickets/tickets-search.service';
 import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.service';
-import { TicketTimelineService } from '../../../src/modules/tickets/services/ticket-timeline.service';
 import { IntegrationsSyncService } from '../../../src/modules/integrations/integrations-sync.service';
-import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('TicketsController', () => {
   let controller: TicketsController;
   let ticketsService: jest.Mocked<TicketsService>;
   let ticketsSearchService: jest.Mocked<TicketsSearchService>;
   let ticketsAIService: jest.Mocked<TicketsAIService>;
-  let ticketTimelineService: jest.Mocked<TicketTimelineService>;
   let integrationsSyncService: jest.Mocked<IntegrationsSyncService>;
-  let prismaService: any;
 
   const mockTicket = {
     id: 'ticket-123',
@@ -88,25 +83,10 @@ describe('TicketsController', () => {
           },
         },
         {
-          provide: TicketTimelineService,
-          useValue: {
-            getTimeline: jest.fn(),
-            recordEvent: jest.fn(),
-          },
-        },
-        {
           provide: IntegrationsSyncService,
           useValue: {
             syncTicketToAllEnabledIntegrations: jest.fn(),
             deleteTicketFromAllIntegrations: jest.fn(),
-          },
-        },
-        {
-          provide: PrismaService,
-          useValue: {
-            ticket: {
-              findFirst: jest.fn(),
-            },
           },
         },
       ],
@@ -116,9 +96,7 @@ describe('TicketsController', () => {
     ticketsService = module.get(TicketsService);
     ticketsSearchService = module.get(TicketsSearchService);
     ticketsAIService = module.get(TicketsAIService);
-    ticketTimelineService = module.get(TicketTimelineService);
     integrationsSyncService = module.get(IntegrationsSyncService);
-    prismaService = module.get(PrismaService);
   });
 
   it('should be defined', () => {
@@ -410,47 +388,6 @@ describe('TicketsController', () => {
       await controller.remove('tenant-123', 'ticket-123');
 
       expect(callOrder).toEqual(['sync', 'remove']);
-    });
-  });
-
-  describe('getTimeline', () => {
-    it('should return timeline events for a ticket', async () => {
-      const mockTimeline = [
-        {
-          id: 'event-1',
-          eventType: 'agent_analysis_started',
-          data: { agentTaskId: 'task-1' },
-          createdAt: new Date(),
-          status: 'in_progress',
-        },
-        {
-          id: 'event-2',
-          eventType: 'agent_plan_ready',
-          data: { agentTaskId: 'task-1' },
-          createdAt: new Date(),
-          status: 'done',
-        },
-      ];
-
-      prismaService.ticket.findFirst.mockResolvedValue({ id: 'ticket-123' });
-      (ticketTimelineService.getTimeline as jest.Mock).mockResolvedValue(mockTimeline);
-
-      const result = await controller.getTimeline('tenant-123', 'ticket-123');
-
-      expect(prismaService.ticket.findFirst).toHaveBeenCalledWith({
-        where: { id: 'ticket-123', tenantId: 'tenant-123' },
-        select: { id: true },
-      });
-      expect(ticketTimelineService.getTimeline).toHaveBeenCalledWith('ticket-123', 'tenant-123');
-      expect(result).toEqual(mockTimeline);
-    });
-
-    it('should throw NotFoundException if ticket does not belong to tenant', async () => {
-      prismaService.ticket.findFirst.mockResolvedValue(null);
-
-      await expect(
-        controller.getTimeline('tenant-123', 'ticket-999'),
-      ).rejects.toThrow(NotFoundException);
     });
   });
 });

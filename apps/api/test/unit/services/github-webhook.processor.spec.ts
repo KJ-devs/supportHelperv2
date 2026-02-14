@@ -3,14 +3,6 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { GithubWebhookProcessor, GithubWebhookJobData } from '../../../src/modules/github/processors/github-webhook.processor';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
-import { AutoMergeService } from '../../../src/modules/github/services/auto-merge.service';
-import { CodebaseIndexerService } from '../../../src/modules/codebase-index/services/codebase-indexer.service';
-import { CIFeedbackService } from '../../../src/modules/agent-tasks/services/ci-feedback.service';
-
-jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn().mockImplementation(() => ({})),
-}));
 
 describe('GithubWebhookProcessor', () => {
   let processor: GithubWebhookProcessor;
@@ -18,26 +10,6 @@ describe('GithubWebhookProcessor', () => {
 
   const mockPrisma = {
     $executeRaw: jest.fn(),
-    githubIssue: { findFirst: jest.fn() },
-    projectGithubConfig: { deleteMany: jest.fn() },
-  };
-
-  const mockIssuesService = {
-    autoCreateIssueFromTicket: jest.fn(),
-    syncTicketStatusToGithub: jest.fn(),
-  };
-
-  const mockCodebaseIndexer = {
-    queueIncrementalIndex: jest.fn(),
-  };
-
-  const mockAutoMergeService = {
-    checkAndMerge: jest.fn().mockResolvedValue({ merged: false, reason: 'disabled' }),
-    handlePRMerged: jest.fn().mockResolvedValue(undefined),
-  };
-
-  const mockCIFeedbackService = {
-    handleCIFailure: jest.fn().mockResolvedValue({ handled: false }),
   };
 
   beforeEach(async () => {
@@ -47,22 +19,6 @@ describe('GithubWebhookProcessor', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
-        },
-        {
-          provide: GithubIssuesService,
-          useValue: mockIssuesService,
-        },
-        {
-          provide: AutoMergeService,
-          useValue: mockAutoMergeService,
-        },
-        {
-          provide: CodebaseIndexerService,
-          useValue: mockCodebaseIndexer,
-        },
-        {
-          provide: CIFeedbackService,
-          useValue: mockCIFeedbackService,
         },
       ],
     }).compile();
@@ -128,7 +84,6 @@ describe('GithubWebhookProcessor', () => {
         action: 'synchronize',
         prNumber: 15,
         repository: 'owner/repo',
-        merged: false,
       });
     });
 

@@ -8,7 +8,6 @@ jest.mock('@octokit/rest', () => ({
 
 import { GithubReposService } from '../../../src/modules/github/services/github-repos.service';
 import { GithubOAuthService } from '../../../src/modules/github/services/github-oauth.service';
-import { GithubAppService } from '../../../src/modules/github/services/github-app.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('GithubReposService', () => {
@@ -51,13 +50,6 @@ describe('GithubReposService', () => {
             getOctokitForTenant: jest.fn().mockResolvedValue(mockOctokit),
             getConnection: jest.fn(),
             setupWebhook: jest.fn(),
-          },
-        },
-        {
-          provide: GithubAppService,
-          useValue: {
-            getInstallationOctokit: jest.fn().mockResolvedValue(mockOctokit),
-            isEnabled: jest.fn().mockReturnValue(false),
           },
         },
       ],

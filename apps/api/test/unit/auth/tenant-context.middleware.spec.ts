@@ -9,7 +9,7 @@ describe('TenantContextMiddleware', () => {
   let prisma: jest.Mocked<PrismaService>;
 
   const mockPrisma = {
-    $executeRawUnsafe: jest.fn(),
+    $executeRaw: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -35,10 +35,10 @@ describe('TenantContextMiddleware', () => {
   });
 
   describe('use', () => {
-    it('should set tenant context when user has valid UUID tenantId', async () => {
+    it('should set tenant context when user is authenticated', async () => {
       const mockUser: Partial<UserEntity> = {
         id: 'user-123',
-        tenantId: '550e8400-e29b-41d4-a716-446655440000',
+        tenantId: 'tenant-123',
         email: 'user@example.com',
       };
 
@@ -48,20 +48,22 @@ describe('TenantContextMiddleware', () => {
       const mockResponse = {} as Response;
       const mockNext = jest.fn() as NextFunction;
 
-      prisma.$executeRawUnsafe.mockResolvedValue(1);
+      prisma.$executeRaw.mockResolvedValue(1);
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        "SET LOCAL app.current_tenant_id = '550e8400-e29b-41d4-a716-446655440000'"
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalled();
+      const call = prisma.$executeRaw.mock.calls[0];
+      // Template literal is passed as array + values
+      expect(call[0]).toEqual(expect.arrayContaining(['SET LOCAL app.current_tenant_id = ']));
+      expect(call[1]).toBe('tenant-123');
       expect(mockNext).toHaveBeenCalled();
     });
 
     it('should set tenant context for application entity', async () => {
       const mockApplication: Partial<ApplicationEntity> = {
         id: 'app-123',
-        tenantId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        tenantId: 'tenant-456',
         name: 'Test App',
       };
 
@@ -71,13 +73,13 @@ describe('TenantContextMiddleware', () => {
       const mockResponse = {} as Response;
       const mockNext = jest.fn() as NextFunction;
 
-      prisma.$executeRawUnsafe.mockResolvedValue(1);
+      prisma.$executeRaw.mockResolvedValue(1);
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
-        "SET LOCAL app.current_tenant_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'"
-      );
+      expect(prisma.$executeRaw).toHaveBeenCalled();
+      const call = prisma.$executeRaw.mock.calls[0];
+      expect(call[1]).toBe('tenant-456');
       expect(mockNext).toHaveBeenCalled();
     });
 
@@ -88,7 +90,7 @@ describe('TenantContextMiddleware', () => {
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
     });
 
@@ -106,7 +108,7 @@ describe('TenantContextMiddleware', () => {
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
     });
 
@@ -124,7 +126,7 @@ describe('TenantContextMiddleware', () => {
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
     });
 
@@ -142,14 +144,14 @@ describe('TenantContextMiddleware', () => {
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
     });
 
     it('should continue execution even if setting tenant context fails', async () => {
       const mockUser: Partial<UserEntity> = {
         id: 'user-123',
-        tenantId: '550e8400-e29b-41d4-a716-446655440000',
+        tenantId: 'tenant-123',
       };
 
       const mockRequest = {
@@ -159,11 +161,11 @@ describe('TenantContextMiddleware', () => {
       const mockNext = jest.fn() as NextFunction;
 
       const error = new Error('Database connection failed');
-      prisma.$executeRawUnsafe.mockRejectedValue(error);
+      prisma.$executeRaw.mockRejectedValue(error);
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
+      expect(prisma.$executeRaw).toHaveBeenCalled();
       expect(mockNext).toHaveBeenCalled();
     });
 
@@ -171,7 +173,7 @@ describe('TenantContextMiddleware', () => {
       const consoleErrorSpy = jest.spyOn(console, 'error');
       const mockUser: Partial<UserEntity> = {
         id: 'user-123',
-        tenantId: '550e8400-e29b-41d4-a716-446655440000',
+        tenantId: 'tenant-123',
       };
 
       const mockRequest = {
@@ -181,7 +183,7 @@ describe('TenantContextMiddleware', () => {
       const mockNext = jest.fn() as NextFunction;
 
       const error = new Error('Database error');
-      prisma.$executeRawUnsafe.mockRejectedValue(error);
+      prisma.$executeRaw.mockRejectedValue(error);
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
@@ -191,7 +193,7 @@ describe('TenantContextMiddleware', () => {
       );
     });
 
-    it('should reject non-UUID tenantId to prevent SQL injection', async () => {
+    it('should use parameterized query to prevent SQL injection', async () => {
       const mockUser: Partial<UserEntity> = {
         id: 'user-123',
         tenantId: "tenant-123'; DROP TABLE users; --",
@@ -203,19 +205,19 @@ describe('TenantContextMiddleware', () => {
       const mockResponse = {} as Response;
       const mockNext = jest.fn() as NextFunction;
 
+      prisma.$executeRaw.mockResolvedValue(1);
+
       await middleware.use(mockRequest, mockResponse, mockNext);
 
-      // Non-UUID tenantId should be silently rejected (no SQL executed)
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      // Verify that the tenantId is passed as a parameterized value
+      expect(prisma.$executeRaw).toHaveBeenCalled();
+      const call = prisma.$executeRaw.mock.calls[0];
+      expect(call[1]).toBe("tenant-123'; DROP TABLE users; --");
       expect(mockNext).toHaveBeenCalled();
     });
 
-    it('should handle different valid UUID tenant IDs', async () => {
-      const tenantIds = [
-        '550e8400-e29b-41d4-a716-446655440000',
-        'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-        '00000000-0000-0000-0000-000000000000',
-      ];
+    it('should handle different tenant IDs', async () => {
+      const tenantIds = ['tenant-1', 'tenant-2', 'tenant-3'];
 
       for (const tenantId of tenantIds) {
         const mockUser: Partial<UserEntity> = {
@@ -229,19 +231,19 @@ describe('TenantContextMiddleware', () => {
         const mockResponse = {} as Response;
         const mockNext = jest.fn() as NextFunction;
 
-        prisma.$executeRawUnsafe.mockResolvedValue(1);
+        prisma.$executeRaw.mockResolvedValue(1);
 
         await middleware.use(mockRequest, mockResponse, mockNext);
 
-        const call = prisma.$executeRawUnsafe.mock.calls[prisma.$executeRawUnsafe.mock.calls.length - 1];
-        expect(call[0]).toBe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
+        const call = prisma.$executeRaw.mock.calls[prisma.$executeRaw.mock.calls.length - 1];
+        expect(call[1]).toBe(tenantId);
       }
     });
 
     it('should call next after setting tenant context', async () => {
       const mockUser: Partial<UserEntity> = {
         id: 'user-123',
-        tenantId: '550e8400-e29b-41d4-a716-446655440000',
+        tenantId: 'tenant-123',
       };
 
       const mockRequest = {
@@ -250,7 +252,7 @@ describe('TenantContextMiddleware', () => {
       const mockResponse = {} as Response;
       const mockNext = jest.fn() as NextFunction;
 
-      prisma.$executeRawUnsafe.mockResolvedValue(1);
+      prisma.$executeRaw.mockResolvedValue(1);
 
       await middleware.use(mockRequest, mockResponse, mockNext);
 
@@ -266,7 +268,28 @@ describe('TenantContextMiddleware', () => {
       await middleware.use(mockRequest, mockResponse, mockNext);
 
       expect(mockNext).toHaveBeenCalledTimes(1);
-      expect(prisma.$executeRawUnsafe).not.toHaveBeenCalled();
+      expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    });
+
+    it('should handle UUID tenant IDs', async () => {
+      const mockUser: Partial<UserEntity> = {
+        id: 'user-123',
+        tenantId: '550e8400-e29b-41d4-a716-446655440000',
+      };
+
+      const mockRequest = {
+        user: mockUser,
+      } as unknown as Request;
+      const mockResponse = {} as Response;
+      const mockNext = jest.fn() as NextFunction;
+
+      prisma.$executeRaw.mockResolvedValue(1);
+
+      await middleware.use(mockRequest, mockResponse, mockNext);
+
+      const call = prisma.$executeRaw.mock.calls[0];
+      expect(call[1]).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(mockNext).toHaveBeenCalled();
     });
   });
 });

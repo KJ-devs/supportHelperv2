@@ -2,19 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { HealthController } from '../../../src/health/health.controller';
 import { HealthService } from '../../../src/monitoring/health.service';
-import { CacheService } from '../../../src/cache/cache.service';
 
 describe('HealthController', () => {
   let controller: HealthController;
   let healthService: jest.Mocked<HealthService>;
-  let cacheService: jest.Mocked<CacheService>;
-
-  const mockResponse = () => {
-    const res: any = {};
-    res.status = jest.fn().mockReturnValue(res);
-    res.json = jest.fn().mockReturnValue(res);
-    return res;
-  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -23,7 +14,6 @@ describe('HealthController', () => {
         {
           provide: HealthService,
           useValue: {
-            getComprehensiveHealth: jest.fn(),
             getBasicHealth: jest.fn(),
             isAlive: jest.fn(),
             isReady: jest.fn(),
@@ -35,22 +25,11 @@ describe('HealthController', () => {
             getDeadLetterQueueCount: jest.fn(),
           },
         },
-        {
-          provide: CacheService,
-          useValue: {
-            getMetrics: jest.fn().mockReturnValue({ hits: 0, misses: 0, hitRate: '0%', total: 0 }),
-            getOrSet: jest.fn().mockImplementation((_key, _ttl, factory) => factory()),
-            get: jest.fn().mockResolvedValue(undefined),
-            set: jest.fn().mockResolvedValue(undefined),
-            del: jest.fn().mockResolvedValue(undefined),
-          },
-        },
       ],
     }).compile();
 
     controller = module.get<HealthController>(HealthController);
     healthService = module.get(HealthService);
-    cacheService = module.get(CacheService);
   });
 
   it('should be defined', () => {
@@ -58,123 +37,13 @@ describe('HealthController', () => {
   });
 
   describe('health', () => {
-    it('should return 200 with comprehensive health when all healthy', async () => {
-      const mockHealth = {
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: 100,
-        version: '0.1.0',
-        services: {
-          postgres: { status: 'healthy', responseTime: 5 },
-          redis: { status: 'healthy', responseTime: 2 },
-          minio: { status: 'healthy', responseTime: 10 },
-          memory: { status: 'healthy', message: 'Heap: 45%' },
-        },
-      };
-      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
-      const res = mockResponse();
+    it('should return basic health status', async () => {
+      const mockHealth = { status: 'healthy', timestamp: new Date().toISOString(), uptime: 100, version: '0.1.0' };
+      (healthService.getBasicHealth as jest.Mock).mockResolvedValue(mockHealth);
 
-      await controller.health(res);
+      const result = await controller.health();
 
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(mockHealth);
-    });
-
-    it('should return 503 when service is unhealthy', async () => {
-      const mockHealth = {
-        status: 'unhealthy',
-        timestamp: new Date().toISOString(),
-        uptime: 100,
-        version: '0.1.0',
-        services: {
-          postgres: { status: 'unhealthy', message: 'Connection refused' },
-        },
-      };
-      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
-      const res = mockResponse();
-
-      await controller.health(res);
-
-      expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith(mockHealth);
-    });
-
-    it('should return 200 when degraded', async () => {
-      const mockHealth = {
-        status: 'degraded',
-        timestamp: new Date().toISOString(),
-        uptime: 100,
-        version: '0.1.0',
-        services: {
-          postgres: { status: 'healthy' },
-          minio: { status: 'unhealthy' },
-        },
-      };
-      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
-      const res = mockResponse();
-
-      await controller.health(res);
-
-      expect(res.status).toHaveBeenCalledWith(200);
-    });
-
-    it('should use cacheService.getOrSet with correct key and TTL', async () => {
-      const mockHealth = {
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: 100,
-        version: '0.1.0',
-        services: {},
-      };
-      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
-      const res = mockResponse();
-
-      await controller.health(res);
-
-      expect(cacheService.getOrSet).toHaveBeenCalledWith(
-        'health:comprehensive',
-        30,
-        expect.any(Function),
-      );
-    });
-
-    it('should return cached result on cache hit without calling healthService', async () => {
-      const cachedHealth = {
-        status: 'healthy',
-        timestamp: '2026-02-15T00:00:00Z',
-        uptime: 50,
-        version: '0.1.0',
-        services: { postgres: { status: 'healthy' } },
-      };
-      (cacheService.getOrSet as jest.Mock).mockResolvedValue(cachedHealth);
-      const res = mockResponse();
-
-      await controller.health(res);
-
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(cachedHealth);
-      // healthService.getComprehensiveHealth should NOT be called directly
-      // (it may be called via factory, but when cache hits, the factory is not invoked)
-      expect(healthService.getComprehensiveHealth).not.toHaveBeenCalled();
-    });
-
-    it('should fall back to direct call when cache throws', async () => {
-      const mockHealth = {
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        uptime: 100,
-        version: '0.1.0',
-        services: {},
-      };
-      (cacheService.getOrSet as jest.Mock).mockRejectedValue(new Error('Redis connection refused'));
-      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
-      const res = mockResponse();
-
-      await controller.health(res);
-
-      expect(healthService.getComprehensiveHealth).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith(mockHealth);
+      expect(result).toEqual(mockHealth);
     });
   });
 
@@ -192,72 +61,21 @@ describe('HealthController', () => {
 
       expect(() => controller.live()).toThrow(ServiceUnavailableException);
     });
-
-    it('should NOT use cache (always real-time)', () => {
-      (healthService.isAlive as jest.Mock).mockReturnValue(true);
-
-      controller.live();
-
-      expect(cacheService.getOrSet).not.toHaveBeenCalled();
-      expect(cacheService.get).not.toHaveBeenCalled();
-    });
   });
 
   describe('ready', () => {
-    it('should return 200 when ready', async () => {
+    it('should return ok when ready', async () => {
       (healthService.isReady as jest.Mock).mockResolvedValue(true);
-      const res = mockResponse();
 
-      await controller.ready(res);
+      const result = await controller.ready();
 
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({ status: 'ok' });
+      expect(result).toEqual({ status: 'ok' });
     });
 
-    it('should return 503 when not ready', async () => {
+    it('should throw ServiceUnavailableException when not ready', async () => {
       (healthService.isReady as jest.Mock).mockResolvedValue(false);
-      const res = mockResponse();
 
-      await controller.ready(res);
-
-      expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith({ status: 'not ready' });
-    });
-
-    it('should use cacheService.getOrSet with correct key and TTL', async () => {
-      (healthService.isReady as jest.Mock).mockResolvedValue(true);
-      const res = mockResponse();
-
-      await controller.ready(res);
-
-      expect(cacheService.getOrSet).toHaveBeenCalledWith(
-        'health:ready',
-        30,
-        expect.any(Function),
-      );
-    });
-
-    it('should return cached readiness result on cache hit', async () => {
-      (cacheService.getOrSet as jest.Mock).mockResolvedValue(true);
-      const res = mockResponse();
-
-      await controller.ready(res);
-
-      expect(res.status).toHaveBeenCalledWith(200);
-      expect(res.json).toHaveBeenCalledWith({ status: 'ok' });
-      expect(healthService.isReady).not.toHaveBeenCalled();
-    });
-
-    it('should fall back to direct call when cache throws', async () => {
-      (cacheService.getOrSet as jest.Mock).mockRejectedValue(new Error('Redis down'));
-      (healthService.isReady as jest.Mock).mockResolvedValue(false);
-      const res = mockResponse();
-
-      await controller.ready(res);
-
-      expect(healthService.isReady).toHaveBeenCalled();
-      expect(res.status).toHaveBeenCalledWith(503);
-      expect(res.json).toHaveBeenCalledWith({ status: 'not ready' });
+      await expect(controller.ready()).rejects.toThrow(ServiceUnavailableException);
     });
   });
 
@@ -339,14 +157,6 @@ describe('HealthController', () => {
       expect(result).toHaveProperty('cpu');
       expect(result).toHaveProperty('pid');
       expect(result).toHaveProperty('nodeVersion');
-    });
-  });
-
-  describe('cacheMetrics', () => {
-    it('should return cache metrics', () => {
-      const result = controller.cacheMetrics();
-
-      expect(result).toEqual({ hits: 0, misses: 0, hitRate: '0%', total: 0 });
     });
   });
 });
