@@ -1,7 +1,9 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { CacheService } from '../../../cache/cache.service';
 import { GithubOAuthService } from './github-oauth.service';
+import { GithubAppService } from './github-app.service';
 import {
   CreateGithubIssueDto,
   GithubIssueResponseDto,
@@ -16,6 +18,9 @@ type TicketWithRelations = Ticket & {
   application: Application | null;
 };
 
+/** TTL in seconds for sync-origin Redis keys (anti-loop protection) */
+const SYNC_ORIGIN_TTL = 30;
+
 @Injectable()
 export class GithubIssuesService {
   private readonly logger = new Logger(GithubIssuesService.name);
@@ -24,7 +29,9 @@ export class GithubIssuesService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    private oauthService: GithubOAuthService
+    private cacheService: CacheService,
+    private oauthService: GithubOAuthService,
+    private appService: GithubAppService,
   ) {
     this.apiUrl = this.config.get('app.apiUrl') || 'http://localhost:3000';
   }
@@ -290,6 +297,177 @@ export class GithubIssuesService {
         });
       }
     }
+  }
+
+  /**
+   * Set a short-lived Redis flag indicating the sync origin for a ticket.
+   * Used by the anti-loop mechanism to prevent infinite GitHub <-> ticket sync cycles.
+   */
+  async setSyncOrigin(ticketId: string, origin: 'github' | 'platform'): Promise<void> {
+    const key = `github:sync-origin:${ticketId}`;
+    await this.cacheService.set(key, origin, SYNC_ORIGIN_TTL);
+  }
+
+  /**
+   * Check whether the most recent status change for a ticket originated from GitHub.
+   * Returns true if the sync-origin flag is set to 'github', meaning we should NOT
+   * sync back to GitHub (would cause a loop).
+   */
+  async isSyncFromGithub(ticketId: string): Promise<boolean> {
+    const key = `github:sync-origin:${ticketId}`;
+    const origin = await this.cacheService.get<string>(key);
+    return origin === 'github';
+  }
+
+  /**
+   * Check whether the most recent status change for a ticket originated from the platform.
+   * Returns true if the sync-origin flag is set to 'platform', meaning we should NOT
+   * sync from GitHub to ticket (would cause a loop).
+   */
+  async isSyncFromPlatform(ticketId: string): Promise<boolean> {
+    const key = `github:sync-origin:${ticketId}`;
+    const origin = await this.cacheService.get<string>(key);
+    return origin === 'platform';
+  }
+
+  /**
+   * Reverse sync: push ticket status change to all linked GitHub issues.
+   * Called when a ticket status changes from the platform (dashboard/API).
+   * Checks the anti-loop flag to avoid syncing back changes that came from GitHub.
+   */
+  async syncTicketStatusToGithub(ticketId: string, newStatus: string): Promise<void> {
+    // Anti-loop: if the status change came from GitHub, do not sync back
+    if (await this.isSyncFromGithub(ticketId)) {
+      this.logger.debug(`Skipping reverse sync for ticket ${ticketId} — change originated from GitHub`);
+      return;
+    }
+
+    const githubIssues = await this.prisma.githubIssue.findMany({
+      where: { ticketId },
+      include: { ticket: { include: { application: true } } },
+    });
+
+    if (githubIssues.length === 0) {
+      return;
+    }
+
+    for (const ghIssue of githubIssues) {
+      try {
+        const [owner, repo] = ghIssue.githubRepo.split('/');
+        const desiredState: 'open' | 'closed' = newStatus === 'resolved' || newStatus === 'closed' ? 'closed' : 'open';
+
+        // Get installation-based Octokit if possible, fall back to OAuth
+        let octokit;
+        const appId = ghIssue.ticket?.applicationId;
+        if (appId) {
+          const config = await this.prisma.projectGithubConfig.findUnique({
+            where: { applicationId: appId },
+          });
+          if (config) {
+            octokit = await this.appService.getInstallationOctokit(Number(config.installationId));
+          }
+        }
+        if (!octokit && ghIssue.ticket?.tenantId) {
+          octokit = await this.oauthService.getOctokitForTenant(ghIssue.ticket.tenantId);
+        }
+        if (!octokit) {
+          this.logger.warn(`No auth available for reverse sync of ticket ${ticketId}`);
+          continue;
+        }
+
+        // Set sync-origin flag BEFORE calling GitHub API so the incoming webhook
+        // (if any) will see the flag and skip reverse-processing.
+        await this.setSyncOrigin(ticketId, 'platform');
+
+        await octokit.issues.update({
+          owner,
+          repo,
+          issue_number: ghIssue.githubIssueNumber,
+          state: desiredState,
+        });
+
+        await this.prisma.githubIssue.update({
+          where: { id: ghIssue.id },
+          data: {
+            syncStatus: 'synced',
+            lastSyncedAt: new Date(),
+          },
+        });
+
+        this.logger.log(
+          `Reverse-synced ticket ${ticketId} -> GitHub issue #${ghIssue.githubIssueNumber} (${desiredState})`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to reverse-sync ticket ${ticketId} to GitHub issue ${ghIssue.id}: ${error.message}`,
+        );
+
+        await this.prisma.githubIssue.update({
+          where: { id: ghIssue.id },
+          data: { syncStatus: 'error' },
+        });
+      }
+    }
+  }
+
+  /**
+   * Auto-create a GitHub issue when a ticket is created, using the
+   * ProjectGithubConfig linked to the ticket's application.
+   * Called by the BullMQ processor for 'create-github-issue' jobs.
+   */
+  async autoCreateIssueFromTicket(ticketId: string): Promise<void> {
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      include: { media: true, application: true },
+    });
+    if (!ticket || !ticket.applicationId) return;
+
+    const config = await this.prisma.projectGithubConfig.findUnique({
+      where: { applicationId: ticket.applicationId },
+    });
+    if (!config) return;
+
+    const { owner, repo, installationId, settings } = config;
+    const repository = `${owner}/${repo}`;
+
+    const existing = await this.prisma.githubIssue.findFirst({
+      where: { ticketId, githubRepo: repository },
+    });
+    if (existing) return;
+
+    const octokit = await this.appService.getInstallationOctokit(Number(installationId));
+    const issueBody = this.formatTicketAsIssueBody(ticket as TicketWithRelations, {
+      repository,
+      includeAiAnalysis: true,
+      includeVideoLink: true,
+    });
+
+    const configSettings = (settings as Record<string, any>) ?? {};
+    const defaultLabels = configSettings.defaultLabels
+      ? (configSettings.defaultLabels as string).split(',').map((l: string) => l.trim())
+      : [];
+    const labels = this.getIssueLabels(ticket, defaultLabels);
+
+    const { data: issue } = await octokit.issues.create({
+      owner,
+      repo,
+      title: ticket.title || `Support Ticket #${ticketId.slice(0, 8)}`,
+      body: issueBody,
+      labels,
+    });
+
+    await this.prisma.githubIssue.create({
+      data: {
+        ticketId,
+        githubIssueNumber: issue.number,
+        githubRepo: repository,
+        githubIssueUrl: issue.html_url,
+        syncStatus: 'synced',
+        lastSyncedAt: new Date(),
+      },
+    });
+
+    this.logger.log(`Auto-created GitHub issue #${issue.number} for ticket ${ticketId} in ${repository}`);
   }
 
   /**

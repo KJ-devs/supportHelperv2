@@ -8,6 +8,8 @@ jest.mock('@octokit/rest', () => ({
 
 import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
 import { GithubOAuthService } from '../../../src/modules/github/services/github-oauth.service';
+import { GithubAppService } from '../../../src/modules/github/services/github-app.service';
+import { CacheService } from '../../../src/cache/cache.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('GithubIssuesService', () => {
@@ -70,8 +72,23 @@ describe('GithubIssuesService', () => {
           useValue: { get: jest.fn().mockReturnValue('http://localhost:3001') },
         },
         {
+          provide: CacheService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            del: jest.fn(),
+          },
+        },
+        {
           provide: GithubOAuthService,
           useValue: { getOctokitForTenant: jest.fn().mockResolvedValue(mockOctokit) },
+        },
+        {
+          provide: GithubAppService,
+          useValue: {
+            getInstallationOctokit: jest.fn().mockResolvedValue(mockOctokit),
+            isEnabled: jest.fn().mockReturnValue(false),
+          },
         },
       ],
     }).compile();

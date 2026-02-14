@@ -7,6 +7,8 @@ import {
   Logger,
   forwardRef,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
@@ -22,6 +24,7 @@ export class TicketsService {
     @Inject(forwardRef(() => TicketsGateway))
     private readonly ticketsGateway: TicketsGateway,
     private readonly cacheService: CacheService,
+    @InjectQueue('github') private readonly githubQueue: Queue,
   ) {}
 
   /**
@@ -78,6 +81,13 @@ export class TicketsService {
 
     // Emit real-time event
     this.ticketsGateway.emitTicketCreated(tenantId, ticket);
+
+    // Auto-create GitHub issue if application has a linked repo
+    if (dto.applicationId) {
+      this.enqueueGithubIssueCreation(ticket.id).catch((err) => {
+        this.logger.warn(`Failed to enqueue GitHub issue creation for ticket ${ticket.id}: ${err.message}`);
+      });
+    }
 
     return ticket;
   }
@@ -327,6 +337,13 @@ export class TicketsService {
 
     // Emit real-time event
     this.ticketsGateway.emitTicketUpdated(tenantId, result);
+
+    // Reverse sync: if status changed, push to linked GitHub issues (non-blocking)
+    if (dto.status) {
+      this.enqueueGithubStatusSync(ticketId, dto.status).catch((err) => {
+        this.logger.warn(`Failed to enqueue GitHub status sync for ticket ${ticketId}: ${err.message}`);
+      });
+    }
 
     return result;
   }
@@ -678,5 +695,46 @@ export class TicketsService {
       acc[value] = item._count;
       return acc;
     }, {});
+  }
+
+  /**
+   * Enqueue a GitHub issue creation job if the application has a ProjectGithubConfig.
+   * Non-blocking: failure here does not affect ticket creation.
+   */
+  private async enqueueGithubIssueCreation(ticketId: string): Promise<void> {
+    await this.githubQueue.add(
+      'create-github-issue',
+      { ticketId },
+      {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        delay: 1000,
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    );
+  }
+
+  /**
+   * Enqueue a GitHub status sync job when a ticket status changes.
+   * Non-blocking: failure here does not affect ticket update.
+   */
+  private async enqueueGithubStatusSync(ticketId: string, newStatus: string): Promise<void> {
+    await this.githubQueue.add(
+      'sync-ticket-status',
+      { ticketId, newStatus },
+      {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 2000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    );
   }
 }

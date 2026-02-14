@@ -2,6 +2,7 @@ import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { GithubIssuesService } from '../services/github-issues.service';
 
 export interface GithubWebhookJobData {
   event: string;
@@ -12,38 +13,68 @@ export interface GithubWebhookJobData {
   receivedAt: string;
 }
 
+export interface CreateGithubIssueJobData {
+  ticketId: string;
+}
+
+export interface SyncTicketStatusJobData {
+  ticketId: string;
+  newStatus: string;
+}
+
 @Processor('github')
 export class GithubWebhookProcessor extends WorkerHost {
   private readonly logger = new Logger(GithubWebhookProcessor.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly issuesService: GithubIssuesService,
+  ) {
     super();
   }
 
-  async process(job: Job<GithubWebhookJobData>): Promise<any> {
-    const { event, deliveryId } = job.data;
+  async process(job: Job<GithubWebhookJobData | CreateGithubIssueJobData | SyncTicketStatusJobData>): Promise<any> {
+    // Handle create-github-issue jobs
+    if (job.name === 'create-github-issue') {
+      const data = job.data as CreateGithubIssueJobData;
+      this.logger.log(`Processing create-github-issue job for ticket ${data.ticketId}`);
+      await this.issuesService.autoCreateIssueFromTicket(data.ticketId);
+      return { handled: true, ticketId: data.ticketId };
+    }
+
+    // Handle sync-ticket-status jobs (reverse sync: ticket -> GitHub)
+    if (job.name === 'sync-ticket-status') {
+      const data = job.data as SyncTicketStatusJobData;
+      this.logger.log(`Processing sync-ticket-status job for ticket ${data.ticketId} (status: ${data.newStatus})`);
+      await this.issuesService.syncTicketStatusToGithub(data.ticketId, data.newStatus);
+      return { handled: true, ticketId: data.ticketId, newStatus: data.newStatus };
+    }
+
+    // Handle webhook jobs
+    const webhookData = job.data as GithubWebhookJobData;
+    const { event, deliveryId } = webhookData;
 
     this.logger.log(`Processing GitHub webhook job: ${event} (${deliveryId})`);
 
     try {
       switch (event) {
         case 'issues':
-          return this.processIssueEvent(job.data);
+          return this.processIssueEvent(webhookData);
 
         case 'pull_request':
-          return this.processPullRequestEvent(job.data);
+          return this.processPullRequestEvent(webhookData);
 
         case 'push':
-          return this.processPushEvent(job.data);
+          return this.processPushEvent(webhookData);
 
         case 'issue_comment':
-          return this.processIssueCommentEvent(job.data);
+          return this.processIssueCommentEvent(webhookData);
 
         case 'check_run':
-          return this.processCheckRunEvent(job.data);
+          return this.processCheckRunEvent(webhookData);
 
         case 'installation':
-          return this.processInstallationEvent(job.data);
+          return this.processInstallationEvent(webhookData);
 
         default:
           this.logger.debug(`Unhandled event type: ${event}`);
