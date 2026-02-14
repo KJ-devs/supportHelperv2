@@ -101,10 +101,10 @@ export function GlobalSearch() {
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Rechercher... (Ctrl+K)"
-          className="w-64 px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-64 px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
         />
         <svg
-          className="absolute left-3 top-2.5 w-5 h-5 text-gray-400"
+          className="absolute left-3 top-2.5 w-5 h-5 text-gray-400 dark:text-gray-500"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -123,7 +123,7 @@ export function GlobalSearch() {
               setQuery('');
               setResults([]);
             }}
-            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
               <path d="M10 8.586L2.929 1.515 1.515 2.929 8.586 10l-7.071 7.071 1.414 1.414L10 11.414l7.071 7.071 1.414-1.414L11.414 10l7.071-7.071-1.414-1.414L10 8.586z" />
@@ -134,10 +134,10 @@ export function GlobalSearch() {
 
       {/* Results Dropdown */}
       {isOpen && query && (
-        <div className="absolute top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
+        <div className="absolute top-full mt-2 w-96 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
           {/* Loading */}
           {isLoading && (
-            <div className="p-4 text-center text-gray-500">
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
               <svg
                 className="animate-spin h-5 w-5 mx-auto mb-2"
                 xmlns="http://www.w3.org/2000/svg"
@@ -164,9 +164,9 @@ export function GlobalSearch() {
 
           {/* No Results */}
           {!isLoading && results.length === 0 && (
-            <div className="p-4 text-center text-gray-500">
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
               <svg
-                className="w-12 h-12 mx-auto mb-2 text-gray-300"
+                className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -190,21 +190,21 @@ export function GlobalSearch() {
                   <button
                     key={ticket.id}
                     onClick={() => handleSelect(ticket.id)}
-                    className="w-full text-left p-3 hover:bg-gray-50 rounded-lg transition-colors"
+                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm font-medium text-gray-900 line-clamp-1">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
                         {ticket.title}
                       </h4>
                       <SeverityBadge severity={ticket.severity} />
                     </div>
-                    <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2 mb-2">
                       {ticket.description}
                     </p>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={ticket.status} />
                       {ticket.application && (
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {ticket.application.name}
                         </span>
                       )}
@@ -214,10 +214,10 @@ export function GlobalSearch() {
               </div>
 
               {/* View All Link */}
-              <div className="border-t p-3">
+              <div className="border-t dark:border-gray-700 p-3">
                 <button
                   onClick={handleViewAll}
-                  className="w-full text-center text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
                   Voir tous les résultats pour &quot;{query}&quot; →
                 </button>

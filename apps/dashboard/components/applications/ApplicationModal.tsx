@@ -153,8 +153,8 @@ export function ApplicationModal({
         />
 
         {/* Settings */}
-        <div className="pt-4 border-t">
-          <h3 className="text-sm font-medium text-gray-900 mb-3">
+        <div className="pt-4 border-t dark:border-gray-700">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
             Paramètres du SDK
           </h3>
 
@@ -166,13 +166,13 @@ export function ApplicationModal({
                 checked={formData.settings?.recordVideo ?? true}
                 onChange={(e) => handleSettingChange('recordVideo', e.target.checked)}
                 disabled={isLoading}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   🎥 Enregistrement vidéo
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Permettre l&apos;enregistrement de vidéos avec les tickets
                 </div>
               </div>
@@ -185,13 +185,13 @@ export function ApplicationModal({
                 checked={formData.settings?.captureLogs ?? true}
                 onChange={(e) => handleSettingChange('captureLogs', e.target.checked)}
                 disabled={isLoading}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   📝 Capture des logs
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Capturer les logs console automatiquement
                 </div>
               </div>
@@ -204,13 +204,13 @@ export function ApplicationModal({
                 checked={formData.settings?.autoAssign ?? false}
                 onChange={(e) => handleSettingChange('autoAssign', e.target.checked)}
                 disabled={isLoading}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   🤖 Attribution automatique
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Assigner automatiquement les nouveaux tickets
                 </div>
               </div>
@@ -223,13 +223,13 @@ export function ApplicationModal({
                 checked={formData.settings?.notifyOnNewTicket ?? true}
                 onChange={(e) => handleSettingChange('notifyOnNewTicket', e.target.checked)}
                 disabled={isLoading}
-                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
+                className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   🔔 Notifications
                 </div>
-                <div className="text-xs text-gray-500">
+                <div className="text-xs text-gray-500 dark:text-gray-400">
                   Recevoir des notifications pour les nouveaux tickets
                 </div>
               </div>
@@ -238,8 +238,8 @@ export function ApplicationModal({
         </div>
 
         {application && (
-          <div className="pt-4 border-t">
-            <p className="text-xs text-gray-500">
+          <div className="pt-4 border-t dark:border-gray-700">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               💡 La clé SDK ne peut pas être modifiée. Utilisez le bouton &quot;Régénérer&quot;
               sur la carte de l&apos;application pour créer une nouvelle clé.
             </p>

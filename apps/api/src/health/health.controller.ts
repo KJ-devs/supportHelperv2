@@ -1,13 +1,17 @@
 import { Controller, Get, HttpCode, HttpStatus, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
+import { CacheService } from '../cache';
 import { Public } from '../common/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
-  constructor(private readonly healthService: HealthService) {}
+  constructor(
+    private readonly healthService: HealthService,
+    private readonly cacheService: CacheService,
+  ) {}
 
   @Get()
   @Public()
@@ -160,5 +164,16 @@ export class HealthController {
       pid: process.pid,
       nodeVersion: process.version,
     };
+  }
+
+  @Get('cache')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cache hit/miss metrics (auth required)' })
+  @ApiResponse({ status: 200, description: 'Cache metrics' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  cacheMetrics() {
+    return this.cacheService.getMetrics();
   }
 }

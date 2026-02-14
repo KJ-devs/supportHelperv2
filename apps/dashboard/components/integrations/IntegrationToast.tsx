@@ -88,9 +88,9 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
   };
 
   const typeStyles = {
-    success: 'bg-white border-l-4 border-green-500',
-    error: 'bg-white border-l-4 border-red-500',
-    info: 'bg-white border-l-4 border-blue-500',
+    success: 'bg-white dark:bg-gray-900 border-l-4 border-green-500',
+    error: 'bg-white dark:bg-gray-900 border-l-4 border-red-500',
+    info: 'bg-white dark:bg-gray-900 border-l-4 border-blue-500',
   };
 
   const iconStyles = {
@@ -140,12 +140,12 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
       <div className="flex items-start gap-3">
         <div className={iconStyles[toast.type]}>{icons[toast.type]}</div>
         <div className="flex-1">
-          <h4 className="text-sm font-semibold text-gray-900">{toast.title}</h4>
-          {toast.message && <p className="text-sm text-gray-600 mt-1">{toast.message}</p>}
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{toast.title}</h4>
+          {toast.message && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{toast.message}</p>}
         </div>
         <button
           onClick={handleClose}
-          className="text-gray-400 hover:text-gray-600 transition-colors flex-shrink-0"
+          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path

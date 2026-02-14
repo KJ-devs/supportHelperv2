@@ -28,7 +28,7 @@ export function TicketFilters({ filters, onFiltersChange, onReset }: TicketFilte
   };
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow space-y-4">
+    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20 space-y-4">
       {/* Search */}
       <form onSubmit={handleSearchSubmit}>
         <Input
