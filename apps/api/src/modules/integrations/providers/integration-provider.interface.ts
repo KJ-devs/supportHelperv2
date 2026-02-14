@@ -20,7 +20,7 @@ export interface IntegrationProvider {
 
   deleteTicket?(externalId: string, config: IntegrationConfig): Promise<void>;
 
-  pullTickets?(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult>;
+  pullTickets?(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number; since?: string }): Promise<PullResult>;
 
   getAuthorizationUrl?(state: string, config: IntegrationConfig): string;
 

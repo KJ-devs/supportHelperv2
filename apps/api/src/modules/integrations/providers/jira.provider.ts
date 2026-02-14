@@ -300,7 +300,7 @@ export class JiraProvider extends BaseIntegrationProvider {
     this.logger.log(`Jira deleteTicket called for ${externalId} - returning success (no deletion)`);
   }
 
-  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number }): Promise<PullResult> {
+  async pullTickets(config: IntegrationConfig, options?: { startAt?: number; maxResults?: number; since?: string }): Promise<PullResult> {
     try {
       const baseUrl = this.getBaseUrl(config);
       const projectKey = config.projectKey;
@@ -310,7 +310,10 @@ export class JiraProvider extends BaseIntegrationProvider {
       let total = 0;
 
       do {
-        const jql = encodeURIComponent(`project = ${projectKey} ORDER BY created DESC`);
+        const sinceClause = options?.since
+          ? ` AND updated >= "${this.formatDateForJql(options.since)}"`
+          : '';
+        const jql = encodeURIComponent(`project = ${projectKey}${sinceClause} ORDER BY created DESC`);
         const url = `${baseUrl}/rest/api/3/search?jql=${jql}&startAt=${startAt}&maxResults=${maxResults}&fields=summary,description,status,priority,issuetype,created,updated,labels`;
 
         const response = await fetch(url, {
@@ -401,5 +404,15 @@ export class JiraProvider extends BaseIntegrationProvider {
       'Lowest': 'low',
     };
     return map[priority] || 'medium';
+  }
+
+  private formatDateForJql(isoDate: string): string {
+    const date = new Date(isoDate);
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}`;
   }
 }
