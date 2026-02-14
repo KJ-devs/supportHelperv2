@@ -162,6 +162,43 @@ export const ticketsApi = {
     const query = period ? `?period=${period}` : '';
     return apiRequest<TicketStats>(`/api/tickets/stats${query}`);
   },
+
+  /**
+   * Perform bulk action on multiple tickets
+   * Uses individual endpoints with Promise.allSettled for partial failure handling
+   */
+  async bulkAction(
+    ticketIds: string[],
+    action: string,
+    value?: any
+  ): Promise<{ processed: number; failed: number; errors: string[] }> {
+    const results = await Promise.allSettled(
+      ticketIds.map((id) => {
+        switch (action) {
+          case 'status':
+            return this.updateStatus(id, value);
+          case 'assign':
+            return this.assignTicket(id, value);
+          case 'unassign':
+            return this.unassignTicket(id);
+          case 'severity':
+            return this.updateTicket(id, { severity: value });
+          case 'delete':
+            return this.deleteTicket(id);
+          default:
+            return Promise.reject(new Error(`Unknown action: ${action}`));
+        }
+      })
+    );
+
+    const processed = results.filter((r) => r.status === 'fulfilled').length;
+    const failures = results.filter((r) => r.status === 'rejected');
+    const errors = failures.map((r) =>
+      r.status === 'rejected' ? (r.reason?.message || 'Unknown error') : ''
+    );
+
+    return { processed, failed: failures.length, errors };
+  },
 };
 
 export { ApiError };
