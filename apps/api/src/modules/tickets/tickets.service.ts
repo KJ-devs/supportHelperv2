@@ -10,6 +10,7 @@ import {
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
+import { CacheService, CacheKeys, CacheTTL } from '../../cache';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class TicketsService {
     private prisma: PrismaService,
     @Inject(forwardRef(() => TicketsGateway))
     private readonly ticketsGateway: TicketsGateway,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -71,6 +73,9 @@ export class TicketsService {
 
     this.logger.log(`Created ticket ${ticket.id} for tenant ${tenantId}`);
 
+    // Invalidate ticket list and stats caches for this tenant
+    await this.invalidateTicketCaches(tenantId);
+
     // Emit real-time event
     this.ticketsGateway.emitTicketCreated(tenantId, ticket);
 
@@ -79,7 +84,7 @@ export class TicketsService {
 
   /**
    * Find all tickets with filters and pagination
-   * TanStack Query compatible
+   * TanStack Query compatible. Results are cached for 5 min.
    */
   async findAll(tenantId: string, filters: FilterTicketsDto) {
     const {
@@ -97,6 +102,15 @@ export class TicketsService {
       createdFrom,
       createdTo,
     } = filters;
+
+    // Only cache non-search queries (search results change too frequently)
+    const filterHash = this.cacheService.hashFilters(filters);
+    const cacheKey = CacheKeys.ticketList(tenantId, filterHash);
+
+    if (!search) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
 
     // Build where clause
     const where: Prisma.TicketWhereInput = {
@@ -163,7 +177,7 @@ export class TicketsService {
       this.prisma.ticket.count({ where }),
     ]);
 
-    return {
+    const result = {
       data: tickets.map(t => ({
         ...t,
         typeConfidence: t.typeConfidence ? Number(t.typeConfidence) : null,
@@ -177,6 +191,13 @@ export class TicketsService {
         hasMore: (page + 1) * limit < total,
       },
     };
+
+    // Cache non-search results
+    if (!search) {
+      await this.cacheService.set(cacheKey, result, CacheTTL.TICKETS);
+    }
+
+    return result;
   }
 
   /**
@@ -301,6 +322,9 @@ export class TicketsService {
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
     };
 
+    // Invalidate caches
+    await this.invalidateTicketCaches(tenantId, ticketId);
+
     // Emit real-time event
     this.ticketsGateway.emitTicketUpdated(tenantId, result);
 
@@ -324,6 +348,9 @@ export class TicketsService {
     });
 
     this.logger.log(`Deleted (closed) ticket ${ticketId}`);
+
+    // Invalidate caches
+    await this.invalidateTicketCaches(tenantId, ticketId);
 
     // Emit real-time event
     this.ticketsGateway.emitTicketDeleted(tenantId, ticketId);
@@ -384,6 +411,9 @@ export class TicketsService {
       typeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
       severityConfidence: ticket.severityConfidence ? Number(ticket.severityConfidence) : null,
     };
+
+    // Invalidate caches
+    await this.invalidateTicketCaches(tenantId, ticketId);
 
     // Emit real-time event
     this.ticketsGateway.emitTicketAssigned(tenantId, result);
@@ -526,6 +556,9 @@ export class TicketsService {
       `Bulk ${action}: processed ${processed}/${ticketIds.length} tickets for tenant ${tenantId}`,
     );
 
+    // Invalidate all ticket caches for this tenant after bulk action
+    await this.invalidateTicketCaches(tenantId);
+
     return {
       processed,
       failed: ticketIds.length - processed,
@@ -534,63 +567,55 @@ export class TicketsService {
   }
 
   /**
-   * Get ticket statistics
+   * Get ticket statistics (cached for 10 min)
    */
   async getStats(tenantId: string) {
-    const [
-      total,
-      byStatus,
-      bySeverity,
-      byType,
-      recentTickets,
-      avgResolutionTime,
-    ] = await Promise.all([
-      // Total tickets
-      this.prisma.ticket.count({ where: { tenantId } }),
-
-      // By status
-      this.prisma.ticket.groupBy({
-        by: ['status'],
-        where: { tenantId },
-        _count: true,
-      }),
-
-      // By severity
-      this.prisma.ticket.groupBy({
-        by: ['severity'],
-        where: { tenantId, severity: { not: null } },
-        _count: true,
-      }),
-
-      // By type
-      this.prisma.ticket.groupBy({
-        by: ['type'],
-        where: { tenantId, type: { not: null } },
-        _count: true,
-      }),
-
-      // Recent tickets (last 7 days)
-      this.prisma.ticket.count({
-        where: {
-          tenantId,
-          createdAt: {
-            gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    const cacheKey = CacheKeys.ticketStats(tenantId);
+    return this.cacheService.getOrSet(cacheKey, CacheTTL.TICKET_STATS, async () => {
+      const [
+        total,
+        byStatus,
+        bySeverity,
+        byType,
+        recentTickets,
+        avgResolutionTime,
+      ] = await Promise.all([
+        this.prisma.ticket.count({ where: { tenantId } }),
+        this.prisma.ticket.groupBy({
+          by: ['status'],
+          where: { tenantId },
+          _count: true,
+        }),
+        this.prisma.ticket.groupBy({
+          by: ['severity'],
+          where: { tenantId, severity: { not: null } },
+          _count: true,
+        }),
+        this.prisma.ticket.groupBy({
+          by: ['type'],
+          where: { tenantId, type: { not: null } },
+          _count: true,
+        }),
+        this.prisma.ticket.count({
+          where: {
+            tenantId,
+            createdAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            },
           },
-        },
-      }),
+        }),
+        this.calculateAvgResolutionTime(tenantId),
+      ]);
 
-      // Average resolution time (in hours)
-      this.calculateAvgResolutionTime(tenantId),
-    ]);
-
-    return {
-      total,
-      byStatus: this.formatGroupByResult(byStatus, 'status'),
-      bySeverity: this.formatGroupByResult(bySeverity, 'severity'),
-      byType: this.formatGroupByResult(byType, 'type'),
-      recentTickets,
-      avgResolutionTimeHours: avgResolutionTime,
-    };
+      return {
+        total,
+        byStatus: this.formatGroupByResult(byStatus, 'status'),
+        bySeverity: this.formatGroupByResult(bySeverity, 'severity'),
+        byType: this.formatGroupByResult(byType, 'type'),
+        recentTickets,
+        avgResolutionTimeHours: avgResolutionTime,
+      };
+    });
   }
 
   /**
@@ -619,6 +644,26 @@ export class TicketsService {
 
     const avgMilliseconds = totalTime / resolvedTickets.length;
     return Math.round(avgMilliseconds / (1000 * 60 * 60)); // Convert to hours
+  }
+
+  /**
+   * Invalidate ticket-related caches for a tenant.
+   * Optionally invalidate a specific ticket detail cache.
+   */
+  private async invalidateTicketCaches(tenantId: string, ticketId?: string): Promise<void> {
+    const promises: Promise<void>[] = [
+      this.cacheService.invalidateByPrefix(`tenant:${tenantId}:tickets:list:`),
+      this.cacheService.del(CacheKeys.ticketStats(tenantId)),
+    ];
+
+    if (ticketId) {
+      promises.push(this.cacheService.del(CacheKeys.ticketDetail(tenantId, ticketId)));
+    }
+
+    // Also invalidate analytics caches since they depend on ticket data
+    promises.push(this.cacheService.invalidateByPrefix(`tenant:${tenantId}:analytics:`));
+
+    await Promise.all(promises);
   }
 
   /**
