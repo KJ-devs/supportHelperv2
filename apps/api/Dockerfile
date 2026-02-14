@@ -52,7 +52,7 @@ RUN pnpm --filter @support-helper/database build
 COPY apps/api/ apps/api/
 
 # Generate Prisma client (this creates node_modules/.prisma and node_modules/@prisma)
-RUN cd apps/api && npx prisma generate
+RUN cd apps/api && pnpm exec prisma generate
 
 # Build the API
 RUN pnpm --filter @support-helper/api build
