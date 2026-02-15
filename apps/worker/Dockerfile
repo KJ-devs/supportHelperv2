@@ -58,7 +58,7 @@ COPY apps/api/tsconfig.json apps/api/tsconfig.json
 COPY apps/worker/ apps/worker/
 
 # Generate Prisma client for worker (uses api's schema)
-RUN npx prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
+RUN cd apps/api && pnpm exec prisma generate
 
 # Build the Worker
 RUN pnpm --filter @support-helper/worker build
@@ -70,12 +70,14 @@ FROM node:20-slim AS production
 
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# Install FFmpeg and Tesseract OCR (required for video analysis pipeline)
+# Install FFmpeg, Tesseract OCR (required for video analysis pipeline),
+# netcat-openbsd for entrypoint DB readiness check
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
       ffmpeg \
       tesseract-ocr \
       dumb-init \
+      netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
@@ -103,9 +105,13 @@ COPY --from=build /app/packages/database/dist packages/database/dist
 # Copy Worker build output
 COPY --from=build /app/apps/worker/dist apps/worker/dist
 
-# Copy Prisma schema and generate client in production context
+# Copy Prisma schema, migrations, and generated client from build
 COPY --from=build /app/apps/api/prisma apps/api/prisma
-RUN npx prisma@5.22.0 generate --schema=apps/api/prisma/schema.prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /app/docker/entrypoint.sh
+RUN chmod +x /app/docker/entrypoint.sh
 
 # Create non-root user
 RUN groupadd -g 1001 appgroup && \
@@ -113,4 +119,5 @@ RUN groupadd -g 1001 appgroup && \
 
 USER appuser
 
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["dumb-init", "node", "apps/worker/dist/main.js"]

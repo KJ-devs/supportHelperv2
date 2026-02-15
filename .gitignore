@@ -45,6 +45,10 @@ data/
 
 # Claude Code local data
 
+# Forge reports & docs
+docs/reports/
+docs/github-user-stories/
+
 
 # Playwright
 test-results/

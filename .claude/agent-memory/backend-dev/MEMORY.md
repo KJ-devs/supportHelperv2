@@ -40,12 +40,24 @@
 
 ### GitHub Integration
 - Config location: `src/config/github.config.ts`
-- Service: `src/modules/github/services/github-oauth.service.ts`
-- Controller: `src/modules/github/controllers/github-oauth.controller.ts`
-- `isEnabled()` check: Returns `true` only if BOTH `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set
+- OAuth service: `src/modules/github/services/github-oauth.service.ts`
+- App service: `src/modules/github/services/github-app.service.ts` (JWT auth, installation tokens)
+- Installation service: `src/modules/github/services/github-installation.service.ts`
+- Issues service: `src/modules/github/services/github-issues.service.ts` (auto-create, sync, anti-loop)
+- Webhooks service: `src/modules/github/services/github-webhooks.service.ts` (event logging, processing)
+- Repos service: `src/modules/github/services/github-repos.service.ts` (list, link, unlink repos)
+- ProjectGithubConfig service: `src/modules/github/services/project-github-config.service.ts`
+- Webhook processor: `src/modules/github/processors/github-webhook.processor.ts` (BullMQ queue)
+- Controllers: github-oauth, github-app, github-installation, project-github, github-repos
+- DTOs: project-github-config.dto.ts (ConnectRepoDto, UpdateProjectGithubSettingsDto)
+- `isEnabled()` (OAuth): Returns `true` only if BOTH `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` are set
+- `isEnabled()` (App): Returns `true` only if BOTH `GITHUB_APP_ID` and `GITHUB_PRIVATE_KEY` are set
 - Setup docs: `docs/GITHUB_OAUTH_SETUP.md`
-- Required env vars for GitHub: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`
+- Required env vars for GitHub OAuth: `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GITHUB_WEBHOOK_SECRET`
+- Required env vars for GitHub App: `GITHUB_APP_ID`, `GITHUB_PRIVATE_KEY`, `GITHUB_APP_NAME`
 - OAuth callback URL: `{API_URL}/api/github/oauth/callback`
+- BullMQ queue 'github' used by: TicketsModule (enqueues), GithubWebhookProcessor (processes)
+- Anti-loop sync: `setSyncOrigin(ticketId, 'github'|'platform')` / `isSyncFromGithub()` / `isSyncFromPlatform()` via CacheService
 
 ### Shared Package (@support-helper/shared)
 - Location: `packages/shared/`
@@ -61,10 +73,14 @@
 ### Testing
 - Test framework: Jest for API (*.spec.ts files)
 - Test command: `pnpm --filter @support-helper/api test`
-- 142 total tests: 122 passed, 20 skipped, 0 failed
+- 745 total tests: 725 passed, 20 skipped, 0 failed (as of 2026-02-14)
 - Tests located in `apps/api/test/unit/` and `apps/api/test/integration/` directories
 - ConfigService must be mocked in tests that inject AuthService (required dependency)
 - Test files in `src/` directory are NOT picked up by Jest -- move to `test/unit/` or `test/integration/`
+- When adding new dependencies to existing services, ALL test files that instantiate that service must add mocks
+- CacheService mock pattern: `{ get: jest.fn().mockResolvedValue(undefined), set: jest.fn(), del: jest.fn(), getOrSet: jest.fn().mockImplementation((_key, _ttl, factory) => factory()) }`
+- `@octokit/rest` must be mocked via `jest.mock()` BEFORE imports in GitHub-related test files (ESM issue)
+- GitHub service tests need GithubAppService mock: `{ getInstallationOctokit: jest.fn(), isEnabled: jest.fn().mockReturnValue(false) }`
 
 ### Key Notes
 - `modules/auth/` directory still exists with guards, strategies, middleware -- used by feature modules

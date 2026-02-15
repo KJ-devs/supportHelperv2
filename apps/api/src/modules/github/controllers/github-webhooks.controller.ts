@@ -1,16 +1,20 @@
 import {
   Controller,
   Post,
+  Delete,
   Headers,
   Body,
   RawBodyRequest,
   Req,
+  Query,
+  UseGuards,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
 import { Request } from 'express';
-import { ApiTags, ApiOperation, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiHeader, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Public } from '../../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { GithubWebhooksService } from '../services/github-webhooks.service';
 
 @ApiTags('GitHub Webhooks')
@@ -36,7 +40,7 @@ export class GithubWebhooksController {
     @Headers('x-hub-signature-256') signature: string,
     @Headers('x-github-delivery') deliveryId: string,
     @Body() payload: any,
-    @Req() req: RawBodyRequest<Request>
+    @Req() req: RawBodyRequest<Request>,
   ) {
     if (!event) {
       throw new UnauthorizedException('Missing x-github-event header');
@@ -49,7 +53,12 @@ export class GithubWebhooksController {
     this.logger.log(`Received webhook: ${event} (${deliveryId})`);
 
     try {
-      await this.webhooksService.processWebhook(event, payload, signature, deliveryId || 'unknown');
+      await this.webhooksService.processWebhook(
+        event,
+        payload,
+        signature,
+        deliveryId || 'unknown',
+      );
 
       return {
         received: true,
@@ -57,9 +66,43 @@ export class GithubWebhooksController {
         deliveryId,
       };
     } catch (error) {
-      this.logger.error(`Webhook processing error: ${error.message}`, error.stack);
+      this.logger.error(
+        `Webhook processing error: ${error.message}`,
+        error.stack,
+      );
       throw error;
     }
   }
 
+  /**
+   * DELETE /github/webhooks/events/cleanup
+   * Deletes webhook events older than specified days (default 30)
+   * Requires JWT authentication (admin only)
+   */
+  @Delete('events/cleanup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Clean up old webhook events' })
+  @ApiQuery({
+    name: 'olderThanDays',
+    required: false,
+    type: Number,
+    description: 'Delete events older than this many days (default: 30)',
+  })
+  async cleanupEvents(
+    @Query('olderThanDays') olderThanDays?: string,
+  ) {
+    const days = olderThanDays ? parseInt(olderThanDays, 10) : 30;
+
+    if (isNaN(days) || days < 1) {
+      return { error: 'olderThanDays must be a positive integer' };
+    }
+
+    const deletedCount = await this.webhooksService.cleanupOldEvents(days);
+
+    return {
+      deleted: deletedCount,
+      olderThanDays: days,
+    };
+  }
 }

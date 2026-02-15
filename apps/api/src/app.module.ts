@@ -2,7 +2,10 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import Redis from 'ioredis';
+import { ThrottlerStorageRedisService } from './common/services/throttler-storage-redis.service';
+import { ThrottlerExceptionFilter } from './common/filters/throttler-exception.filter';
 
 // Configuration
 import configs, { validate } from './config';
@@ -13,6 +16,7 @@ import { RedisCacheModule } from './cache/cache.module';
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
+import { EncryptionModule } from './common/encryption.module';
 
 // Authentication & Authorization
 import { AuthModule } from './auth/auth.module';
@@ -28,6 +32,7 @@ import { MediaModule } from './modules/media/media.module';
 
 // AI & Automation
 import { AIModule } from './ai/ai.module';
+import { AiConfigModule } from './modules/ai-config/ai-config.module';
 import { AgentModule } from './modules/agent/agent.module';
 
 // Integrations
@@ -46,7 +51,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
  * Architecture: Core Services Layer
  * - Multi-tenant isolation
  * - JWT + SDK key authentication
- * - Rate limiting
+ * - Rate limiting with Redis storage
  * - Global configuration
  */
 @Module({
@@ -79,28 +84,49 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
       },
     }),
 
-    // Rate Limiting
-    ThrottlerModule.forRoot([
-      {
-        name: 'short',
-        ttl: 1000, // 1 second
-        limit: 10, // 10 requests
+    // Rate Limiting with Redis Storage
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => {
+        const redisUrl = config.get<string>('database.redisUrl') || 'redis://localhost:6379';
+        const url = new URL(redisUrl);
+
+        const redisClient = new Redis({
+          host: url.hostname,
+          port: parseInt(url.port || '6379', 10),
+          maxRetriesPerRequest: null,
+          connectTimeout: 5000,
+          lazyConnect: true,
+        });
+
+        return {
+          throttlers: [
+            {
+              name: 'public',
+              ttl: 60000, // 1 minute
+              limit: 10,
+            },
+            {
+              name: 'authenticated',
+              ttl: 60000, // 1 minute
+              limit: 100,
+            },
+            {
+              name: 'sdk',
+              ttl: 60000, // 1 minute
+              limit: 50,
+            },
+          ],
+          storage: new ThrottlerStorageRedisService(redisClient),
+        };
       },
-      {
-        name: 'medium',
-        ttl: 10000, // 10 seconds
-        limit: 50, // 50 requests
-      },
-      {
-        name: 'long',
-        ttl: 60000, // 1 minute
-        limit: 200, // 200 requests
-      },
-    ]),
+    }),
 
     // Core Infrastructure
     PrismaModule,
     RedisCacheModule,
+    EncryptionModule,
     MonitoringModule,
     HealthModule,
 
@@ -116,6 +142,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 
     // AI & Automation
     AIModule,
+    AiConfigModule,
     AgentModule,
 
     // Integrations
@@ -133,6 +160,11 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    // Global throttler exception filter
+    {
+      provide: APP_FILTER,
+      useClass: ThrottlerExceptionFilter,
     },
   ],
 })

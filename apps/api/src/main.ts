@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { RateLimitLoggingInterceptor } from './common/interceptors/rate-limit-logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { validateEnvironmentVariables } from './config/validate-env';
 
 // BigInt cannot be serialized by JSON.stringify by default.
 // This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
@@ -14,6 +16,9 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 };
 
 async function bootstrap() {
+  // Validate environment variables BEFORE NestJS initialization
+  validateEnvironmentVariables();
+
   // Create the app
   const app = await NestFactory.create(AppModule);
 
@@ -53,7 +58,10 @@ async function bootstrap() {
   );
 
   // Global interceptors
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(
+    new LoggingInterceptor(),
+    new RateLimitLoggingInterceptor(),
+  );
 
   // Global JWT guard (will be skipped for @Public() and @SdkAuth() routes)
   app.useGlobalGuards(new JwtAuthGuard(reflector));
@@ -80,7 +88,7 @@ async function bootstrap() {
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'x-sdk-key', 'x-correlation-id'],
-    exposedHeaders: ['x-correlation-id'],
+    exposedHeaders: ['x-correlation-id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'Retry-After'],
   });
 
   // Swagger documentation

@@ -1,13 +1,16 @@
-import { Controller, Get, HttpCode, HttpStatus, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Logger, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Response } from 'express';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
-import { CacheService } from '../cache';
+import { CacheService, CacheTTL, CacheKeys } from '../cache';
 import { Public } from '../common/decorators';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
   constructor(
     private readonly healthService: HealthService,
     private readonly cacheService: CacheService,
@@ -15,28 +18,48 @@ export class HealthController {
 
   @Get()
   @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Basic health check (liveness)' })
+  @ApiOperation({ summary: 'Comprehensive health check of all dependencies' })
   @ApiResponse({
     status: 200,
-    description: 'Service is alive',
+    description: 'All services healthy or degraded',
     schema: {
       example: {
         status: 'healthy',
         timestamp: '2024-01-16T12:00:00Z',
         uptime: 12345,
         version: '0.1.0',
+        services: {
+          postgres: { status: 'healthy', responseTime: 5, lastCheck: '2024-01-16T12:00:00Z' },
+          redis: { status: 'healthy', responseTime: 2, lastCheck: '2024-01-16T12:00:00Z' },
+          minio: { status: 'healthy', responseTime: 10, lastCheck: '2024-01-16T12:00:00Z' },
+          memory: { status: 'healthy', message: 'Heap: 45% used (90MB / 200MB)', lastCheck: '2024-01-16T12:00:00Z' },
+        },
       },
     },
   })
-  async health(): Promise<HealthStatus> {
-    return this.healthService.getBasicHealth();
+  @ApiResponse({ status: 503, description: 'Service is unhealthy' })
+  async health(@Res() res: Response): Promise<void> {
+    let health: HealthStatus;
+    try {
+      health = await this.cacheService.getOrSet<HealthStatus>(
+        CacheKeys.healthComprehensive(),
+        CacheTTL.HEALTH_COMPREHENSIVE,
+        () => this.healthService.getComprehensiveHealth(),
+      );
+    } catch (error) {
+      this.logger.warn('Cache unavailable for health check, running directly', error);
+      health = await this.healthService.getComprehensiveHealth();
+    }
+    const statusCode = health.status === 'unhealthy'
+      ? HttpStatus.SERVICE_UNAVAILABLE
+      : HttpStatus.OK;
+    res.status(statusCode).json(health);
   }
 
   @Get('live')
   @Public()
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Kubernetes liveness probe' })
+  @ApiOperation({ summary: 'Liveness probe - checks if app process is running' })
   @ApiResponse({ status: 200, description: 'Service is alive' })
   @ApiResponse({ status: 503, description: 'Service is not alive' })
   live(): { status: string } {
@@ -48,16 +71,26 @@ export class HealthController {
 
   @Get('ready')
   @Public()
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Kubernetes readiness probe' })
+  @ApiOperation({ summary: 'Readiness probe - checks if all dependencies are available' })
   @ApiResponse({ status: 200, description: 'Service is ready to accept traffic' })
   @ApiResponse({ status: 503, description: 'Service is not ready' })
-  async ready(): Promise<{ status: string }> {
-    const isReady = await this.healthService.isReady();
-    if (isReady) {
-      return { status: 'ok' };
+  async ready(@Res() res: Response): Promise<void> {
+    let isReady: boolean;
+    try {
+      isReady = await this.cacheService.getOrSet<boolean>(
+        CacheKeys.healthReady(),
+        CacheTTL.HEALTH_READY,
+        () => this.healthService.isReady(),
+      );
+    } catch (error) {
+      this.logger.warn('Cache unavailable for readiness check, running directly', error);
+      isReady = await this.healthService.isReady();
     }
-    throw new ServiceUnavailableException('Service not ready');
+    if (isReady) {
+      res.status(HttpStatus.OK).json({ status: 'ok' });
+    } else {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE).json({ status: 'not ready' });
+    }
   }
 
   @Get('full')

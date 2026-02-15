@@ -140,6 +140,12 @@ export default function SettingsPage() {
     { id: 'team', label: '👥 Équipe', icon: '👥' },
   ] as const;
 
+  const settingsPages = [
+    { href: '/dashboard/settings/ai', label: '🤖 AI Configuration' },
+    { href: '/dashboard/settings/github', label: '🐙 GitHub' },
+    { href: '/dashboard/settings/status', label: '📊 Statut Systeme' },
+  ];
+
   return (
     <DashboardLayout>
       <Toaster position="top-right" />
@@ -169,6 +175,20 @@ export default function SettingsPage() {
                   >
                     {tab.label}
                   </button>
+                ))}
+              </nav>
+            </Card>
+
+            <Card padding={false} className="mt-4">
+              <nav className="space-y-1">
+                {settingsPages.map((page) => (
+                  <a
+                    key={page.href}
+                    href={page.href}
+                    className="block w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {page.label}
+                  </a>
                 ))}
               </nav>
             </Card>

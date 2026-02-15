@@ -240,6 +240,17 @@ Key variables (see `.env.example` for full list):
 | `API_PORT` | API port (default 3001) |
 | `DASHBOARD_URL` | CORS origin for dashboard |
 
+## Pre-Merge Checklist (MANDATORY)
+
+Before merging any branch or PR, you **MUST**:
+1. Run `pnpm build` and ensure **all packages build successfully** (0 errors)
+2. Run `pnpm dev` and verify services start without errors
+3. Fix any build or runtime errors **before** creating the PR or merging
+
+**Git workflow:**
+- Always use `git rebase` instead of `git merge` to keep a clean linear history
+- Use `git rebase origin/main` to sync with upstream, never `git merge origin/main`
+
 ## Common Pitfalls
 
 1. **SDK CDN build** - Must be built separately: `pnpm --filter @support-helper/sdk-web build:cdn`. Verify `dist/cdn/sdk.iife.js` exists after build. See `packages/sdk-web/CDN_SETUP.md` for details.

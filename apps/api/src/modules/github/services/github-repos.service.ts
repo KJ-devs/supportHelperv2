@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, BadRequestException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubOAuthService } from './github-oauth.service';
+import { GithubAppService } from './github-app.service';
 import { ListReposQueryDto, GithubRepoDto, ListReposResponseDto } from '../dto';
 
 @Injectable()
@@ -11,7 +12,8 @@ export class GithubReposService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    private oauthService: GithubOAuthService
+    private oauthService: GithubOAuthService,
+    private appService: GithubAppService,
   ) {}
 
   /**
@@ -164,5 +166,45 @@ export class GithubReposService {
       return [];
     }
     return (connection.repos as string[]) || [];
+  }
+
+  /**
+   * List repositories accessible by a GitHub App installation.
+   * Uses installation token instead of user OAuth token.
+   */
+  async listInstallationRepos(
+    installationId: number,
+    page: number = 1,
+    perPage: number = 30,
+  ): Promise<ListReposResponseDto> {
+    const octokit = await this.appService.getInstallationOctokit(installationId);
+
+    const { data, headers } = await octokit.apps.listReposAccessibleToInstallation({
+      per_page: perPage,
+      page,
+    });
+
+    const linkHeader = headers.link || '';
+    const hasMore = linkHeader.includes('rel="next"');
+
+    const repositories: GithubRepoDto[] = data.repositories.map((repo) => ({
+      id: repo.id,
+      name: repo.name,
+      fullName: repo.full_name,
+      private: repo.private,
+      url: repo.html_url,
+      description: repo.description || undefined,
+      defaultBranch: repo.default_branch,
+      starCount: repo.stargazers_count ?? 0,
+      openIssuesCount: repo.open_issues_count ?? 0,
+      updatedAt: repo.updated_at || repo.created_at || new Date().toISOString(),
+    }));
+
+    return {
+      repositories,
+      total: data.total_count,
+      page,
+      hasMore,
+    };
   }
 }

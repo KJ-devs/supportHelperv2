@@ -52,7 +52,7 @@ RUN pnpm --filter @support-helper/database build
 COPY apps/api/ apps/api/
 
 # Generate Prisma client (this creates node_modules/.prisma and node_modules/@prisma)
-RUN cd apps/api && npx prisma generate
+RUN cd apps/api && pnpm exec prisma generate
 
 # Build the API
 RUN pnpm --filter @support-helper/api build
@@ -64,8 +64,8 @@ FROM node:20-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
 
-# Add dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+# Add dumb-init for proper signal handling, netcat for entrypoint DB readiness check
+RUN apk add --no-cache dumb-init netcat-openbsd
 
 ENV NODE_ENV=production
 WORKDIR /app
@@ -95,6 +95,13 @@ COPY --from=build /app/packages/database/dist packages/database/dist
 # Copy API build output
 COPY --from=build /app/apps/api/dist apps/api/dist
 
+# Note: Prisma schema + migrations already copied above (line 86) for @prisma/client postinstall.
+# prisma migrate deploy needs both schema.prisma and migrations/ directory at runtime.
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /app/docker/entrypoint.sh
+RUN chmod +x /app/docker/entrypoint.sh
+
 # Create non-root user
 RUN addgroup -g 1001 -S appgroup && \
     adduser -S appuser -u 1001 -G appgroup
@@ -103,4 +110,5 @@ USER appuser
 
 EXPOSE 3001
 
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
 CMD ["dumb-init", "node", "apps/api/dist/src/main.js"]
