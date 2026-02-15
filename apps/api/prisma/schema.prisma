@@ -29,6 +29,7 @@ model Tenant {
   githubInstallations GithubInstallation[]
   integrations        Integration[]
   aiConfig            AiConfig?
+  codebaseEmbeddings  CodebaseEmbedding[]
 
   @@map("tenants")
 }
@@ -64,9 +65,11 @@ model Application {
   githubRepo String?  @map("github_repo") @db.VarChar(255)
   createdAt  DateTime @default(now()) @map("created_at")
 
-  tenant       Tenant              @relation(fields: [tenantId], references: [id])
-  tickets      Ticket[]
-  githubConfig ProjectGithubConfig?
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+  tickets             Ticket[]
+  githubConfig        ProjectGithubConfig?
+  codebaseEmbeddings  CodebaseEmbedding[]
+  codebaseIndexStatus CodebaseIndexStatus?
 
   @@map("applications")
 }
@@ -411,4 +414,48 @@ model ClassificationFeedback {
   corrector User?  @relation(fields: [correctedBy], references: [id])
 
   @@map("classification_feedback")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// CODEBASE INDEXING & EMBEDDINGS
+// ═══════════════════════════════════════════════════════════════════════
+
+model CodebaseEmbedding {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  filePath      String   @map("file_path") @db.VarChar(500)
+  chunkIndex    Int      @map("chunk_index")
+  content       String   @db.Text
+  embedding     Unsupported("vector(1536)")?
+  language      String   @db.VarChar(20)
+  lastCommitSha String   @map("last_commit_sha") @db.VarChar(40)
+  metadata      Json?    @db.JsonB
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, filePath, chunkIndex])
+  @@index([tenantId, applicationId])
+  @@index([applicationId, filePath])
+  @@map("codebase_embeddings")
+}
+
+model CodebaseIndexStatus {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  applicationId   String    @unique @map("application_id") @db.Uuid
+  status          String    @default("idle") @db.VarChar(20)
+  lastIndexedAt   DateTime? @map("last_indexed_at")
+  lastCommitSha   String?   @map("last_commit_sha") @db.VarChar(40)
+  totalFiles      Int       @default(0) @map("total_files")
+  totalChunks     Int       @default(0) @map("total_chunks")
+  error           String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("codebase_index_status")
 }

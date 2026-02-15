@@ -22,6 +22,7 @@ import queueConfig from './config/queue.config';
  * - GithubSyncWorker: GitHub bidirectional sync
  * - AgentWorker: AI agent orchestration
  * - IntegrationSyncWorker: Third-party integration sync (Slack, Discord, Notion, etc.)
+ * - CodebaseIndexingWorker: Codebase embedding indexing for AI-powered code search
  *
  * Configuration:
  * - Shared Redis with apps/api

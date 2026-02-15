@@ -1,8 +1,9 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubIssuesService } from '../services/github-issues.service';
+import { CodebaseIndexerService } from '../../codebase-index/services/codebase-indexer.service';
 
 export interface GithubWebhookJobData {
   event: string;
@@ -29,6 +30,8 @@ export class GithubWebhookProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly issuesService: GithubIssuesService,
+    @Inject(forwardRef(() => CodebaseIndexerService))
+    private readonly codebaseIndexer: CodebaseIndexerService,
   ) {
     super();
   }
@@ -120,18 +123,92 @@ export class GithubWebhookProcessor extends WorkerHost {
 
   private async processPushEvent(data: GithubWebhookJobData) {
     const { payload } = data;
-    const { repository, commits, ref } = payload;
+    const { repository, commits, ref, before } = payload;
+    const repoFullName: string = repository.full_name;
+    const defaultBranch: string = repository.default_branch;
 
     this.logger.log(
-      `Processed push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`,
+      `Processed push to ${repoFullName} (${ref}): ${commits?.length || 0} commits`,
     );
+
+    // Only trigger codebase indexing for pushes to the default branch
+    const pushedBranch = (ref as string)?.replace('refs/heads/', '');
+    if (pushedBranch === defaultBranch && before) {
+      await this.triggerCodebaseIndexing(repoFullName, before);
+    }
 
     return {
       handled: true,
-      repository: repository.full_name,
+      repository: repoFullName,
       ref,
       commitCount: commits?.length || 0,
     };
+  }
+
+  /**
+   * Trigger incremental codebase indexing when code is pushed to the default branch.
+   * Looks up ProjectGithubConfig to find the linked application and tenant.
+   */
+  private async triggerCodebaseIndexing(
+    repoFullName: string,
+    beforeSha: string,
+  ): Promise<void> {
+    const [owner, repo] = repoFullName.split('/');
+    if (!owner || !repo) return;
+
+    try {
+      // Find the ProjectGithubConfig that links this repo to an application
+      const config = await this.prisma.projectGithubConfig.findFirst({
+        where: { owner, repo },
+        include: { application: true, installation: true },
+      });
+
+      if (!config) {
+        this.logger.debug(
+          `No ProjectGithubConfig found for ${repoFullName}, skipping codebase indexing`,
+        );
+        return;
+      }
+
+      // Check if codebase is already indexed (skip if never indexed — needs manual trigger)
+      const status = await this.prisma.codebaseIndexStatus.findUnique({
+        where: { applicationId: config.applicationId },
+      });
+
+      if (!status || status.status === 'idle') {
+        this.logger.debug(
+          `Codebase not yet indexed for app ${config.applicationId}, skipping incremental index`,
+        );
+        return;
+      }
+
+      if (status.status === 'indexing') {
+        this.logger.debug(
+          `Codebase already indexing for app ${config.applicationId}, skipping`,
+        );
+        return;
+      }
+
+      // Queue incremental index
+      const tenantId = config.installation.tenantId;
+      const sinceCommitSha = status.lastCommitSha || beforeSha;
+
+      const jobId = await this.codebaseIndexer.queueIncrementalIndex(
+        config.applicationId,
+        tenantId,
+        sinceCommitSha,
+        'webhook',
+      );
+
+      this.logger.log(
+        `Queued incremental codebase index for ${repoFullName} (app: ${config.applicationId}), job: ${jobId}`,
+      );
+    } catch (error) {
+      // Don't let indexing failures break webhook processing
+      this.logger.warn(
+        `Failed to trigger codebase indexing for ${repoFullName}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
   }
 
   private async processIssueCommentEvent(data: GithubWebhookJobData) {

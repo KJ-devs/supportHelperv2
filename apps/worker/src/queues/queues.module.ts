@@ -8,6 +8,7 @@ export const QUEUE_NAMES = {
   GITHUB_SYNC: 'github-sync',
   AGENT_ORCHESTRATION: 'agent-orchestration',
   INTEGRATION_SYNC: 'integration-sync',
+  CODEBASE_INDEXING: 'codebase-indexing',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -106,6 +107,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
             attempts: 4,
           },
         };
+      },
+    }),
+
+    // Codebase Indexing Queue
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.CODEBASE_INDEXING,
+      defaultJobOptions: {
+        attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 30000,
+        },
+        removeOnComplete: 50,
+        removeOnFail: 100,
       },
     }),
 
