@@ -286,8 +286,21 @@ export class GithubOAuthService {
       throw new UnauthorizedException('GitHub token expired, please reconnect');
     }
 
-    // Decrypt access token before use
-    const decryptedToken = this.encryption.decrypt(connection.accessToken);
+    // Decrypt access token before use (with fallback for legacy plaintext tokens)
+    let decryptedToken: string;
+    try {
+      decryptedToken = this.encryption.decrypt(connection.accessToken);
+    } catch {
+      // Token is stored in plaintext (pre-encryption migration) — use as-is
+      // and re-encrypt it for future use
+      this.logger.warn('Found legacy plaintext GitHub token, migrating to encrypted storage');
+      decryptedToken = connection.accessToken;
+      const encryptedToken = this.encryption.encrypt(decryptedToken);
+      await this.prisma.githubConnection.update({
+        where: { id: connection.id },
+        data: { accessToken: encryptedToken },
+      });
+    }
     return new Octokit({ auth: decryptedToken });
   }
 
