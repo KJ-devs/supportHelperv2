@@ -3,9 +3,7 @@ import { withSentryConfig } from '@sentry/nextjs';
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // output: 'standalone' is set via Dockerfile ARG for Docker builds only
-  // (Windows lacks symlink support needed for standalone mode)
-  ...(process.env.NEXT_OUTPUT_STANDALONE === 'true' ? { output: 'standalone' } : {}),
+  output: 'standalone',
   transpilePackages: ['@support-helper/shared'],
 
   // Experimental features

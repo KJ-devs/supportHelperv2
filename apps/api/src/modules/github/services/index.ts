@@ -6,3 +6,4 @@ export * from './github-userstory.service';
 export * from './github-app.service';
 export * from './github-installation.service';
 export * from './project-github-config.service';
+export * from './template-renderer.service';

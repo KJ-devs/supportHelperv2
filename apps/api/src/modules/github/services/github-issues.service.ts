@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CacheService } from '../../../cache/cache.service';
 import { GithubOAuthService } from './github-oauth.service';
 import { GithubAppService } from './github-app.service';
+import { TemplateRendererService } from './template-renderer.service';
 import {
   CreateGithubIssueDto,
   GithubIssueResponseDto,
@@ -32,6 +33,7 @@ export class GithubIssuesService {
     private cacheService: CacheService,
     private oauthService: GithubOAuthService,
     private appService: GithubAppService,
+    private templateRenderer: TemplateRendererService,
   ) {
     this.apiUrl = this.config.get('app.apiUrl') || 'http://localhost:3000';
   }
@@ -436,13 +438,18 @@ export class GithubIssuesService {
     if (existing) return;
 
     const octokit = await this.appService.getInstallationOctokit(Number(installationId));
-    const issueBody = this.formatTicketAsIssueBody(ticket as TicketWithRelations, {
-      repository,
-      includeAiAnalysis: true,
-      includeVideoLink: true,
-    });
-
     const configSettings = (settings as Record<string, any>) ?? {};
+    const customTemplate = configSettings.issueBodyTemplate as string | undefined;
+    const issueBody = this.formatTicketAsIssueBody(
+      ticket as TicketWithRelations,
+      {
+        repository,
+        includeAiAnalysis: true,
+        includeVideoLink: true,
+      },
+      customTemplate || undefined,
+    );
+
     const defaultLabels = configSettings.defaultLabels
       ? (configSettings.defaultLabels as string).split(',').map((l: string) => l.trim())
       : [];
@@ -543,7 +550,6 @@ export class GithubIssuesService {
       aiAnalysis = ticket.aiSummary;
     }
 
-    type TicketWithReporter = typeof ticket & { reporterEmail?: string };
     return {
       title: ticket.title || `Support Ticket #${ticket.id.slice(0, 8)}`,
       description: ticket.description || 'No description provided.',
@@ -552,7 +558,7 @@ export class GithubIssuesService {
       steps: stepsText,
       recording_url: recordingUrl,
       ticket_url: `${this.apiUrl}/tickets/${ticket.id}`,
-      reporter: (ticket as TicketWithReporter).reporterEmail || 'Unknown',
+      reporter: (ticket as any).reporterEmail || 'Unknown',
       ai_analysis: aiAnalysis,
       user_context: userContextText,
       ticket_id: ticket.id.slice(0, 8),

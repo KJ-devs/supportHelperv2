@@ -120,7 +120,6 @@ services:
 
   # ============================================
   # API (NestJS)
-  # Runs Prisma migrations automatically at startup
   # ============================================
   api:
     build:
@@ -131,7 +130,6 @@ services:
     environment:
       NODE_ENV: production
       API_PORT: 3001
-      RUN_MIGRATIONS: "true"
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-support_helper}
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
       S3_ENDPOINT: http://minio:9000
@@ -168,7 +166,7 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/health/ready || exit 1"]
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
       interval: 15s
       timeout: 10s
       retries: 5

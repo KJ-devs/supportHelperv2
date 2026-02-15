@@ -18,13 +18,6 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
 import { EncryptionModule } from './common/encryption.module';
 
-// Logging & Metrics
-import { LoggerModule } from './common/logger/logger.module';
-import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
-import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
-import { MetricsModule } from './modules/metrics/metrics.module';
-import { MetricsInterceptor } from './modules/metrics/metrics.interceptor';
-
 // Authentication & Authorization
 import { AuthModule } from './auth/auth.module';
 
