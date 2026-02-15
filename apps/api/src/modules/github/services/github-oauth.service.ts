@@ -38,7 +38,7 @@ export class GithubOAuthService {
 
   constructor(
     private prisma: PrismaService,
-    private config: ConfigService
+    private config: ConfigService,
   ) {
     this.clientId = this.config.get('github.clientId') || '';
     this.clientSecret = this.config.get('github.clientSecret') || '';
@@ -208,13 +208,12 @@ export class GithubOAuthService {
   ) {
     const tokenExpiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
 
-    // Check if connection already exists
+    // Prisma encryption middleware auto-encrypts accessToken and refreshToken on write
     const existing = await this.prisma.githubConnection.findFirst({
       where: { tenantId },
     });
 
     if (existing) {
-      // Update existing connection
       return this.prisma.githubConnection.update({
         where: { id: existing.id },
         data: {
@@ -225,7 +224,6 @@ export class GithubOAuthService {
       });
     }
 
-    // Create new connection
     return this.prisma.githubConnection.create({
       data: {
         tenantId,
@@ -280,6 +278,7 @@ export class GithubOAuthService {
       throw new UnauthorizedException('GitHub token expired, please reconnect');
     }
 
+    // accessToken is auto-decrypted by Prisma encryption middleware
     return new Octokit({ auth: connection.accessToken });
   }
 

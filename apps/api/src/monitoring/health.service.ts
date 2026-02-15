@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
 import Redis from 'ioredis';
 
 export interface HealthStatus {
@@ -8,6 +9,7 @@ export interface HealthStatus {
   timestamp: string;
   uptime: number;
   version: string;
+  services?: Record<string, HealthCheck>;
   checks?: Record<string, HealthCheck>;
 }
 
@@ -38,8 +40,11 @@ export interface QueueStatus {
 
 @Injectable()
 export class HealthService {
+  private readonly logger = new Logger(HealthService.name);
   private redis: Redis | null = null;
   private redisInitialized = false;
+  private s3Client: S3Client | null = null;
+  private s3Initialized = false;
   private cronJobs: Map<string, CronJobStatus> = new Map();
   private readonly startTime = Date.now();
 
@@ -47,7 +52,7 @@ export class HealthService {
     private readonly config: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    // Don't initialize Redis in constructor to avoid blocking startup
+    // Don't initialize Redis/S3 in constructor to avoid blocking startup
   }
 
   private getRedis(): Redis | null {
@@ -71,12 +76,77 @@ export class HealthService {
     return this.redis;
   }
 
+  private getS3Client(): S3Client | null {
+    if (!this.s3Initialized) {
+      this.s3Initialized = true;
+      const endpoint = this.config.get<string>('s3.endpoint');
+      const accessKeyId = this.config.get<string>('s3.accessKeyId');
+      const secretAccessKey = this.config.get<string>('s3.secretAccessKey');
+      const region = this.config.get<string>('s3.region') || 'us-east-1';
+
+      if (endpoint && accessKeyId && secretAccessKey) {
+        try {
+          this.s3Client = new S3Client({
+            endpoint,
+            region,
+            credentials: { accessKeyId, secretAccessKey },
+            forcePathStyle: true,
+          });
+        } catch (error) {
+          this.logger.warn('Failed to create S3 client for health checks', error);
+          this.s3Client = null;
+        }
+      }
+    }
+    return this.s3Client;
+  }
+
   async getBasicHealth(): Promise<HealthStatus> {
     return {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       version: this.config.get('app.version') || '0.1.0',
+    };
+  }
+
+  /**
+   * Comprehensive health check of all dependencies.
+   * Returns status of each service with latency.
+   */
+  async getComprehensiveHealth(): Promise<HealthStatus> {
+    const services: Record<string, HealthCheck> = {};
+
+    const [dbCheck, redisCheck, s3Check] = await Promise.all([
+      this.checkDatabase(),
+      this.checkRedis(),
+      this.checkS3(),
+    ]);
+
+    services.postgres = dbCheck;
+    services.redis = redisCheck;
+    services.minio = s3Check;
+    services.memory = this.checkMemory();
+
+    // Determine overall status
+    const statuses = Object.values(services).map((s) => s.status);
+    let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+
+    if (statuses.includes('unhealthy')) {
+      // Database unhealthy => fully unhealthy; others => degraded
+      if (services.postgres.status === 'unhealthy') {
+        overallStatus = 'unhealthy';
+      } else {
+        overallStatus = 'degraded';
+      }
+    }
+
+    return {
+      status: overallStatus,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      version: this.config.get('app.version') || '0.1.0',
+      services,
     };
   }
 
@@ -93,6 +163,12 @@ export class HealthService {
     // Redis check
     checks.redis = await this.checkRedis();
     if (checks.redis.status === 'unhealthy') {
+      overallStatus = overallStatus === 'unhealthy' ? 'unhealthy' : 'degraded';
+    }
+
+    // S3/MinIO check
+    checks.minio = await this.checkS3();
+    if (checks.minio.status === 'unhealthy') {
       overallStatus = overallStatus === 'unhealthy' ? 'unhealthy' : 'degraded';
     }
 
@@ -153,6 +229,34 @@ export class HealthService {
         status: 'unhealthy',
         responseTime: Date.now() - start,
         message: error instanceof Error ? error.message : 'Redis connection failed',
+        lastCheck: new Date().toISOString(),
+      };
+    }
+  }
+
+  async checkS3(): Promise<HealthCheck> {
+    const s3 = this.getS3Client();
+    if (!s3) {
+      return {
+        status: 'unhealthy',
+        message: 'S3/MinIO not configured',
+        lastCheck: new Date().toISOString(),
+      };
+    }
+
+    const start = Date.now();
+    try {
+      await s3.send(new ListBucketsCommand({}));
+      return {
+        status: 'healthy',
+        responseTime: Date.now() - start,
+        lastCheck: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'S3/MinIO connection failed',
         lastCheck: new Date().toISOString(),
       };
     }
@@ -256,7 +360,10 @@ export class HealthService {
 
   // Readiness check (is the service ready to accept traffic?)
   async isReady(): Promise<boolean> {
-    const dbCheck = await this.checkDatabase();
-    return dbCheck.status === 'healthy';
+    const [dbCheck, redisCheck] = await Promise.all([
+      this.checkDatabase(),
+      this.checkRedis(),
+    ]);
+    return dbCheck.status === 'healthy' && redisCheck.status === 'healthy';
   }
 }

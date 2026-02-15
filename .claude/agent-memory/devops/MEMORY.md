@@ -63,15 +63,29 @@
 - Correction appliquée : `passport-custom` retiré du root package.json
 - **Rapport complet** : `docs/audit/PHASE2_REPORT.md`
 
-## Dockerfiles (2026-02-12)
+## Dockerfiles (2026-02-15)
 - `apps/api/Dockerfile` - 3-stage (deps/build/prod), node:20-alpine, pnpm@9.15.4 via corepack
 - `apps/worker/Dockerfile` - 3-stage, node:20-slim (needs apt for ffmpeg+tesseract)
+- `apps/dashboard/Dockerfile` - 3-stage, node:20-alpine, Next.js standalone output
 - `.dockerignore` (root) - excludes node_modules, dist, .next, tests, .env, .git, docs
-- Build context = repo root (deploy-api.yml uses `context: .`)
+- Build context = repo root for all Dockerfiles
 - Both shared packages (`shared`, `database`) extend `tsconfig.base.json` - must be copied in build stage
 - Worker references `../api/prisma/schema.prisma` - api's prisma dir must be present
 - API `start:prod` says `dist/src/main` but actual NestJS output is `dist/main.js` (possible typo in package.json)
 - Worker uses `dist/main` which is correct
+- Dashboard uses `output: 'standalone'` in next.config.mjs (EPERM symlink error on Windows, works in Docker/Linux)
+
+## Production Docker Compose (2026-02-15)
+- `docker-compose.prod.yml` - Full production stack
+- Services: postgres, redis, minio, minio-init, api, worker, dashboard
+- No MeiliSearch or MailHog (dev-only)
+- Required env vars enforced with `${VAR:?message}` syntax
+- Redis requires password in production (`REDIS_PASSWORD`)
+- Memory limits total ~2.8GB (fits 4GB target): PG=512M, Redis=192M, MinIO=256M, API=512M, Worker=1G, Dashboard=256M
+- Named Docker volumes for persistence: postgres_data, redis_data, minio_data
+- Startup order: postgres/redis/minio -> api -> worker/dashboard
+- Network: `sh-prod-network` (separate from dev `support-helper-network`)
+- Configurable ports via env vars: POSTGRES_PORT, REDIS_PORT, API_PORT, DASHBOARD_PORT, MINIO_API_PORT, MINIO_CONSOLE_PORT
 
 ## Windows Prisma DLL Locking (2026-02-12)
 **Problem**: `pnpm db:generate` fails with EPERM on `query_engine-windows.dll.node` rename

@@ -15,6 +15,7 @@ import {
   ApiBearerAuth,
   ApiResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
@@ -42,6 +43,7 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 @ApiBearerAuth()
 @Controller('tickets')
 @UseGuards(JwtAuthGuard)
+@Throttle({ authenticated: { limit: 100, ttl: 60000 } })
 export class TicketsController {
   constructor(
     private readonly ticketsService: TicketsService,

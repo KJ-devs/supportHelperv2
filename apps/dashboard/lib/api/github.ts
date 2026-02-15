@@ -65,6 +65,80 @@ export interface UserStoryIssueResponse {
   };
 }
 
+// GitHub App types
+
+export interface GitHubAppInfo {
+  appName: string;
+  appSlug: string;
+  appId: number;
+  installUrl: string;
+  description?: string;
+}
+
+export interface GitHubInstallation {
+  id: string;
+  installationId: number;
+  accountLogin: string;
+  accountType: string;
+  accountAvatarUrl?: string;
+  repositorySelection: string;
+  createdAt: string;
+}
+
+export interface GitHubInstallationRepo {
+  id: number;
+  name: string;
+  fullName: string;
+  private: boolean;
+  description?: string;
+  defaultBranch: string;
+  url: string;
+}
+
+export interface GitHubInstallationReposResponse {
+  repositories: GitHubInstallationRepo[];
+  totalCount: number;
+  page: number;
+  hasMore: boolean;
+}
+
+export interface GitHubAppConfig {
+  installationId?: number;
+  owner?: string;
+  repo?: string;
+  defaultBranch?: string;
+  autoCreateIssues?: boolean;
+  syncEnabled?: boolean;
+  labelSync?: boolean;
+}
+
+export interface ConnectRepoData {
+  installationId: number;
+  owner: string;
+  repo: string;
+  defaultBranch?: string;
+}
+
+// Issue template types
+
+export interface IssueTemplateResponse {
+  template: string;
+  isDefault: boolean;
+  placeholders: Record<string, string>;
+}
+
+export interface TemplateValidation {
+  valid: boolean;
+  placeholders: string[];
+  missingPlaceholders: string[];
+}
+
+export interface TemplatePreviewResponse {
+  rendered: string;
+  template: string;
+  sampleData: Record<string, string>;
+}
+
 export const githubApi = {
   /**
    * Get OAuth authorization URL
@@ -147,6 +221,140 @@ export const githubApi = {
   async syncTicket(ticketId: string): Promise<{ success: boolean }> {
     return apiRequest(`/api/tickets/${ticketId}/github/sync`, {
       method: 'POST',
+    });
+  },
+
+  // ── GitHub App (installation-based flow) ──────────────────────────
+
+  /**
+   * Get GitHub App metadata and install URL
+   */
+  async getAppInfo(): Promise<GitHubAppInfo> {
+    return apiRequest('/api/github/app/info');
+  },
+
+  /**
+   * Get GitHub App installation URL
+   */
+  async getInstallUrl(): Promise<{ url: string }> {
+    return apiRequest('/api/github/install');
+  },
+
+  /**
+   * List GitHub App installations for the tenant
+   */
+  async getInstallations(): Promise<GitHubInstallation[]> {
+    return apiRequest('/api/github/install/installations');
+  },
+
+  /**
+   * Remove a GitHub App installation
+   */
+  async removeInstallation(id: string): Promise<void> {
+    return apiRequest(`/api/github/install/installations/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * List repos accessible from a GitHub App installation
+   */
+  async getInstallationRepos(
+    installationId: number,
+    page?: number
+  ): Promise<GitHubInstallationReposResponse> {
+    return apiRequest(
+      `/api/github/installations/${installationId}/repos?page=${page || 1}`
+    );
+  },
+
+  /**
+   * Link a GitHub repo to an application
+   */
+  async connectRepo(
+    appId: string,
+    data: ConnectRepoData
+  ): Promise<{ success: boolean }> {
+    return apiRequest(`/api/applications/${appId}/github/connect`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
+   * Unlink a GitHub repo from an application
+   */
+  async disconnectRepo(appId: string): Promise<void> {
+    return apiRequest(`/api/applications/${appId}/github/disconnect`, {
+      method: 'DELETE',
+    });
+  },
+
+  /**
+   * Get GitHub config for an application
+   */
+  async getGithubConfig(appId: string): Promise<GitHubAppConfig> {
+    return apiRequest(`/api/applications/${appId}/github/config`);
+  },
+
+  /**
+   * Update GitHub settings for an application
+   */
+  async updateGithubSettings(
+    appId: string,
+    settings: Partial<GitHubAppConfig>
+  ): Promise<GitHubAppConfig> {
+    return apiRequest(`/api/applications/${appId}/github/settings`, {
+      method: 'PATCH',
+      body: JSON.stringify(settings),
+    });
+  },
+
+  // ── Issue Template Endpoints ──────────────────────────────────────
+
+  /**
+   * Get the current issue template for an application
+   */
+  async getIssueTemplate(
+    appId: string
+  ): Promise<IssueTemplateResponse> {
+    return apiRequest(`/api/applications/${appId}/github/template`);
+  },
+
+  /**
+   * Update the issue template for an application
+   */
+  async updateIssueTemplate(
+    appId: string,
+    template: string
+  ): Promise<{ template: string; isDefault: boolean; validation: TemplateValidation }> {
+    return apiRequest(`/api/applications/${appId}/github/template`, {
+      method: 'PATCH',
+      body: JSON.stringify({ template }),
+    });
+  },
+
+  /**
+   * Preview a rendered template with sample data
+   */
+  async previewIssueTemplate(
+    appId: string,
+    template?: string
+  ): Promise<TemplatePreviewResponse> {
+    return apiRequest(`/api/applications/${appId}/github/template/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ template }),
+    });
+  },
+
+  /**
+   * Reset the issue template to default
+   */
+  async resetIssueTemplate(
+    appId: string
+  ): Promise<IssueTemplateResponse> {
+    return apiRequest(`/api/applications/${appId}/github/template`, {
+      method: 'DELETE',
     });
   },
 };

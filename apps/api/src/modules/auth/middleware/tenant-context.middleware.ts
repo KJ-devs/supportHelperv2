@@ -24,13 +24,16 @@ export class TenantContextMiddleware implements NestMiddleware {
     const user = req.user as UserEntity | ApplicationEntity;
 
     if (user?.tenantId) {
-      try {
-        // Set PostgreSQL session variable for RLS using parameterized query
-        // This is safer than string interpolation to prevent SQL injection
-        await this.prisma.$executeRaw`SET LOCAL app.current_tenant_id = ${user.tenantId}`;
-      } catch (error) {
-        console.error('Failed to set tenant context:', error);
-        // Continue execution - RLS will be enforced at application level
+      // SET LOCAL doesn't support parameterized queries ($1),
+      // so we validate UUID format before using $executeRawUnsafe
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(user.tenantId)) {
+        try {
+          await this.prisma.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${user.tenantId}'`);
+        } catch (error) {
+          console.error('Failed to set tenant context:', error);
+          // Continue execution - RLS will be enforced at application level
+        }
       }
     }
 
