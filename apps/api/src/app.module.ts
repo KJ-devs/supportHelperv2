@@ -48,6 +48,9 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 // Codebase Indexing
 import { CodebaseIndexModule } from './modules/codebase-index/codebase-index.module';
 
+// Agent Tasks (Code Analysis)
+import { AgentTasksModule } from './modules/agent-tasks/agent-tasks.module';
+
 /**
  * Root Application Module
  *
@@ -160,6 +163,9 @@ import { CodebaseIndexModule } from './modules/codebase-index/codebase-index.mod
 
     // Codebase Indexing
     CodebaseIndexModule,
+
+    // Agent Tasks (Code Analysis)
+    AgentTasksModule,
   ],
   providers: [
     // Global rate limiting guard

@@ -1,7 +1,10 @@
 import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Job, Queue } from 'bullmq';
 import { Octokit } from '@octokit/rest';
+import { createDecipheriv } from 'crypto';
+import Anthropic from '@anthropic-ai/sdk';
 import { QUEUE_NAMES } from '../queues';
 import {
   AgentJobData,
@@ -165,6 +168,7 @@ export class AgentWorker extends WorkerHost {
     private readonly prisma: PrismaService,
     private readonly meilisearch: MeilisearchService,
     private readonly agentService: AgentService,
+    private readonly configService: ConfigService,
     @InjectQueue('dead-letter')
     private readonly deadLetterQueue: Queue,
   ) {
@@ -204,6 +208,9 @@ export class AgentWorker extends WorkerHost {
 
         case 'create-user-story':
           return await this.handleCreateUserStory(job);
+
+        case 'generate-action-plan':
+          return await this.handleGenerateActionPlan(job);
 
         default:
           throw new Error(`Unknown agent job type: ${type}`);
@@ -898,6 +905,539 @@ Keep responses concise but thorough.`,
         repository: options.repository,
       },
     };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Code Analysis: Generate Action Plan (US-3.2)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Generate a code-level action plan for a ticket.
+   * Fetches ticket + codebase context, calls Claude, and stores the plan.
+   */
+  private async handleGenerateActionPlan(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, applicationId, agentTaskId } = job.data;
+
+    if (!agentTaskId || !applicationId) {
+      throw new Error('agentTaskId and applicationId are required for generate-action-plan');
+    }
+
+    this.logger.log(`Generating action plan for ticket ${ticketId} (task ${agentTaskId})`);
+    await job.updateProgress(5);
+
+    // 1. Update status to analyzing and log start
+    await this.prisma.agentTask.update({
+      where: { id: agentTaskId },
+      data: { status: 'analyzing' },
+    });
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'started',
+      message: 'Starting ticket analysis',
+    });
+
+    await job.updateProgress(10);
+
+    // 2. Fetch ticket with application + githubConfig + installation
+    const agentTask = await this.prisma.agentTask.findUnique({
+      where: { id: agentTaskId },
+      include: {
+        ticket: {
+          include: {
+            application: {
+              include: {
+                githubConfig: {
+                  include: {
+                    installation: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!agentTask) {
+      throw new Error(`Agent task ${agentTaskId} not found`);
+    }
+
+    const { ticket } = agentTask;
+    const githubConfig = ticket.application?.githubConfig;
+
+    if (!githubConfig) {
+      await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application. Link a repository first.');
+      throw new Error('No GitHub configuration found for application');
+    }
+
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'ticket_loaded',
+      message: `Loaded ticket "${ticket.title}" with repo ${githubConfig.owner}/${githubConfig.repo}`,
+    });
+
+    await job.updateProgress(20);
+
+    // 3. Check if codebase is indexed
+    const indexStatus = await this.prisma.codebaseIndexStatus.findUnique({
+      where: { applicationId },
+    });
+
+    if (!indexStatus || indexStatus.status !== 'indexed') {
+      this.logger.warn(`Codebase not indexed for application ${applicationId}, continuing with limited context`);
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'codebase_index_warning',
+        message: 'Codebase not fully indexed. Analysis may be less accurate.',
+      });
+    }
+
+    await job.updateProgress(30);
+
+    // 4. Search relevant code via pgvector RAG
+    const relevantCode = await this.searchCodebaseEmbeddings(applicationId, ticket);
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'code_search',
+      message: `Found ${relevantCode.length} relevant code snippets`,
+    });
+
+    await job.updateProgress(40);
+
+    // 5. Get repo tree via GitHub API
+    const repoTree = await this.getRepoTreeForActionPlan(
+      tenantId,
+      Number(githubConfig.installation.installationId),
+      githubConfig.owner,
+      githubConfig.repo,
+    );
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'repo_tree',
+      message: `Retrieved repo tree with ${repoTree.length} files`,
+    });
+
+    await job.updateProgress(50);
+
+    // 6. Get Anthropic API key for the tenant
+    const anthropicApiKey = await this.getDecryptedAnthropicKey(tenantId);
+    if (!anthropicApiKey) {
+      await this.setAgentTaskError(agentTaskId, 'No Anthropic API key configured for this tenant.');
+      throw new Error('No Anthropic API key configured');
+    }
+
+    // Get configured model
+    const aiConfig = await this.prisma.aiConfig.findUnique({
+      where: { tenantId },
+    });
+    const model = aiConfig?.model || 'claude-sonnet-4-20250514';
+
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'ai_configured',
+      message: `Using model ${model}`,
+    });
+
+    await job.updateProgress(60);
+
+    // 7. Build prompts and call Claude
+    const systemPrompt = this.buildActionPlanSystemPrompt();
+    const userPrompt = this.buildActionPlanUserPrompt(ticket, repoTree, relevantCode);
+
+    const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+
+    this.logger.log(`Calling Claude (${model}) for action plan generation`);
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'calling_claude',
+      message: 'Sending analysis request to Claude',
+    });
+
+    const response = await anthropic.messages.create({
+      model,
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    await job.updateProgress(80);
+
+    // 8. Parse action plan from response
+    const textBlock = response.content.find(
+      (block: { type: string }) => block.type === 'text',
+    ) as { type: 'text'; text: string } | undefined;
+    if (!textBlock) {
+      await this.setAgentTaskError(agentTaskId, 'Claude returned an unexpected response format');
+      throw new Error('No text block in Claude response');
+    }
+
+    const actionPlan = this.parseActionPlanResponse(textBlock.text);
+
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'plan_parsed',
+      message: `Action plan: ${actionPlan.files.length} files, complexity: ${actionPlan.estimatedComplexity}`,
+    });
+
+    await job.updateProgress(90);
+
+    // 9. Store action plan and update status to plan_ready
+    await this.prisma.agentTask.update({
+      where: { id: agentTaskId },
+      data: {
+        actionPlan: actionPlan as any,
+        status: 'plan_ready',
+      },
+    });
+
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'completed',
+      message: 'Action plan generated and ready for review',
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(`Action plan ready for agent task ${agentTaskId}: ${actionPlan.files.length} files`);
+
+    return {
+      success: true,
+      type: 'generate-action-plan',
+      ticketId,
+      response: actionPlan.summary,
+      metadata: {
+        agentTaskId,
+        filesCount: actionPlan.files.length,
+        complexity: actionPlan.estimatedComplexity,
+      } as any,
+    };
+  }
+
+  /**
+   * Search codebase embeddings using pgvector for relevant code snippets.
+   */
+  private async searchCodebaseEmbeddings(
+    applicationId: string,
+    ticket: { title: string | null; description: string | null; aiSummary: string | null },
+  ): Promise<Array<{ filePath: string; content: string; language: string; distance: number }>> {
+    // Build query from ticket content
+    const queryParts = [ticket.title, ticket.description, ticket.aiSummary].filter(Boolean);
+    if (queryParts.length === 0) return [];
+
+    const queryText = queryParts.join(' ');
+
+    // Generate embedding for the query using OpenAI
+    try {
+      const embeddingResult = await this.openaiService.generateEmbedding(queryText);
+      const embeddingStr = `[${embeddingResult.embedding.join(',')}]`;
+
+      const results: Array<{
+        file_path: string;
+        content: string;
+        language: string;
+        distance: number;
+      }> = await this.prisma.$queryRawUnsafe(
+        `SELECT file_path, content, language,
+                embedding <=> $1::vector AS distance
+         FROM codebase_embeddings
+         WHERE application_id = $2::uuid
+         ORDER BY distance
+         LIMIT 10`,
+        embeddingStr,
+        applicationId,
+      );
+
+      return results.map((row) => ({
+        filePath: row.file_path,
+        content: row.content,
+        language: row.language,
+        distance: Number(row.distance),
+      }));
+    } catch (error) {
+      this.logger.warn(`Codebase search failed: ${getErrorMessage(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get repo file tree via GitHub API using tenant's GitHub connection.
+   */
+  private async getRepoTreeForActionPlan(
+    tenantId: string,
+    installationId: number,
+    owner: string,
+    repo: string,
+  ): Promise<string[]> {
+    try {
+      // Get GitHub access token
+      const connection = await this.prisma.githubConnection.findFirst({
+        where: {
+          tenantId,
+          installationId: BigInt(installationId),
+        },
+      });
+
+      if (!connection?.accessToken) {
+        this.logger.warn('No GitHub access token found for repo tree');
+        return [];
+      }
+
+      const octokit = new Octokit({ auth: connection.accessToken });
+
+      const { data } = await octokit.git.getTree({
+        owner,
+        repo,
+        tree_sha: 'HEAD',
+        recursive: 'true',
+      });
+
+      return data.tree
+        .filter((item) => item.type === 'blob' && item.path)
+        .map((item) => item.path!)
+        .slice(0, 200);
+    } catch (error) {
+      this.logger.warn(`Failed to get repo tree for ${owner}/${repo}: ${getErrorMessage(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * Get decrypted Anthropic API key for a tenant.
+   * The API encrypts with AES-256-GCM in iv:authTag:ciphertext format (base64).
+   */
+  private async getDecryptedAnthropicKey(tenantId: string): Promise<string | null> {
+    const aiConfig = await this.prisma.aiConfig.findUnique({
+      where: { tenantId },
+    });
+
+    if (!aiConfig?.encryptedApiKey) return null;
+
+    const encryptedValue = aiConfig.encryptedApiKey;
+
+    // Check if value looks encrypted (iv:authTag:ciphertext, base64)
+    const parts = encryptedValue.split(':');
+    if (parts.length !== 3) {
+      // Value may be stored as plaintext (legacy or no middleware)
+      return encryptedValue;
+    }
+
+    // Decrypt using ENCRYPTION_KEY env var (same key as API's EncryptionService)
+    const keyHex = this.configService.get<string>('ENCRYPTION_KEY');
+    if (!keyHex) {
+      this.logger.warn('ENCRYPTION_KEY not configured, cannot decrypt API key');
+      return null;
+    }
+
+    try {
+      const key = Buffer.from(keyHex, 'hex');
+      const [ivB64, authTagB64, ciphertextB64] = parts;
+      const iv = Buffer.from(ivB64!, 'base64');
+      const authTag = Buffer.from(authTagB64!, 'base64');
+      const ciphertext = Buffer.from(ciphertextB64!, 'base64');
+
+      const decipher = createDecipheriv('aes-256-gcm', key, iv);
+      decipher.setAuthTag(authTag);
+
+      const decrypted = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]);
+
+      return decrypted.toString('utf8');
+    } catch (error) {
+      this.logger.error(`Failed to decrypt Anthropic API key: ${getErrorMessage(error)}`);
+      return null;
+    }
+  }
+
+  private buildActionPlanSystemPrompt(): string {
+    return `You are a senior software developer analyzing a bug report for a codebase.
+Your job is to:
+1. Understand the reported issue from the ticket details
+2. Analyze the relevant source code provided
+3. Identify the root cause
+4. Propose a concrete action plan with specific file changes
+
+Project conventions:
+- TypeScript with strict mode
+- NestJS framework with dependency injection
+- Prisma ORM for database access
+- async/await over raw promises
+- class-validator decorators for DTOs
+- NestJS exceptions for error handling (BadRequestException, NotFoundException, etc.)
+- Multi-tenant architecture: all data access must be scoped by tenantId
+
+You MUST respond with valid JSON matching this exact structure:
+{
+  "summary": "Brief one-sentence summary of the issue and proposed fix",
+  "rootCause": "Detailed explanation of what causes the bug",
+  "files": [
+    {
+      "filePath": "path/to/file.ts",
+      "operation": "modify",
+      "description": "What needs to change in this file and why",
+      "changeType": "bug_fix",
+      "order": 1
+    }
+  ],
+  "testingStrategy": "How to verify the fix works (unit tests, manual steps, etc.)",
+  "risks": ["List of potential risks or side effects of the changes"],
+  "estimatedComplexity": "low"
+}
+
+Rules:
+- "operation" must be one of: "modify", "create", "delete"
+- "changeType" must be one of: "bug_fix", "enhancement", "refactor", "test"
+- "order" indicates the sequence in which files should be changed (1 = first)
+- "estimatedComplexity" must be one of: "low", "medium", "high"
+- File paths must match paths from the repository tree
+- Be specific in descriptions: mention function names, line-level changes
+- Only include files that actually need changes
+- Do NOT wrap the JSON in markdown code blocks. Output raw JSON only.`;
+  }
+
+  private buildActionPlanUserPrompt(
+    ticket: any,
+    repoTree: string[],
+    relevantCode: Array<{ filePath: string; content: string; language: string; distance: number }>,
+  ): string {
+    const parts: string[] = [];
+
+    parts.push('## Bug Report\n');
+    parts.push(`**Title:** ${ticket.title || 'Untitled'}`);
+    parts.push(`**Type:** ${ticket.type || 'Unknown'}`);
+    parts.push(`**Severity:** ${ticket.severity || 'Unknown'}`);
+
+    if (ticket.description) {
+      parts.push(`\n**Description:**\n${ticket.description}`);
+    }
+    if (ticket.aiSummary) {
+      parts.push(`\n**AI Summary:**\n${ticket.aiSummary}`);
+    }
+    if (ticket.aiAnalysis) {
+      const analysisStr = typeof ticket.aiAnalysis === 'string'
+        ? ticket.aiAnalysis
+        : JSON.stringify(ticket.aiAnalysis, null, 2);
+      parts.push(`\n**AI Analysis:**\n${analysisStr}`);
+    }
+    if (ticket.reproductionSteps) {
+      const stepsStr = typeof ticket.reproductionSteps === 'string'
+        ? ticket.reproductionSteps
+        : JSON.stringify(ticket.reproductionSteps, null, 2);
+      parts.push(`\n**Reproduction Steps:**\n${stepsStr}`);
+    }
+
+    if (repoTree.length > 0) {
+      parts.push('\n## Repository Structure\n');
+      parts.push('```');
+      parts.push(repoTree.join('\n'));
+      parts.push('```');
+    }
+
+    if (relevantCode.length > 0) {
+      parts.push('\n## Relevant Code Snippets\n');
+      for (const snippet of relevantCode) {
+        const truncated = this.truncateCodeSnippet(snippet.content, 100);
+        parts.push(`### ${snippet.filePath} (similarity: ${(1 - snippet.distance).toFixed(3)})`);
+        parts.push(`\`\`\`${snippet.language || 'typescript'}`);
+        parts.push(truncated);
+        parts.push('```\n');
+      }
+    }
+
+    return parts.join('\n');
+  }
+
+  private truncateCodeSnippet(content: string, maxLines: number): string {
+    const lines = content.split('\n');
+    if (lines.length <= maxLines) return content;
+    return lines.slice(0, maxLines).join('\n') + `\n// ... truncated (${lines.length - maxLines} more lines)`;
+  }
+
+  private parseActionPlanResponse(text: string): {
+    summary: string;
+    rootCause: string;
+    files: Array<{
+      filePath: string;
+      operation: 'modify' | 'create' | 'delete';
+      description: string;
+      changeType: 'bug_fix' | 'enhancement' | 'refactor' | 'test';
+      order: number;
+    }>;
+    testingStrategy: string;
+    risks: string[];
+    estimatedComplexity: 'low' | 'medium' | 'high';
+  } {
+    let jsonStr = text.trim();
+
+    // Remove markdown code block if present
+    const jsonBlockMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (jsonBlockMatch) {
+      jsonStr = jsonBlockMatch[1]!.trim();
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonStr);
+    } catch {
+      this.logger.error(`Failed to parse Claude action plan JSON: ${text.substring(0, 500)}`);
+      throw new Error('Claude returned invalid JSON for the action plan');
+    }
+
+    const validOperations = ['modify', 'create', 'delete'];
+    const validChangeTypes = ['bug_fix', 'enhancement', 'refactor', 'test'];
+    const validComplexities = ['low', 'medium', 'high'];
+
+    return {
+      summary: parsed.summary || '',
+      rootCause: parsed.rootCause || '',
+      files: Array.isArray(parsed.files)
+        ? parsed.files.map((f: any, i: number) => ({
+            filePath: f.filePath || '',
+            operation: validOperations.includes(f.operation) ? f.operation : 'modify',
+            description: f.description || '',
+            changeType: validChangeTypes.includes(f.changeType) ? f.changeType : 'bug_fix',
+            order: typeof f.order === 'number' ? f.order : i + 1,
+          }))
+        : [],
+      testingStrategy: parsed.testingStrategy || '',
+      risks: Array.isArray(parsed.risks) ? parsed.risks : [],
+      estimatedComplexity: validComplexities.includes(parsed.estimatedComplexity)
+        ? parsed.estimatedComplexity
+        : 'medium',
+    };
+  }
+
+  /**
+   * Append a log entry to an agent task's execution log.
+   */
+  private async appendAgentTaskLog(agentTaskId: string, entry: Record<string, any>): Promise<void> {
+    try {
+      const task = await this.prisma.agentTask.findUnique({
+        where: { id: agentTaskId },
+        select: { executionLog: true },
+      });
+
+      const currentLog = (task?.executionLog as Record<string, any>[]) || [];
+      const updatedLog = [...currentLog, { ...entry, timestamp: new Date().toISOString() }];
+
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: { executionLog: updatedLog },
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to append agent task log: ${getErrorMessage(error)}`);
+    }
+  }
+
+  /**
+   * Set error on an agent task and update status to failed.
+   */
+  private async setAgentTaskError(agentTaskId: string, error: string): Promise<void> {
+    try {
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: {
+          error,
+          status: 'failed',
+          completedAt: new Date(),
+        },
+      });
+      await this.appendAgentTaskLog(agentTaskId, { step: 'error', message: error });
+    } catch (err) {
+      this.logger.error(`Failed to set agent task error: ${getErrorMessage(err)}`);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
