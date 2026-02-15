@@ -64,7 +64,10 @@ ENV NEXT_PUBLIC_POSTHOG_HOST=${NEXT_PUBLIC_POSTHOG_HOST}
 # Ensure public directory exists (may be empty)
 RUN mkdir -p apps/dashboard/public
 
-# Build the Dashboard (output: 'standalone' in next.config.mjs)
+# Enable standalone output for Docker builds
+ENV NEXT_OUTPUT_STANDALONE=true
+
+# Build the Dashboard (standalone mode enabled via env var)
 RUN pnpm --filter @support-helper/dashboard build
 
 # ============================================================

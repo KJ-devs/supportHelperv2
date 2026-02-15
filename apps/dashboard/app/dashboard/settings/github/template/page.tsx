@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -14,6 +14,14 @@ import {
 import type { Application } from '@/lib/types/application';
 
 export default function GitHubTemplatePage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <GitHubTemplatePageContent />
+    </Suspense>
+  );
+}
+
+function GitHubTemplatePageContent() {
   const { isLoading: authLoading } = useRequireAuth();
   const searchParams = useSearchParams();
   const appIdParam = searchParams.get('appId');
@@ -47,8 +55,8 @@ export default function GitHubTemplatePage() {
     if (authLoading) return;
     applicationsApi.getApplications().then((apps) => {
       setApplications(apps || []);
-      if (!selectedAppId && apps.length > 0) {
-        setSelectedAppId(apps[0].id);
+      if (!selectedAppId && apps && apps.length > 0) {
+        setSelectedAppId(apps[0]!.id);
       }
     });
   }, [authLoading, selectedAppId]);
