@@ -35,9 +35,8 @@ export class AiConfigController {
       return {
         configured: false,
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-20250514',
         maskedApiKey: null,
-        endpoint: null,
         settings: {},
       };
     }
@@ -58,7 +57,7 @@ export class AiConfigController {
   }
 
   @Post('validate-key')
-  @ApiOperation({ summary: 'Validate an AI provider API key/configuration' })
+  @ApiOperation({ summary: 'Validate an Anthropic API key' })
   @ApiResponse({
     status: 200,
     description: 'Validation result',
@@ -71,11 +70,6 @@ export class AiConfigController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async validateKey(@Body() dto: ValidateKeyDto) {
-    return this.aiConfigService.validateKey(
-      dto.apiKey,
-      dto.provider,
-      dto.endpoint,
-      dto.model,
-    );
+    return this.aiConfigService.validateKey(dto.apiKey);
   }
 }

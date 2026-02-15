@@ -28,6 +28,7 @@ model Tenant {
   githubConnections   GithubConnection[]
   githubInstallations GithubInstallation[]
   integrations        Integration[]
+  aiConfig            AiConfig?
 
   @@map("tenants")
 }

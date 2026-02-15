@@ -1,8 +1,8 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UpdateAiConfigDto, AIProviderType } from './dto/update-ai-config.dto';
-import { AIProviderFactory } from '../../ai/providers/ai-provider.factory';
-import { AIProviderConfig } from '../../ai/providers/ai-provider.types';
+import { EncryptionService } from '../../common/services/encryption.service';
+import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
+import Anthropic from '@anthropic-ai/sdk';
 
 export interface AiConfigResponse {
   id: string;
@@ -10,7 +10,6 @@ export interface AiConfigResponse {
   provider: string;
   maskedApiKey: string | null;
   model: string;
-  endpoint?: string;
   settings: Record<string, any>;
   createdAt: Date;
   updatedAt: Date;
@@ -22,7 +21,7 @@ export class AiConfigService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly providerFactory: AIProviderFactory,
+    private readonly encryptionService: EncryptionService,
   ) {}
 
   async getConfig(tenantId: string): Promise<AiConfigResponse | null> {
@@ -34,17 +33,15 @@ export class AiConfigService {
       return null;
     }
 
-    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
-    const settings = config.settings as Record<string, any>;
-
     return {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
+      maskedApiKey: this.maskApiKey(
+        this.encryptionService.decrypt(config.encryptedApiKey),
+      ),
       model: config.model,
-      endpoint: settings?.endpoint,
-      settings,
+      settings: config.settings as Record<string, any>,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -54,32 +51,21 @@ export class AiConfigService {
     tenantId: string,
     dto: UpdateAiConfigDto,
   ): Promise<AiConfigResponse> {
-    const existing = await this.prisma.aiConfig.findUnique({
-      where: { tenantId },
-    });
-
     const data: any = {};
 
-    if (dto.provider !== undefined) {
-      data.provider = dto.provider;
-    }
     if (dto.apiKey) {
-      // Prisma encryption middleware will auto-encrypt on write
-      data.encryptedApiKey = dto.apiKey;
+      data.encryptedApiKey = this.encryptionService.encrypt(dto.apiKey);
     }
     if (dto.model !== undefined) {
       data.model = dto.model;
     }
-
-    // Merge endpoint and other settings
-    const mergedSettings: Record<string, any> = {
-      ...(existing?.settings as Record<string, any>),
-      ...dto.settings,
-    };
-    if (dto.endpoint !== undefined) {
-      mergedSettings.endpoint = dto.endpoint;
+    if (dto.settings !== undefined) {
+      data.settings = dto.settings;
     }
-    data.settings = mergedSettings;
+
+    const existing = await this.prisma.aiConfig.findUnique({
+      where: { tenantId },
+    });
 
     let config;
 
@@ -89,80 +75,46 @@ export class AiConfigService {
         data,
       });
     } else {
-      // Create new config
-      const provider = dto.provider || AIProviderType.ANTHROPIC;
-
-      // Ollama doesn't require API key
-      if (provider !== AIProviderType.OLLAMA && !dto.apiKey) {
+      if (!dto.apiKey) {
         throw new BadRequestException(
-          `API key is required for ${provider} provider`,
+          'API key is required when creating a new AI configuration',
         );
       }
-
       config = await this.prisma.aiConfig.create({
         data: {
           tenantId,
-          provider,
-          encryptedApiKey: dto.apiKey || '',
-          model: dto.model || this.getDefaultModel(provider),
-          settings: mergedSettings,
+          encryptedApiKey: data.encryptedApiKey,
+          model: dto.model || 'claude-sonnet-4-20250514',
+          settings: dto.settings || {},
         },
       });
     }
-
-    const settings = config.settings as Record<string, any>;
 
     return {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
+      maskedApiKey: this.maskApiKey(
+        this.encryptionService.decrypt(config.encryptedApiKey),
+      ),
       model: config.model,
-      endpoint: settings?.endpoint,
-      settings,
+      settings: config.settings as Record<string, any>,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
   }
 
-  private getDefaultModel(provider: AIProviderType): string {
-    switch (provider) {
-      case AIProviderType.OPENAI:
-        return 'gpt-4o';
-      case AIProviderType.ANTHROPIC:
-        return 'claude-sonnet-4-5-20250929';
-      case AIProviderType.OLLAMA:
-        return 'llama3.1';
-      default:
-        return 'claude-sonnet-4-5-20250929';
-    }
-  }
-
   async validateKey(
     apiKey: string,
-    provider?: AIProviderType,
-    endpoint?: string,
-    model?: string,
   ): Promise<{ valid: boolean; error?: string }> {
     try {
-      const providerType = provider || AIProviderType.ANTHROPIC;
+      const client = new Anthropic({ apiKey });
 
-      const config: AIProviderConfig = {
-        provider: providerType as 'anthropic' | 'openai' | 'ollama',
-        apiKey,
-        endpoint,
-        model,
-      };
-
-      const providerInstance = this.providerFactory.create(config);
-      const isValid = await providerInstance.validateConfig();
-
-      if (!isValid) {
-        return {
-          valid: false,
-          error: `Failed to validate ${providerType} configuration`,
-        };
-      }
+      await client.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'Say "ok"' }],
+      });
 
       return { valid: true };
     } catch (error: any) {
@@ -172,10 +124,7 @@ export class AiConfigService {
         return { valid: false, error: 'Invalid API key' };
       }
       if (error.status === 403) {
-        return {
-          valid: false,
-          error: 'API key does not have required permissions',
-        };
+        return { valid: false, error: 'API key does not have required permissions' };
       }
       if (error.status === 429) {
         // Rate-limited but the key itself is valid
@@ -184,7 +133,7 @@ export class AiConfigService {
 
       return {
         valid: false,
-        error: error.message || 'Failed to validate configuration',
+        error: error.message || 'Failed to validate API key',
       };
     }
   }
@@ -198,8 +147,7 @@ export class AiConfigService {
       return null;
     }
 
-    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
-    return config.encryptedApiKey;
+    return this.encryptionService.decrypt(config.encryptedApiKey);
   }
 
   private maskApiKey(apiKey: string): string {

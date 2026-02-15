@@ -2,20 +2,32 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { AiConfigService } from '../../../src/modules/ai-config/ai-config.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import { AIProviderFactory } from '../../../src/ai/providers/ai-provider.factory';
+import { EncryptionService } from '../../../src/common/services/encryption.service';
+
+jest.mock('@anthropic-ai/sdk', () => {
+  return {
+    __esModule: true,
+    default: jest.fn().mockImplementation(() => ({
+      messages: {
+        create: jest.fn().mockResolvedValue({
+          content: [{ type: 'text', text: 'ok' }],
+        }),
+      },
+    })),
+  };
+});
 
 describe('AiConfigService', () => {
   let service: AiConfigService;
   let prisma: jest.Mocked<PrismaService>;
-  let providerFactory: jest.Mocked<AIProviderFactory>;
+  let encryptionService: jest.Mocked<EncryptionService>;
 
   const tenantId = 'tenant-123';
-  // Mock data simulates values after Prisma middleware auto-decryption
   const mockConfig = {
     id: 'config-123',
     tenantId,
     provider: 'anthropic',
-    encryptedApiKey: 'sk-ant-api03-test-key-1234',
+    encryptedApiKey: 'encrypted:data:here',
     model: 'claude-sonnet-4-20250514',
     settings: {},
     createdAt: new Date('2026-01-01'),
@@ -37,11 +49,10 @@ describe('AiConfigService', () => {
           },
         },
         {
-          provide: AIProviderFactory,
+          provide: EncryptionService,
           useValue: {
-            create: jest.fn().mockReturnValue({
-              validateConfig: jest.fn().mockResolvedValue(true),
-            }),
+            encrypt: jest.fn().mockReturnValue('encrypted:data:here'),
+            decrypt: jest.fn().mockReturnValue('sk-ant-api03-test-key-1234'),
           },
         },
       ],
@@ -49,7 +60,7 @@ describe('AiConfigService', () => {
 
     service = module.get<AiConfigService>(AiConfigService);
     prisma = module.get(PrismaService);
-    providerFactory = module.get(AIProviderFactory);
+    encryptionService = module.get(EncryptionService);
   });
 
   it('should be defined', () => {
@@ -77,6 +88,7 @@ describe('AiConfigService', () => {
       expect(result!.maskedApiKey).toBe('****1234');
       expect(result!.provider).toBe('anthropic');
       expect(result!.model).toBe('claude-sonnet-4-20250514');
+      expect(encryptionService.decrypt).toHaveBeenCalledWith('encrypted:data:here');
     });
   });
 
@@ -89,13 +101,11 @@ describe('AiConfigService', () => {
         apiKey: 'sk-ant-api03-new-key',
       });
 
-      // Plaintext key is passed; Prisma middleware auto-encrypts on write
       expect(prisma.aiConfig.create).toHaveBeenCalledWith({
         data: {
           tenantId,
-          provider: 'anthropic',
-          encryptedApiKey: 'sk-ant-api03-new-key',
-          model: 'claude-sonnet-4-5-20250929',
+          encryptedApiKey: 'encrypted:data:here',
+          model: 'claude-sonnet-4-20250514',
           settings: {},
         },
       });
@@ -123,7 +133,7 @@ describe('AiConfigService', () => {
 
       expect(prisma.aiConfig.update).toHaveBeenCalledWith({
         where: { tenantId },
-        data: { model: 'claude-opus-4-20250514', settings: {} },
+        data: { model: 'claude-opus-4-20250514' },
       });
       expect(result.model).toBe('claude-opus-4-20250514');
     });
@@ -136,10 +146,12 @@ describe('AiConfigService', () => {
         apiKey: 'sk-ant-api03-updated-key',
       });
 
-      // Plaintext key is passed; Prisma middleware auto-encrypts on write
+      expect(encryptionService.encrypt).toHaveBeenCalledWith(
+        'sk-ant-api03-updated-key',
+      );
       expect(prisma.aiConfig.update).toHaveBeenCalledWith({
         where: { tenantId },
-        data: { encryptedApiKey: 'sk-ant-api03-updated-key', settings: {} },
+        data: { encryptedApiKey: 'encrypted:data:here' },
       });
     });
 
@@ -163,13 +175,15 @@ describe('AiConfigService', () => {
       const result = await service.validateKey('sk-ant-api03-valid-key');
 
       expect(result.valid).toBe(true);
-      expect(providerFactory.create).toHaveBeenCalled();
     });
 
     it('should return invalid for a 401 error', async () => {
-      (providerFactory.create as jest.Mock).mockReturnValueOnce({
-        validateConfig: jest.fn().mockRejectedValue({ status: 401, message: 'Invalid API key' }),
-      });
+      const Anthropic = require('@anthropic-ai/sdk').default;
+      Anthropic.mockImplementationOnce(() => ({
+        messages: {
+          create: jest.fn().mockRejectedValue({ status: 401, message: 'Invalid API key' }),
+        },
+      }));
 
       const result = await service.validateKey('sk-ant-api03-bad-key');
 
@@ -178,23 +192,16 @@ describe('AiConfigService', () => {
     });
 
     it('should return valid for a 429 rate limit error', async () => {
-      (providerFactory.create as jest.Mock).mockReturnValueOnce({
-        validateConfig: jest.fn().mockRejectedValue({ status: 429, message: 'Rate limited' }),
-      });
+      const Anthropic = require('@anthropic-ai/sdk').default;
+      Anthropic.mockImplementationOnce(() => ({
+        messages: {
+          create: jest.fn().mockRejectedValue({ status: 429, message: 'Rate limited' }),
+        },
+      }));
 
       const result = await service.validateKey('sk-ant-api03-rate-limited');
 
       expect(result.valid).toBe(true);
-    });
-
-    it('should return invalid when validateConfig returns false', async () => {
-      (providerFactory.create as jest.Mock).mockReturnValueOnce({
-        validateConfig: jest.fn().mockResolvedValue(false),
-      });
-
-      const result = await service.validateKey('sk-ant-api03-invalid');
-
-      expect(result.valid).toBe(false);
     });
   });
 
@@ -212,8 +219,8 @@ describe('AiConfigService', () => {
 
       const result = await service.getDecryptedApiKey(tenantId);
 
-      // Value is already decrypted by Prisma middleware
       expect(result).toBe('sk-ant-api03-test-key-1234');
+      expect(encryptionService.decrypt).toHaveBeenCalledWith('encrypted:data:here');
     });
   });
 });

@@ -105,9 +105,13 @@ COPY --from=build /app/packages/database/dist packages/database/dist
 # Copy Worker build output
 COPY --from=build /app/apps/worker/dist apps/worker/dist
 
-# Copy Prisma schema (needed at runtime) and generated client from build
+# Copy Prisma schema, migrations, and generated client from build
 COPY --from=build /app/apps/api/prisma apps/api/prisma
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /app/docker/entrypoint.sh
+RUN chmod +x /app/docker/entrypoint.sh
 
 # Create non-root user
 RUN groupadd -g 1001 appgroup && \
