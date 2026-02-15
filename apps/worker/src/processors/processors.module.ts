@@ -3,6 +3,7 @@ import { VideoAnalysisWorker } from '../workers/video-analysis.worker';
 import { GithubSyncWorker } from '../workers/github-sync.worker';
 import { AgentWorker } from '../workers/agent.worker';
 import { IntegrationSyncWorker } from '../workers/integration-sync.worker';
+import { CodebaseIndexingWorker } from '../workers/codebase-indexing.worker';
 import { DeadLetterWorker } from '../workers/dead-letter.worker';
 
 /**
@@ -16,6 +17,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     GithubSyncWorker,
     AgentWorker,
     IntegrationSyncWorker,
+    CodebaseIndexingWorker,
     DeadLetterWorker,
   ],
   exports: [
@@ -23,6 +25,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     GithubSyncWorker,
     AgentWorker,
     IntegrationSyncWorker,
+    CodebaseIndexingWorker,
     DeadLetterWorker,
   ],
 })

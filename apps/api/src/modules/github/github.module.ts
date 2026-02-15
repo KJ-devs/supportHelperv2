@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 
 // Prisma
@@ -6,6 +6,9 @@ import { PrismaModule } from '../../prisma/prisma.module';
 
 // AI
 import { AIModule } from '../../ai/ai.module';
+
+// Codebase Indexing
+import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 
 // Services
 import {
@@ -66,6 +69,7 @@ import { GithubWebhookProcessor } from './processors';
   imports: [
     PrismaModule,
     AIModule,
+    forwardRef(() => CodebaseIndexModule),
     // Register BullMQ queue for async webhook processing
     BullModule.registerQueue({
       name: 'github',
