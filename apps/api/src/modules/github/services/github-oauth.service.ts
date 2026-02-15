@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { EncryptionService } from '../../../common/services/encryption.service';
 import { Octokit } from '@octokit/rest';
 import * as crypto from 'crypto';
 
@@ -38,7 +39,8 @@ export class GithubOAuthService {
 
   constructor(
     private prisma: PrismaService,
-    private config: ConfigService
+    private config: ConfigService,
+    private encryption: EncryptionService,
   ) {
     this.clientId = this.config.get('github.clientId') || '';
     this.clientSecret = this.config.get('github.clientSecret') || '';
@@ -208,6 +210,10 @@ export class GithubOAuthService {
   ) {
     const tokenExpiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
 
+    // Encrypt tokens before storing
+    const encryptedAccessToken = this.encryption.encrypt(accessToken);
+    const encryptedRefreshToken = refreshToken ? this.encryption.encrypt(refreshToken) : undefined;
+
     // Check if connection already exists
     const existing = await this.prisma.githubConnection.findFirst({
       where: { tenantId },
@@ -218,8 +224,8 @@ export class GithubOAuthService {
       return this.prisma.githubConnection.update({
         where: { id: existing.id },
         data: {
-          accessToken,
-          refreshToken,
+          accessToken: encryptedAccessToken,
+          refreshToken: encryptedRefreshToken,
           tokenExpiresAt,
         },
       });
@@ -230,8 +236,8 @@ export class GithubOAuthService {
       data: {
         tenantId,
         installationId,
-        accessToken,
-        refreshToken,
+        accessToken: encryptedAccessToken,
+        refreshToken: encryptedRefreshToken,
         tokenExpiresAt,
         repos: [],
       },
@@ -280,7 +286,9 @@ export class GithubOAuthService {
       throw new UnauthorizedException('GitHub token expired, please reconnect');
     }
 
-    return new Octokit({ auth: connection.accessToken });
+    // Decrypt access token before use
+    const decryptedToken = this.encryption.decrypt(connection.accessToken);
+    return new Octokit({ auth: decryptedToken });
   }
 
   /**
