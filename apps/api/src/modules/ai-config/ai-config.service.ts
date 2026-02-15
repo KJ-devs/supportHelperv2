@@ -1,6 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EncryptionService } from '../../common/services/encryption.service';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -21,7 +20,6 @@ export class AiConfigService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly encryptionService: EncryptionService,
   ) {}
 
   async getConfig(tenantId: string): Promise<AiConfigResponse | null> {
@@ -33,13 +31,12 @@ export class AiConfigService {
       return null;
     }
 
+    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
     return {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(
-        this.encryptionService.decrypt(config.encryptedApiKey),
-      ),
+      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
       model: config.model,
       settings: config.settings as Record<string, any>,
       createdAt: config.createdAt,
@@ -54,7 +51,8 @@ export class AiConfigService {
     const data: any = {};
 
     if (dto.apiKey) {
-      data.encryptedApiKey = this.encryptionService.encrypt(dto.apiKey);
+      // Prisma encryption middleware will auto-encrypt on write
+      data.encryptedApiKey = dto.apiKey;
     }
     if (dto.model !== undefined) {
       data.model = dto.model;
@@ -90,13 +88,12 @@ export class AiConfigService {
       });
     }
 
+    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
     return {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(
-        this.encryptionService.decrypt(config.encryptedApiKey),
-      ),
+      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
       model: config.model,
       settings: config.settings as Record<string, any>,
       createdAt: config.createdAt,
@@ -147,7 +144,8 @@ export class AiConfigService {
       return null;
     }
 
-    return this.encryptionService.decrypt(config.encryptedApiKey);
+    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
+    return config.encryptedApiKey;
   }
 
   private maskApiKey(apiKey: string): string {

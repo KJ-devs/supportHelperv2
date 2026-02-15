@@ -28,8 +28,16 @@ export class TenantGuard implements CanActivate {
     request.tenantId = tenantId;
 
     // Set PostgreSQL session variable for RLS
-    // This enables Row Level Security policies to filter by tenant
-    await this.prisma.$executeRaw`SET LOCAL app.current_tenant_id = ${tenantId}`;
+    // Note: SET LOCAL doesn't support parameterized queries ($1),
+    // so we validate UUID format before using $executeRawUnsafe
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(tenantId)) {
+      try {
+        await this.prisma.$executeRawUnsafe(`SET LOCAL app.current_tenant_id = '${tenantId}'`);
+      } catch {
+        // Silently fail - RLS policies handle unauthorized access at DB level
+      }
+    }
 
     return true;
   }

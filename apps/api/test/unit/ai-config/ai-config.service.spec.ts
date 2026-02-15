@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { AiConfigService } from '../../../src/modules/ai-config/ai-config.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import { EncryptionService } from '../../../src/common/services/encryption.service';
 
 jest.mock('@anthropic-ai/sdk', () => {
   return {
@@ -20,14 +19,14 @@ jest.mock('@anthropic-ai/sdk', () => {
 describe('AiConfigService', () => {
   let service: AiConfigService;
   let prisma: jest.Mocked<PrismaService>;
-  let encryptionService: jest.Mocked<EncryptionService>;
 
   const tenantId = 'tenant-123';
+  // Mock data simulates values after Prisma middleware auto-decryption
   const mockConfig = {
     id: 'config-123',
     tenantId,
     provider: 'anthropic',
-    encryptedApiKey: 'encrypted:data:here',
+    encryptedApiKey: 'sk-ant-api03-test-key-1234',
     model: 'claude-sonnet-4-20250514',
     settings: {},
     createdAt: new Date('2026-01-01'),
@@ -48,19 +47,11 @@ describe('AiConfigService', () => {
             },
           },
         },
-        {
-          provide: EncryptionService,
-          useValue: {
-            encrypt: jest.fn().mockReturnValue('encrypted:data:here'),
-            decrypt: jest.fn().mockReturnValue('sk-ant-api03-test-key-1234'),
-          },
-        },
       ],
     }).compile();
 
     service = module.get<AiConfigService>(AiConfigService);
     prisma = module.get(PrismaService);
-    encryptionService = module.get(EncryptionService);
   });
 
   it('should be defined', () => {
@@ -88,7 +79,6 @@ describe('AiConfigService', () => {
       expect(result!.maskedApiKey).toBe('****1234');
       expect(result!.provider).toBe('anthropic');
       expect(result!.model).toBe('claude-sonnet-4-20250514');
-      expect(encryptionService.decrypt).toHaveBeenCalledWith('encrypted:data:here');
     });
   });
 
@@ -101,10 +91,11 @@ describe('AiConfigService', () => {
         apiKey: 'sk-ant-api03-new-key',
       });
 
+      // Plaintext key is passed; Prisma middleware auto-encrypts on write
       expect(prisma.aiConfig.create).toHaveBeenCalledWith({
         data: {
           tenantId,
-          encryptedApiKey: 'encrypted:data:here',
+          encryptedApiKey: 'sk-ant-api03-new-key',
           model: 'claude-sonnet-4-20250514',
           settings: {},
         },
@@ -146,12 +137,10 @@ describe('AiConfigService', () => {
         apiKey: 'sk-ant-api03-updated-key',
       });
 
-      expect(encryptionService.encrypt).toHaveBeenCalledWith(
-        'sk-ant-api03-updated-key',
-      );
+      // Plaintext key is passed; Prisma middleware auto-encrypts on write
       expect(prisma.aiConfig.update).toHaveBeenCalledWith({
         where: { tenantId },
-        data: { encryptedApiKey: 'encrypted:data:here' },
+        data: { encryptedApiKey: 'sk-ant-api03-updated-key' },
       });
     });
 
@@ -219,8 +208,8 @@ describe('AiConfigService', () => {
 
       const result = await service.getDecryptedApiKey(tenantId);
 
+      // Value is already decrypted by Prisma middleware
       expect(result).toBe('sk-ant-api03-test-key-1234');
-      expect(encryptionService.decrypt).toHaveBeenCalledWith('encrypted:data:here');
     });
   });
 });

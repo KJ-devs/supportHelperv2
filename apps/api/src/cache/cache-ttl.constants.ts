@@ -17,6 +17,12 @@ export const CacheTTL = {
 
   /** Ticket stats - 10 minutes */
   TICKET_STATS: 600,
+
+  /** Comprehensive health check - 30 seconds */
+  HEALTH_COMPREHENSIVE: 30,
+
+  /** Readiness probe - 30 seconds */
+  HEALTH_READY: 30,
 } as const;
 
 /**
@@ -39,4 +45,7 @@ export const CacheKeys = {
   applicationList: (tenantId: string) => `tenant:${tenantId}:apps:list`,
   applicationDetail: (tenantId: string, appId: string) => `tenant:${tenantId}:apps:${appId}`,
   applicationStats: (tenantId: string, appId: string) => `tenant:${tenantId}:apps:${appId}:stats`,
+
+  healthComprehensive: () => 'health:comprehensive',
+  healthReady: () => 'health:ready',
 } as const;
