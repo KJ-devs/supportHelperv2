@@ -12,10 +12,14 @@ export interface VideoAnalysisResult {
   reproductionSteps: string[];
 }
 
+const EMBEDDING_BATCH_SIZE = 100;
+const EMBEDDING_MAX_CHARS = 32000; // ~8191 tokens * ~4 chars/token
+
 @Injectable()
 export class AIService {
   private readonly logger = new Logger(AIService.name);
   private openai: OpenAI;
+  private readonly embeddingModel: string;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
@@ -24,6 +28,78 @@ export class AIService {
     } else {
       this.openai = new OpenAI({ apiKey });
     }
+    this.embeddingModel = this.configService.get<string>(
+      'EMBEDDING_MODEL',
+      'text-embedding-3-small',
+    );
+  }
+
+  /**
+   * Generate embedding for a single text input.
+   * Uses OpenAI text-embedding-3-small (1536 dimensions) by default.
+   */
+  async generateEmbedding(text: string): Promise<number[]> {
+    if (!this.openai) {
+      this.logger.warn('OpenAI not configured, cannot generate embedding');
+      return [];
+    }
+
+    try {
+      const truncated =
+        text.length > EMBEDDING_MAX_CHARS
+          ? text.slice(0, EMBEDDING_MAX_CHARS)
+          : text;
+
+      const response = await this.openai.embeddings.create({
+        model: this.embeddingModel,
+        input: truncated,
+      });
+
+      return response.data[0].embedding;
+    } catch (error) {
+      this.logger.error(
+        `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return [];
+    }
+  }
+
+  /**
+   * Generate embeddings for multiple texts in batches.
+   * Batches into groups of 100 and processes sequentially to respect rate limits.
+   */
+  async generateEmbeddings(texts: string[]): Promise<number[][]> {
+    if (!this.openai) {
+      this.logger.warn('OpenAI not configured, cannot generate embeddings');
+      return texts.map(() => []);
+    }
+
+    const results: number[][] = [];
+
+    for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
+      const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE).map((t) =>
+        t.length > EMBEDDING_MAX_CHARS ? t.slice(0, EMBEDDING_MAX_CHARS) : t,
+      );
+
+      try {
+        const response = await this.openai.embeddings.create({
+          model: this.embeddingModel,
+          input: batch,
+        });
+
+        // Sort by index to preserve order
+        const sorted = response.data.sort((a, b) => a.index - b.index);
+        results.push(...sorted.map((d) => d.embedding));
+      } catch (error) {
+        this.logger.error(
+          `Failed to generate embeddings for batch starting at index ${i}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+        // Return empty arrays for the failed batch
+        results.push(...batch.map(() => []));
+      }
+    }
+
+    return results;
   }
 
   async analyzeVideoTranscript(transcript: string, ocrText?: string): Promise<VideoAnalysisResult> {

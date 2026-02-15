@@ -45,6 +45,9 @@ import { FeedbackModule } from './modules/feedback/feedback.module';
 // Analytics & Reporting
 import { AnalyticsModule } from './modules/analytics/analytics.module';
 
+// Codebase Indexing
+import { CodebaseIndexModule } from './modules/codebase-index/codebase-index.module';
+
 /**
  * Root Application Module
  *
@@ -154,6 +157,9 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 
     // Analytics
     AnalyticsModule,
+
+    // Codebase Indexing
+    CodebaseIndexModule,
   ],
   providers: [
     // Global rate limiting guard

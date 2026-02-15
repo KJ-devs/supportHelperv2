@@ -208,6 +208,29 @@ export interface FunctionCallResult {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// CODEBASE INDEXING JOBS
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface CodebaseIndexingJobData {
+  type: 'full-index' | 'incremental-index';
+  applicationId: string;
+  tenantId: string;
+  repoFullName: string;
+  installationId: number;
+  sinceCommitSha?: string;
+  triggeredBy: 'webhook' | 'manual';
+}
+
+export interface CodebaseIndexingResult {
+  success: boolean;
+  type: string;
+  filesProcessed: number;
+  chunksCreated: number;
+  duration: number;
+  error?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // JOB METADATA
 // ═══════════════════════════════════════════════════════════════════════
 
