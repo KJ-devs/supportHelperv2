@@ -58,7 +58,7 @@ COPY apps/api/tsconfig.json apps/api/tsconfig.json
 COPY apps/worker/ apps/worker/
 
 # Generate Prisma client for worker (uses api's schema)
-RUN pnpm exec prisma generate --schema=apps/api/prisma/schema.prisma
+RUN cd apps/api && pnpm exec prisma generate
 
 # Build the Worker
 RUN pnpm --filter @support-helper/worker build
