@@ -85,6 +85,14 @@ const REQUIRED_VARIABLES: Array<{
       return /^[a-f0-9]{64}$/i.test(value);
     },
   },
+  {
+    name: 'ENCRYPTION_KEY',
+    setupHint: 'Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    validator: (value: string) => {
+      // Must be 64 hex characters (32 bytes)
+      return /^[a-f0-9]{64}$/i.test(value);
+    },
+  },
 ];
 
 /**

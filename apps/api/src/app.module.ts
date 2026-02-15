@@ -16,6 +16,7 @@ import { RedisCacheModule } from './cache/cache.module';
 import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
+import { EncryptionModule } from './common/encryption.module';
 
 // Authentication & Authorization
 import { AuthModule } from './auth/auth.module';
@@ -124,6 +125,7 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
     // Core Infrastructure
     PrismaModule,
     RedisCacheModule,
+    EncryptionModule,
     MonitoringModule,
     HealthModule,
 

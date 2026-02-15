@@ -4,6 +4,7 @@ import { PrismaService } from '../../../prisma/prisma.service';
 import { CacheService } from '../../../cache/cache.service';
 import { GithubOAuthService } from './github-oauth.service';
 import { GithubAppService } from './github-app.service';
+import { TemplateRendererService } from './template-renderer.service';
 import {
   CreateGithubIssueDto,
   GithubIssueResponseDto,
@@ -32,6 +33,7 @@ export class GithubIssuesService {
     private cacheService: CacheService,
     private oauthService: GithubOAuthService,
     private appService: GithubAppService,
+    private templateRenderer: TemplateRendererService,
   ) {
     this.apiUrl = this.config.get('app.apiUrl') || 'http://localhost:3000';
   }
@@ -436,13 +438,18 @@ export class GithubIssuesService {
     if (existing) return;
 
     const octokit = await this.appService.getInstallationOctokit(Number(installationId));
-    const issueBody = this.formatTicketAsIssueBody(ticket as TicketWithRelations, {
-      repository,
-      includeAiAnalysis: true,
-      includeVideoLink: true,
-    });
-
     const configSettings = (settings as Record<string, any>) ?? {};
+    const customTemplate = configSettings.issueBodyTemplate as string | undefined;
+    const issueBody = this.formatTicketAsIssueBody(
+      ticket as TicketWithRelations,
+      {
+        repository,
+        includeAiAnalysis: true,
+        includeVideoLink: true,
+      },
+      customTemplate || undefined,
+    );
+
     const defaultLabels = configSettings.defaultLabels
       ? (configSettings.defaultLabels as string).split(',').map((l: string) => l.trim())
       : [];
@@ -493,72 +500,85 @@ export class GithubIssuesService {
   }
 
   /**
-   * Format ticket as GitHub issue body
+   * Build the template data dictionary from a ticket.
    */
-  private formatTicketAsIssueBody(
+  private buildTemplateData(
     ticket: TicketWithRelations,
-    options: CreateGithubIssueDto
-  ): string {
-    const sections: string[] = [];
-
-    // Description
-    sections.push(`## Description\n\n${ticket.description || 'No description provided.'}`);
-
-    // AI Analysis
-    if (options.includeAiAnalysis !== false && ticket.aiSummary) {
-      sections.push(`## AI Analysis\n\n${ticket.aiSummary}`);
-    }
-
-    // Reproduction Steps
+    options: CreateGithubIssueDto,
+  ): Record<string, string> {
+    // Steps
+    let stepsText = 'No reproduction steps provided.';
     if (ticket.reproductionSteps) {
       const steps = this.parseJson(ticket.reproductionSteps);
       if (Array.isArray(steps) && steps.length > 0) {
-        const stepsText = steps.map((step, i) => `${i + 1}. ${step}`).join('\n');
-        sections.push(`## Reproduction Steps\n\n${stepsText}`);
+        stepsText = steps.map((step, i) => `${i + 1}. ${step}`).join('\n');
       }
     }
 
-    // User Context
+    // User context
+    let userContextText = 'No user context available.';
     if (ticket.userContext) {
       const context = this.parseJson(ticket.userContext);
       if (context && typeof context === 'object') {
-        const contextLines = [
+        const lines = [
           `- **OS**: ${context.os || 'Unknown'}`,
           `- **Browser**: ${context.browser || 'Unknown'}`,
           `- **Version**: ${context.version || 'Unknown'}`,
           context.url ? `- **URL**: ${context.url}` : null,
         ].filter(Boolean);
-
-        sections.push(`## User Context\n\n${contextLines.join('\n')}`);
+        userContextText = lines.join('\n');
       }
     }
 
-    // Video Link
+    // Recording URL
+    let recordingUrl = 'No recordings available.';
     if (options.includeVideoLink !== false && ticket.media && ticket.media.length > 0) {
       const videos = ticket.media.filter(m => m.type === 'video');
       if (videos.length > 0) {
-        const videoLinks = videos.map(v => {
-          const url = v.storageUrl || `${this.apiUrl}/api/media/${v.id}`;
-          return `- [View Recording](${url})`;
-        });
-
-        sections.push(
-          `## Media\n\n${videoLinks.join('\n')}\n\n> Video recordings are available in the support platform.`
-        );
+        recordingUrl = videos
+          .map(v => {
+            const url = v.storageUrl || `${this.apiUrl}/api/media/${v.id}`;
+            return `[View Recording](${url})`;
+          })
+          .join('\n');
       }
     }
 
-    // Metadata
-    const metadata = [
-      `**Ticket ID**: \`${ticket.id.slice(0, 8)}\``,
-      ticket.type ? `**Type**: ${ticket.type}` : null,
-      ticket.severity ? `**Severity**: ${ticket.severity}` : null,
-      ticket.status ? `**Status**: ${ticket.status}` : null,
-    ].filter(Boolean);
+    // AI Analysis
+    let aiAnalysis = 'No AI analysis available.';
+    if (options.includeAiAnalysis !== false && ticket.aiSummary) {
+      aiAnalysis = ticket.aiSummary;
+    }
 
-    sections.push(`---\n\n${metadata.join(' | ')}\n\n*Created from Support Helper*`);
+    return {
+      title: ticket.title || `Support Ticket #${ticket.id.slice(0, 8)}`,
+      description: ticket.description || 'No description provided.',
+      severity: ticket.severity || 'unknown',
+      type: ticket.type || 'unknown',
+      steps: stepsText,
+      recording_url: recordingUrl,
+      ticket_url: `${this.apiUrl}/tickets/${ticket.id}`,
+      reporter: (ticket as any).reporterEmail || 'Unknown',
+      ai_analysis: aiAnalysis,
+      user_context: userContextText,
+      ticket_id: ticket.id.slice(0, 8),
+      status: ticket.status || 'open',
+    };
+  }
 
-    return sections.join('\n\n');
+  /**
+   * Format ticket as GitHub issue body.
+   * Uses a custom template from ProjectGithubConfig settings if available,
+   * otherwise falls back to the default template.
+   */
+  private formatTicketAsIssueBody(
+    ticket: TicketWithRelations,
+    options: CreateGithubIssueDto,
+    customTemplate?: string,
+  ): string {
+    const data = this.buildTemplateData(ticket, options);
+    const template = customTemplate || this.templateRenderer.getDefaultTemplate();
+    return this.templateRenderer.render(template, data);
   }
 
   /**

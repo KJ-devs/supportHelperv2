@@ -12,3 +12,6 @@ export * from './github-userstory.dto';
 
 // Project GitHub Config DTOs
 export * from './project-github-config.dto';
+
+// Template DTOs
+export * from './github-template.dto';

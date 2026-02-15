@@ -9,6 +9,7 @@ jest.mock('@octokit/rest', () => ({
 import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
 import { GithubOAuthService } from '../../../src/modules/github/services/github-oauth.service';
 import { GithubAppService } from '../../../src/modules/github/services/github-app.service';
+import { TemplateRendererService } from '../../../src/modules/github/services/template-renderer.service';
 import { CacheService } from '../../../src/cache/cache.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
@@ -88,6 +89,23 @@ describe('GithubIssuesService', () => {
           useValue: {
             getInstallationOctokit: jest.fn().mockResolvedValue(mockOctokit),
             isEnabled: jest.fn().mockReturnValue(false),
+          },
+        },
+        {
+          provide: TemplateRendererService,
+          useValue: {
+            render: jest.fn().mockImplementation((template: string, data: Record<string, string>) => {
+              let result = template;
+              for (const [key, value] of Object.entries(data)) {
+                const placeholder = key.startsWith('{{') ? key : `{{${key}}}`;
+                result = result.split(placeholder).join(value || '');
+              }
+              return result;
+            }),
+            getDefaultTemplate: jest.fn().mockReturnValue('## Description\n\n{{description}}'),
+            getPlaceholders: jest.fn().mockReturnValue({}),
+            getSampleData: jest.fn().mockReturnValue({}),
+            validate: jest.fn().mockReturnValue({ valid: true, placeholders: [], missingPlaceholders: [] }),
           },
         },
       ],
