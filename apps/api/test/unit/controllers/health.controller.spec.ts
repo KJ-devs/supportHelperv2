@@ -8,6 +8,13 @@ describe('HealthController', () => {
   let controller: HealthController;
   let healthService: jest.Mocked<HealthService>;
 
+  const mockResponse = () => {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [HealthController],
@@ -15,6 +22,7 @@ describe('HealthController', () => {
         {
           provide: HealthService,
           useValue: {
+            getComprehensiveHealth: jest.fn(),
             getBasicHealth: jest.fn(),
             isAlive: jest.fn(),
             isReady: jest.fn(),
@@ -44,13 +52,64 @@ describe('HealthController', () => {
   });
 
   describe('health', () => {
-    it('should return basic health status', async () => {
-      const mockHealth = { status: 'healthy', timestamp: new Date().toISOString(), uptime: 100, version: '0.1.0' };
-      (healthService.getBasicHealth as jest.Mock).mockResolvedValue(mockHealth);
+    it('should return 200 with comprehensive health when all healthy', async () => {
+      const mockHealth = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: 100,
+        version: '0.1.0',
+        services: {
+          postgres: { status: 'healthy', responseTime: 5 },
+          redis: { status: 'healthy', responseTime: 2 },
+          minio: { status: 'healthy', responseTime: 10 },
+          memory: { status: 'healthy', message: 'Heap: 45%' },
+        },
+      };
+      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
+      const res = mockResponse();
 
-      const result = await controller.health();
+      await controller.health(res);
 
-      expect(result).toEqual(mockHealth);
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockHealth);
+    });
+
+    it('should return 503 when service is unhealthy', async () => {
+      const mockHealth = {
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        uptime: 100,
+        version: '0.1.0',
+        services: {
+          postgres: { status: 'unhealthy', message: 'Connection refused' },
+        },
+      };
+      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
+      const res = mockResponse();
+
+      await controller.health(res);
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith(mockHealth);
+    });
+
+    it('should return 200 when degraded', async () => {
+      const mockHealth = {
+        status: 'degraded',
+        timestamp: new Date().toISOString(),
+        uptime: 100,
+        version: '0.1.0',
+        services: {
+          postgres: { status: 'healthy' },
+          minio: { status: 'unhealthy' },
+        },
+      };
+      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
+      const res = mockResponse();
+
+      await controller.health(res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 
@@ -71,18 +130,24 @@ describe('HealthController', () => {
   });
 
   describe('ready', () => {
-    it('should return ok when ready', async () => {
+    it('should return 200 when ready', async () => {
       (healthService.isReady as jest.Mock).mockResolvedValue(true);
+      const res = mockResponse();
 
-      const result = await controller.ready();
+      await controller.ready(res);
 
-      expect(result).toEqual({ status: 'ok' });
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ status: 'ok' });
     });
 
-    it('should throw ServiceUnavailableException when not ready', async () => {
+    it('should return 503 when not ready', async () => {
       (healthService.isReady as jest.Mock).mockResolvedValue(false);
+      const res = mockResponse();
 
-      await expect(controller.ready()).rejects.toThrow(ServiceUnavailableException);
+      await controller.ready(res);
+
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({ status: 'not ready' });
     });
   });
 
@@ -164,6 +229,14 @@ describe('HealthController', () => {
       expect(result).toHaveProperty('cpu');
       expect(result).toHaveProperty('pid');
       expect(result).toHaveProperty('nodeVersion');
+    });
+  });
+
+  describe('cacheMetrics', () => {
+    it('should return cache metrics', () => {
+      const result = controller.cacheMetrics();
+
+      expect(result).toEqual({ hits: 0, misses: 0, hitRate: '0%', total: 0 });
     });
   });
 });

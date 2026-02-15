@@ -15,6 +15,13 @@ jest.mock('ioredis', () => {
   return jest.fn().mockImplementation(() => mockRedis);
 });
 
+// Mock AWS SDK S3
+const mockS3Send = jest.fn();
+jest.mock('@aws-sdk/client-s3', () => ({
+  S3Client: jest.fn().mockImplementation(() => ({ send: mockS3Send })),
+  ListBucketsCommand: jest.fn(),
+}));
+
 describe('HealthService', () => {
   let service: HealthService;
   let prisma: jest.Mocked<PrismaService>;
@@ -28,6 +35,7 @@ describe('HealthService', () => {
     mockRedis.llen.mockResolvedValue(0);
     mockRedis.get.mockResolvedValue('0');
     mockRedis.zcard.mockResolvedValue(0);
+    mockS3Send.mockResolvedValue({ Buckets: [] });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -38,6 +46,10 @@ describe('HealthService', () => {
             get: jest.fn((key: string) => {
               if (key === 'app.version') return '1.0.0';
               if (key === 'database.redisUrl') return 'redis://localhost:6379';
+              if (key === 's3.endpoint') return 'http://localhost:9000';
+              if (key === 's3.accessKeyId') return 'minioadmin';
+              if (key === 's3.secretAccessKey') return 'minioadmin';
+              if (key === 's3.region') return 'us-east-1';
               return null;
             }),
           },
@@ -80,6 +92,44 @@ describe('HealthService', () => {
     });
   });
 
+  describe('getComprehensiveHealth', () => {
+    it('should return all services with healthy overall status', async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+      mockS3Send.mockResolvedValue({ Buckets: [] });
+
+      const result = await service.getComprehensiveHealth();
+
+      expect(['healthy', 'degraded']).toContain(result.status);
+      expect(result.services).toBeDefined();
+      expect(result.services).toHaveProperty('postgres');
+      expect(result.services).toHaveProperty('redis');
+      expect(result.services).toHaveProperty('minio');
+      expect(result.services).toHaveProperty('memory');
+      expect(result.services!.postgres.status).toBe('healthy');
+      expect(result.version).toBe('1.0.0');
+    });
+
+    it('should return unhealthy when database is down', async () => {
+      (prisma.$queryRaw as jest.Mock).mockRejectedValue(new Error('DB down'));
+
+      const result = await service.getComprehensiveHealth();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.services!.postgres.status).toBe('unhealthy');
+    });
+
+    it('should return degraded when non-critical service (S3) is down', async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+      mockS3Send.mockRejectedValueOnce(new Error('S3 down'));
+
+      const result = await service.getComprehensiveHealth();
+
+      expect(result.status).toBe('degraded');
+      expect(result.services!.postgres.status).toBe('healthy');
+      expect(result.services!.minio.status).toBe('unhealthy');
+    });
+  });
+
   describe('getFullHealth', () => {
     it('should return healthy status when all checks pass', async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
@@ -91,6 +141,7 @@ describe('HealthService', () => {
       expect(['healthy', 'degraded']).toContain(result.status);
       expect(result.checks).toHaveProperty('database');
       expect(result.checks).toHaveProperty('redis');
+      expect(result.checks).toHaveProperty('minio');
       expect(result.checks).toHaveProperty('memory');
       expect(result.checks?.database.status).toBe('healthy');
     });
@@ -185,6 +236,44 @@ describe('HealthService', () => {
 
       expect(result.status).toBe('unhealthy');
       expect(result.message).toBe('Connection refused');
+    });
+  });
+
+  describe('checkS3', () => {
+    it('should return healthy when S3 responds', async () => {
+      mockS3Send.mockResolvedValueOnce({ Buckets: [] });
+
+      const result = await service.checkS3();
+
+      expect(result.status).toBe('healthy');
+      expect(result.responseTime).toBeGreaterThanOrEqual(0);
+      expect(result.lastCheck).toBeDefined();
+    });
+
+    it('should return unhealthy when S3 fails', async () => {
+      mockS3Send.mockRejectedValueOnce(new Error('Connection refused'));
+
+      const result = await service.checkS3();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.message).toBe('Connection refused');
+    });
+
+    it('should return unhealthy when S3 is not configured', async () => {
+      const mockConfigNoS3 = {
+        get: jest.fn((key: string) => {
+          if (key === 'app.version') return '1.0.0';
+          if (key === 'database.redisUrl') return 'redis://localhost:6379';
+          if (key.startsWith('s3.')) return null;
+          return null;
+        }),
+      } as any;
+      const newService = new HealthService(mockConfigNoS3, prisma);
+
+      const result = await newService.checkS3();
+
+      expect(result.status).toBe('unhealthy');
+      expect(result.message).toBe('S3/MinIO not configured');
     });
   });
 
@@ -336,8 +425,9 @@ describe('HealthService', () => {
   });
 
   describe('isReady', () => {
-    it('should return true when database is healthy', async () => {
+    it('should return true when database and redis are healthy', async () => {
       (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+      mockRedis.ping.mockResolvedValue('PONG');
 
       const result = await service.isReady();
 
@@ -346,6 +436,15 @@ describe('HealthService', () => {
 
     it('should return false when database is unhealthy', async () => {
       (prisma.$queryRaw as jest.Mock).mockRejectedValue(new Error('DB error'));
+
+      const result = await service.isReady();
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false when redis is unhealthy', async () => {
+      (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ '?column?': 1 }]);
+      mockRedis.ping.mockRejectedValue(new Error('Redis error'));
 
       const result = await service.isReady();
 
