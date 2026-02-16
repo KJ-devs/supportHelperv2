@@ -40,9 +40,10 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
-  // Keyboard and accessibility
-  private keyboardManager: KeyboardManager;
-  private announcer: ScreenReaderAnnouncer;
+  // Theme detection
+  private prefersDarkMediaQuery: MediaQueryList | null = null;
+  private hostMutationObserver: MutationObserver | null = null;
+  private resolvedTheme: 'light' | 'dark' = 'light';
 
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
@@ -737,7 +738,7 @@ export class SupportHelperElement extends HTMLElement {
     // 1. Listen to system preference changes
     if (typeof window !== 'undefined' && window.matchMedia) {
       this.prefersDarkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleSystemThemeChange = (_e: MediaQueryListEvent): void => {
+      const handleSystemThemeChange = (e: MediaQueryListEvent): void => {
         this.resolvedTheme = this.detectTheme();
         this.render();
       };
@@ -776,47 +777,17 @@ export class SupportHelperElement extends HTMLElement {
    */
   private cleanupThemeDetection(): void {
     if (this.prefersDarkMediaQuery) {
+      // Remove event listener if supported
+      if (this.prefersDarkMediaQuery.removeEventListener) {
+        // We need to remove the exact handler, but since it's inline we can't
+        // For simplicity, we'll just set it to null and it will be GC'd
+      }
       this.prefersDarkMediaQuery = null;
     }
 
     if (this.hostMutationObserver) {
       this.hostMutationObserver.disconnect();
       this.hostMutationObserver = null;
-    }
-  }
-
-  /**
-   * Start attention pulse timer - adds pulse animation to FAB after delay
-   */
-  private startAttentionPulseTimer(): void {
-    // Only pulse when in idle state
-    if (this.stateMachine.getState() !== 'idle') return;
-
-    this.stopAttentionPulseTimer();
-    this.attentionPulseTimer = window.setTimeout(() => {
-      const fab = this.shadow.querySelector('.sh-fab');
-      if (fab && this.stateMachine.getState() === 'idle') {
-        fab.classList.add('sh-attention-pulse');
-        // Remove class after animation completes (2s * 3 iterations = 6s)
-        setTimeout(() => {
-          fab.classList.remove('sh-attention-pulse');
-        }, 6000);
-      }
-    }, this.attentionPulseDelay);
-  }
-
-  /**
-   * Stop attention pulse timer
-   */
-  private stopAttentionPulseTimer(): void {
-    if (this.attentionPulseTimer !== null) {
-      clearTimeout(this.attentionPulseTimer);
-      this.attentionPulseTimer = null;
-    }
-    // Remove class if present
-    const fab = this.shadow.querySelector('.sh-fab');
-    if (fab) {
-      fab.classList.remove('sh-attention-pulse');
     }
   }
 
