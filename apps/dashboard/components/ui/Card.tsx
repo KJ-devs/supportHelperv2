@@ -13,7 +13,7 @@ interface CardProps {
 
 export function Card({ children, className = '', padding = true }: CardProps) {
   return (
-    <div className={`bg-white rounded-lg shadow ${padding ? 'p-6' : ''} ${className}`}>
+    <div className={`bg-white dark:bg-gray-900 rounded-lg shadow-md dark:shadow-gray-800/20 ${padding ? 'p-6' : ''} ${className}`}>
       {children}
     </div>
   );
