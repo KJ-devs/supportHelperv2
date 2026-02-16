@@ -12,7 +12,10 @@ import { PinoLoggerService } from './common/logger/pino-logger.service';
 
 // BigInt cannot be serialized by JSON.stringify by default.
 // This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
-(BigInt.prototype as any).toJSON = function () {
+interface BigInt {
+  toJSON(): number;
+}
+BigInt.prototype.toJSON = function () {
   return Number(this);
 };
 
@@ -28,6 +31,9 @@ async function bootstrap() {
   // Get and attach the Pino logger
   const pinoLogger = app.get(PinoLoggerService);
   app.useLogger(pinoLogger);
+
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
 
   const config = app.get(ConfigService);
   const reflector = app.get(Reflector);
