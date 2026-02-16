@@ -343,45 +343,19 @@ export default function TicketsPage() {
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-hidden p-6">
-          {!isLoading && tickets.length === 0 ? (
-            <EmptyState
-              icon={filters.search ? SearchX : Inbox}
-              title={filters.search ? 'No results found' : 'No tickets yet'}
-              description={
-                filters.search
-                  ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                  : 'Get started by creating your first support ticket.'
-              }
-              action={
-                filters.search
-                  ? {
-                      label: 'Clear filters',
-                      onClick: () => {
-                        resetFilters();
-                        setRowSelection({});
-                      },
-                    }
-                  : {
-                      label: 'Create ticket',
-                      onClick: () => router.push('/tickets/new'),
-                    }
-              }
-            />
-          ) : (
-            <TicketsDataTable
-              data={tickets}
-              isLoading={isLoading}
-              sorting={sorting}
-              onSortingChange={setSorting}
-              rowSelection={rowSelection}
-              onRowSelectionChange={setRowSelection}
-              onView={handleView}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-              enableVirtualization={tickets.length > 100}
-            />
-          )}
+        <div className="flex-1 overflow-hidden p-4 sm:p-6">
+          <TicketsDataTable
+            data={tickets}
+            isLoading={isLoading}
+            sorting={sorting}
+            onSortingChange={setSorting}
+            rowSelection={rowSelection}
+            onRowSelectionChange={setRowSelection}
+            onView={handleView}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+            enableVirtualization={tickets.length > 100}
+          />
         </div>
 
         {/* Pagination */}

@@ -28,9 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
-          <main id="main-content" className="flex-1 overflow-auto p-4 sm:p-6" role="main">
-            {children}
-          </main>
+          <main className="flex-1 overflow-auto p-4 sm:p-6">{children}</main>
         </div>
       </div>
     </AuthGuard>
