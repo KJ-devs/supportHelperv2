@@ -7,6 +7,7 @@ This directory contains documentation for self-hosting Support Helper Platform.
 - **[Installation Guide](./installation.md)** - Complete setup instructions using Docker Compose
 - **[Updating Guide](./updating.md)** - How to update your installation
 - **[Backup & Restore Guide](./backup-restore.md)** - Backup and restore procedures
+- **[Monitoring & Logging Guide](./monitoring.md)** - Structured logging, metrics, and alerting
 
 ## Overview
 
@@ -34,7 +35,12 @@ Support Helper Platform can be self-hosted using Docker Compose. The production 
   - Automated backups via cron with `./scripts/backup-cron.sh`
   - Full restore procedure with `./scripts/restore.sh`
   - Cloud storage sync (S3, GCS, Azure)
-- **Monitoring** - Health checks at `/health`, `/health/live`, and `/health/ready`
+- **Monitoring** - Complete guide in [monitoring.md](./monitoring.md)
+  - Structured JSON logging with configurable log levels
+  - Request correlation and tracing with X-Request-Id headers
+  - Prometheus metrics at `/metrics`
+  - Grafana + Loki integration for log aggregation
+  - Health checks at `/health`, `/health/live`, and `/health/ready`
 
 ## Support
 
