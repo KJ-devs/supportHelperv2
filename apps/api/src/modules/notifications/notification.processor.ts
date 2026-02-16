@@ -303,6 +303,7 @@ export class NotificationProcessor extends WorkerHost {
       pr_created: `PR Created: ${title}`,
       pr_merged: `PR Merged: ${title}`,
       fix_deployed: `Fix Deployed: ${title}`,
+      ticket_resolved: `Your issue has been resolved: ${title}`,
     };
     return eventLabels[eventType] || `Ticket Update: ${title}`;
   }
@@ -311,6 +312,11 @@ export class NotificationProcessor extends WorkerHost {
     eventType: string,
     data: Record<string, any>,
   ): string {
+    // Special template for ticket_resolved event
+    if (eventType === 'ticket_resolved') {
+      return this.buildResolutionEmailHtml(data);
+    }
+
     const title = data.ticketTitle || data.title || 'Ticket Update';
     const summary = data.summary || data.description || '';
     const emoji = this.getEventEmoji(eventType);
@@ -335,9 +341,9 @@ export class NotificationProcessor extends WorkerHost {
       <h2 style="margin: 0;">${emoji} ${eventLabel}</h2>
     </div>
     <div class="content">
-      <h3>${title}</h3>
+      <h3>${this.escapeHtml(title)}</h3>
       <span class="event-badge">${eventType}</span>
-      ${summary ? `<p>${summary}</p>` : ''}
+      ${summary ? `<p>${this.escapeHtml(summary)}</p>` : ''}
       <div class="footer">
         <p>Ticket ID: ${data.ticketId || 'N/A'}</p>
         <p>This is an automated notification from Support Helper.</p>
@@ -346,6 +352,111 @@ export class NotificationProcessor extends WorkerHost {
   </div>
 </body>
 </html>`.trim();
+  }
+
+  private buildResolutionEmailHtml(data: Record<string, any>): string {
+    const title = data.ticketTitle || 'Your Issue';
+    const summary = data.summary || 'Your issue has been resolved.';
+    const changes = Array.isArray(data.changes) ? data.changes : [];
+    const version = data.version || 'the next release';
+    const reopenToken = data.reopenToken || '';
+    const ticketId = data.ticketId || '';
+    const prUrl = data.prUrl || '';
+    const publicId = data.publicId || '';
+
+    // Build API base URL from config or use default
+    const apiUrl = this.configService.get<string>('API_URL') || 'http://localhost:3001';
+    const trackingUrl = publicId ? `${apiUrl}/tickets/track/${publicId}` : '';
+    const reopenUrl = ticketId && reopenToken ? `${apiUrl}/api/sdk/tickets/${ticketId}/reopen?token=${reopenToken}` : '';
+
+    const changesListHtml = changes.length > 0
+      ? `<ul style="margin: 16px 0; padding-left: 20px;">
+          ${changes.map((change: string) => `<li>${this.escapeHtml(change)}</li>`).join('')}
+        </ul>`
+      : '';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #10B981; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; border-top: none; }
+    .summary { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #10B981; }
+    .changes-section { margin: 20px 0; }
+    .changes-section h4 { margin-top: 0; color: #374151; }
+    .version-badge { display: inline-block; background: #EEF2FF; color: #4F46E5; padding: 6px 12px; border-radius: 16px; font-size: 13px; font-weight: 500; }
+    .button-group { margin: 30px 0; text-align: center; }
+    .button { display: inline-block; padding: 12px 24px; margin: 0 8px; border-radius: 6px; text-decoration: none; font-weight: 500; transition: all 0.2s; }
+    .button-primary { background: #4F46E5; color: white; }
+    .button-primary:hover { background: #4338CA; }
+    .button-secondary { background: white; color: #4F46E5; border: 2px solid #4F46E5; }
+    .button-secondary:hover { background: #EEF2FF; }
+    .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-size: 12px; color: #6b7280; text-align: center; }
+    ul { line-height: 1.8; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin: 0; font-size: 28px;">🎉 Your Issue Has Been Resolved!</h2>
+    </div>
+    <div class="content">
+      <h3 style="margin-top: 0; color: #111827;">${this.escapeHtml(title)}</h3>
+
+      <div class="summary">
+        <p style="margin: 0; font-size: 16px;">${this.escapeHtml(summary)}</p>
+      </div>
+
+      ${changesListHtml ? `
+      <div class="changes-section">
+        <h4>What's been fixed:</h4>
+        ${changesListHtml}
+      </div>
+      ` : ''}
+
+      <p style="margin: 20px 0;">
+        <strong>Expected in:</strong> <span class="version-badge">${this.escapeHtml(version)}</span>
+      </p>
+
+      ${prUrl ? `
+      <p style="margin: 16px 0;">
+        <a href="${this.escapeHtml(prUrl)}" style="color: #4F46E5; text-decoration: none;">View the pull request →</a>
+      </p>
+      ` : ''}
+
+      <div class="button-group">
+        ${trackingUrl ? `
+        <a href="${this.escapeHtml(trackingUrl)}" class="button button-primary">Track Your Issue</a>
+        ` : ''}
+        ${reopenUrl ? `
+        <a href="${this.escapeHtml(reopenUrl)}" class="button button-secondary">Issue Still Exists?</a>
+        ` : ''}
+      </div>
+
+      <div class="footer">
+        <p><strong>Ticket ID:</strong> ${ticketId}</p>
+        ${publicId ? `<p><strong>Tracking ID:</strong> ${publicId}</p>` : ''}
+        <p>This is an automated notification from Support Helper.</p>
+        <p style="margin-top: 12px; font-size: 11px;">If the issue persists after the fix is deployed, click the "Issue Still Exists?" button to reopen the ticket.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+  }
+
+  private escapeHtml(text: string): string {
+    const map: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;',
+    };
+    return text.replace(/[&<>"']/g, (m) => map[m]);
   }
 
   private formatEventType(eventType: string): string {
@@ -363,6 +474,7 @@ export class NotificationProcessor extends WorkerHost {
       pr_created: '🔀',
       pr_merged: '✅',
       fix_deployed: '🚀',
+      ticket_resolved: '🎉',
     };
     return emojis[eventType] || '📋';
   }

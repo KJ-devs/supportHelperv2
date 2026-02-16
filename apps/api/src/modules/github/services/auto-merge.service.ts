@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubAppService } from './github-app.service';
 import { TicketTimelineService } from '../../tickets/services/ticket-timeline.service';
+import { AutoResponseService } from '../../tickets/services/auto-response.service';
 
 export interface MergeResult {
   merged: boolean;
@@ -16,6 +17,9 @@ export class AutoMergeService {
     private readonly prisma: PrismaService,
     private readonly githubAppService: GithubAppService,
     private readonly ticketTimelineService: TicketTimelineService,
+    @Optional()
+    @Inject(AutoResponseService)
+    private readonly autoResponseService?: AutoResponseService,
   ) {}
 
   /**
@@ -242,6 +246,19 @@ export class AutoMergeService {
       },
     );
 
+    // Trigger auto-response to client
+    if (this.autoResponseService) {
+      await this.autoResponseService.handleTicketMerged(
+        agentTask.ticketId,
+        agentTask.tenantId,
+        {
+          prNumber,
+          prUrl: agentTask.prUrl,
+          branchName: agentTask.branchName,
+        },
+      );
+    }
+
     this.logger.log(
       `Handled PR merged: ${owner}/${repo}#${prNumber} — ticket ${agentTask.ticketId} updated to merged`,
     );
@@ -304,6 +321,19 @@ export class AutoMergeService {
         prUrl: agentTask.prUrl,
       },
     );
+
+    // Trigger auto-response to client
+    if (this.autoResponseService) {
+      await this.autoResponseService.handleTicketMerged(
+        agentTask.ticketId,
+        tenantId,
+        {
+          prNumber,
+          prUrl: agentTask.prUrl,
+          branchName,
+        },
+      );
+    }
 
     this.logger.log(
       `Updated AgentTask ${agentTask.id} and ticket ${agentTask.ticketId} to merged`,

@@ -11,6 +11,8 @@ import {
   FileText,
   CircleDot,
   AlertTriangle,
+  Mail,
+  RotateCcw,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,6 +56,8 @@ const EVENT_LABELS: Record<string, string> = {
   pr_created: 'Fix ready for review',
   pr_merged: 'Fix deployed',
   fix_deployed: 'Issue resolved',
+  resolution_sent: 'Resolution notification sent',
+  ticket_reopened: 'Ticket reopened',
 };
 
 function getEventIcon(eventType: string) {
@@ -77,6 +81,10 @@ function getEventIcon(eventType: string) {
       return GitMerge;
     case 'fix_deployed':
       return Rocket;
+    case 'resolution_sent':
+      return Mail;
+    case 'ticket_reopened':
+      return RotateCcw;
     default:
       return CircleDot;
   }
@@ -195,6 +203,9 @@ export default async function TrackPage({ params }: TrackPageProps) {
 
   const statusConfig = getStatusConfig(ticket.status);
   const severityConfig = getSeverityConfig(ticket.severity);
+  const resolutionEvent = ticket.ticketEvents.find(
+    (e) => e.eventType === 'resolution_sent',
+  );
 
   return (
     <div className="space-y-6">
@@ -278,22 +289,40 @@ export default async function TrackPage({ params }: TrackPageProps) {
         </CardContent>
       </Card>
 
-      {/* Resolved notice */}
-      {ticket.resolvedAt && (
+      {/* Resolution Summary */}
+      {ticket.resolvedAt || ticket.status === 'merged' ? (
         <Card className="border-success/30 bg-success/5">
           <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-5 w-5 text-success" />
-              <div>
-                <p className="font-medium">This issue has been resolved</p>
-                <p className="text-sm text-muted-foreground">
-                  Resolved {formatDistanceToNow(new Date(ticket.resolvedAt), { addSuffix: true })}
-                </p>
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-success" />
+              <div className="space-y-3">
+                <div>
+                  <p className="font-medium">This issue has been resolved</p>
+                  {ticket.resolvedAt && (
+                    <p className="text-sm text-muted-foreground">
+                      Resolved {formatDistanceToNow(new Date(ticket.resolvedAt), { addSuffix: true })}
+                    </p>
+                  )}
+                </div>
+                {resolutionEvent && (
+                  <>
+                    {resolutionEvent.data.summary && (
+                      <p className="text-sm">{String(resolutionEvent.data.summary)}</p>
+                    )}
+                    {Array.isArray(resolutionEvent.data.changes) && resolutionEvent.data.changes.length > 0 && (
+                      <ul className="list-disc pl-5 text-sm text-muted-foreground space-y-1">
+                        {(resolutionEvent.data.changes as string[]).map((change, i) => (
+                          <li key={i}>{change}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {/* Footer help section */}
       <Card>
