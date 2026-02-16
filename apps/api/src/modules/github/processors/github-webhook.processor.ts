@@ -3,6 +3,7 @@ import { Inject, Logger, forwardRef } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubIssuesService } from '../services/github-issues.service';
+import { AutoMergeService } from '../services/auto-merge.service';
 import { CodebaseIndexerService } from '../../codebase-index/services/codebase-indexer.service';
 import { CIFeedbackService } from '../../agent-tasks/services/ci-feedback.service';
 
@@ -31,6 +32,7 @@ export class GithubWebhookProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly issuesService: GithubIssuesService,
+    private readonly autoMergeService: AutoMergeService,
     @Inject(forwardRef(() => CodebaseIndexerService))
     private readonly codebaseIndexer: CodebaseIndexerService,
     private readonly ciFeedbackService: CIFeedbackService,
@@ -75,6 +77,9 @@ export class GithubWebhookProcessor extends WorkerHost {
         case 'issue_comment':
           return this.processIssueCommentEvent(webhookData);
 
+        case 'pull_request_review':
+          return this.processPullRequestReviewEvent(webhookData);
+
         case 'check_run':
           return this.processCheckRunEvent(webhookData);
 
@@ -115,9 +120,67 @@ export class GithubWebhookProcessor extends WorkerHost {
 
     this.logger.log(`Processed PR ${action}: ${repository.full_name}#${pull_request.number}`);
 
+    // Handle PR merged externally
+    if (action === 'closed' && pull_request.merged === true) {
+      const [owner, repo] = (repository.full_name as string).split('/');
+      if (owner && repo) {
+        try {
+          await this.autoMergeService.handlePRMerged(
+            owner,
+            repo,
+            pull_request.number,
+            pull_request.merged_by?.login,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to handle PR merged for ${repository.full_name}#${pull_request.number}: ${error instanceof Error ? error.message : error}`,
+          );
+        }
+      }
+    }
+
     return {
       handled: true,
       action,
+      prNumber: pull_request.number,
+      repository: repository.full_name,
+      merged: action === 'closed' && pull_request.merged === true,
+    };
+  }
+
+  private async processPullRequestReviewEvent(data: GithubWebhookJobData) {
+    const { payload } = data;
+    const { action, review, pull_request, repository } = payload;
+
+    this.logger.log(
+      `Processed PR review ${action}: ${repository.full_name}#${pull_request.number} — ${review.state}`,
+    );
+
+    // When a review is submitted and approved, try auto-merge
+    if (action === 'submitted' && review.state === 'approved') {
+      const [owner, repo] = (repository.full_name as string).split('/');
+      if (owner && repo) {
+        try {
+          const result = await this.autoMergeService.checkAndMerge(
+            owner,
+            repo,
+            pull_request.number,
+          );
+          this.logger.log(
+            `Auto-merge check for ${repository.full_name}#${pull_request.number}: merged=${result.merged}${result.reason ? `, reason=${result.reason}` : ''}`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Auto-merge check failed for ${repository.full_name}#${pull_request.number}: ${error instanceof Error ? error.message : error}`,
+          );
+        }
+      }
+    }
+
+    return {
+      handled: true,
+      action,
+      reviewState: review.state,
       prNumber: pull_request.number,
       repository: repository.full_name,
     };
@@ -289,6 +352,31 @@ export class GithubWebhookProcessor extends WorkerHost {
         repository: repository.full_name,
         linkedTickets,
       };
+    }
+
+    // On successful check run, try auto-merge (CI passing might be the last condition)
+    if (action === 'completed' && check_run.conclusion === 'success') {
+      for (const pr of check_run.pull_requests || []) {
+        const [repoOwner, repoName] = (repository.full_name as string).split('/');
+        if (repoOwner && repoName) {
+          try {
+            const result = await this.autoMergeService.checkAndMerge(
+              repoOwner,
+              repoName,
+              pr.number,
+            );
+            if (result.merged) {
+              this.logger.log(
+                `Auto-merged PR ${repository.full_name}#${pr.number} after check "${check_run.name}" passed`,
+              );
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Auto-merge check failed for ${repository.full_name}#${pr.number}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        }
+      }
     }
 
     return {

@@ -13,6 +13,9 @@ import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 // Agent Tasks (CI feedback loop)
 import { AgentTasksModule } from '../agent-tasks/agent-tasks.module';
 
+// Tickets (timeline events for auto-merge)
+import { TicketsModule } from '../tickets/tickets.module';
+
 // Services
 import {
   GithubOAuthService,
@@ -24,6 +27,7 @@ import {
   GithubInstallationService,
   ProjectGithubConfigService,
   TemplateRendererService,
+  AutoMergeService,
 } from './services';
 
 // Controllers
@@ -74,6 +78,7 @@ import { GithubWebhookProcessor } from './processors';
     AIModule,
     forwardRef(() => CodebaseIndexModule),
     forwardRef(() => AgentTasksModule),
+    forwardRef(() => TicketsModule),
     // Register BullMQ queue for async webhook processing
     BullModule.registerQueue({
       name: 'github',
@@ -109,6 +114,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubInstallationService,
     ProjectGithubConfigService,
     TemplateRendererService,
+    AutoMergeService,
     // BullMQ processor
     GithubWebhookProcessor,
   ],
@@ -122,6 +128,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubInstallationService,
     ProjectGithubConfigService,
     TemplateRendererService,
+    AutoMergeService,
   ],
 })
 export class GithubModule {}

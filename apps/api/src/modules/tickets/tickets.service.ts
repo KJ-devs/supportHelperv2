@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
@@ -35,12 +36,15 @@ export class TicketsService {
     dto: CreateTicketDto,
     reporterId?: string,
   ) {
+    const publicId = nanoid(12);
+
     const data: Prisma.TicketCreateInput = {
       title: dto.title,
       description: dto.description,
       userContext: dto.userContext as Prisma.JsonObject,
       reproductionSteps: dto.reproductionSteps as Prisma.JsonObject,
       sessionId: dto.sessionId,
+      publicId,
       tenant: {
         connect: { id: tenantId },
       },

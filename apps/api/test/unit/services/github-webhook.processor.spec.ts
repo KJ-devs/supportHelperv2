@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { GithubWebhookProcessor, GithubWebhookJobData } from '../../../src/modules/github/processors/github-webhook.processor';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
+import { AutoMergeService } from '../../../src/modules/github/services/auto-merge.service';
 import { CodebaseIndexerService } from '../../../src/modules/codebase-index/services/codebase-indexer.service';
 import { CIFeedbackService } from '../../../src/modules/agent-tasks/services/ci-feedback.service';
 
@@ -30,6 +31,11 @@ describe('GithubWebhookProcessor', () => {
     queueIncrementalIndex: jest.fn(),
   };
 
+  const mockAutoMergeService = {
+    checkAndMerge: jest.fn().mockResolvedValue({ merged: false, reason: 'disabled' }),
+    handlePRMerged: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockCIFeedbackService = {
     handleCIFailure: jest.fn().mockResolvedValue({ handled: false }),
   };
@@ -45,6 +51,10 @@ describe('GithubWebhookProcessor', () => {
         {
           provide: GithubIssuesService,
           useValue: mockIssuesService,
+        },
+        {
+          provide: AutoMergeService,
+          useValue: mockAutoMergeService,
         },
         {
           provide: CodebaseIndexerService,
@@ -118,6 +128,7 @@ describe('GithubWebhookProcessor', () => {
         action: 'synchronize',
         prNumber: 15,
         repository: 'owner/repo',
+        merged: false,
       });
     });
 
