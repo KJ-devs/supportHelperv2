@@ -40,18 +40,9 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
-  // Theme detection
-  private prefersDarkMediaQuery: MediaQueryList | null = null;
-  private hostMutationObserver: MutationObserver | null = null;
-  private resolvedTheme: 'light' | 'dark' = 'light';
-
   // Keyboard and accessibility
-  private keyboardManager!: KeyboardManager;
-  private announcer!: ScreenReaderAnnouncer;
-
-  // Attention pulse timer
-  private attentionPulseTimer: number | null = null;
-  private attentionPulseDelay = 5000; // 5 seconds
+  private keyboardManager: KeyboardManager;
+  private announcer: ScreenReaderAnnouncer;
 
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
@@ -117,9 +108,6 @@ export class SupportHelperElement extends HTMLElement {
 
     // Initialize screen reader announcer
     this.announcer.initialize();
-
-    // Start attention pulse timer for FAB
-    this.startAttentionPulseTimer();
   }
 
   disconnectedCallback(): void {
@@ -612,7 +600,6 @@ export class SupportHelperElement extends HTMLElement {
 
       // Announce modal opened to screen readers
       this.announcer.announce('Support helper opened', 'polite');
-      this.stopAttentionPulseTimer();
     } else if (newState === 'idle' && prevState !== 'idle') {
       this.emit('sh:close', undefined);
 

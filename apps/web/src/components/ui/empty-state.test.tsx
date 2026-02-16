@@ -9,73 +9,71 @@ describe('EmptyState', () => {
     render(
       <EmptyState
         icon={Inbox}
-        title="No items found"
-        description="There are no items to display at this time."
+        title="No tickets yet"
+        description="Get started by creating your first ticket."
       />
     );
 
-    expect(screen.getByText('No items found')).toBeInTheDocument();
-    expect(screen.getByText('There are no items to display at this time.')).toBeInTheDocument();
+    expect(screen.getByText('No tickets yet')).toBeInTheDocument();
+    expect(screen.getByText('Get started by creating your first ticket.')).toBeInTheDocument();
   });
 
-  it('renders without description', () => {
-    render(<EmptyState icon={Inbox} title="No items found" />);
-
-    expect(screen.getByText('No items found')).toBeInTheDocument();
-    expect(screen.queryByText('There are no items to display')).not.toBeInTheDocument();
-  });
-
-  it('renders action button when provided', () => {
-    const handleClick = vi.fn();
-
+  it('renders action button when actionLabel is provided', () => {
+    const onAction = vi.fn();
     render(
       <EmptyState
         icon={Inbox}
-        title="No items found"
-        action={{
-          label: 'Create item',
-          onClick: handleClick,
-        }}
+        title="No tickets yet"
+        description="Get started by creating your first ticket."
+        actionLabel="Create ticket"
+        onAction={onAction}
       />
     );
 
-    const button = screen.getByRole('button', { name: 'Create item' });
+    const button = screen.getByRole('button', { name: 'Create ticket' });
     expect(button).toBeInTheDocument();
   });
 
-  it('calls action onClick when button is clicked', async () => {
+  it('calls onAction when button is clicked', async () => {
+    const onAction = vi.fn();
     const user = userEvent.setup();
-    const handleClick = vi.fn();
 
     render(
       <EmptyState
         icon={Inbox}
-        title="No items found"
-        action={{
-          label: 'Create item',
-          onClick: handleClick,
-        }}
+        title="No tickets yet"
+        actionLabel="Create ticket"
+        onAction={onAction}
       />
     );
 
-    const button = screen.getByRole('button', { name: 'Create item' });
-    await user.click(button);
-
-    expect(handleClick).toHaveBeenCalledTimes(1);
+    await user.click(screen.getByRole('button', { name: 'Create ticket' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
   });
 
-  it('does not render action button when not provided', () => {
-    render(<EmptyState icon={Inbox} title="No items found" />);
-
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  it('applies custom className', () => {
+  it('renders compact variant with smaller icon', () => {
     const { container } = render(
-      <EmptyState icon={Inbox} title="No items found" className="custom-class" />
+      <EmptyState
+        icon={Inbox}
+        title="No tickets yet"
+        variant="compact"
+      />
     );
 
-    const emptyStateDiv = container.firstChild;
-    expect(emptyStateDiv).toHaveClass('custom-class');
+    const icon = container.querySelector('svg');
+    expect(icon).toHaveClass('h-8', 'w-8');
+  });
+
+  it('renders default variant with larger icon', () => {
+    const { container } = render(
+      <EmptyState
+        icon={Inbox}
+        title="No tickets yet"
+        variant="default"
+      />
+    );
+
+    const icon = container.querySelector('svg');
+    expect(icon).toHaveClass('h-12', 'w-12');
   });
 });

@@ -3,41 +3,57 @@ import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-export interface EmptyStateProps {
+export interface EmptyStateProps extends React.HTMLAttributes<HTMLDivElement> {
   icon: LucideIcon;
   title: string;
   description?: string;
-  action?: {
-    label: string;
-    onClick: () => void;
-  };
-  className?: string;
+  actionLabel?: string;
+  actionHref?: string;
+  onAction?: () => void;
+  variant?: 'default' | 'compact';
 }
 
 export function EmptyState({
   icon: Icon,
   title,
   description,
-  action,
+  actionLabel,
+  actionHref,
+  onAction,
+  variant = 'default',
   className,
+  ...props
 }: EmptyStateProps) {
+  const handleAction = () => {
+    if (onAction) {
+      onAction();
+    } else if (actionHref) {
+      window.location.href = actionHref;
+    }
+  };
+
+  const iconSize = variant === 'compact' ? 'h-8 w-8' : 'h-12 w-12';
+  const paddingClass = variant === 'compact' ? 'py-8' : 'py-12';
+
   return (
     <div
       className={cn(
-        'flex flex-col items-center justify-center rounded-lg border border-dashed bg-muted/30 px-8 py-12 text-center',
+        'flex flex-col items-center justify-center text-center',
+        paddingClass,
         className
       )}
+      {...props}
     >
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-        <Icon className="h-8 w-8 text-muted-foreground" />
+      <div className="rounded-full bg-muted p-3 mb-4">
+        <Icon className={cn(iconSize, 'text-muted-foreground')} />
       </div>
-      <h3 className="mb-2 text-lg font-semibold">{title}</h3>
+      <h3 className="text-lg font-semibold mb-1">{title}</h3>
       {description && (
-        <p className="mb-6 max-w-sm text-sm text-muted-foreground">{description}</p>
+        <p className="text-sm text-muted-foreground max-w-sm mb-4">{description}</p>
       )}
-      {action && (
-        <Button onClick={action.onClick} variant="default">
-          {action.label}
+      {actionLabel && (
+        <Button onClick={handleAction} size={variant === 'compact' ? 'sm' : 'default'}>
+          {actionLabel}
         </Button>
       )}
     </div>

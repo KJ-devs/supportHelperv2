@@ -37,13 +37,7 @@ const roleVariants: Record<string, 'default' | 'secondary'> = {
 };
 
 export function TeamSettings() {
-  // TODO: Replace with actual API call
-  const hasTeamMembers = teamMembers.length > 0;
-
-  const handleInviteMember = () => {
-    // TODO: Implement invite modal
-    console.log('Open invite member modal');
-  };
+  const isEmpty = teamMembers.length === 0;
 
   return (
     <Card>
@@ -58,47 +52,45 @@ export function TeamSettings() {
         </Button>
       </CardHeader>
       <CardContent>
-        {!hasTeamMembers ? (
+        {isEmpty ? (
           <EmptyState
             icon={Users}
-            title="No team members yet"
-            description="Start building your support team by inviting members."
-            action={{
-              label: 'Invite first member',
-              onClick: handleInviteMember,
-            }}
+            title="No team members"
+            description="Start building your team by inviting members to collaborate."
+            actionLabel="Invite Member"
+            variant="compact"
           />
         ) : (
           <div className="space-y-4">
             {teamMembers.map(member => (
-              <div
-                key={member.id}
-                className="flex items-center justify-between rounded-lg border p-4"
-              >
-                <div className="flex items-center gap-4">
-                  <Avatar>
-                    <AvatarImage src={member.avatar || undefined} />
-                    <AvatarFallback>
-                      {member.name
-                        .split(' ')
-                        .map(n => n[0])
-                        .join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="font-medium">{member.name}</p>
-                    <p className="text-sm text-muted-foreground">{member.email}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <Badge variant={roleVariants[member.role]}>{member.role}</Badge>
-                  <Button variant="outline" size="sm">
-                    Edit
-                  </Button>
+            <div
+              key={member.id}
+              className="flex items-center justify-between rounded-lg border p-4"
+            >
+              <div className="flex items-center gap-4">
+                <Avatar>
+                  <AvatarImage src={member.avatar || undefined} />
+                  <AvatarFallback>
+                    {member.name
+                      .split(' ')
+                      .map(n => n[0])
+                      .join('')}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <p className="font-medium">{member.name}</p>
+                  <p className="text-sm text-muted-foreground">{member.email}</p>
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="flex items-center gap-4">
+                <Badge variant={roleVariants[member.role]}>{member.role}</Badge>
+                <Button variant="outline" size="sm">
+                  Edit
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
         )}
       </CardContent>
     </Card>

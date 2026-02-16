@@ -65,7 +65,7 @@ export function TicketsByTypeChart({ data, isLoading }: TicketsByTypeChartProps)
             icon={BarChart3}
             title="No data available"
             description="There are no tickets in the selected date range."
-            className="min-h-[200px]"
+            variant="compact"
           />
         ) : (
           <div className="h-[300px]">

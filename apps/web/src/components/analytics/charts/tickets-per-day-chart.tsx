@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { BarChart3 } from 'lucide-react';
 import type { TicketsPerDayData } from '@/types/analytics';
 import { format, parseISO } from 'date-fns';
 import { TrendingUp } from 'lucide-react';
@@ -42,7 +43,7 @@ export function TicketsPerDayChart({ data, isLoading }: TicketsPerDayChartProps)
     formattedDate: format(parseISO(item.date), 'MMM dd'),
   }));
 
-  const hasData = data && data.length > 0;
+  const isEmpty = !data || data.length === 0;
 
   return (
     <Card>
@@ -51,13 +52,22 @@ export function TicketsPerDayChart({ data, isLoading }: TicketsPerDayChartProps)
         <CardDescription>Daily ticket volume over the selected period</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          {!hasData ? (
-            <div className="flex h-full items-center justify-center">
-              <EmptyState
-                icon={TrendingUp}
-                title="No data available"
-                description="Analytics will appear here once you start receiving tickets."
+        {isEmpty ? (
+          <EmptyState
+            icon={BarChart3}
+            title="No data available"
+            description="There are no tickets in the selected date range."
+            variant="compact"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis
+                dataKey="formattedDate"
+                className="text-xs fill-muted-foreground"
+                tick={{ fill: 'hsl(var(--muted-foreground))' }}
               />
             </div>
           ) : (
@@ -95,6 +105,7 @@ export function TicketsPerDayChart({ data, isLoading }: TicketsPerDayChartProps)
             </ResponsiveContainer>
           )}
         </div>
+        )}
       </CardContent>
     </Card>
   );

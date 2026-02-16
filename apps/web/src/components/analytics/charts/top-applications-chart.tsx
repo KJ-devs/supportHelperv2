@@ -43,7 +43,7 @@ export function TopApplicationsChart({ data, isLoading }: TopApplicationsChartPr
             icon={AppWindow}
             title="No data available"
             description="There are no applications with tickets in the selected date range."
-            className="min-h-[200px]"
+            variant="compact"
           />
         ) : (
           <div className="h-[300px]">

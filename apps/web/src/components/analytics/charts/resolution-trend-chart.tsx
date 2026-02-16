@@ -56,7 +56,7 @@ export function ResolutionTrendChart({ data, isLoading }: ResolutionTrendChartPr
             icon={TrendingUp}
             title="No data available"
             description="There are no resolved tickets in the selected date range."
-            className="min-h-[200px]"
+            variant="compact"
           />
         ) : (
           <div className="h-[300px]">
