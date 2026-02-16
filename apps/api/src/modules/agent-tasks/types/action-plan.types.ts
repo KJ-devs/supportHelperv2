@@ -18,12 +18,18 @@ export interface ActionPlanFile {
 export type AgentTaskStatus =
   | 'analyzing'
   | 'plan_ready'
+  | 'plan_pending_review'
   | 'plan_approved'
   | 'generating'
   | 'code_ready'
+  | 'code_pending_review'
   | 'code_approved'
   | 'pushing'
   | 'pr_created'
   | 'completed'
   | 'failed'
   | 'expired';
+
+export type AgentMode = 'auto' | 'review_plan' | 'review_all';
+
+export type ReviewPhase = 'plan' | 'code';

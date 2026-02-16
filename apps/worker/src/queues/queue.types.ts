@@ -129,7 +129,8 @@ export type AgentJobType =
   | 'classify-ticket'
   | 'create-user-story' // Generate and create GitHub User Story from ticket
   | 'generate-action-plan' // Generate code-level action plan for a ticket (US-3.2)
-  | 'generate-code'; // Generate code changes, create branch and PR (US-3.3)
+  | 'generate-code' // Generate code changes, create branch and PR (US-3.3)
+  | 'push-code'; // Push approved code to GitHub after review (US-3.4)
 
 export interface AgentJobData {
   type: AgentJobType;
@@ -194,6 +195,8 @@ export interface AgentResult {
     prUrl?: string;
     prNumber?: number;
     branchName?: string;
+    // Validation mode metadata (US-3.4)
+    needsReview?: boolean;
   };
   error?: string;
 }
