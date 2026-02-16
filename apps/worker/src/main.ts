@@ -60,6 +60,7 @@ async function bootstrap() {
   logger.log('  - AgentWorker (agent-orchestration queue, 5 retries)');
   logger.log('  - IntegrationSyncWorker (integration-sync queue, 4 retries)');
   logger.log('  - BackupWorker (backup queue, 3 retries)');
+  logger.log('  - UsageSnapshotProcessor (usage-snapshot queue, monthly cron)');
   logger.log('  - DeadLetterWorker (dead-letter queue)');
   logger.log('Retry Strategy: Exponential backoff (1min, 5min, 15min, 1hr)');
   logger.log(`Concurrency: ${process.env.WORKER_CONCURRENCY || 10} jobs`);

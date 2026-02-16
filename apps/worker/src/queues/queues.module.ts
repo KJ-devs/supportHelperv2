@@ -10,6 +10,7 @@ export const QUEUE_NAMES = {
   INTEGRATION_SYNC: 'integration-sync',
   CODEBASE_INDEXING: 'codebase-indexing',
   BACKUP: 'backup',
+  USAGE_SNAPSHOT: 'usage-snapshot',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -136,6 +137,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
         },
         removeOnComplete: 100,
         removeOnFail: 500,
+      },
+    }),
+
+    // Usage Snapshot Queue (Monthly cron)
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.USAGE_SNAPSHOT,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 10000,
+        },
+        removeOnComplete: 10,
+        removeOnFail: 50,
       },
     }),
 
