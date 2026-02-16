@@ -123,10 +123,19 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthResponse> {
     const user = await this.prisma.user.findFirst({
       where: { email: dto.email },
+      include: { tenant: { include: { ssoConfig: true } } },
     });
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Check if password login is disabled for this tenant
+    if (user.tenant.ssoConfig?.enabled && user.tenant.ssoConfig?.disablePassword) {
+      throw new UnauthorizedException(
+        'Password login is disabled. Please use SSO login at: ' +
+        `/auth/sso/${user.tenant.ssoConfig.providerType}/login?tenant=${user.tenant.slug}`
+      );
     }
 
     const isPasswordValid = await bcrypt.compare(dto.password, user.passwordHash);
