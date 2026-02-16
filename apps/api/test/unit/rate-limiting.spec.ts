@@ -10,9 +10,13 @@ import { ThrottlerExceptionFilter } from '../../src/common/filters/throttler-exc
 import { AuthController } from '../../src/auth/auth.controller';
 import { AuthService } from '../../src/auth/auth.service';
 
-describe('Rate Limiting (Unit)', () => {
+// Skip if Redis is not available (integration test)
+const describeIfRedis = process.env.REDIS_URL || process.env.CI ? describe : describe.skip;
+
+describeIfRedis('Rate Limiting (Unit)', () => {
   let app: INestApplication;
   let redisClient: Redis;
+  let redisAvailable = false;
 
   // Mock AuthService
   const mockAuthService = {
@@ -40,7 +44,18 @@ describe('Rate Limiting (Unit)', () => {
       host: url.hostname,
       port: parseInt(url.port || '6379', 10),
       db: 15, // Use separate DB for tests
+      maxRetriesPerRequest: 3,
+      retryStrategy: (times) => (times > 3 ? null : Math.min(times * 100, 1000)),
     });
+
+    // Check if Redis is actually available
+    try {
+      await redisClient.ping();
+      redisAvailable = true;
+    } catch {
+      console.warn('Redis not available, skipping rate-limiting tests');
+      return;
+    }
 
     // Flush test DB before tests
     await redisClient.flushdb();
@@ -105,6 +120,10 @@ describe('Rate Limiting (Unit)', () => {
   });
 
   afterAll(async () => {
+    if (!redisAvailable) {
+      try { await redisClient.quit(); } catch { /* ignore */ }
+      return;
+    }
     await redisClient.flushdb();
     // app.close() triggers ThrottlerStorageRedisService.onApplicationShutdown()
     // which quits the shared Redis client, so no separate quit is needed

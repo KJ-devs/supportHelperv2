@@ -7,6 +7,7 @@ import { HealthModule } from './health';
 import { LoggerModule } from './common/logger/logger.module';
 
 // Config imports
+import anthropicConfig from './config/anthropic.config';
 import ffmpegConfig from './config/ffmpeg.config';
 import ocrConfig from './config/ocr.config';
 import openaiConfig from './config/openai.config';
@@ -37,7 +38,7 @@ import queueConfig from './config/queue.config';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
-      load: [ffmpegConfig, ocrConfig, openaiConfig, yoloConfig, queueConfig],
+      load: [anthropicConfig, ffmpegConfig, ocrConfig, openaiConfig, yoloConfig, queueConfig],
     }),
 
     // Logging

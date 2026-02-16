@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { PrismaService } from './prisma.service';
@@ -167,7 +168,9 @@ const HUMAN_REQUEST_KEYWORDS = [
 @Injectable()
 export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
-  private openaiClient!: OpenAI;
+  private anthropicClient: Anthropic | null = null;
+  private openaiClient: OpenAI | null = null;
+  private activeProvider: 'anthropic' | 'openai' = 'anthropic';
 
   // Configuration
   private readonly MAX_ATTEMPTS = 3;
@@ -182,9 +185,61 @@ export class AgentService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    this.openaiClient = new OpenAI({ apiKey });
-    this.logger.log('AgentService initialized with GPT-4o function calling');
+    const anthropicKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+
+    if (anthropicKey) {
+      this.anthropicClient = new Anthropic({ apiKey: anthropicKey });
+      this.activeProvider = 'anthropic';
+      this.logger.log('AgentService initialized with Claude (Anthropic)');
+    }
+
+    if (openaiKey) {
+      this.openaiClient = new OpenAI({ apiKey: openaiKey });
+      if (!anthropicKey) {
+        this.activeProvider = 'openai';
+        this.logger.log('AgentService initialized with OpenAI');
+      }
+    }
+
+    if (!anthropicKey && !openaiKey) {
+      this.logger.warn('No AI provider configured - agent features will be limited');
+    }
+  }
+
+  /**
+   * Unified chat completion that works with both providers
+   */
+  private async chatCompletion(options: {
+    systemPrompt: string;
+    userPrompt: string;
+    maxTokens?: number;
+  }): Promise<string> {
+    if (this.activeProvider === 'anthropic' && this.anthropicClient) {
+      const response = await this.anthropicClient.messages.create({
+        model: 'claude-sonnet-4-5-20250929',
+        max_tokens: options.maxTokens || 1024,
+        system: options.systemPrompt + '\nRespond ONLY with valid JSON.',
+        messages: [{ role: 'user', content: options.userPrompt }],
+      });
+      return response.content[0]?.type === 'text' ? response.content[0].text : '{}';
+    }
+
+    if (this.openaiClient) {
+      const response = await this.openaiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: options.systemPrompt },
+          { role: 'user', content: options.userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        max_tokens: options.maxTokens || 1024,
+      });
+      return response.choices[0]?.message?.content || '{}';
+    }
+
+    throw new Error('No AI provider configured');
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -664,7 +719,7 @@ export class AgentService implements OnModuleInit {
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Analyze ticket using GPT-4o
+   * Analyze ticket using Claude Sonnet 4.5
    */
   private async analyzeTicket(ticket: any): Promise<TicketAnalysisResult> {
     const prompt = `Analyze this support ticket and provide a structured analysis:
@@ -676,7 +731,7 @@ Severity: ${ticket.severity || 'Unknown'}
 AI Summary: ${ticket.aiSummary || 'Not available'}
 User Context: ${JSON.stringify(ticket.userContext || {})}
 
-Respond with JSON:
+Respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "summary": "Brief summary of the issue",
   "type": "bug|feature|question|documentation|performance|security|other",
@@ -687,19 +742,14 @@ Respond with JSON:
   "confidence": 0.0-1.0
 }`;
 
-    const response = await this.openaiClient.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: 'You are an expert technical support analyst.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
+    const content = await this.chatCompletion({
+      systemPrompt: 'You are an expert technical support analyst.',
+      userPrompt: prompt,
+      maxTokens: 1024,
     });
 
     try {
-      const content = response.choices[0]?.message?.content;
-      return JSON.parse(content || '{}');
+      return JSON.parse(this.extractJson(content));
     } catch {
       return {
         summary: ticket.title || '',
@@ -755,7 +805,7 @@ Respond with JSON:
   }
 
   /**
-   * Generate clarifying questions using GPT-4o
+   * Generate clarifying questions using Claude Sonnet 4.5
    */
   private async generateClarifyingQuestions(
     ticket: any,
@@ -767,21 +817,17 @@ Ticket: ${ticket.title}
 Description: ${ticket.description}
 Analysis: ${JSON.stringify(analysis)}
 
-Generate specific, helpful questions. Respond with JSON array: ["question1", "question2", "question3"]`;
+Generate specific, helpful questions. Respond ONLY with valid JSON (no markdown, no code blocks):
+{"questions": ["question1", "question2", "question3"]}`;
 
-    const response = await this.openaiClient.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: 'You are a helpful support agent gathering information.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
+    const content = await this.chatCompletion({
+      systemPrompt: 'You are a helpful support agent gathering information.',
+      userPrompt: prompt,
+      maxTokens: 512,
     });
 
     try {
-      const content = response.choices[0]?.message?.content;
-      const parsed = JSON.parse(content || '{"questions":[]}');
+      const parsed = JSON.parse(this.extractJson(content));
       return Array.isArray(parsed) ? parsed : parsed.questions || [];
     } catch {
       return ['Could you provide more details about when this issue occurs?'];
@@ -815,7 +861,7 @@ ${similarContext || 'None found'}
 Related GitHub issues:
 ${githubContext || 'None found'}
 
-Provide a helpful, actionable solution. Respond with JSON:
+Provide a helpful, actionable solution. Respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "solution": "Detailed solution explanation",
   "confidence": 0.0-1.0,
@@ -823,22 +869,14 @@ Provide a helpful, actionable solution. Respond with JSON:
   "sources": ["similar ticket ID or GitHub issue"]
 }`;
 
-    const response = await this.openaiClient.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are an expert technical support agent providing solutions.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.3,
+    const content = await this.chatCompletion({
+      systemPrompt: 'You are an expert technical support agent providing solutions.',
+      userPrompt: prompt,
+      maxTokens: 2048,
     });
 
     try {
-      const content = response.choices[0]?.message?.content;
-      return JSON.parse(content || '{}');
+      return JSON.parse(this.extractJson(content));
     } catch {
       return {
         solution:
@@ -874,7 +912,7 @@ Determine:
 2. Do we need more clarifying questions?
 3. What is our confidence in understanding the issue?
 
-Respond with JSON:
+Respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "needsMoreInfo": true/false,
   "hasSolution": true/false,
@@ -882,19 +920,14 @@ Respond with JSON:
   "confidence": 0.0-1.0
 }`;
 
-    const response = await this.openaiClient.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: 'You are analyzing user responses for support tickets.' },
-        { role: 'user', content: prompt },
-      ],
-      response_format: { type: 'json_object' },
-      temperature: 0.2,
+    const content = await this.chatCompletion({
+      systemPrompt: 'You are analyzing user responses for support tickets.',
+      userPrompt: prompt,
+      maxTokens: 512,
     });
 
     try {
-      const content = response.choices[0]?.message?.content;
-      return JSON.parse(content || '{}');
+      return JSON.parse(this.extractJson(content));
     } catch {
       return { needsMoreInfo: true, hasSolution: false, confidence: 0.5 };
     }
@@ -1379,6 +1412,21 @@ Respond with JSON:
         this.logger.error(`Failed to send escalation notification: ${getErrorMessage(error)}`);
       }
     }
+  }
+
+  /**
+   * Extract JSON from text response (handles markdown code blocks)
+   */
+  private extractJson(text: string): string {
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch?.[1]) {
+      return codeBlockMatch[1].trim();
+    }
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return jsonMatch[0];
+    }
+    return text;
   }
 
   private sleep(ms: number): Promise<void> {

@@ -71,7 +71,16 @@ export class AIService {
       }
     }
 
-    // Fall back to system-wide config from env vars
+    // Fall back to system-wide config from env vars (Anthropic preferred, OpenAI as fallback)
+    const anthropicKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+    if (anthropicKey) {
+      return {
+        provider: 'anthropic',
+        apiKey: anthropicKey,
+        model: DEFAULT_MODELS.anthropic,
+      };
+    }
+
     const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (openaiKey) {
       return {

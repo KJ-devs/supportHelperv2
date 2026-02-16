@@ -2,23 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { AiConfigService } from '../../../src/modules/ai-config/ai-config.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-
-jest.mock('@anthropic-ai/sdk', () => {
-  return {
-    __esModule: true,
-    default: jest.fn().mockImplementation(() => ({
-      messages: {
-        create: jest.fn().mockResolvedValue({
-          content: [{ type: 'text', text: 'ok' }],
-        }),
-      },
-    })),
-  };
-});
+import { AIProviderFactory } from '../../../src/ai/providers/ai-provider.factory';
 
 describe('AiConfigService', () => {
   let service: AiConfigService;
   let prisma: jest.Mocked<PrismaService>;
+  let providerFactory: jest.Mocked<AIProviderFactory>;
 
   const tenantId = 'tenant-123';
   // Mock data simulates values after Prisma middleware auto-decryption
@@ -47,11 +36,20 @@ describe('AiConfigService', () => {
             },
           },
         },
+        {
+          provide: AIProviderFactory,
+          useValue: {
+            create: jest.fn().mockReturnValue({
+              validateConfig: jest.fn().mockResolvedValue(true),
+            }),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<AiConfigService>(AiConfigService);
     prisma = module.get(PrismaService);
+    providerFactory = module.get(AIProviderFactory);
   });
 
   it('should be defined', () => {
@@ -95,8 +93,9 @@ describe('AiConfigService', () => {
       expect(prisma.aiConfig.create).toHaveBeenCalledWith({
         data: {
           tenantId,
+          provider: 'anthropic',
           encryptedApiKey: 'sk-ant-api03-new-key',
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-5-20250929',
           settings: {},
         },
       });
@@ -124,7 +123,7 @@ describe('AiConfigService', () => {
 
       expect(prisma.aiConfig.update).toHaveBeenCalledWith({
         where: { tenantId },
-        data: { model: 'claude-opus-4-20250514' },
+        data: { model: 'claude-opus-4-20250514', settings: {} },
       });
       expect(result.model).toBe('claude-opus-4-20250514');
     });
@@ -140,7 +139,7 @@ describe('AiConfigService', () => {
       // Plaintext key is passed; Prisma middleware auto-encrypts on write
       expect(prisma.aiConfig.update).toHaveBeenCalledWith({
         where: { tenantId },
-        data: { encryptedApiKey: 'sk-ant-api03-updated-key' },
+        data: { encryptedApiKey: 'sk-ant-api03-updated-key', settings: {} },
       });
     });
 
@@ -164,15 +163,13 @@ describe('AiConfigService', () => {
       const result = await service.validateKey('sk-ant-api03-valid-key');
 
       expect(result.valid).toBe(true);
+      expect(providerFactory.create).toHaveBeenCalled();
     });
 
     it('should return invalid for a 401 error', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
-      Anthropic.mockImplementationOnce(() => ({
-        messages: {
-          create: jest.fn().mockRejectedValue({ status: 401, message: 'Invalid API key' }),
-        },
-      }));
+      (providerFactory.create as jest.Mock).mockReturnValueOnce({
+        validateConfig: jest.fn().mockRejectedValue({ status: 401, message: 'Invalid API key' }),
+      });
 
       const result = await service.validateKey('sk-ant-api03-bad-key');
 
@@ -181,16 +178,23 @@ describe('AiConfigService', () => {
     });
 
     it('should return valid for a 429 rate limit error', async () => {
-      const Anthropic = require('@anthropic-ai/sdk').default;
-      Anthropic.mockImplementationOnce(() => ({
-        messages: {
-          create: jest.fn().mockRejectedValue({ status: 429, message: 'Rate limited' }),
-        },
-      }));
+      (providerFactory.create as jest.Mock).mockReturnValueOnce({
+        validateConfig: jest.fn().mockRejectedValue({ status: 429, message: 'Rate limited' }),
+      });
 
       const result = await service.validateKey('sk-ant-api03-rate-limited');
 
       expect(result.valid).toBe(true);
+    });
+
+    it('should return invalid when validateConfig returns false', async () => {
+      (providerFactory.create as jest.Mock).mockReturnValueOnce({
+        validateConfig: jest.fn().mockResolvedValue(false),
+      });
+
+      const result = await service.validateKey('sk-ant-api03-invalid');
+
+      expect(result.valid).toBe(false);
     });
   });
 
