@@ -601,3 +601,16 @@ model TicketMessage {
   @@index([ticketId, createdAt])
   @@map("ticket_messages")
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// SYSTEM CONFIG
+// ═══════════════════════════════════════════════════════════════════════
+
+model SystemConfig {
+  key       String   @id @db.VarChar(255)
+  value     Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}

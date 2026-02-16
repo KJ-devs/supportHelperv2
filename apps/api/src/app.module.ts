@@ -54,6 +54,9 @@ import { AgentTasksModule } from './modules/agent-tasks/agent-tasks.module';
 // Notifications
 import { NotificationModule } from './modules/notifications/notification.module';
 
+// Setup Wizard
+import { SetupModule } from './modules/setup/setup.module';
+
 /**
  * Root Application Module
  *
@@ -172,6 +175,9 @@ import { NotificationModule } from './modules/notifications/notification.module'
 
     // Notifications
     NotificationModule,
+
+    // Setup Wizard
+    SetupModule,
   ],
   providers: [
     // Global rate limiting guard
