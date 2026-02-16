@@ -47,7 +47,7 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Bienvenue, {user.name || user.email}!
+            Bienvenue, {user.name || user.email}! 👋
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Voici un aperçu rapide de votre plateforme de support
@@ -81,28 +81,22 @@ export default function DashboardPage() {
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Accès rapide</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {quickLinks.map((link) => {
-              const Icon = link.icon;
-              return (
-                <Link key={link.href} href={link.href}>
-                  <Card className="h-full hover:shadow-lg dark:hover:shadow-gray-700/20 transition-shadow cursor-pointer">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {link.title}
-                      </h3>
-                    </div>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{link.description}</p>
-                    <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">{link.stats}</span>
-                      <span className="text-blue-600 dark:text-blue-400 text-sm font-medium flex items-center gap-1">
-                        Voir <ArrowRight className="w-4 h-4" aria-hidden="true" />
-                      </span>
-                    </div>
-                  </Card>
-                </Link>
-              );
-            })}
+            {quickLinks.map((link) => (
+              <Link key={link.href} href={link.href}>
+                <Card className="h-full hover:shadow-lg dark:hover:shadow-gray-700/20 transition-shadow cursor-pointer">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    {link.title}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">{link.description}</p>
+                  <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">{link.stats}</span>
+                    <span className="text-blue-600 dark:text-blue-400 text-sm font-medium">
+                      Voir →
+                    </span>
+                  </div>
+                </Card>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
