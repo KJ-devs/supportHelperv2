@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -25,10 +25,13 @@ export class ConnectRepoDto {
 }
 
 export class UpdateProjectGithubSettingsDto {
-  @ApiPropertyOptional({ description: 'GitHub agent mode (auto, manual, disabled)' })
+  @ApiPropertyOptional({
+    description: 'Agent autonomy mode: auto (no review), review_plan (review before code gen), review_all (review plan and code)',
+    enum: ['auto', 'review_plan', 'review_all'],
+  })
   @IsOptional()
-  @IsString()
-  agentMode?: string;
+  @IsEnum(['auto', 'review_plan', 'review_all'])
+  agentMode?: 'auto' | 'review_plan' | 'review_all';
 
   @ApiPropertyOptional({ description: 'Issue template name' })
   @IsOptional()

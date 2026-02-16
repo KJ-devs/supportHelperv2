@@ -10,18 +10,37 @@ import { AgentTasksController } from './agent-tasks.controller';
 import { CodeAnalysisAgentService } from './services/code-analysis-agent.service';
 import { CodeGenerationAgentService } from './services/code-generation-agent.service';
 import { CIFeedbackService } from './services/ci-feedback.service';
+import { ValidationModeService } from './services/validation-mode.service';
+import { ReviewExpiryScheduler, ReviewExpiryProcessor } from './services/review-expiry.service';
 
 @Module({
   imports: [
     PrismaModule,
     AiConfigModule,
-    BullModule.registerQueue({ name: 'agent-orchestration' }),
+    BullModule.registerQueue(
+      { name: 'agent-orchestration' },
+      { name: 'review-expiry' },
+    ),
     forwardRef(() => CodebaseIndexModule),
     forwardRef(() => GithubModule),
     forwardRef(() => TicketsModule),
   ],
   controllers: [AgentTasksController],
-  providers: [AgentTasksService, CodeAnalysisAgentService, CodeGenerationAgentService, CIFeedbackService],
-  exports: [AgentTasksService, CodeAnalysisAgentService, CodeGenerationAgentService, CIFeedbackService],
+  providers: [
+    AgentTasksService,
+    CodeAnalysisAgentService,
+    CodeGenerationAgentService,
+    CIFeedbackService,
+    ValidationModeService,
+    ReviewExpiryScheduler,
+    ReviewExpiryProcessor,
+  ],
+  exports: [
+    AgentTasksService,
+    CodeAnalysisAgentService,
+    CodeGenerationAgentService,
+    CIFeedbackService,
+    ValidationModeService,
+  ],
 })
 export class AgentTasksModule {}

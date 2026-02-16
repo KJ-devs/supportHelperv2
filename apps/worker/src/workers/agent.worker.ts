@@ -175,6 +175,8 @@ export class AgentWorker extends WorkerHost {
     private readonly pullRequestService: PullRequestService,
     @InjectQueue('dead-letter')
     private readonly deadLetterQueue: Queue,
+    @InjectQueue(QUEUE_NAMES.AGENT_ORCHESTRATION)
+    private readonly agentQueue: Queue,
   ) {
     super();
   }
@@ -218,6 +220,9 @@ export class AgentWorker extends WorkerHost {
 
         case 'generate-code':
           return await this.handleGenerateCode(job);
+
+        case 'push-code':
+          return await this.handlePushCode(job);
 
         default:
           throw new Error(`Unknown agent job type: ${type}`);
@@ -1080,19 +1085,60 @@ Keep responses concise but thorough.`,
 
     await job.updateProgress(90);
 
-    // 9. Store action plan and update status to plan_ready
-    await this.prisma.agentTask.update({
-      where: { id: agentTaskId },
-      data: {
-        actionPlan: actionPlan as any,
-        status: 'plan_ready',
-      },
-    });
+    // 9. Check validation mode to determine next status
+    const needsPlanReview = await this.shouldWaitForReview(applicationId!, 'plan');
 
-    await this.appendAgentTaskLog(agentTaskId, {
-      step: 'completed',
-      message: 'Action plan generated and ready for review',
-    });
+    if (needsPlanReview) {
+      // Set to plan_pending_review and wait for human approval
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: {
+          actionPlan: actionPlan as any,
+          status: 'plan_pending_review',
+          reviewRequestedAt: new Date(),
+        },
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'completed',
+        message: 'Action plan generated. Waiting for human review before proceeding.',
+      });
+
+      this.logger.log(`Action plan for task ${agentTaskId} requires review (plan_pending_review)`);
+    } else {
+      // Auto mode: set plan_ready, then auto-approve and queue code generation
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: {
+          actionPlan: actionPlan as any,
+          status: 'plan_approved',
+        },
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'completed',
+        message: 'Action plan generated and auto-approved (auto mode). Proceeding to code generation.',
+      });
+
+      // Auto-queue code generation
+      await this.agentQueue.add(
+        'generate-code',
+        {
+          type: 'generate-code' as const,
+          ticketId,
+          tenantId,
+          applicationId,
+          agentTaskId,
+        },
+        {
+          priority: 5,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 30000 },
+        },
+      );
+
+      this.logger.log(`Action plan auto-approved for task ${agentTaskId}, code generation queued`);
+    }
 
     await job.updateProgress(100);
 
@@ -1107,6 +1153,7 @@ Keep responses concise but thorough.`,
         agentTaskId,
         filesCount: actionPlan.files.length,
         complexity: actionPlan.estimatedComplexity,
+        needsReview: needsPlanReview,
       } as any,
     };
   }
@@ -1339,13 +1386,78 @@ Keep responses concise but thorough.`,
         message: `Generated code for ${generatedFiles.length} files`,
       });
 
-      // Update status to code_ready
+      await job.updateProgress(65);
+
+      // US-3.4: Check if code review is needed before pushing
+      const needsCodeReview = await this.shouldWaitForReview(applicationId!, 'code');
+
+      if (needsCodeReview) {
+        // Persist generated files so push-code can pick them up later
+        await this.prisma.agentTask.update({
+          where: { id: agentTaskId },
+          data: {
+            status: 'code_pending_review',
+            reviewRequestedAt: new Date(),
+          },
+        });
+
+        await this.appendAgentTaskLog(agentTaskId, {
+          step: 'awaiting_code_review',
+          message: 'Code generated. Waiting for human review before pushing.',
+          generatedFiles: generatedFiles.map((f) => ({
+            filePath: f.filePath,
+            operation: f.operation,
+            contentLength: f.content.length,
+          })),
+        });
+
+        // Store generated files in a dedicated JSON field within execution log
+        // The push-code handler will re-generate or use the same job data
+        const currentLog = (
+          (
+            await this.prisma.agentTask.findUnique({
+              where: { id: agentTaskId },
+              select: { executionLog: true },
+            })
+          )?.executionLog as any[]
+        ) || [];
+
+        await this.prisma.agentTask.update({
+          where: { id: agentTaskId },
+          data: {
+            executionLog: [
+              ...currentLog,
+              {
+                step: 'generated_files_snapshot',
+                timestamp: new Date().toISOString(),
+                files: generatedFiles,
+              },
+            ],
+          },
+        });
+
+        this.logger.log(`Code for task ${agentTaskId} requires review (code_pending_review)`);
+
+        await job.updateProgress(100);
+
+        return {
+          success: true,
+          type: 'generate-code',
+          ticketId,
+          response: `Code generated for ${generatedFiles.length} files. Waiting for review.`,
+          metadata: {
+            agentTaskId,
+            filesCount: generatedFiles.length,
+            needsReview: true,
+          } as any,
+        };
+      }
+
+      // Auto mode: proceed directly to push
       await this.prisma.agentTask.update({
         where: { id: agentTaskId },
-        data: { status: 'code_ready' },
+        data: { status: 'code_approved' },
       });
-
-      await job.updateProgress(65);
 
       // Read settings from ProjectGithubConfig
       const gitSettings = (githubConfig.settings as any) || {};
@@ -1575,6 +1687,217 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
 
     // If no code block found, use the raw response (trimmed)
     return response.trim();
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Push Code: Create Branch & PR after code review approval (US-3.4)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Push previously generated code to GitHub after code review approval.
+   * Reads generated files from the execution log snapshot.
+   */
+  private async handlePushCode(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, applicationId, agentTaskId } = job.data;
+
+    if (!agentTaskId || !applicationId) {
+      throw new Error('agentTaskId and applicationId are required for push-code');
+    }
+
+    this.logger.log(`Pushing approved code for task ${agentTaskId}`);
+    await job.updateProgress(5);
+
+    // 1. Set status to pushing
+    await this.prisma.agentTask.update({
+      where: { id: agentTaskId },
+      data: { status: 'pushing' },
+    });
+
+    try {
+      // 2. Load task with full context
+      const agentTask = await this.prisma.agentTask.findUnique({
+        where: { id: agentTaskId },
+        include: {
+          ticket: {
+            include: {
+              application: {
+                include: {
+                  githubConfig: {
+                    include: { installation: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!agentTask) {
+        throw new Error(`Agent task ${agentTaskId} not found`);
+      }
+
+      const { ticket } = agentTask;
+      const githubConfig = ticket.application?.githubConfig;
+
+      if (!githubConfig) {
+        throw new Error('No GitHub configuration found');
+      }
+
+      // 3. Retrieve generated files from execution log snapshot
+      const executionLog = (agentTask.executionLog as any[]) || [];
+      const snapshot = executionLog
+        .reverse()
+        .find((entry) => entry.step === 'generated_files_snapshot');
+
+      if (!snapshot?.files?.length) {
+        throw new Error('No generated files snapshot found in execution log');
+      }
+
+      const generatedFiles = snapshot.files as Array<{
+        filePath: string;
+        content: string;
+        operation: 'modify' | 'create' | 'delete';
+      }>;
+
+      await job.updateProgress(20);
+
+      // 4. Get Octokit
+      const { owner, repo, defaultBranch } = githubConfig;
+      const connection = await this.prisma.githubConnection.findFirst({
+        where: {
+          tenantId,
+          installationId: BigInt(githubConfig.installation.installationId),
+        },
+      });
+
+      if (!connection?.accessToken) {
+        throw new Error('No GitHub access token found');
+      }
+
+      const octokit = new Octokit({ auth: connection.accessToken });
+      const actionPlan = agentTask.actionPlan as any;
+      const gitSettings = (githubConfig.settings as any) || {};
+
+      // 5. Create branch
+      const { branchName, baseSha } = await this.gitAutomationService.createBranch({
+        octokit,
+        owner,
+        repo,
+        defaultBranch,
+        ticketId,
+        ticketTitle: ticket.title || 'untitled',
+        settings: gitSettings,
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'branch_created',
+        message: `Created branch ${branchName} from ${defaultBranch}`,
+      });
+
+      await job.updateProgress(50);
+
+      // 6. Commit
+      const changeType = actionPlan?.files?.[0]?.changeType || 'bug_fix';
+      const { commitSha } = await this.gitAutomationService.atomicCommit({
+        octokit,
+        owner,
+        repo,
+        branchName,
+        baseSha,
+        files: generatedFiles,
+        ticketId,
+        ticketTitle: ticket.title || 'AI-generated changes',
+        agentTaskId,
+        changeType,
+        settings: gitSettings,
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'committed',
+        message: `Committed ${generatedFiles.length} files (${commitSha.substring(0, 7)})`,
+      });
+
+      await job.updateProgress(75);
+
+      // 7. Create PR
+      const prResult = await this.pullRequestService.createOrUpdatePR({
+        octokit,
+        owner,
+        repo,
+        branchName,
+        defaultBranch,
+        ticketId,
+        ticket: {
+          title: ticket.title || undefined,
+          description: ticket.description || undefined,
+          type: ticket.type || undefined,
+          severity: ticket.severity || undefined,
+          aiSummary: ticket.aiSummary || undefined,
+        },
+        actionPlan: {
+          summary: actionPlan?.summary || 'AI-generated changes.',
+          rootCause: actionPlan?.rootCause || 'See ticket for details.',
+          testingStrategy: actionPlan?.testingStrategy,
+          files: actionPlan?.files || [],
+        },
+        generatedFiles: generatedFiles.map((f) => ({
+          filePath: f.filePath,
+          operation: f.operation,
+        })),
+        agentTaskId,
+        settings: {
+          reviewers: gitSettings.reviewers,
+          autoLabel: gitSettings.autoLabel !== false,
+        },
+      });
+
+      await job.updateProgress(95);
+
+      // 8. Update status to pr_created
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: {
+          status: 'pr_created',
+          prNumber: prResult.prNumber,
+          prUrl: prResult.prUrl,
+          branchName,
+        },
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'completed',
+        message: `Pull request ${prResult.created ? 'created' : 'updated'}: ${prResult.prUrl}`,
+        prUrl: prResult.prUrl,
+        prNumber: prResult.prNumber,
+        branchName,
+      });
+
+      await job.updateProgress(100);
+
+      this.logger.log(`PR #${prResult.prNumber} created for task ${agentTaskId}: ${prResult.prUrl}`);
+
+      return {
+        success: true,
+        type: 'push-code',
+        ticketId,
+        response: `Pull request #${prResult.prNumber} created: ${prResult.prUrl}`,
+        metadata: {
+          agentTaskId,
+          prUrl: prResult.prUrl,
+          prNumber: prResult.prNumber,
+          branchName,
+        } as any,
+      };
+    } catch (error) {
+      const currentTask = await this.prisma.agentTask.findUnique({
+        where: { id: agentTaskId },
+        select: { status: true },
+      });
+      if (currentTask && currentTask.status !== 'failed') {
+        await this.setAgentTaskError(agentTaskId, getErrorMessage(error));
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1870,6 +2193,43 @@ Rules:
         ? parsed.estimatedComplexity
         : 'medium',
     };
+  }
+
+  /**
+   * US-3.4: Check whether the agent pipeline should wait for human review at a given phase.
+   * Reads the agentMode from ProjectGithubConfig.settings.
+   */
+  private async shouldWaitForReview(
+    applicationId: string,
+    phase: 'plan' | 'code',
+  ): Promise<boolean> {
+    try {
+      const config = await this.prisma.projectGithubConfig.findUnique({
+        where: { applicationId },
+      });
+
+      if (!config) {
+        return false; // No config = auto mode
+      }
+
+      const settings = (config.settings as Record<string, any>) ?? {};
+      const mode = settings.agentMode;
+
+      if (mode === 'review_all') {
+        return true;
+      }
+
+      if (mode === 'review_plan' && phase === 'plan') {
+        return true;
+      }
+
+      return false; // auto mode or review_plan with code phase
+    } catch (error) {
+      this.logger.warn(
+        `Failed to check validation mode for app ${applicationId}: ${getErrorMessage(error)}`,
+      );
+      return false; // Fail open to auto mode
+    }
   }
 
   /**
