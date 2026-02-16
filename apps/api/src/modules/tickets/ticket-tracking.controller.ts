@@ -54,6 +54,8 @@ export class TicketTrackingController {
       'agent_analysis_started',
       'agent_plan_ready',
       'agent_plan_approved',
+      'resolution_sent',
+      'ticket_reopened',
     ];
 
     const filteredEvents = ticket.ticketEvents.filter((e) =>
