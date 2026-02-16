@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
+import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuthService } from '../../auth/auth.service';
 import {
@@ -165,41 +166,91 @@ export class SetupService {
   }
 
   /**
-   * Test SMTP connection
-   * Currently validates format only - can be extended with actual SMTP connection test
+   * Test SMTP connection by verifying transport connectivity
    */
   async testSmtp(dto: SmtpConfigDto): Promise<{ success: boolean; error?: string }> {
+    // Basic validation
+    if (!dto.host || !dto.port || !dto.fromEmail) {
+      return {
+        success: false,
+        error: 'Missing required SMTP configuration fields',
+      };
+    }
+
+    if (dto.port < 1 || dto.port > 65535) {
+      return {
+        success: false,
+        error: 'Invalid SMTP port number',
+      };
+    }
+
+    const transport = nodemailer.createTransport({
+      host: dto.host,
+      port: dto.port,
+      secure: dto.secure ?? dto.port === 465,
+      auth: dto.username
+        ? { user: dto.username, pass: dto.password }
+        : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 10_000,
+    });
+
     try {
-      // Basic validation
-      if (!dto.host || !dto.port || !dto.fromEmail) {
-        return {
-          success: false,
-          error: 'Missing required SMTP configuration fields',
-        };
+      await transport.verify();
+      this.logger.log(`SMTP connection test succeeded for ${dto.host}:${dto.port}`);
+
+      // Optionally send a test email to the fromEmail address
+      try {
+        await transport.sendMail({
+          from: dto.fromEmail,
+          to: dto.fromEmail,
+          subject: 'Support Helper - SMTP Test',
+          text: 'This is a test email from the Support Helper setup wizard. Your SMTP configuration is working correctly.',
+        });
+        this.logger.log(`SMTP test email sent to ${dto.fromEmail}`);
+      } catch (sendError) {
+        // Connection works but send failed - still report success for the connection test
+        this.logger.warn(
+          `SMTP connection verified but test email failed: ${sendError instanceof Error ? sendError.message : 'Unknown error'}`,
+        );
       }
-
-      // Validate port range
-      if (dto.port < 1 || dto.port > 65535) {
-        return {
-          success: false,
-          error: 'Invalid SMTP port number',
-        };
-      }
-
-      // TODO: Add actual SMTP connection test using nodemailer
-      // For now, just validate the configuration format
-
-      this.logger.log('SMTP configuration validated (format check only)');
 
       return { success: true };
     } catch (error) {
-      this.logger.error(`SMTP test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const message = error instanceof Error ? error.message : 'SMTP test failed';
+      const code = (error as NodeJS.ErrnoException).code;
+      this.logger.error(`SMTP connection test failed: ${message}`);
 
       return {
         success: false,
-        error: error instanceof Error ? error.message : 'SMTP test failed',
+        error: this.mapSmtpError(code, message),
       };
+    } finally {
+      transport.close();
     }
+  }
+
+  private mapSmtpError(code: string | undefined, message: string): string {
+    if (code === 'ETIMEDOUT' || code === 'ESOCKET') {
+      return 'Connection timed out. Verify the SMTP host and port are correct and reachable.';
+    }
+    if (code === 'ECONNREFUSED') {
+      return 'Connection refused. The SMTP server is not accepting connections on this host/port.';
+    }
+    if (code === 'ENOTFOUND') {
+      return `Hostname not found. Verify that "${message.split("'")[1] || 'the host'}" is correct.`;
+    }
+    if (code === 'EAUTH' || message.includes('Invalid login') || message.includes('Authentication')) {
+      return 'Authentication failed. Check your SMTP username and password.';
+    }
+    if (message.includes('self-signed') || message.includes('UNABLE_TO_VERIFY_LEAF_SIGNATURE') || message.includes('certificate')) {
+      return 'TLS certificate error. The server certificate could not be verified. Check the secure/TLS settings.';
+    }
+    if (code === 'ECONNRESET') {
+      return 'Connection was reset by the server. This may indicate a TLS/SSL mismatch - try toggling the secure setting.';
+    }
+    return message;
   }
 
   /**
