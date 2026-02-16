@@ -478,6 +478,12 @@ model AgentTask {
   startedAt       DateTime? @map("started_at")
   completedAt     DateTime? @map("completed_at")
   error           String?   @db.Text
+
+  // PR tracking
+  prNumber        Int?      @map("pr_number")
+  prUrl           String?   @map("pr_url") @db.Text
+  branchName      String?   @map("branch_name") @db.VarChar(255)
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
