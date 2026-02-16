@@ -5,6 +5,7 @@ import type { AgentTask } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
 import { SeverityBadge } from '@/components/ui';
+import { Bot } from 'lucide-react';
 
 interface AgentTaskTableProps {
   tasks: AgentTask[];
@@ -46,7 +47,7 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
   if (tasks.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-5xl mb-4">🤖</div>
+        <Bot className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
           No agent tasks found
         </h3>

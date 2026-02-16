@@ -8,6 +8,21 @@
 import { useState } from 'react';
 import type { Application } from '@/lib/types/application';
 import { Badge, Button } from '@/components/ui';
+import {
+  Smartphone,
+  Monitor,
+  Globe,
+  Eye,
+  EyeOff,
+  Copy,
+  Check,
+  Video,
+  FileText,
+  Bot,
+  Edit,
+  RotateCw,
+  Trash2,
+} from 'lucide-react';
 
 interface ApplicationCardProps {
   application: Application;
@@ -49,9 +64,24 @@ export function ApplicationCard({
           </h3>
           <div className="flex items-center gap-2">
             <Badge variant="default">
-              {application.platform === 'web' && '🌐 Web'}
-              {application.platform === 'mobile' && '📱 Mobile'}
-              {application.platform === 'desktop' && '💻 Desktop'}
+              {application.platform === 'web' && (
+                <span className="flex items-center gap-1">
+                  <Globe className="w-3 h-3" aria-hidden="true" />
+                  Web
+                </span>
+              )}
+              {application.platform === 'mobile' && (
+                <span className="flex items-center gap-1">
+                  <Smartphone className="w-3 h-3" aria-hidden="true" />
+                  Mobile
+                </span>
+              )}
+              {application.platform === 'desktop' && (
+                <span className="flex items-center gap-1">
+                  <Monitor className="w-3 h-3" aria-hidden="true" />
+                  Desktop
+                </span>
+              )}
               {!['web', 'mobile', 'desktop'].includes(application.platform) && application.platform}
             </Badge>
             <span className="text-sm text-gray-500 dark:text-gray-400">{createdAt}</span>
@@ -73,16 +103,18 @@ export function ApplicationCard({
             variant="ghost"
             onClick={() => setShowKey(!showKey)}
             title={showKey ? 'Masquer' : 'Afficher'}
+            aria-label={showKey ? 'Masquer la clé' : 'Afficher la clé'}
           >
-            {showKey ? '👁️' : '🔒'}
+            {showKey ? <Eye className="w-4 h-4" aria-hidden="true" /> : <EyeOff className="w-4 h-4" aria-hidden="true" />}
           </Button>
           <Button
             size="sm"
             variant="secondary"
             onClick={handleCopyKey}
             title="Copier"
+            aria-label="Copier la clé SDK"
           >
-            {copied ? '✅' : '📋'}
+            {copied ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
           </Button>
         </div>
       </div>
@@ -102,13 +134,22 @@ export function ApplicationCard({
         <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
           <div className="flex flex-wrap gap-2">
             {application.settings.recordVideo && (
-              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">🎥 Vidéo</span>
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
+                <Video className="w-3 h-3" aria-hidden="true" />
+                Vidéo
+              </span>
             )}
             {application.settings.captureLogs && (
-              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">📝 Logs</span>
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
+                <FileText className="w-3 h-3" aria-hidden="true" />
+                Logs
+              </span>
             )}
             {application.settings.autoAssign && (
-              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">🤖 Auto-assign</span>
+              <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
+                <Bot className="w-3 h-3" aria-hidden="true" />
+                Auto-assign
+              </span>
             )}
           </div>
         </div>
@@ -120,25 +161,28 @@ export function ApplicationCard({
           size="sm"
           variant="secondary"
           onClick={() => onEdit(application)}
-          className="flex-1"
+          className="flex-1 flex items-center justify-center gap-1"
         >
-          ✏️ Modifier
+          <Edit className="w-4 h-4" aria-hidden="true" />
+          Modifier
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => onRegenerateKey(application)}
           title="Régénérer la clé"
+          aria-label="Régénérer la clé SDK"
         >
-          🔄
+          <RotateCw className="w-4 h-4" aria-hidden="true" />
         </Button>
         <Button
           size="sm"
           variant="danger"
           onClick={() => onDelete(application)}
           title="Supprimer"
+          aria-label="Supprimer l'application"
         >
-          🗑️
+          <Trash2 className="w-4 h-4" aria-hidden="true" />
         </Button>
       </div>
     </div>

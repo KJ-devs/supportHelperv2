@@ -47,7 +47,7 @@ const PROVIDER_INFO = {
   ollama: {
     name: 'Ollama (Local)',
     description: 'Run AI models locally on your own hardware for privacy',
-    icon: '🖥️',
+    icon: 'Monitor',
     requiresApiKey: false,
     defaultEndpoint: 'http://localhost:11434',
   },

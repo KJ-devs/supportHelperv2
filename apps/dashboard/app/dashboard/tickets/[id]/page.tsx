@@ -15,6 +15,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TicketDetail } from '@/components/tickets/TicketDetail';
 import { TicketTimeline } from '@/components/tickets/TicketTimeline';
 import { PageLoader, Button } from '@/components/ui';
+import { AlertTriangle, Trash2 } from 'lucide-react';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -97,8 +98,10 @@ export default function TicketDetailPage() {
                   variant="danger"
                   size="sm"
                   onClick={handleDelete}
+                  className="flex items-center gap-1"
                 >
-                  🗑️ Supprimer
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
+                  Supprimer
                 </Button>
               </div>
             )}
@@ -107,10 +110,10 @@ export default function TicketDetailPage() {
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <div className="text-red-600 text-5xl mb-4">⚠️</div>
-            <h3 className="text-lg font-medium text-red-800 mb-2">Erreur</h3>
-            <p className="text-red-700 mb-4">{error}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+            <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-600 dark:text-red-400" aria-hidden="true" />
+            <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">Erreur</h3>
+            <p className="text-red-700 dark:text-red-400 mb-4">{error}</p>
             <div className="flex justify-center space-x-2">
               <Button variant="secondary" size="sm" onClick={fetchTicket}>
                 Réessayer
