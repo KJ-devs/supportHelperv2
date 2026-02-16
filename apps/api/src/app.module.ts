@@ -73,6 +73,9 @@ import { AuditModule } from './modules/audit/audit.module';
 // Backup & Restore
 import { BackupModule } from './modules/backup/backup.module';
 
+// SSO Authentication
+import { SsoModule } from './modules/auth/sso/sso.module';
+
 /**
  * Root Application Module
  *
@@ -205,6 +208,9 @@ import { BackupModule } from './modules/backup/backup.module';
 
     // Backup & Restore
     BackupModule,
+
+    // SSO Authentication
+    SsoModule,
   ],
   providers: [
     // Global rate limiting guard
