@@ -12,13 +12,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fr">
       <body className="bg-gray-50 dark:bg-gray-950">
-        <ThemeProvider>
-          <PostHogProvider>
-            <AuthProvider>{children}</AuthProvider>
-          </PostHogProvider>
-        </ThemeProvider>
+        <PostHogProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
