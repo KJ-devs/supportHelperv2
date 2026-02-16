@@ -51,6 +51,9 @@ import { CodebaseIndexModule } from './modules/codebase-index/codebase-index.mod
 // Agent Tasks (Code Analysis)
 import { AgentTasksModule } from './modules/agent-tasks/agent-tasks.module';
 
+// Notifications
+import { NotificationModule } from './modules/notifications/notification.module';
+
 /**
  * Root Application Module
  *
@@ -166,6 +169,9 @@ import { AgentTasksModule } from './modules/agent-tasks/agent-tasks.module';
 
     // Agent Tasks (Code Analysis)
     AgentTasksModule,
+
+    // Notifications
+    NotificationModule,
   ],
   providers: [
     // Global rate limiting guard

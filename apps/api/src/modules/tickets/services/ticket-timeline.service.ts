@@ -1,6 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TicketsGateway } from '../tickets.gateway';
+import { NotificationService } from '../../notifications/notification.service';
+
+/** Event types that trigger notifications to configured channels. */
+const NOTIFIABLE_EVENTS = new Set([
+  'ticket_received',
+  'analysis_completed',
+  'code_generation_started',
+  'pr_created',
+  'pr_merged',
+  'fix_deployed',
+]);
 
 export interface TimelineEntry {
   id: string;
@@ -17,6 +28,9 @@ export class TicketTimelineService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ticketsGateway: TicketsGateway,
+    @Optional()
+    @Inject(NotificationService)
+    private readonly notificationService?: NotificationService,
   ) {}
 
   async recordEvent(
@@ -41,6 +55,34 @@ export class TicketTimelineService {
       data: data || {},
       createdAt: event.createdAt,
     });
+
+    // Dispatch notifications for notifiable events
+    if (NOTIFIABLE_EVENTS.has(eventType) && this.notificationService) {
+      try {
+        const ticket = await this.prisma.ticket.findUnique({
+          where: { id: ticketId },
+          select: { applicationId: true, title: true },
+        });
+
+        if (ticket) {
+          await this.notificationService.dispatchNotification({
+            ticketId,
+            tenantId,
+            applicationId: ticket.applicationId,
+            eventType,
+            data: {
+              ...(data || {}),
+              ticketId,
+              ticketTitle: ticket.title,
+            },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Failed to dispatch notification for ${eventType} on ticket ${ticketId}: ${err instanceof Error ? err.message : 'Unknown'}`,
+        );
+      }
+    }
   }
 
   async getTimeline(
