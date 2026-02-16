@@ -59,7 +59,7 @@ export class AIService {
 
         if (aiConfig) {
           return {
-            provider: aiConfig.provider as any,
+            provider: aiConfig.provider as 'anthropic' | 'openai' | 'ollama',
             apiKey: aiConfig.encryptedApiKey, // Auto-decrypted by Prisma middleware
             model: aiConfig.model,
           };
@@ -110,10 +110,10 @@ export class AIService {
       where: { key: 'ai_config' },
       create: {
         key: 'ai_config',
-        value: config as any,
+        value: config,
       },
       update: {
-        value: config as any,
+        value: config,
       },
     });
 

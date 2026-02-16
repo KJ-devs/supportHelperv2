@@ -120,7 +120,7 @@ export class SlackProvider extends BaseIntegrationProvider {
       return {
         success: true,
         externalId: result.ts,
-        externalUrl: (result.message as any)?.permalink,
+        externalUrl: (result.message as { permalink?: string } | undefined)?.permalink,
         message: 'Ticket posted to Slack',
       };
     } catch (error) {
