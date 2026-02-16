@@ -5,6 +5,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as fs from 'fs/promises';
@@ -207,5 +208,93 @@ export class S3Service implements OnModuleInit {
       }
       throw error;
     }
+  }
+
+  /**
+   * List all objects in bucket with optional prefix
+   */
+  async listObjects(prefix?: string): Promise<Array<{ key: string; size: number }>> {
+    this.logger.log(`Listing objects with prefix: ${prefix || '(all)'}`);
+
+    try {
+      const objects: Array<{ key: string; size: number }> = [];
+      let continuationToken: string | undefined = undefined;
+
+      do {
+        const command: ListObjectsV2Command = new ListObjectsV2Command({
+          Bucket: this.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        });
+
+        const response: Awaited<ReturnType<typeof this.client.send<ListObjectsV2Command>>> =
+          await this.client.send(command);
+
+        if (response.Contents) {
+          for (const item of response.Contents) {
+            if (item.Key) {
+              objects.push({
+                key: item.Key,
+                size: item.Size || 0,
+              });
+            }
+          }
+        }
+
+        continuationToken = response.NextContinuationToken;
+      } while (continuationToken);
+
+      this.logger.log(`Found ${objects.length} objects`);
+      return objects;
+    } catch (error) {
+      this.logger.error(`Failed to list objects: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Download file from S3 to specific path
+   */
+  async downloadToPath(key: string, targetPath: string): Promise<void> {
+    this.logger.log(`Downloading ${key} to ${targetPath}`);
+
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+      });
+
+      const response = await this.client.send(command);
+
+      if (!response.Body) {
+        throw new Error('Empty response body from S3');
+      }
+
+      // Ensure target directory exists
+      const dir = path.dirname(targetPath);
+      await fs.mkdir(dir, { recursive: true });
+
+      // Stream body to file
+      const stream = response.Body as Readable;
+      const chunks: Buffer[] = [];
+
+      for await (const chunk of stream) {
+        chunks.push(Buffer.from(chunk));
+      }
+
+      await fs.writeFile(targetPath, Buffer.concat(chunks));
+
+      this.logger.log(`Downloaded ${key} to ${targetPath}`);
+    } catch (error) {
+      this.logger.error(`Failed to download ${key}: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get bucket name
+   */
+  getBucket(): string {
+    return this.bucket;
   }
 }

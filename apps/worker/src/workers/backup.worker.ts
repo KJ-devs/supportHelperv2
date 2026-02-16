@@ -7,6 +7,7 @@ import { promisify } from 'util';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+import { S3Service } from '../services/s3.service';
 
 const execFileAsync = promisify(execFile);
 
@@ -49,7 +50,10 @@ export class BackupWorker extends WorkerHost {
   private readonly backupPath: string;
   private readonly databaseUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly s3Service: S3Service,
+  ) {
     super();
     this.backupPath = this.configService.get<string>('BACKUP_PATH') || '/backups';
     this.databaseUrl = this.configService.get<string>('DATABASE_URL') || '';
@@ -299,27 +303,72 @@ export class BackupWorker extends WorkerHost {
 
   /**
    * Backup media files from MinIO/S3
-   * For now, just create a placeholder directory
-   * TODO: Implement actual S3 sync using S3Service or mc mirror
+   * Lists all objects in S3 bucket and downloads them to local directory
    */
   private async backupMedia(outputPath: string): Promise<void> {
-    this.logger.log(`Creating media backup directory at: ${outputPath}`);
+    this.logger.log(`Backing up media files to: ${outputPath}`);
 
     try {
       await fs.mkdir(outputPath, { recursive: true });
 
-      // TODO: Implement S3 sync
-      // Option 1: Use S3Service to list and download all objects
-      // Option 2: Use MinIO mc mirror command
-      // For now, just log a warning
-      this.logger.warn('Media backup not yet implemented - creating placeholder directory');
+      // List all objects in the S3 bucket
+      const objects = await this.s3Service.listObjects();
 
-      // Create a README to indicate incomplete implementation
-      const readmePath = path.join(outputPath, 'README.txt');
-      await fs.writeFile(
-        readmePath,
-        'Media backup not yet fully implemented.\nThis directory is a placeholder for future S3/MinIO object backup.',
+      if (objects.length === 0) {
+        this.logger.log('No media files found in S3 bucket');
+        return;
+      }
+
+      this.logger.log(`Found ${objects.length} media files to backup`);
+
+      let downloadedCount = 0;
+      let totalBytes = 0;
+
+      // Download each object, preserving directory structure
+      for (const obj of objects) {
+        try {
+          const targetPath = path.join(outputPath, obj.key);
+
+          // Download file using S3Service
+          await this.s3Service.downloadToPath(obj.key, targetPath);
+
+          downloadedCount++;
+          totalBytes += obj.size;
+
+          // Log progress every 10 files
+          if (downloadedCount % 10 === 0) {
+            this.logger.log(
+              `Backup progress: ${downloadedCount}/${objects.length} files (${this.formatSize(totalBytes)})`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to backup file ${obj.key}: ${getErrorMessage(error)}`,
+          );
+          // Continue with other files even if one fails
+        }
+      }
+
+      this.logger.log(
+        `Media backup completed: ${downloadedCount}/${objects.length} files (${this.formatSize(totalBytes)})`,
       );
+
+      // Create manifest file with backup metadata
+      const manifest = {
+        timestamp: new Date().toISOString(),
+        bucket: this.s3Service.getBucket(),
+        totalFiles: downloadedCount,
+        totalBytes,
+        files: objects.map(obj => ({
+          key: obj.key,
+          size: obj.size,
+        })),
+      };
+
+      const manifestPath = path.join(outputPath, 'manifest.json');
+      await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2));
+
+      this.logger.log(`Created backup manifest at: ${manifestPath}`);
     } catch (error) {
       this.logger.error(`Media backup failed: ${getErrorMessage(error)}`);
       throw error;
@@ -328,21 +377,115 @@ export class BackupWorker extends WorkerHost {
 
   /**
    * Restore media files to MinIO/S3
-   * For now, just log a warning
-   * TODO: Implement actual S3 sync using S3Service or mc mirror
+   * Uploads all files from backup directory to S3, preserving directory structure
    */
   private async restoreMedia(inputPath: string): Promise<void> {
     this.logger.log(`Restoring media from: ${inputPath}`);
 
     try {
-      // TODO: Implement S3 sync
-      // Option 1: Use S3Service to upload all objects
-      // Option 2: Use MinIO mc mirror command
-      this.logger.warn('Media restore not yet implemented - skipping');
+      // Check if manifest exists
+      const manifestPath = path.join(inputPath, 'manifest.json');
+      let manifest: any = null;
+
+      try {
+        const manifestContent = await fs.readFile(manifestPath, 'utf-8');
+        manifest = JSON.parse(manifestContent);
+        this.logger.log(
+          `Found backup manifest: ${manifest.totalFiles} files (${this.formatSize(manifest.totalBytes)})`,
+        );
+      } catch {
+        this.logger.warn('No manifest found, will scan directory for files');
+      }
+
+      // Get all files in the backup directory
+      const filesToRestore = await this.getAllFiles(inputPath);
+
+      // Filter out manifest.json
+      const mediaFiles = filesToRestore.filter(f => !f.endsWith('manifest.json'));
+
+      if (mediaFiles.length === 0) {
+        this.logger.log('No media files found in backup directory');
+        return;
+      }
+
+      this.logger.log(`Found ${mediaFiles.length} files to restore`);
+
+      let uploadedCount = 0;
+      let totalBytes = 0;
+
+      // Upload each file to S3
+      for (const filePath of mediaFiles) {
+        try {
+          // Get relative path from backup directory (this becomes the S3 key)
+          const relativePath = path.relative(inputPath, filePath);
+          const s3Key = relativePath.replace(/\\/g, '/'); // Normalize path separators
+
+          // Get file stats
+          const stats = await fs.stat(filePath);
+
+          // Upload file
+          await this.s3Service.upload(s3Key, filePath);
+
+          uploadedCount++;
+          totalBytes += stats.size;
+
+          // Log progress every 10 files
+          if (uploadedCount % 10 === 0) {
+            this.logger.log(
+              `Restore progress: ${uploadedCount}/${mediaFiles.length} files (${this.formatSize(totalBytes)})`,
+            );
+          }
+        } catch (error) {
+          this.logger.error(
+            `Failed to restore file ${filePath}: ${getErrorMessage(error)}`,
+          );
+          // Continue with other files even if one fails
+        }
+      }
+
+      this.logger.log(
+        `Media restore completed: ${uploadedCount}/${mediaFiles.length} files (${this.formatSize(totalBytes)})`,
+      );
+
+      // Verify restore if manifest exists
+      if (manifest) {
+        const missingFiles = manifest.files.filter((file: any) => {
+          const localPath = path.join(inputPath, file.key);
+          return !mediaFiles.includes(localPath);
+        });
+
+        if (missingFiles.length > 0) {
+          this.logger.warn(
+            `${missingFiles.length} files from manifest were not found in backup directory`,
+          );
+        }
+      }
     } catch (error) {
       this.logger.error(`Media restore failed: ${getErrorMessage(error)}`);
       throw error;
     }
+  }
+
+  /**
+   * Recursively get all files in a directory
+   */
+  private async getAllFiles(dirPath: string): Promise<string[]> {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    const files: string[] = [];
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        // Recursively get files from subdirectory
+        const subFiles = await this.getAllFiles(fullPath);
+        files.push(...subFiles);
+      } else if (entry.isFile()) {
+        files.push(fullPath);
+      }
+    }
+
+    return files;
   }
 
   /**
