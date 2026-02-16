@@ -13,9 +13,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { BarChart3, TrendingUp } from 'lucide-react';
 import type { TicketsPerDayData } from '@/types/analytics';
 import { format, parseISO } from 'date-fns';
+import { TrendingUp } from 'lucide-react';
 
 interface TicketsPerDayChartProps {
   data?: TicketsPerDayData[];

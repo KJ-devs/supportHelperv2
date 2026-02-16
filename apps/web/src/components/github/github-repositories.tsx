@@ -3,7 +3,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { GitFork, Star, AlertCircle, FolderGit2, Github } from 'lucide-react';
+import { GitFork, Star, AlertCircle, FolderGit2 } from 'lucide-react';
 
 const repositories = [
   {

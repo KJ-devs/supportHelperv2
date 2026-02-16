@@ -343,7 +343,7 @@ export default function TicketsPage() {
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-hidden p-4 sm:p-6">
+        <div className="flex-1 overflow-hidden p-6">
           {!isLoading && tickets.length === 0 ? (
             <EmptyState
               icon={filters.search ? SearchX : Inbox}
