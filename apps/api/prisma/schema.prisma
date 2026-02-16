@@ -37,6 +37,7 @@ model Tenant {
   licenseUsage            LicenseUsage[]
   auditLogs               AuditLog[]
   ssoConfig               SsoConfig?
+  archivedDeadLetterJobs  ArchivedDeadLetterJob[]
 
   @@map("tenants")
 }
@@ -683,4 +684,32 @@ model SsoConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("sso_config")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DEAD LETTER QUEUE ARCHIVE
+// ═══════════════════════════════════════════════════════════════════════
+
+model ArchivedDeadLetterJob {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId      String?  @map("tenant_id") @db.Uuid // nullable for system-level jobs
+  queueName     String   @map("queue_name") @db.VarChar(100)
+  jobId         String   @map("job_id") @db.VarChar(255)
+  jobName       String?  @map("job_name") @db.VarChar(255)
+  jobData       Json     @map("job_data")
+  failedReason  String?  @map("failed_reason") @db.Text
+  stackTrace    String[] @map("stack_trace")
+  attemptsMade  Int      @map("attempts_made")
+  processedAt   DateTime @map("processed_at") // when it was originally processed by DLQ
+  archivedAt    DateTime @default(now()) @map("archived_at") // when it was archived
+  ticketId      String?  @map("ticket_id") @db.Uuid // extracted from jobData for quick lookups
+  applicationId String?  @map("application_id") @db.Uuid
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, archivedAt(sort: Desc)])
+  @@index([queueName, archivedAt(sort: Desc)])
+  @@index([ticketId])
+  @@index([archivedAt]) // for cleanup queries
+  @@map("archived_dead_letter_jobs")
 }
