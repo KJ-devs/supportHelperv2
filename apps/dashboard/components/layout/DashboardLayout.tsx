@@ -21,6 +21,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Tableau de bord', icon: '📊' },
   { href: '/dashboard/tickets', label: 'Tickets', icon: '🎫' },
+  { href: '/dashboard/agent-tasks', label: 'Agent Tasks', icon: '🤖' },
   { href: '/dashboard/applications', label: 'Applications', icon: '📱' },
   { href: '/dashboard/integrations', label: 'Integrations', icon: '🔌' },
   { href: '/dashboard/github', label: 'GitHub', icon: '🐙' },

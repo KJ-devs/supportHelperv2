@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TicketTimelineService } from '../tickets/services/ticket-timeline.service';
 import { ActionPlan, AgentTaskStatus } from './types/action-plan.types';
@@ -57,7 +58,7 @@ export class AgentTasksService {
   }
 
   async updateStatus(id: string, status: AgentTaskStatus) {
-    const data: Record<string, any> = { status };
+    const data: Prisma.AgentTaskUpdateInput = { status };
 
     if (status === 'completed' || status === 'failed') {
       data.completedAt = new Date();
@@ -76,7 +77,7 @@ export class AgentTasksService {
     const task = await this.prisma.agentTask.update({
       where: { id },
       data: {
-        actionPlan: plan as any,
+        actionPlan: plan as unknown as Prisma.InputJsonValue,
         status: 'plan_ready',
       },
     });
@@ -125,7 +126,7 @@ export class AgentTasksService {
     return task;
   }
 
-  async appendLog(id: string, entry: Record<string, any>) {
+  async appendLog(id: string, entry: Prisma.InputJsonObject) {
     const task = await this.prisma.agentTask.findUnique({
       where: { id },
       select: { executionLog: true },
@@ -135,7 +136,7 @@ export class AgentTasksService {
       throw new NotFoundException(`Agent task ${id} not found`);
     }
 
-    const currentLog = (task.executionLog as Record<string, any>[]) || [];
+    const currentLog = (task.executionLog as Prisma.JsonArray) || [];
     const updatedLog = [
       ...currentLog,
       { ...entry, timestamp: new Date().toISOString() },
@@ -145,5 +146,212 @@ export class AgentTasksService {
       where: { id },
       data: { executionLog: updatedLog },
     });
+  }
+
+  async findAll(
+    tenantId: string,
+    filters: {
+      status?: string;
+      applicationId?: string;
+      severity?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      search?: string;
+      page: number;
+      limit: number;
+    },
+  ) {
+    const where: Prisma.AgentTaskWhereInput = { tenantId };
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+    if (filters.applicationId) {
+      where.applicationId = filters.applicationId;
+    }
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {};
+      if (filters.dateFrom) where.createdAt.gte = new Date(filters.dateFrom);
+      if (filters.dateTo) where.createdAt.lte = new Date(filters.dateTo);
+    }
+    const ticketFilter: Prisma.TicketWhereInput = {};
+    if (filters.severity) {
+      ticketFilter.severity = filters.severity;
+    }
+    if (filters.search) {
+      ticketFilter.title = { contains: filters.search, mode: 'insensitive' };
+    }
+    if (Object.keys(ticketFilter).length > 0) {
+      where.ticket = { is: ticketFilter };
+    }
+
+    const [data, total] = await Promise.all([
+      this.prisma.agentTask.findMany({
+        where,
+        include: {
+          ticket: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              severity: true,
+              type: true,
+            },
+          },
+          application: {
+            select: { id: true, name: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: filters.page * filters.limit,
+        take: filters.limit,
+      }),
+      this.prisma.agentTask.count({ where }),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page: filters.page,
+        limit: filters.limit,
+        total,
+        totalPages: Math.ceil(total / filters.limit),
+      },
+    };
+  }
+
+  async getStats(tenantId: string) {
+    const tasks = await this.prisma.agentTask.findMany({
+      where: { tenantId },
+      select: {
+        status: true,
+        startedAt: true,
+        completedAt: true,
+      },
+    });
+
+    const totalTasks = tasks.length;
+    const inProgress = tasks.filter((t) =>
+      !['completed', 'failed', 'expired'].includes(t.status),
+    ).length;
+    const completedTasks = tasks.filter((t) => t.status === 'completed');
+    const failedCount = tasks.filter((t) => t.status === 'failed').length;
+
+    const finishedTasks = tasks.filter((t) =>
+      ['completed', 'failed'].includes(t.status),
+    );
+    const successRate =
+      finishedTasks.length > 0
+        ? Math.round((completedTasks.length / finishedTasks.length) * 100)
+        : 0;
+
+    // Calculate average resolution time in minutes
+    const completedWithTimes = completedTasks.filter(
+      (t) => t.startedAt && t.completedAt,
+    );
+    const avgResolutionTime =
+      completedWithTimes.length > 0
+        ? Math.round(
+            completedWithTimes.reduce((sum, t) => {
+              const duration =
+                new Date(t.completedAt!).getTime() -
+                new Date(t.startedAt!).getTime();
+              return sum + duration;
+            }, 0) /
+              completedWithTimes.length /
+              60000,
+          )
+        : 0;
+
+    const byStatus: Record<string, number> = {};
+    for (const t of tasks) {
+      byStatus[t.status] = (byStatus[t.status] || 0) + 1;
+    }
+
+    return {
+      totalTasks,
+      inProgress,
+      successRate,
+      avgResolutionTime,
+      failedCount,
+      byStatus,
+    };
+  }
+
+  async retry(id: string) {
+    // Read current log first since JSON columns don't support push
+    const existing = await this.prisma.agentTask.findUnique({
+      where: { id },
+      select: { executionLog: true },
+    });
+    const currentLog = (existing?.executionLog as Prisma.JsonArray) || [];
+
+    const task = await this.prisma.agentTask.update({
+      where: { id },
+      data: {
+        status: 'analyzing',
+        error: null,
+        completedAt: null,
+        startedAt: new Date(),
+        executionLog: [
+          ...currentLog,
+          {
+            step: 'manual_retry',
+            message: 'Task manually retried by user',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+      include: { ticket: true },
+    });
+
+    this.logger.log(`Retried agent task ${id}`);
+
+    await this.ticketTimeline.recordEvent(
+      task.ticketId,
+      task.tenantId,
+      'agent_task_retried',
+      { agentTaskId: id },
+    );
+
+    return task;
+  }
+
+  async cancel(id: string) {
+    // Read current log first since JSON columns don't support push
+    const existing = await this.prisma.agentTask.findUnique({
+      where: { id },
+      select: { executionLog: true },
+    });
+    const currentLog = (existing?.executionLog as Prisma.JsonArray) || [];
+
+    const task = await this.prisma.agentTask.update({
+      where: { id },
+      data: {
+        status: 'failed',
+        error: 'Cancelled by user',
+        completedAt: new Date(),
+        executionLog: [
+          ...currentLog,
+          {
+            step: 'cancelled',
+            message: 'Task cancelled by user',
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
+      include: { ticket: true },
+    });
+
+    this.logger.log(`Cancelled agent task ${id}`);
+
+    await this.ticketTimeline.recordEvent(
+      task.ticketId,
+      task.tenantId,
+      'agent_task_cancelled',
+      { agentTaskId: id },
+    );
+
+    return task;
   }
 }
