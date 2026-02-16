@@ -14,7 +14,6 @@ import { StatsCard } from '@/components/analytics/StatsCard';
 import { SimpleBarChart } from '@/components/analytics/SimpleBarChart';
 import { PieChart } from '@/components/analytics/PieChart';
 import { PageLoader, Card, Button, Select, EmptyState } from '@/components/ui';
-import { AlertTriangle, Ticket, ClipboardList, CheckCircle, BarChart3 } from 'lucide-react';
 
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -149,7 +148,7 @@ export default function AnalyticsPage() {
         )}
 
         {/* Key Metrics */}
-        {!hasNoData && (<>
+        {!hasNoData && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatsCard
             title="Total Tickets"
@@ -259,7 +258,7 @@ export default function AnalyticsPage() {
             🔄 Actualiser les données
           </Button>
         </div>
-        </>)}
+        )}
       </div>
     </DashboardLayout>
   );
