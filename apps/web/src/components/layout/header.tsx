@@ -1,7 +1,7 @@
 'use client';
 
 import { useTheme } from 'next-themes';
-import { Bell, Moon, Sun, Search, User, LogOut, Settings } from 'lucide-react';
+import { Bell, Moon, Sun, Search, User, LogOut, Settings, Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,39 +13,58 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 export function Header() {
   const { theme, setTheme } = useTheme();
+  const { toggleMobile } = useSidebarStore();
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative w-96">
+    <header className="flex h-16 items-center justify-between border-b bg-card px-4 sm:px-6">
+      {/* Left section - Mobile menu + Search */}
+      <div className="flex flex-1 items-center gap-2 sm:gap-4">
+        {/* Mobile menu button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleMobile}
+          className="min-h-[44px] min-w-[44px] md:hidden"
+        >
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle menu</span>
+        </Button>
+
+        {/* Search - responsive width */}
+        <div className="relative w-full max-w-md">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search tickets, users, or keywords..."
-            className="pl-10"
+            placeholder="Search..."
+            className="pl-10 text-sm"
           />
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2">
+      {/* Right section - Actions */}
+      <div className="flex items-center gap-1 sm:gap-2">
         {/* Theme Toggle */}
         <Button
           variant="ghost"
           size="icon"
           onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+          className="min-h-[44px] min-w-[44px]"
         >
           <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
           <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
           <span className="sr-only">Toggle theme</span>
         </Button>
 
-        {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        {/* Notifications - hidden on mobile */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative hidden min-h-[44px] min-w-[44px] sm:inline-flex"
+        >
           <Bell className="h-5 w-5" />
           <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
           <span className="sr-only">Notifications</span>
@@ -54,7 +73,7 @@ export function Header() {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Button variant="ghost" className="relative h-10 w-10 rounded-full min-h-[44px] min-w-[44px]">
               <Avatar className="h-8 w-8">
                 <AvatarImage src="/avatars/user.png" alt="User" />
                 <AvatarFallback>AD</AvatarFallback>

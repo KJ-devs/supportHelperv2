@@ -165,14 +165,14 @@ export function DataTable<TData, TValue>({
   // Render loading skeleton
   if (isLoading) {
     return (
-      <div className={cn('rounded-md border', containerClassName)}>
-        <table className={cn('w-full caption-bottom text-sm', tableClassName)}>
+      <div className={cn('overflow-x-auto rounded-md border', containerClassName)}>
+        <table className={cn('w-full min-w-[640px] caption-bottom text-sm', tableClassName)}>
           <thead className={cn('border-b bg-muted/50', headerClassName)}>
             <tr>
               {tableColumns.map((column, index) => (
                 <th
                   key={index}
-                  className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"
+                  className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4"
                 >
                   <Skeleton className="h-4 w-20" />
                 </th>
@@ -183,7 +183,7 @@ export function DataTable<TData, TValue>({
             {Array.from({ length: 10 }).map((_, index) => (
               <tr key={index} className="border-b">
                 {tableColumns.map((column, colIndex) => (
-                  <td key={colIndex} className="p-4 align-middle">
+                  <td key={colIndex} className="p-2 align-middle sm:p-4">
                     <Skeleton className="h-4 w-full" />
                   </td>
                 ))}
@@ -198,15 +198,15 @@ export function DataTable<TData, TValue>({
   // Render empty state
   if (rows.length === 0) {
     return (
-      <div className={cn('rounded-md border', containerClassName)}>
-        <table className={cn('w-full caption-bottom text-sm', tableClassName)}>
+      <div className={cn('overflow-x-auto rounded-md border', containerClassName)}>
+        <table className={cn('w-full min-w-[640px] caption-bottom text-sm', tableClassName)}>
           <thead className={cn('border-b bg-muted/50', headerClassName)}>
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
                 {headerGroup.headers.map(header => (
                   <th
                     key={header.id}
-                    className="h-12 px-4 text-left align-middle font-medium text-muted-foreground"
+                    className="h-12 px-2 text-left align-middle font-medium text-muted-foreground sm:px-4"
                     style={{ width: header.column.getSize() }}
                   >
                     {header.isPlaceholder
@@ -219,7 +219,7 @@ export function DataTable<TData, TValue>({
           </thead>
           <tbody>
             <tr>
-              <td colSpan={tableColumns.length} className="h-24 text-center text-muted-foreground">
+              <td colSpan={tableColumns.length} className="h-24 text-center text-sm text-muted-foreground sm:text-base">
                 No results found.
               </td>
             </tr>
@@ -237,7 +237,7 @@ export function DataTable<TData, TValue>({
         className={cn('overflow-auto rounded-md border', containerClassName)}
         style={{ height: '600px' }}
       >
-        <table className={cn('w-full caption-bottom text-sm', tableClassName)}>
+        <table className={cn('w-full min-w-[640px] caption-bottom text-sm', tableClassName)}>
           <thead className={cn('sticky top-0 z-10 border-b bg-background', headerClassName)}>
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
@@ -278,7 +278,7 @@ export function DataTable<TData, TValue>({
                   {row.getVisibleCells().map(cell => (
                     <td
                       key={cell.id}
-                      className={cn('p-4 align-middle', cellClassName)}
+                      className={cn('p-2 align-middle sm:p-4', cellClassName)}
                       style={{ width: cell.column.getSize() }}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -295,8 +295,8 @@ export function DataTable<TData, TValue>({
 
   // Standard render without virtualization
   return (
-    <div className={cn('overflow-auto rounded-md border', containerClassName)}>
-      <table className={cn('w-full caption-bottom text-sm', tableClassName)}>
+    <div className={cn('overflow-x-auto rounded-md border', containerClassName)}>
+      <table className={cn('w-full min-w-[640px] caption-bottom text-sm', tableClassName)}>
         <thead className={cn('border-b bg-muted/50', headerClassName)}>
           {table.getHeaderGroups().map(headerGroup => (
             <tr key={headerGroup.id}>
@@ -321,7 +321,7 @@ export function DataTable<TData, TValue>({
               {row.getVisibleCells().map(cell => (
                 <td
                   key={cell.id}
-                  className={cn('p-4 align-middle', cellClassName)}
+                  className={cn('p-2 align-middle sm:p-4', cellClassName)}
                   style={{ width: cell.column.getSize() }}
                 >
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -344,24 +344,24 @@ function TableHeader({ header }: { header: any }) {
   return (
     <th
       className={cn(
-        'h-12 px-4 text-left align-middle font-medium text-muted-foreground',
+        'h-12 px-2 text-left align-middle text-xs font-medium text-muted-foreground sm:px-4 sm:text-sm',
         canSort && 'cursor-pointer select-none hover:bg-muted/50'
       )}
       style={{ width: header.column.getSize() }}
       onClick={canSort ? header.column.getToggleSortingHandler() : undefined}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 sm:gap-2">
         {header.isPlaceholder
           ? null
           : flexRender(header.column.columnDef.header, header.getContext())}
         {canSort && (
           <span className="ml-1">
             {sorted === 'asc' ? (
-              <ArrowUp className="h-4 w-4" />
+              <ArrowUp className="h-3 w-3 sm:h-4 sm:w-4" />
             ) : sorted === 'desc' ? (
-              <ArrowDown className="h-4 w-4" />
+              <ArrowDown className="h-3 w-3 sm:h-4 sm:w-4" />
             ) : (
-              <ChevronsUpDown className="h-4 w-4 opacity-50" />
+              <ChevronsUpDown className="h-3 w-3 opacity-50 sm:h-4 sm:w-4" />
             )}
           </span>
         )}
