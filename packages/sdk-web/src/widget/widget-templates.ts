@@ -82,7 +82,13 @@ const ICONS = {
  */
 export function renderFAB(tooltip: string): string {
   return `
-    <button class="sh-fab" title="${escapeHtml(tooltip)}" data-action="open">
+    <button
+      class="sh-fab"
+      title="${escapeHtml(tooltip)}"
+      data-action="open"
+      aria-label="${escapeHtml(tooltip)}"
+      tabindex="0"
+    >
       ${ICONS.help}
     </button>
   `;
@@ -93,11 +99,16 @@ export function renderFAB(tooltip: string): string {
  */
 export function renderModal(title: string, bodyContent: string): string {
   return `
-    <div class="sh-backdrop" data-action="close"></div>
+    <div class="sh-backdrop" data-action="close" aria-hidden="true"></div>
     <div class="sh-modal" role="dialog" aria-modal="true" aria-labelledby="sh-modal-title">
       <div class="sh-modal-header">
         <h2 class="sh-modal-title" id="sh-modal-title">${escapeHtml(title)}</h2>
-        <button class="sh-close-btn" data-action="close" aria-label="Close">
+        <button
+          class="sh-close-btn"
+          data-action="close"
+          aria-label="Close dialog"
+          tabindex="0"
+        >
           ${ICONS.close}
         </button>
       </div>
@@ -114,15 +125,20 @@ export function renderModal(title: string, bodyContent: string): string {
 export function renderOpenView(): string {
   return `
     <div class="sh-view sh-view-center">
-      <div class="sh-start-icon">
+      <div class="sh-start-icon" aria-hidden="true">
         ${ICONS.video}
       </div>
       <div class="sh-title">Record your issue</div>
       <p class="sh-message">
-        Share your screen to capture exactly what went wrong. 
+        Share your screen to capture exactly what went wrong.
         We'll analyze the video to help resolve your issue faster.
       </p>
-      <button class="sh-btn sh-btn-primary sh-btn-block" data-action="start">
+      <button
+        class="sh-btn sh-btn-primary sh-btn-block"
+        data-action="start"
+        aria-label="Start recording your screen"
+        tabindex="0"
+      >
         ${ICONS.video}
         <span>Start Recording</span>
       </button>
@@ -171,13 +187,22 @@ export function renderRecordingBar(elapsedSeconds: number, isPaused: boolean): s
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
 
   return `
-    <div class="sh-recording-bar">
-      <span class="sh-rec-dot ${isPaused ? 'paused' : ''}"></span>
-      <span class="sh-rec-time sh-timer-time">${timeStr}</span>
-      <button data-action="${isPaused ? 'resume' : 'pause'}">
+    <div class="sh-recording-bar" role="status" aria-live="polite">
+      <span class="sh-rec-dot ${isPaused ? 'paused' : ''}" aria-hidden="true"></span>
+      <span class="sh-rec-time sh-timer-time" aria-label="Recording time ${timeStr}">${timeStr}</span>
+      <button
+        data-action="${isPaused ? 'resume' : 'pause'}"
+        aria-label="${isPaused ? 'Resume recording' : 'Pause recording'}"
+        tabindex="0"
+      >
         ${isPaused ? 'Resume' : 'Pause'}
       </button>
-      <button class="sh-rec-stop" data-action="stop">
+      <button
+        class="sh-rec-stop"
+        data-action="stop"
+        aria-label="Stop recording"
+        tabindex="0"
+      >
         Stop
       </button>
     </div>
@@ -192,22 +217,37 @@ export function renderPreviewView(videoUrl: string, duration: number, size: numb
   const secs = Math.floor(duration % 60);
   const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
   const sizeStr = formatFileSize(size);
-  
+
   return `
     <div class="sh-view">
       <div class="sh-video-container">
-        <video class="sh-video" src="${videoUrl}" controls></video>
+        <video
+          class="sh-video"
+          src="${videoUrl}"
+          controls
+          aria-label="Preview of recorded video"
+        ></video>
       </div>
-      <div class="sh-video-info">
+      <div class="sh-video-info" aria-live="polite">
         <span>Duration: ${timeStr}</span>
         <span>Size: ${sizeStr}</span>
       </div>
       <div class="sh-btn-group">
-        <button class="sh-btn sh-btn-secondary" data-action="re-record">
+        <button
+          class="sh-btn sh-btn-secondary"
+          data-action="re-record"
+          aria-label="Record video again"
+          tabindex="0"
+        >
           ${ICONS.refresh}
           <span>Record again</span>
         </button>
-        <button class="sh-btn sh-btn-primary" data-action="accept">
+        <button
+          class="sh-btn sh-btn-primary"
+          data-action="accept"
+          aria-label="Use this video and continue"
+          tabindex="0"
+        >
           ${ICONS.check}
           <span>Use this video</span>
         </button>
@@ -223,33 +263,54 @@ export function renderEditingView(videoUrl: string, duration: number): string {
   const mins = Math.floor(duration / 60);
   const secs = Math.floor(duration % 60);
   const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-  
+
   return `
     <div class="sh-view">
-      <form class="sh-form" data-form="report">
+      <form class="sh-form" data-form="report" aria-label="Issue report form">
         <div class="sh-video-thumb">
-          <video src="${videoUrl}" muted></video>
-          <div class="sh-video-thumb-overlay">
+          <video src="${videoUrl}" muted aria-hidden="true"></video>
+          <div class="sh-video-thumb-overlay" aria-hidden="true">
             ${ICONS.film}
             <span>${timeStr} video attached</span>
           </div>
         </div>
-        <input 
-          type="text" 
-          class="sh-input" 
-          name="title" 
-          placeholder="Brief title for your issue..."
-          required
-          maxlength="200"
-        />
-        <textarea 
-          class="sh-textarea" 
-          name="description" 
-          placeholder="Describe what happened..."
-          required
-          maxlength="2000"
-        ></textarea>
-        <button type="submit" class="sh-btn sh-btn-primary sh-btn-block">
+        <div class="sh-form-field">
+          <label for="sh-input-title" class="sh-sr-only">Issue title</label>
+          <input
+            id="sh-input-title"
+            type="text"
+            class="sh-input"
+            name="title"
+            placeholder="Brief title for your issue..."
+            required
+            maxlength="200"
+            aria-required="true"
+            aria-describedby="sh-title-hint"
+            tabindex="0"
+          />
+          <span id="sh-title-hint" class="sh-sr-only">Enter a brief title describing your issue</span>
+        </div>
+        <div class="sh-form-field">
+          <label for="sh-input-description" class="sh-sr-only">Issue description</label>
+          <textarea
+            id="sh-input-description"
+            class="sh-textarea"
+            name="description"
+            placeholder="Describe what happened..."
+            required
+            maxlength="2000"
+            aria-required="true"
+            aria-describedby="sh-description-hint"
+            tabindex="0"
+          ></textarea>
+          <span id="sh-description-hint" class="sh-sr-only">Describe what happened in detail</span>
+        </div>
+        <button
+          type="submit"
+          class="sh-btn sh-btn-primary sh-btn-block"
+          aria-label="Send report"
+          tabindex="0"
+        >
           ${ICONS.send}
           <span>Send Report</span>
         </button>
@@ -263,8 +324,8 @@ export function renderEditingView(videoUrl: string, duration: number): string {
  */
 export function renderSubmittingView(): string {
   return `
-    <div class="sh-view sh-view-center">
-      <div class="sh-spinner"></div>
+    <div class="sh-view sh-view-center" role="status" aria-live="polite">
+      <div class="sh-spinner" aria-hidden="true"></div>
       <p class="sh-message">Sending your report...</p>
     </div>
   `;
@@ -275,27 +336,27 @@ export function renderSubmittingView(): string {
  */
 export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse['aiAnalysis'], dashboardUrl?: string): string {
   let analysisHtml = '';
-  
+
   if (aiAnalysis) {
-    const severityClass = aiAnalysis.severity === 'high' ? 'sh-badge-high' : 
+    const severityClass = aiAnalysis.severity === 'high' ? 'sh-badge-high' :
                           aiAnalysis.severity === 'medium' ? 'sh-badge-medium' : 'sh-badge-low';
-    
+
     analysisHtml = `
-      <div class="sh-analysis">
+      <div class="sh-analysis" role="region" aria-label="AI Analysis Results">
         <div class="sh-analysis-label">AI Analysis</div>
         <p class="sh-analysis-text">${escapeHtml(aiAnalysis.summary)}</p>
         <div style="margin-top: 8px;">
-          <span class="sh-badge ${severityClass}">${aiAnalysis.severity} severity</span>
+          <span class="sh-badge ${severityClass}" role="status">${aiAnalysis.severity} severity</span>
         </div>
       </div>
     `;
   }
-  
+
   const ticketUrl = dashboardUrl || `#ticket-${ticketId}`;
-  
+
   return `
-    <div class="sh-view sh-view-center">
-      <div class="sh-success-icon">
+    <div class="sh-view sh-view-center" role="status" aria-live="polite">
+      <div class="sh-success-icon" aria-hidden="true">
         ${ICONS.check}
       </div>
       <div class="sh-title">Report Sent!</div>
@@ -303,11 +364,24 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
         Your issue has been submitted successfully. Our team will analyze it and get back to you.
       </p>
       ${analysisHtml}
-      <a class="sh-ticket-link" href="${ticketUrl}" target="_blank" rel="noopener">
+      <a
+        class="sh-ticket-link"
+        href="${ticketUrl}"
+        target="_blank"
+        rel="noopener"
+        aria-label="View ticket ${ticketId.substring(0, 8)} in new window"
+        tabindex="0"
+      >
         View ticket #${escapeHtml(ticketId.substring(0, 8))}
         ${ICONS.externalLink}
       </a>
-      <button class="sh-btn sh-btn-secondary sh-btn-block" data-action="close" style="margin-top: 12px;">
+      <button
+        class="sh-btn sh-btn-secondary sh-btn-block"
+        data-action="close"
+        style="margin-top: 12px;"
+        aria-label="Close dialog"
+        tabindex="0"
+      >
         Close
       </button>
     </div>
@@ -319,17 +393,27 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
  */
 export function renderErrorView(message: string): string {
   return `
-    <div class="sh-view sh-view-center">
-      <div class="sh-error-icon">
+    <div class="sh-view sh-view-center" role="alert" aria-live="assertive">
+      <div class="sh-error-icon" aria-hidden="true">
         ${ICONS.alertCircle}
       </div>
       <div class="sh-title">Something went wrong</div>
       <p class="sh-message">${escapeHtml(message)}</p>
       <div class="sh-btn-group" style="margin-top: 8px;">
-        <button class="sh-btn sh-btn-secondary" data-action="close">
+        <button
+          class="sh-btn sh-btn-secondary"
+          data-action="close"
+          aria-label="Close dialog"
+          tabindex="0"
+        >
           Close
         </button>
-        <button class="sh-btn sh-btn-primary" data-action="retry">
+        <button
+          class="sh-btn sh-btn-primary"
+          data-action="retry"
+          aria-label="Try again"
+          tabindex="0"
+        >
           ${ICONS.refresh}
           <span>Try again</span>
         </button>

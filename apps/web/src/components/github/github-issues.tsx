@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
 import { formatRelativeTime } from '@/lib/utils';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, FileText } from 'lucide-react';
 
 const issues = [
   {
@@ -37,14 +38,24 @@ const issues = [
 ];
 
 export function GitHubIssues() {
+  const isEmpty = issues.length === 0;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Linked Issues</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {issues.map(issue => (
+        {isEmpty ? (
+          <EmptyState
+            icon={FileText}
+            title="No linked issues"
+            description="Create tickets and link them to GitHub issues to see them here."
+            variant="compact"
+          />
+        ) : (
+          <div className="space-y-4">
+            {issues.map(issue => (
             <div key={issue.id} className="flex items-center justify-between rounded-lg border p-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -72,6 +83,7 @@ export function GitHubIssues() {
             </div>
           ))}
         </div>
+        )}
       </CardContent>
     </Card>
   );

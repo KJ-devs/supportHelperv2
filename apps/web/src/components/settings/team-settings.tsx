@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { UserPlus, Users } from 'lucide-react';
 
 const teamMembers = [
   {
@@ -36,6 +37,8 @@ const roleVariants: Record<string, 'default' | 'secondary'> = {
 };
 
 export function TeamSettings() {
+  const isEmpty = teamMembers.length === 0;
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -49,8 +52,17 @@ export function TeamSettings() {
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {teamMembers.map(member => (
+        {isEmpty ? (
+          <EmptyState
+            icon={Users}
+            title="No team members"
+            description="Start building your team by inviting members to collaborate."
+            actionLabel="Invite Member"
+            variant="compact"
+          />
+        ) : (
+          <div className="space-y-4">
+            {teamMembers.map(member => (
             <div
               key={member.id}
               className="flex items-center justify-between rounded-lg border p-4"
@@ -79,6 +91,7 @@ export function TeamSettings() {
             </div>
           ))}
         </div>
+        )}
       </CardContent>
     </Card>
   );

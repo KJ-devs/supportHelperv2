@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { GitFork, Star, AlertCircle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { GitFork, Star, AlertCircle, Github } from 'lucide-react';
 
 const repositories = [
   {
@@ -40,14 +41,25 @@ const repositories = [
 ];
 
 export function GitHubRepositories() {
+  const isEmpty = repositories.length === 0;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Connected Repositories</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {repositories.map(repo => (
+        {isEmpty ? (
+          <EmptyState
+            icon={Github}
+            title="No repositories connected"
+            description="Connect your GitHub account to sync issues and repositories."
+            actionLabel="Connect GitHub"
+            variant="compact"
+          />
+        ) : (
+          <div className="space-y-4">
+            {repositories.map(repo => (
             <div key={repo.id} className="flex items-center justify-between rounded-lg border p-4">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
@@ -74,6 +86,7 @@ export function GitHubRepositories() {
             </div>
           ))}
         </div>
+        )}
       </CardContent>
     </Card>
   );

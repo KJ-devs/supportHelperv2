@@ -62,6 +62,19 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       display: none !important;
     }
 
+    /* Screen reader only - visually hidden but accessible */
+    .sh-sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+
     /* Floating Action Button */
     .sh-fab {
       position: fixed;
@@ -89,6 +102,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-fab:active {
       transform: scale(0.96);
+    }
+
+    .sh-fab:focus-visible {
+      outline: 3px solid var(--sh-primary);
+      outline-offset: 2px;
     }
 
     .sh-fab svg {
@@ -168,6 +186,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-recording-bar button:hover {
       background: rgba(255, 255, 255, 0.3);
+    }
+
+    .sh-recording-bar button:focus-visible {
+      outline: 2px solid white;
+      outline-offset: 2px;
     }
 
     .sh-recording-bar button.sh-rec-stop {
@@ -252,6 +275,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       color: var(--sh-text);
     }
 
+    .sh-close-btn:focus-visible {
+      outline: 2px solid var(--sh-primary);
+      outline-offset: 2px;
+    }
+
     .sh-close-btn svg {
       width: 18px;
       height: 18px;
@@ -308,6 +336,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       background: var(--sh-primary-hover);
     }
 
+    .sh-btn-primary:focus-visible {
+      outline: 3px solid var(--sh-primary);
+      outline-offset: 2px;
+    }
+
     .sh-btn-secondary {
       background: var(--sh-bg-secondary);
       color: var(--sh-text);
@@ -318,6 +351,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       background: var(--sh-border);
     }
 
+    .sh-btn-secondary:focus-visible {
+      outline: 2px solid var(--sh-primary);
+      outline-offset: 2px;
+    }
+
     .sh-btn-danger {
       background: var(--sh-error);
       color: white;
@@ -325,6 +363,11 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-btn-danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--sh-error) 85%, black);
+    }
+
+    .sh-btn-danger:focus-visible {
+      outline: 2px solid var(--sh-error);
+      outline-offset: 2px;
     }
 
     .sh-btn-block {
@@ -402,6 +445,12 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       gap: 16px;
     }
 
+    .sh-form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     .sh-input, .sh-textarea {
       width: 100%;
       padding: 12px 14px;
@@ -418,6 +467,21 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       outline: none;
       border-color: var(--sh-primary);
       box-shadow: 0 0 0 3px var(--sh-primary-light);
+    }
+
+    .sh-input:focus-visible, .sh-textarea:focus-visible {
+      outline: 2px solid var(--sh-primary);
+      outline-offset: 2px;
+      border-color: var(--sh-primary);
+      box-shadow: 0 0 0 3px var(--sh-primary-light);
+    }
+
+    .sh-input[aria-invalid="true"], .sh-textarea[aria-invalid="true"] {
+      border-color: var(--sh-error);
+    }
+
+    .sh-input[aria-invalid="true"]:focus, .sh-textarea[aria-invalid="true"]:focus {
+      box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
     }
 
     .sh-input::placeholder, .sh-textarea::placeholder {
@@ -584,6 +648,12 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-ticket-link:hover {
       text-decoration: underline;
+    }
+
+    .sh-ticket-link:focus-visible {
+      outline: 2px solid var(--sh-primary);
+      outline-offset: 2px;
+      border-radius: 4px;
     }
 
     .sh-ticket-link svg {
