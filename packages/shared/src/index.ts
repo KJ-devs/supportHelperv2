@@ -11,3 +11,6 @@ export * from './constants/severity';
 // Utils
 export * from './utils/validation';
 export * from './utils/encryption';
+
+// Design System
+export * from './design-tokens';
