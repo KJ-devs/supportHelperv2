@@ -218,16 +218,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       transform: scale(1.05);
     }
 
-    .sh-recording-bar button:focus-visible {
-      outline: 2px solid white;
-      outline-offset: 2px;
-    }
-
-    .sh-recording-bar button:focus-visible {
-      outline: 2px solid white;
-      outline-offset: 2px;
-    }
-
     .sh-recording-bar button.sh-rec-stop {
       background: #ef4444;
     }
@@ -392,16 +382,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
-    .sh-btn-primary:focus-visible {
-      outline: 3px solid var(--sh-primary);
-      outline-offset: 2px;
-    }
-
-    .sh-btn-primary:focus-visible {
-      outline: 3px solid var(--sh-primary);
-      outline-offset: 2px;
-    }
-
     .sh-btn-secondary {
       background: var(--sh-bg-secondary);
       color: var(--sh-text);
@@ -413,16 +393,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
-    .sh-btn-secondary:focus-visible {
-      outline: 2px solid var(--sh-primary);
-      outline-offset: 2px;
-    }
-
-    .sh-btn-secondary:focus-visible {
-      outline: 2px solid var(--sh-primary);
-      outline-offset: 2px;
-    }
-
     .sh-btn-danger {
       background: var(--sh-error);
       color: white;
@@ -431,16 +401,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
     .sh-btn-danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--sh-error) 85%, black);
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-    }
-
-    .sh-btn-danger:focus-visible {
-      outline: 2px solid var(--sh-error);
-      outline-offset: 2px;
-    }
-
-    .sh-btn-danger:focus-visible {
-      outline: 2px solid var(--sh-error);
-      outline-offset: 2px;
     }
 
     .sh-btn-block {
@@ -539,13 +499,6 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       box-shadow: 0 0 0 3px var(--sh-primary-light),
                   0 2px 8px rgba(0, 0, 0, 0.05);
       transform: translateY(-1px);
-    }
-
-    .sh-input:focus-visible, .sh-textarea:focus-visible {
-      outline: 2px solid var(--sh-primary);
-      outline-offset: 2px;
-      border-color: var(--sh-primary);
-      box-shadow: 0 0 0 3px var(--sh-primary-light);
     }
 
     .sh-input:focus-visible, .sh-textarea:focus-visible {

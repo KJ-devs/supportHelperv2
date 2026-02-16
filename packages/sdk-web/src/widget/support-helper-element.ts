@@ -40,10 +40,9 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
-  // Theme detection
-  private prefersDarkMediaQuery: MediaQueryList | null = null;
-  private hostMutationObserver: MutationObserver | null = null;
-  private resolvedTheme: 'light' | 'dark' = 'light';
+  // Attention pulse timer
+  private attentionPulseTimer: number | null = null;
+  private attentionPulseDelay = 5000; // 5 seconds
 
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
@@ -104,11 +103,8 @@ export class SupportHelperElement extends HTMLElement {
     // Attach event listeners
     this.attachEventListeners();
 
-    // Initialize keyboard manager
-    this.keyboardManager.attach();
-
-    // Initialize screen reader announcer
-    this.announcer.initialize();
+    // Start attention pulse timer for FAB
+    this.startAttentionPulseTimer();
   }
 
   disconnectedCallback(): void {
@@ -598,9 +594,7 @@ export class SupportHelperElement extends HTMLElement {
     // Emit events for state changes
     if (newState !== 'idle' && prevState === 'idle') {
       this.emit('sh:open', undefined);
-
-      // Announce modal opened to screen readers
-      this.announcer.announce('Support helper opened', 'polite');
+      this.stopAttentionPulseTimer();
     } else if (newState === 'idle' && prevState !== 'idle') {
       this.emit('sh:close', undefined);
 
@@ -683,111 +677,37 @@ export class SupportHelperElement extends HTMLElement {
   }
 
   /**
-   * Initialize theme detection based on config.theme
+   * Start attention pulse timer - adds pulse animation to FAB after delay
    */
-  private initializeThemeDetection(): void {
-    if (this.config.theme === 'light') {
-      this.resolvedTheme = 'light';
-    } else if (this.config.theme === 'dark') {
-      this.resolvedTheme = 'dark';
-    } else {
-      // Auto mode: detect system preference and host page
-      this.resolvedTheme = this.detectTheme();
-      this.setupThemeObservers();
-    }
+  private startAttentionPulseTimer(): void {
+    // Only pulse when in idle state
+    if (this.stateMachine.getState() !== 'idle') return;
+
+    this.stopAttentionPulseTimer();
+    this.attentionPulseTimer = window.setTimeout(() => {
+      const fab = this.shadow.querySelector('.sh-fab');
+      if (fab && this.stateMachine.getState() === 'idle') {
+        fab.classList.add('sh-attention-pulse');
+        // Remove class after animation completes (2s * 3 iterations = 6s)
+        setTimeout(() => {
+          fab.classList.remove('sh-attention-pulse');
+        }, 6000);
+      }
+    }, this.attentionPulseDelay);
   }
 
   /**
-   * Detect theme based on system preference and host page
+   * Stop attention pulse timer
    */
-  private detectTheme(): 'light' | 'dark' {
-    // 1. Check host page for dark mode indicators
-    if (typeof document !== 'undefined') {
-      const html = document.documentElement;
-      const body = document.body;
-
-      // Check for common dark mode classes
-      if (html.classList.contains('dark') || body.classList.contains('dark')) {
-        return 'dark';
-      }
-
-      // Check for data-theme attribute
-      const htmlTheme = html.getAttribute('data-theme');
-      const bodyTheme = body.getAttribute('data-theme');
-      if (htmlTheme === 'dark' || bodyTheme === 'dark') {
-        return 'dark';
-      }
+  private stopAttentionPulseTimer(): void {
+    if (this.attentionPulseTimer !== null) {
+      clearTimeout(this.attentionPulseTimer);
+      this.attentionPulseTimer = null;
     }
-
-    // 2. Check system preference
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
-      if (prefersDark.matches) {
-        return 'dark';
-      }
-    }
-
-    // Default to light
-    return 'light';
-  }
-
-  /**
-   * Setup theme observers for auto mode
-   */
-  private setupThemeObservers(): void {
-    // 1. Listen to system preference changes
-    if (typeof window !== 'undefined' && window.matchMedia) {
-      this.prefersDarkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleSystemThemeChange = (e: MediaQueryListEvent): void => {
-        this.resolvedTheme = this.detectTheme();
-        this.render();
-      };
-
-      // Use addEventListener for modern browsers
-      if (this.prefersDarkMediaQuery.addEventListener) {
-        this.prefersDarkMediaQuery.addEventListener('change', handleSystemThemeChange);
-      }
-    }
-
-    // 2. Observe host page changes (html/body class and data-theme changes)
-    if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
-      this.hostMutationObserver = new MutationObserver(() => {
-        const newTheme = this.detectTheme();
-        if (newTheme !== this.resolvedTheme) {
-          this.resolvedTheme = newTheme;
-          this.render();
-        }
-      });
-
-      // Observe both html and body
-      const observerConfig: MutationObserverInit = {
-        attributes: true,
-        attributeFilter: ['class', 'data-theme'],
-      };
-
-      this.hostMutationObserver.observe(document.documentElement, observerConfig);
-      if (document.body) {
-        this.hostMutationObserver.observe(document.body, observerConfig);
-      }
-    }
-  }
-
-  /**
-   * Cleanup theme observers
-   */
-  private cleanupThemeDetection(): void {
-    if (this.prefersDarkMediaQuery) {
-      // Remove event listener if supported
-      if (this.prefersDarkMediaQuery.removeEventListener) {
-        // We need to remove the exact handler, but since it's inline we can't
-        // For simplicity, we'll just set it to null and it will be GC'd
-      }
-      this.prefersDarkMediaQuery = null;
-    }
-
-    if (this.hostMutationObserver) {
-      this.hostMutationObserver.disconnect();
-      this.hostMutationObserver = null;
+    // Remove class if present
+    const fab = this.shadow.querySelector('.sh-fab');
+    if (fab) {
+      fab.classList.remove('sh-attention-pulse');
     }
   }
 
