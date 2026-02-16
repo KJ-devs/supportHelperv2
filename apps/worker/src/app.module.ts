@@ -4,6 +4,7 @@ import { QueuesModule } from './queues';
 import { ProcessorsModule } from './processors';
 import { ServicesModule } from './services/services.module';
 import { HealthModule } from './health';
+import { LoggerModule } from './common/logger/logger.module';
 
 // Config imports
 import ffmpegConfig from './config/ffmpeg.config';
@@ -38,6 +39,9 @@ import queueConfig from './config/queue.config';
       envFilePath: ['.env.local', '.env'],
       load: [ffmpegConfig, ocrConfig, openaiConfig, yoloConfig, queueConfig],
     }),
+
+    // Logging
+    LoggerModule,
 
     // Services
     ServicesModule,

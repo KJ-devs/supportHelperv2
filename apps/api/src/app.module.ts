@@ -2,7 +2,7 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import Redis from 'ioredis';
 import { ThrottlerStorageRedisService } from './common/services/throttler-storage-redis.service';
 import { ThrottlerExceptionFilter } from './common/filters/throttler-exception.filter';
@@ -17,6 +17,13 @@ import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
 import { EncryptionModule } from './common/encryption.module';
+
+// Logging & Metrics
+import { LoggerModule } from './common/logger/logger.module';
+import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
+import { StructuredLoggingInterceptor } from './common/interceptors/structured-logging.interceptor';
+import { MetricsModule } from './modules/metrics/metrics.module';
+import { MetricsInterceptor } from './modules/metrics/metrics.interceptor';
 
 // Authentication & Authorization
 import { AuthModule } from './auth/auth.module';
@@ -150,6 +157,8 @@ import { BackupModule } from './modules/backup/backup.module';
     EncryptionModule,
     MonitoringModule,
     HealthModule,
+    LoggerModule,
+    MetricsModule,
 
     // Authentication & Authorization
     AuthModule,
@@ -208,11 +217,23 @@ import { BackupModule } from './modules/backup/backup.module';
       provide: APP_FILTER,
       useClass: ThrottlerExceptionFilter,
     },
+    // Global structured logging interceptor
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: StructuredLoggingInterceptor,
+    },
+    // Global metrics interceptor (only active when PROMETHEUS_ENABLED=true)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
   ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    // Apply correlation ID middleware to all routes
-    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+    // Apply request ID and correlation ID middleware to all routes
+    consumer
+      .apply(RequestIdMiddleware, CorrelationIdMiddleware)
+      .forRoutes('*');
   }
 }
