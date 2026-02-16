@@ -36,6 +36,7 @@ model Tenant {
   notificationLogs        NotificationLog[]
   licenseUsage            LicenseUsage[]
   auditLogs               AuditLog[]
+  ssoConfig               SsoConfig?
 
   @@map("tenants")
 }
@@ -660,4 +661,26 @@ model AuditLog {
   @@index([action])
   @@index([resourceType, resourceId])
   @@map("audit_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SSO / ENTERPRISE AUTH
+// ═══════════════════════════════════════════════════════════════════════
+
+model SsoConfig {
+  id              String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String   @unique @map("tenant_id") @db.Uuid
+  providerType    String   @map("provider_type") @db.VarChar(20) // "saml", "oidc"
+  enabled         Boolean  @default(false)
+  config          String   @db.Text // encrypted SAML/OIDC settings (ciphertext)
+  configIv        String   @map("config_iv") @db.VarChar(32) // initialization vector for encryption
+  roleMapping     Json     @default("{}") @map("role_mapping") // IdP groups → app roles
+  autoProvision   Boolean  @default(true) @map("auto_provision")
+  disablePassword Boolean  @default(false) @map("disable_password") // disable email/password login
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("sso_config")
 }

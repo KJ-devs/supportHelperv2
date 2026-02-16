@@ -145,6 +145,7 @@ export default function SettingsPage() {
     { href: '/dashboard/settings/license', label: '🔑 License' },
     { href: '/dashboard/settings/ai', label: '🤖 AI Configuration' },
     { href: '/dashboard/settings/github', label: '🐙 GitHub' },
+    { href: '/dashboard/settings/auth/sso', label: '🔐 SSO' },
     { href: '/dashboard/settings/status', label: '📊 Statut Systeme' },
   ];
 
