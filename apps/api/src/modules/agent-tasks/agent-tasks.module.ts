@@ -7,6 +7,7 @@ import { GithubModule } from '../github/github.module';
 import { AgentTasksService } from './agent-tasks.service';
 import { AgentTasksController } from './agent-tasks.controller';
 import { CodeAnalysisAgentService } from './services/code-analysis-agent.service';
+import { CodeGenerationAgentService } from './services/code-generation-agent.service';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { CodeAnalysisAgentService } from './services/code-analysis-agent.service
     forwardRef(() => GithubModule),
   ],
   controllers: [AgentTasksController],
-  providers: [AgentTasksService, CodeAnalysisAgentService],
-  exports: [AgentTasksService, CodeAnalysisAgentService],
+  providers: [AgentTasksService, CodeAnalysisAgentService, CodeGenerationAgentService],
+  exports: [AgentTasksService, CodeAnalysisAgentService, CodeGenerationAgentService],
 })
 export class AgentTasksModule {}

@@ -212,6 +212,9 @@ export class AgentWorker extends WorkerHost {
         case 'generate-action-plan':
           return await this.handleGenerateActionPlan(job);
 
+        case 'generate-code':
+          return await this.handleGenerateCode(job);
+
         default:
           throw new Error(`Unknown agent job type: ${type}`);
       }
@@ -1102,6 +1105,535 @@ Keep responses concise but thorough.`,
         complexity: actionPlan.estimatedComplexity,
       } as any,
     };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Code Generation: Generate Code, Create Branch & PR (US-3.3)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Generate code changes for an approved action plan, create a branch, commit, and open a PR.
+   */
+  private async handleGenerateCode(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, applicationId, agentTaskId } = job.data;
+
+    if (!agentTaskId || !applicationId) {
+      throw new Error('agentTaskId and applicationId are required for generate-code');
+    }
+
+    this.logger.log(`Generating code for ticket ${ticketId} (task ${agentTaskId})`);
+    await job.updateProgress(5);
+
+    // 1. Set status to generating
+    await this.prisma.agentTask.update({
+      where: { id: agentTaskId },
+      data: { status: 'generating' },
+    });
+    await this.appendAgentTaskLog(agentTaskId, {
+      step: 'started',
+      message: 'Starting code generation',
+    });
+
+    try {
+      await job.updateProgress(10);
+
+      // 2. Load full context: AgentTask -> Ticket -> Application -> ProjectGithubConfig -> GithubInstallation
+      const agentTask = await this.prisma.agentTask.findUnique({
+        where: { id: agentTaskId },
+        include: {
+          ticket: {
+            include: {
+              application: {
+                include: {
+                  githubConfig: {
+                    include: {
+                      installation: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!agentTask) {
+        throw new Error(`Agent task ${agentTaskId} not found`);
+      }
+
+      const { ticket } = agentTask;
+      const githubConfig = ticket.application?.githubConfig;
+
+      if (!githubConfig) {
+        await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application.');
+        throw new Error('No GitHub configuration found for application');
+      }
+
+      // 3. Get action plan from agentTask
+      const actionPlan = agentTask.actionPlan as any;
+      if (!actionPlan?.files?.length) {
+        await this.setAgentTaskError(agentTaskId, 'No action plan files found. Generate an action plan first.');
+        throw new Error('No action plan files found');
+      }
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'context_loaded',
+        message: `Loaded ticket "${ticket.title}" with ${actionPlan.files.length} files to process`,
+      });
+
+      await job.updateProgress(15);
+
+      // 4. Get Octokit client via installation token
+      const { owner, repo, defaultBranch } = githubConfig;
+      const connection = await this.prisma.githubConnection.findFirst({
+        where: {
+          tenantId,
+          installationId: BigInt(githubConfig.installation.installationId),
+        },
+      });
+
+      if (!connection?.accessToken) {
+        await this.setAgentTaskError(agentTaskId, 'No GitHub access token found. Reconnect GitHub.');
+        throw new Error('No GitHub access token found');
+      }
+
+      const octokit = new Octokit({ auth: connection.accessToken });
+
+      // 5. Get Anthropic API key
+      const anthropicApiKey = await this.getDecryptedAnthropicKey(tenantId);
+      if (!anthropicApiKey) {
+        await this.setAgentTaskError(agentTaskId, 'No Anthropic API key configured for this tenant.');
+        throw new Error('No Anthropic API key configured');
+      }
+
+      const aiConfig = await this.prisma.aiConfig.findUnique({
+        where: { tenantId },
+      });
+      const model = aiConfig?.model || 'claude-sonnet-4-20250514';
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'ai_configured',
+        message: `Using model ${model}`,
+      });
+
+      await job.updateProgress(20);
+
+      // 6. Generate code for each file
+      const sortedFiles = [...actionPlan.files].sort(
+        (a: any, b: any) => (a.order || 0) - (b.order || 0),
+      );
+      const anthropic = new Anthropic({ apiKey: anthropicApiKey });
+      const generatedFiles: Array<{
+        filePath: string;
+        content: string;
+        operation: 'modify' | 'create' | 'delete';
+      }> = [];
+      let apiCallCount = 0;
+      const maxApiCalls = 10;
+
+      const systemPrompt = this.buildCodeGenSystemPrompt();
+
+      for (const file of sortedFiles) {
+        if (apiCallCount >= maxApiCalls) {
+          await this.appendAgentTaskLog(agentTaskId, {
+            step: 'rate_limit',
+            message: `Reached maximum API calls (${maxApiCalls}). Stopping code generation.`,
+          });
+          break;
+        }
+
+        // Skip deletion — just mark for tree entry later
+        if (file.operation === 'delete') {
+          generatedFiles.push({
+            filePath: file.filePath,
+            content: '',
+            operation: 'delete',
+          });
+          await this.appendAgentTaskLog(agentTaskId, {
+            step: 'file_delete',
+            message: `Marked ${file.filePath} for deletion`,
+          });
+          continue;
+        }
+
+        // Fetch current content for modifications
+        let currentContent = '';
+        if (file.operation === 'modify') {
+          try {
+            const { data: fileData } = await octokit.repos.getContent({
+              owner,
+              repo,
+              path: file.filePath,
+              ref: defaultBranch,
+            });
+
+            if ('content' in fileData && fileData.content) {
+              currentContent = Buffer.from(fileData.content, 'base64').toString('utf-8');
+            }
+          } catch (error) {
+            this.logger.warn(`Could not fetch ${file.filePath}: ${getErrorMessage(error)}`);
+            await this.appendAgentTaskLog(agentTaskId, {
+              step: 'file_fetch_warning',
+              message: `Could not fetch current content for ${file.filePath}, treating as new file`,
+            });
+          }
+        }
+
+        // Search relevant code context via pgvector
+        const codeContext = await this.searchCodebaseEmbeddings(applicationId, {
+          title: file.description,
+          description: file.filePath,
+          aiSummary: null,
+        });
+
+        // Build prompt and call Claude
+        const userPrompt = this.buildCodeGenUserPrompt(file, currentContent, codeContext, actionPlan);
+
+        apiCallCount++;
+        this.logger.log(`Calling Claude for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`);
+
+        const response = await anthropic.messages.create({
+          model,
+          max_tokens: 8192,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        });
+
+        const textBlock = response.content.find(
+          (block: { type: string }) => block.type === 'text',
+        ) as { type: 'text'; text: string } | undefined;
+
+        if (!textBlock) {
+          this.logger.warn(`No text response for ${file.filePath}, skipping`);
+          continue;
+        }
+
+        const generatedCode = this.extractCodeFromResponse(textBlock.text);
+        generatedFiles.push({
+          filePath: file.filePath,
+          content: generatedCode,
+          operation: file.operation,
+        });
+
+        await this.appendAgentTaskLog(agentTaskId, {
+          step: 'file_generated',
+          message: `Generated code for ${file.filePath} (${generatedCode.length} chars)`,
+        });
+
+        // Progress: 20-60% for code generation
+        const fileProgress = 20 + Math.round((generatedFiles.length / sortedFiles.length) * 40);
+        await job.updateProgress(Math.min(fileProgress, 60));
+      }
+
+      if (generatedFiles.length === 0) {
+        await this.setAgentTaskError(agentTaskId, 'No code was generated for any files.');
+        throw new Error('No code generated');
+      }
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'code_ready',
+        message: `Generated code for ${generatedFiles.length} files`,
+      });
+
+      // Update status to code_ready
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: { status: 'code_ready' },
+      });
+
+      await job.updateProgress(65);
+
+      // 7. Create branch via Git Data API
+      const branchSuffix = ticketId.substring(0, 8);
+      let branchName = `agent/fix-${branchSuffix}`;
+
+      let baseSha: string;
+      try {
+        const { data: refData } = await octokit.git.getRef({
+          owner,
+          repo,
+          ref: `heads/${defaultBranch}`,
+        });
+        baseSha = refData.object.sha;
+      } catch (error) {
+        await this.setAgentTaskError(agentTaskId, `Failed to get HEAD of ${defaultBranch}: ${getErrorMessage(error)}`);
+        throw error;
+      }
+
+      try {
+        await octokit.git.createRef({
+          owner,
+          repo,
+          ref: `refs/heads/${branchName}`,
+          sha: baseSha,
+        });
+      } catch (error) {
+        // If branch already exists, try with timestamp suffix
+        const timestamp = Date.now();
+        branchName = `agent/fix-${branchSuffix}-${timestamp}`;
+        try {
+          await octokit.git.createRef({
+            owner,
+            repo,
+            ref: `refs/heads/${branchName}`,
+            sha: baseSha,
+          });
+        } catch (retryError) {
+          await this.setAgentTaskError(agentTaskId, `Failed to create branch: ${getErrorMessage(retryError)}`);
+          throw retryError;
+        }
+      }
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'branch_created',
+        message: `Created branch ${branchName} from ${defaultBranch} (${baseSha.substring(0, 7)})`,
+      });
+
+      await job.updateProgress(70);
+
+      // 8. Commit files via Git Data API (single atomic commit)
+      const treeEntries: Array<{
+        path: string;
+        mode: '100644';
+        type: 'blob';
+        sha: string | null;
+      }> = [];
+
+      for (const file of generatedFiles) {
+        if (file.operation === 'delete') {
+          // For deletions, set sha to null in the tree
+          treeEntries.push({
+            path: file.filePath,
+            mode: '100644',
+            type: 'blob',
+            sha: null,
+          });
+        } else {
+          // Create blob for new/modified files
+          const { data: blobData } = await octokit.git.createBlob({
+            owner,
+            repo,
+            content: file.content,
+            encoding: 'utf-8',
+          });
+          treeEntries.push({
+            path: file.filePath,
+            mode: '100644',
+            type: 'blob',
+            sha: blobData.sha,
+          });
+        }
+      }
+
+      const { data: treeData } = await octokit.git.createTree({
+        owner,
+        repo,
+        base_tree: baseSha,
+        tree: treeEntries as any,
+      });
+
+      const changeType = actionPlan.files?.[0]?.changeType || 'bug_fix';
+      const commitPrefix = changeType === 'bug_fix' ? 'fix' : 'feat';
+      const commitMessage = `${commitPrefix}: ${ticket.title || 'AI-generated changes'}\n\nGenerated by Support Helper AI Agent\nTicket: ${ticketId.substring(0, 8)}\nTask: ${agentTaskId.substring(0, 8)}`;
+
+      const { data: commitData } = await octokit.git.createCommit({
+        owner,
+        repo,
+        message: commitMessage,
+        tree: treeData.sha,
+        parents: [baseSha],
+      });
+
+      await octokit.git.updateRef({
+        owner,
+        repo,
+        ref: `heads/${branchName}`,
+        sha: commitData.sha,
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'committed',
+        message: `Committed ${generatedFiles.length} files (${commitData.sha.substring(0, 7)})`,
+      });
+
+      await job.updateProgress(85);
+
+      // 9. Create PR
+      const prTitle = `${commitPrefix}: ${ticket.title || 'AI-generated fix'}`;
+      const prBodyParts: string[] = [
+        `## Summary`,
+        ``,
+        actionPlan.summary || 'AI-generated changes based on ticket analysis.',
+        ``,
+        `## Root Cause`,
+        ``,
+        actionPlan.rootCause || 'See ticket for details.',
+        ``,
+        `## Changed Files`,
+        ``,
+      ];
+
+      for (const file of generatedFiles) {
+        const opLabel = file.operation === 'delete' ? 'Deleted' : file.operation === 'create' ? 'Created' : 'Modified';
+        prBodyParts.push(`- **${opLabel}**: \`${file.filePath}\``);
+      }
+
+      prBodyParts.push(
+        ``,
+        `## Testing Strategy`,
+        ``,
+        actionPlan.testingStrategy || 'Manual verification recommended.',
+        ``,
+        `---`,
+        `*Generated by Support Helper AI Agent*`,
+        `*Ticket: \`${ticketId.substring(0, 8)}\`*`,
+      );
+
+      const { data: prData } = await octokit.pulls.create({
+        owner,
+        repo,
+        title: prTitle,
+        body: prBodyParts.join('\n'),
+        head: branchName,
+        base: defaultBranch,
+      });
+
+      await job.updateProgress(95);
+
+      // 10. Update status to pr_created and log completion
+      await this.prisma.agentTask.update({
+        where: { id: agentTaskId },
+        data: { status: 'pr_created' },
+      });
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'completed',
+        message: `Pull request created: ${prData.html_url}`,
+        prUrl: prData.html_url,
+        prNumber: prData.number,
+        branchName,
+      });
+
+      await job.updateProgress(100);
+
+      this.logger.log(`PR #${prData.number} created for agent task ${agentTaskId}: ${prData.html_url}`);
+
+      return {
+        success: true,
+        type: 'generate-code',
+        ticketId,
+        response: `Pull request #${prData.number} created: ${prData.html_url}`,
+        metadata: {
+          agentTaskId,
+          filesCount: generatedFiles.length,
+          complexity: actionPlan.estimatedComplexity,
+          prUrl: prData.html_url,
+          prNumber: prData.number,
+          branchName,
+        } as any,
+      };
+    } catch (error) {
+      // Set task to failed if not already set
+      const currentTask = await this.prisma.agentTask.findUnique({
+        where: { id: agentTaskId },
+        select: { status: true },
+      });
+      if (currentTask && currentTask.status !== 'failed') {
+        await this.setAgentTaskError(agentTaskId, getErrorMessage(error));
+      }
+      throw error;
+    }
+  }
+
+  private buildCodeGenSystemPrompt(): string {
+    return `You are a senior software developer writing code changes based on an action plan.
+
+Your job is to generate the COMPLETE file content for the specified file. Follow these rules strictly:
+
+1. Output ONLY the file content — no explanations, no markdown, no commentary
+2. Wrap the entire output in a single code block with the language identifier:
+   \`\`\`typescript
+   // full file content here
+   \`\`\`
+3. For modifications: output the COMPLETE modified file, not just the changes
+4. For new files: output the complete new file
+5. Follow the project's existing coding conventions exactly
+6. Maintain all existing imports, exports, and structure that should not change
+7. Use TypeScript strict mode — no \`any\` types unless absolutely necessary
+8. Follow NestJS patterns: decorators, dependency injection, DTOs with class-validator
+9. All database queries must include tenantId filtering (multi-tenant architecture)
+10. Use async/await, not raw promises
+11. Include proper error handling with NestJS exceptions where appropriate
+12. Do NOT add comments explaining your changes unless the logic is non-obvious`;
+  }
+
+  private buildCodeGenUserPrompt(
+    file: { filePath: string; operation: string; description: string; changeType: string },
+    currentContent: string,
+    codeContext: Array<{ filePath: string; content: string; language: string; distance: number }>,
+    actionPlan: { summary: string; rootCause: string; files: any[]; testingStrategy: string },
+  ): string {
+    const parts: string[] = [];
+
+    parts.push('## Task');
+    parts.push(`**Operation:** ${file.operation}`);
+    parts.push(`**File:** ${file.filePath}`);
+    parts.push(`**Change Type:** ${file.changeType}`);
+    parts.push(`**Description:** ${file.description}`);
+    parts.push('');
+    parts.push('## Context');
+    parts.push(`**Issue Summary:** ${actionPlan.summary}`);
+    parts.push(`**Root Cause:** ${actionPlan.rootCause}`);
+
+    if (currentContent) {
+      parts.push('');
+      parts.push('## Current File Content');
+      parts.push(`\`\`\`typescript`);
+      parts.push(this.truncateCodeSnippet(currentContent, 300));
+      parts.push('```');
+    }
+
+    if (codeContext.length > 0) {
+      parts.push('');
+      parts.push('## Related Code (for reference)');
+      for (const snippet of codeContext.slice(0, 5)) {
+        parts.push(`### ${snippet.filePath}`);
+        parts.push(`\`\`\`${snippet.language || 'typescript'}`);
+        parts.push(this.truncateCodeSnippet(snippet.content, 50));
+        parts.push('```');
+      }
+    }
+
+    // List other files in the plan for context
+    const otherFiles = actionPlan.files.filter((f: any) => f.filePath !== file.filePath);
+    if (otherFiles.length > 0) {
+      parts.push('');
+      parts.push('## Other Files Being Changed (for context)');
+      for (const f of otherFiles) {
+        parts.push(`- \`${f.filePath}\` (${f.operation}): ${f.description}`);
+      }
+    }
+
+    parts.push('');
+    parts.push('## Instructions');
+    if (file.operation === 'modify') {
+      parts.push('Generate the COMPLETE modified file content. Include ALL original code that should remain unchanged, plus your modifications.');
+    } else {
+      parts.push('Generate the COMPLETE new file content.');
+    }
+
+    return parts.join('\n');
+  }
+
+  private extractCodeFromResponse(response: string): string {
+    // Try to extract code from a code block
+    const codeBlockMatch = response.match(/```(?:\w+)?\s*\n([\s\S]*?)\n```/);
+    if (codeBlockMatch) {
+      return codeBlockMatch[1]!.trim();
+    }
+
+    // If no code block found, use the raw response (trimmed)
+    return response.trim();
   }
 
   /**

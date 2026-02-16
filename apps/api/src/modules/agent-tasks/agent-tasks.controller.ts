@@ -134,7 +134,29 @@ export class AgentTasksController {
       );
     }
 
-    return this.agentTasksService.approve(id);
+    const approvedTask = await this.agentTasksService.approve(id);
+
+    // Queue code generation job
+    await this.agentQueue.add(
+      'generate-code',
+      {
+        type: 'generate-code' as const,
+        ticketId: task.ticketId,
+        tenantId,
+        applicationId: task.applicationId,
+        agentTaskId: id,
+      },
+      {
+        priority: 5,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 30000,
+        },
+      },
+    );
+
+    return approvedTask;
   }
 
   @Get('tickets/:ticketId')
