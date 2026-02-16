@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import OpenAI from 'openai';
+import { PrismaService } from '../prisma/prisma.service';
+import { AIProvider } from './providers/ai-provider.interface';
+import { AIProviderFactory } from './providers/ai-provider.factory';
+import { AIProviderConfig, DEFAULT_MODELS } from './providers/ai-provider.types';
 
 export interface VideoAnalysisResult {
   summary: string;
@@ -18,44 +21,149 @@ const EMBEDDING_MAX_CHARS = 32000; // ~8191 tokens * ~4 chars/token
 @Injectable()
 export class AIService {
   private readonly logger = new Logger(AIService.name);
-  private openai: OpenAI;
-  private readonly embeddingModel: string;
+  private provider: AIProvider | null = null;
+  private providerConfig: AIProviderConfig | null = null;
 
-  constructor(private configService: ConfigService) {
-    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-    if (!apiKey) {
-      this.logger.warn('OPENAI_API_KEY not configured - AI features disabled');
-    } else {
-      this.openai = new OpenAI({ apiKey });
+  constructor(
+    private configService: ConfigService,
+    private prisma: PrismaService,
+    private providerFactory: AIProviderFactory,
+  ) {}
+
+  /**
+   * Initialize or recreate provider based on current config
+   */
+  private async initializeProvider(tenantId?: string): Promise<void> {
+    const config = await this.getProviderConfig(tenantId);
+
+    // Only recreate if config changed
+    const configKey = JSON.stringify(config);
+    const currentKey = this.providerConfig ? JSON.stringify(this.providerConfig) : null;
+
+    if (configKey !== currentKey) {
+      this.providerConfig = config;
+      this.provider = config ? this.providerFactory.create(config) : null;
     }
-    this.embeddingModel = this.configService.get<string>(
-      'EMBEDDING_MODEL',
-      'text-embedding-3-small',
-    );
+  }
+
+  /**
+   * Get provider config from SystemConfig or env vars (fallback)
+   */
+  async getProviderConfig(tenantId?: string): Promise<AIProviderConfig | null> {
+    // Try to get per-tenant config first (if tenantId provided)
+    if (tenantId) {
+      try {
+        const aiConfig = await this.prisma.aiConfig.findUnique({
+          where: { tenantId },
+        });
+
+        if (aiConfig) {
+          return {
+            provider: aiConfig.provider as any,
+            apiKey: aiConfig.encryptedApiKey, // Auto-decrypted by Prisma middleware
+            model: aiConfig.model,
+          };
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch tenant AI config: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+    }
+
+    // Fall back to system-wide config from env vars
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    if (openaiKey) {
+      return {
+        provider: 'openai',
+        apiKey: openaiKey,
+        model: DEFAULT_MODELS.openai,
+      };
+    }
+
+    // No config available
+    return null;
+  }
+
+  /**
+   * Get the active AI provider instance
+   */
+  async getActiveProvider(tenantId?: string): Promise<AIProvider | null> {
+    await this.initializeProvider(tenantId);
+    return this.provider;
+  }
+
+  /**
+   * Update provider config (system-wide, stored in SystemConfig)
+   */
+  async updateProviderConfig(config: AIProviderConfig): Promise<void> {
+    await this.prisma.systemConfig.upsert({
+      where: { key: 'ai_config' },
+      create: {
+        key: 'ai_config',
+        value: config as any,
+      },
+      update: {
+        value: config as any,
+      },
+    });
+
+    // Invalidate cached provider
+    this.provider = null;
+    this.providerConfig = null;
+  }
+
+  /**
+   * Test connection to configured provider
+   */
+  async testConnection(tenantId?: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const provider = await this.getActiveProvider(tenantId);
+
+      if (!provider) {
+        return {
+          success: false,
+          message: 'No AI provider configured',
+        };
+      }
+
+      const isValid = await provider.validateConfig();
+
+      return {
+        success: isValid,
+        message: isValid
+          ? `Successfully connected to ${provider.getProviderName()}`
+          : `Failed to connect to ${provider.getProviderName()}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   /**
    * Generate embedding for a single text input.
-   * Uses OpenAI text-embedding-3-small (1536 dimensions) by default.
+   * Uses provider's embedding capability if available.
    */
-  async generateEmbedding(text: string): Promise<number[]> {
-    if (!this.openai) {
-      this.logger.warn('OpenAI not configured, cannot generate embedding');
+  async generateEmbedding(text: string, tenantId?: string): Promise<number[]> {
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider) {
+      this.logger.warn('No AI provider configured, cannot generate embedding');
+      return [];
+    }
+
+    if (!provider.generateEmbedding) {
+      this.logger.warn(
+        `Provider ${provider.getProviderName()} does not support embeddings`,
+      );
       return [];
     }
 
     try {
-      const truncated =
-        text.length > EMBEDDING_MAX_CHARS
-          ? text.slice(0, EMBEDDING_MAX_CHARS)
-          : text;
-
-      const response = await this.openai.embeddings.create({
-        model: this.embeddingModel,
-        input: truncated,
-      });
-
-      return response.data[0].embedding;
+      return await provider.generateEmbedding(text);
     } catch (error) {
       this.logger.error(
         `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -65,46 +173,44 @@ export class AIService {
   }
 
   /**
-   * Generate embeddings for multiple texts in batches.
-   * Batches into groups of 100 and processes sequentially to respect rate limits.
+   * Generate embeddings for multiple texts.
+   * Processes sequentially if provider doesn't support batch.
    */
-  async generateEmbeddings(texts: string[]): Promise<number[][]> {
-    if (!this.openai) {
-      this.logger.warn('OpenAI not configured, cannot generate embeddings');
+  async generateEmbeddings(texts: string[], tenantId?: string): Promise<number[][]> {
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider || !provider.generateEmbedding) {
+      this.logger.warn('No embedding-capable AI provider configured');
       return texts.map(() => []);
     }
 
     const results: number[][] = [];
 
-    for (let i = 0; i < texts.length; i += EMBEDDING_BATCH_SIZE) {
-      const batch = texts.slice(i, i + EMBEDDING_BATCH_SIZE).map((t) =>
-        t.length > EMBEDDING_MAX_CHARS ? t.slice(0, EMBEDDING_MAX_CHARS) : t,
-      );
-
+    // Process sequentially (providers may have their own batching)
+    for (const text of texts) {
       try {
-        const response = await this.openai.embeddings.create({
-          model: this.embeddingModel,
-          input: batch,
-        });
-
-        // Sort by index to preserve order
-        const sorted = response.data.sort((a, b) => a.index - b.index);
-        results.push(...sorted.map((d) => d.embedding));
+        const embedding = await provider.generateEmbedding(text);
+        results.push(embedding);
       } catch (error) {
         this.logger.error(
-          `Failed to generate embeddings for batch starting at index ${i}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
         );
-        // Return empty arrays for the failed batch
-        results.push(...batch.map(() => []));
+        results.push([]);
       }
     }
 
     return results;
   }
 
-  async analyzeVideoTranscript(transcript: string, ocrText?: string): Promise<VideoAnalysisResult> {
-    if (!this.openai) {
-      this.logger.warn('OpenAI not configured, returning mock analysis');
+  async analyzeVideoTranscript(
+    transcript: string,
+    ocrText?: string,
+    tenantId?: string,
+  ): Promise<VideoAnalysisResult> {
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider) {
+      this.logger.warn('No AI provider configured, returning mock analysis');
       return this.getMockAnalysis(transcript);
     }
 
@@ -129,35 +235,23 @@ Please provide a JSON response with the following fields:
 Respond ONLY with valid JSON.
       `;
 
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+      const schema = {
+        summary: 'string',
+        severity: 'string',
+        severityConfidence: 'number',
+        type: 'string',
+        typeConfidence: 'number',
+        keywords: 'array',
+        reproductionSteps: 'array',
+      };
+
+      const analysis = await provider.generateStructuredOutput<any>(prompt, schema, {
+        systemPrompt:
+          'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.',
         temperature: 0.3,
-        max_tokens: 1000,
+        maxTokens: 1000,
       });
 
-      const content = response.choices[0].message.content;
-      if (!content) {
-        throw new Error('Empty response from OpenAI');
-      }
-
-      // Extract JSON from response (in case it's wrapped in markdown)
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-
-      const analysis = JSON.parse(jsonMatch[0]);
       return {
         summary: analysis.summary || 'Unable to generate summary',
         severity: analysis.severity || 'medium',
@@ -169,7 +263,7 @@ Respond ONLY with valid JSON.
       };
     } catch (error) {
       this.logger.error(
-        `Failed to analyze video: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to analyze video: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       // Return mock analysis on error for MVP
       return this.getMockAnalysis(transcript);
@@ -182,9 +276,12 @@ Respond ONLY with valid JSON.
   async processUserDescription(
     description: string,
     userContext?: Record<string, any>,
+    tenantId?: string,
   ): Promise<VideoAnalysisResult & { enrichedDescription: string }> {
-    if (!this.openai) {
-      this.logger.warn('OpenAI not configured, returning basic processing');
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider) {
+      this.logger.warn('No AI provider configured, returning basic processing');
       const mock = this.getMockAnalysis(description);
       return {
         ...mock,
@@ -217,34 +314,24 @@ Please provide a JSON response with the following fields:
 Respond ONLY with valid JSON.
       `;
 
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+      const schema = {
+        enrichedDescription: 'string',
+        summary: 'string',
+        severity: 'string',
+        severityConfidence: 'number',
+        type: 'string',
+        typeConfidence: 'number',
+        keywords: 'array',
+        reproductionSteps: 'array',
+      };
+
+      const analysis = await provider.generateStructuredOutput<any>(prompt, schema, {
+        systemPrompt:
+          'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.',
         temperature: 0.3,
-        max_tokens: 1500,
+        maxTokens: 1500,
       });
 
-      const content = response.choices[0].message.content;
-      if (!content) {
-        throw new Error('Empty response from OpenAI');
-      }
-
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No JSON found in response');
-      }
-
-      const analysis = JSON.parse(jsonMatch[0]);
       return {
         enrichedDescription: analysis.enrichedDescription || description,
         summary: analysis.summary || 'Unable to generate summary',
@@ -267,65 +354,50 @@ Respond ONLY with valid JSON.
     }
   }
 
-  async classifyIssue(description: string): Promise<string> {
-    if (!this.openai) {
+  async classifyIssue(description: string, tenantId?: string): Promise<string> {
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider) {
       return 'other';
     }
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content:
-              'You are a technical support AI classifier. Classify the issue into one category only: crash, performance, ui, data-loss, feature-request, or other.',
-          },
-          {
-            role: 'user',
-            content: `Classify this issue: ${description}`,
-          },
-        ],
-        max_tokens: 20,
-        temperature: 0.1,
-      });
+      const response = await provider.generateCompletion(
+        `Classify this issue: ${description}`,
+        {
+          systemPrompt:
+            'You are a technical support AI classifier. Classify the issue into one category only: crash, performance, ui, data-loss, feature-request, or other.',
+          maxTokens: 20,
+          temperature: 0.1,
+        },
+      );
 
-      const content = response.choices[0].message.content?.toLowerCase() || 'other';
+      const content = response.toLowerCase();
       const validTypes = ['crash', 'performance', 'ui', 'data-loss', 'feature-request', 'other'];
-      return validTypes.find(t => content.includes(t)) || 'other';
+      return validTypes.find((t) => content.includes(t)) || 'other';
     } catch (error) {
       this.logger.error(`Classification failed: ${error}`);
       return 'other';
     }
   }
 
-  async generateCompletion(prompt: string): Promise<string> {
-    if (!this.openai) {
-      this.logger.warn('OpenAI not configured, returning empty response');
+  async generateCompletion(prompt: string, tenantId?: string): Promise<string> {
+    const provider = await this.getActiveProvider(tenantId);
+
+    if (!provider) {
+      this.logger.warn('No AI provider configured, returning empty response');
       return '';
     }
 
     try {
-      const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful technical support AI assistant.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
+      return await provider.generateCompletion(prompt, {
+        systemPrompt: 'You are a helpful technical support AI assistant.',
         temperature: 0.7,
-        max_tokens: 1500,
+        maxTokens: 1500,
       });
-
-      return response.choices[0].message.content || '';
     } catch (error) {
       this.logger.error(
-        `Failed to generate completion: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Failed to generate completion: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       return '';
     }
