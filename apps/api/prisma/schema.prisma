@@ -35,6 +35,7 @@ model Tenant {
   notificationPreferences NotificationPreference[]
   notificationLogs        NotificationLog[]
   licenseUsage            LicenseUsage[]
+  auditLogs               AuditLog[]
 
   @@map("tenants")
 }
@@ -634,4 +635,29 @@ model LicenseUsage {
   @@unique([tenantId, month, metric])
   @@index([tenantId])
   @@map("license_usage")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AUDIT LOGS
+// ═══════════════════════════════════════════════════════════════════════
+
+model AuditLog {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  actorId      String?  @map("actor_id") @db.VarChar(255)
+  actorType    String   @map("actor_type") @db.VarChar(50) // "user", "system", "agent"
+  action       String   @db.VarChar(100) // "login", "create_user", "update_settings", etc.
+  resourceType String?  @map("resource_type") @db.VarChar(100)
+  resourceId   String?  @map("resource_id") @db.VarChar(255)
+  details      Json?    @default("{}")
+  ipAddress    String?  @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt(sort: Desc)])
+  @@index([actorId])
+  @@index([action])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
 }
