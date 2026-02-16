@@ -1,0 +1,297 @@
+groups:
+  # ==========================================
+  # API Service Alerts
+  # ==========================================
+  - name: api_alerts
+    interval: 30s
+    rules:
+      # High error rate (>5% of requests returning 5xx)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total[5m]))
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "High error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/high-error-rate.md"
+
+      # Slow response times (p95 > 2s)
+      - alert: SlowResponseTime
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "Slow API response times"
+          description: "p95 response time for route {{ $labels.route }} is {{ $value }}s (threshold: 2s)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/slow-response.md"
+
+      # Very slow response times (p95 > 5s)
+      - alert: VerySlowResponseTime
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route)) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "Very slow API response times"
+          description: "p95 response time for route {{ $labels.route }} is {{ $value }}s (threshold: 5s)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/slow-response.md"
+
+      # API instance down
+      - alert: APIInstanceDown
+        expr: up{job="support-helper-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API instance is down"
+          description: "API instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/instance-down.md"
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: |
+          (process_resident_memory_bytes{job="support-helper-api"} / 1024 / 1024 / 1024) > 1.5
+        for: 5m
+        labels:
+          severity: warning
+          component: api
+        annotations:
+          summary: "High memory usage"
+          description: "API instance {{ $labels.instance }} is using {{ $value }}GB of memory (threshold: 1.5GB)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/high-memory.md"
+
+  # ==========================================
+  # Database Alerts
+  # ==========================================
+  - name: database_alerts
+    interval: 30s
+    rules:
+      # Database connection pool exhaustion (>80%)
+      - alert: DatabaseConnectionPoolHigh
+        expr: |
+          (db_connections_active / (db_connections_active + db_connections_idle)) > 0.8
+        for: 2m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Database connection pool usage high"
+          description: "Connection pool is {{ $value | humanizePercentage }} full (threshold: 80%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/db-connection-pool.md"
+
+      # Slow database queries (p95 > 1s)
+      - alert: SlowDatabaseQueries
+        expr: |
+          histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le, model, operation)) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: database
+        annotations:
+          summary: "Slow database queries detected"
+          description: "p95 query time for {{ $labels.operation }} on {{ $labels.model }} is {{ $value }}s (threshold: 1s)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/slow-queries.md"
+
+      # PostgreSQL down
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/postgres-down.md"
+
+  # ==========================================
+  # Redis Alerts
+  # ==========================================
+  - name: redis_alerts
+    interval: 30s
+    rules:
+      # Redis memory usage high (>80%)
+      - alert: RedisMemoryHigh
+        expr: |
+          (redis_memory_used_bytes{job="redis"} / redis_memory_max_bytes{job="redis"}) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis is using {{ $value | humanizePercentage }} of allocated memory (threshold: 80%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/redis-memory.md"
+
+      # Redis down
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis instance {{ $labels.instance }} has been down for more than 1 minute"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/redis-down.md"
+
+      # Cache hit rate low (<70%)
+      - alert: CacheHitRateLow
+        expr: |
+          (
+            sum(rate(cache_hits_total[5m]))
+            /
+            (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))
+          ) < 0.7
+        for: 10m
+        labels:
+          severity: info
+          component: redis
+        annotations:
+          summary: "Cache hit rate is low"
+          description: "Cache hit rate is {{ $value | humanizePercentage }} (threshold: 70%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/cache-hit-rate.md"
+
+  # ==========================================
+  # Queue Alerts
+  # ==========================================
+  - name: queue_alerts
+    interval: 30s
+    rules:
+      # Queue backlog growing (>1000 waiting jobs)
+      - alert: QueueBacklogHigh
+        expr: queue_jobs_waiting > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Queue backlog is growing"
+          description: "Queue {{ $labels.queue }} has {{ $value }} jobs waiting (threshold: 1000)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/queue-backlog.md"
+
+      # Queue backlog critical (>5000 waiting jobs)
+      - alert: QueueBacklogCritical
+        expr: queue_jobs_waiting > 5000
+        for: 2m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Queue backlog is critically high"
+          description: "Queue {{ $labels.queue }} has {{ $value }} jobs waiting (threshold: 5000)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/queue-backlog.md"
+
+      # High job failure rate (>10% failures)
+      - alert: HighJobFailureRate
+        expr: |
+          (
+            sum(rate(queue_jobs_failed_total[5m])) by (queue)
+            /
+            sum(rate(queue_jobs_total[5m])) by (queue)
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High job failure rate"
+          description: "Queue {{ $labels.queue }} has {{ $value | humanizePercentage }} failure rate (threshold: 10%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/job-failures.md"
+
+      # Worker instance down
+      - alert: WorkerInstanceDown
+        expr: up{job="support-helper-worker"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker instance is down"
+          description: "Worker instance {{ $labels.instance }} has been down for more than 2 minutes"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/instance-down.md"
+
+  # ==========================================
+  # Business Metrics Alerts
+  # ==========================================
+  - name: business_alerts
+    interval: 1m
+    rules:
+      # Video processing taking too long (p95 > 5 minutes)
+      - alert: SlowVideoProcessing
+        expr: |
+          histogram_quantile(0.95, sum(rate(video_processing_duration_seconds_bucket[10m])) by (le)) > 300
+        for: 10m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Video processing is slow"
+          description: "p95 video processing time is {{ $value }}s (threshold: 300s)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/slow-video-processing.md"
+
+      # AI analysis taking too long (p95 > 30s)
+      - alert: SlowAIAnalysis
+        expr: |
+          histogram_quantile(0.95, sum(rate(ai_analysis_duration_seconds_bucket[10m])) by (le, provider)) > 30
+        for: 10m
+        labels:
+          severity: warning
+          component: ai
+        annotations:
+          summary: "AI analysis is slow"
+          description: "p95 AI analysis time for {{ $labels.provider }} is {{ $value }}s (threshold: 30s)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/slow-ai-analysis.md"
+
+      # High integration sync failure rate (>20%)
+      - alert: HighIntegrationSyncFailureRate
+        expr: |
+          (
+            sum(rate(integration_sync_failure_total[10m])) by (integration_type)
+            /
+            (sum(rate(integration_sync_success_total[10m])) by (integration_type) + sum(rate(integration_sync_failure_total[10m])) by (integration_type))
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: integrations
+        annotations:
+          summary: "High integration sync failure rate"
+          description: "Integration {{ $labels.integration_type }} has {{ $value | humanizePercentage }} failure rate (threshold: 20%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/integration-failures.md"
+
+  # ==========================================
+  # Uptime Alerts
+  # ==========================================
+  - name: uptime_alerts
+    interval: 1m
+    rules:
+      # API availability (uptime < 99%)
+      - alert: LowAPIAvailability
+        expr: |
+          (
+            sum(rate(http_requests_total{status_code!~"5.."}[1h]))
+            /
+            sum(rate(http_requests_total[1h]))
+          ) < 0.99
+        for: 5m
+        labels:
+          severity: critical
+          component: api
+        annotations:
+          summary: "API availability is below 99%"
+          description: "API availability is {{ $value | humanizePercentage }} over the last hour (threshold: 99%)"
+          runbook_url: "https://github.com/KJ-devs/supportHelperv2/blob/master/docs/runbooks/low-availability.md"
