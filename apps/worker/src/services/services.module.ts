@@ -10,6 +10,8 @@ import {
   PrismaService,
   EmailService,
   AgentService,
+  GitAutomationService,
+  PullRequestService,
 } from './index';
 import { JobMonitoringService } from './job-monitoring.service';
 
@@ -32,6 +34,8 @@ import { JobMonitoringService } from './job-monitoring.service';
     EmailService,
     AgentService,
     JobMonitoringService,
+    GitAutomationService,
+    PullRequestService,
   ],
   exports: [
     PrismaService,
@@ -45,6 +49,8 @@ import { JobMonitoringService } from './job-monitoring.service';
     EmailService,
     AgentService,
     JobMonitoringService,
+    GitAutomationService,
+    PullRequestService,
   ],
 })
 export class ServicesModule {}

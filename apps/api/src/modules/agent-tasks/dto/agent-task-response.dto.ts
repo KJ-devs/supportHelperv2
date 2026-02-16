@@ -40,6 +40,15 @@ export class AgentTaskResponseDto {
   @ApiPropertyOptional({ nullable: true })
   error: string | null;
 
+  @ApiPropertyOptional({ nullable: true })
+  prNumber: number | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  prUrl: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  branchName: string | null;
+
   @ApiProperty()
   createdAt: Date;
 }
