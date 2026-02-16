@@ -9,3 +9,5 @@ export * from './prisma.service';
 export * from './email.service';
 export * from './agent.service';
 export * from './job-monitoring.service';
+export * from './git-automation.service';
+export * from './pull-request.service';
