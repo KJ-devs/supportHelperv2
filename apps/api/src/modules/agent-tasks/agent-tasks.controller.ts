@@ -26,7 +26,7 @@ import { AgentTaskResponseDto } from './dto/agent-task-response.dto';
 
 @ApiTags('Agent Tasks')
 @ApiBearerAuth()
-@Controller('api/v1/agent-tasks')
+@Controller('v1/agent-tasks')
 @UseGuards(JwtAuthGuard)
 export class AgentTasksController {
   constructor(

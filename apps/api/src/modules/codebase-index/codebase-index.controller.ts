@@ -17,7 +17,7 @@ import { ReindexDto } from './dto/reindex.dto';
 import { PrismaService } from '../../prisma/prisma.service';
 
 @ApiTags('codebase-index')
-@Controller('api/v1/applications')
+@Controller('v1/applications')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CodebaseIndexController {
