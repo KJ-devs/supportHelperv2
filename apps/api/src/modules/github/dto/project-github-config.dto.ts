@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum, IsBoolean } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
@@ -42,4 +42,35 @@ export class UpdateProjectGithubSettingsDto {
   @IsOptional()
   @IsString()
   defaultLabels?: string;
+
+  @ApiPropertyOptional({ description: 'Max retry attempts for agent tasks', minimum: 1, maximum: 10 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  maxRetries?: number;
+
+  @ApiPropertyOptional({ description: 'Agent task timeout in minutes', minimum: 1, maximum: 30 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  timeoutMinutes?: number;
+
+  @ApiPropertyOptional({ description: 'Enable automatic PR merging' })
+  @IsOptional()
+  @IsBoolean()
+  autoMergeEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Merge strategy for auto-merge',
+    enum: ['squash', 'merge', 'rebase'],
+  })
+  @IsOptional()
+  @IsEnum(['squash', 'merge', 'rebase'])
+  mergeStrategy?: 'squash' | 'merge' | 'rebase';
+
+  @ApiPropertyOptional({ description: 'Number of required reviews before merge', minimum: 0, maximum: 5 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  requiredReviews?: number;
 }

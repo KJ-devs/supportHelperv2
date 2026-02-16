@@ -110,6 +110,16 @@ export interface GitHubAppConfig {
   autoCreateIssues?: boolean;
   syncEnabled?: boolean;
   labelSync?: boolean;
+  settings?: {
+    agentMode?: 'auto' | 'review_plan' | 'review_all';
+    maxRetries?: number;
+    timeoutMinutes?: number;
+    autoMergeEnabled?: boolean;
+    mergeStrategy?: 'squash' | 'merge' | 'rebase';
+    requiredReviews?: number;
+    issueBodyTemplate?: string;
+    [key: string]: any;
+  };
 }
 
 export interface ConnectRepoData {
@@ -302,7 +312,7 @@ export const githubApi = {
    */
   async updateGithubSettings(
     appId: string,
-    settings: Partial<GitHubAppConfig>
+    settings: Record<string, any>
   ): Promise<GitHubAppConfig> {
     return apiRequest(`/api/applications/${appId}/github/settings`, {
       method: 'PATCH',
