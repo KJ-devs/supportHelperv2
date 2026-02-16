@@ -18,6 +18,32 @@ async function bootstrap() {
   // Enable graceful shutdown
   app.enableShutdownHooks();
 
+  // Graceful shutdown handlers
+  const shutdown = async (signal: string) => {
+    logger.log(`Received ${signal}, starting graceful shutdown...`);
+
+    try {
+      await app.close();
+      logger.log('Worker service shutdown completed');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during worker shutdown', error);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+
+  // Handle uncaught exceptions
+  process.on('uncaughtException', (error) => {
+    logger.error('Uncaught Exception in Worker', error);
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled Rejection in Worker', { reason });
+  });
+
   // No HTTP server needed for workers, but we can still start one for health checks
   const port = process.env.WORKER_PORT || 3003;
   await app.listen(port);

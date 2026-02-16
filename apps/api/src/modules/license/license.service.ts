@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { PrismaService } from '../../prisma/prisma.service';
 import { LICENSE_PUBLIC_KEY } from './keys/public.key';
 import {
@@ -247,5 +249,104 @@ export class LicenseService implements OnModuleInit {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     return `${year}-${month}`;
+  }
+
+  async getVersionInfo(): Promise<{
+    current: string;
+    dbVersion: string | null;
+    dbCompatible: boolean;
+    nodeVersion: string;
+    uptime: number;
+  }> {
+    // Read version from package.json
+    let current = '0.1.0';
+    try {
+      const packagePath = join(__dirname, '../../../package.json');
+      const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
+      current = packageJson.version || '0.1.0';
+    } catch (error) {
+      this.logger.warn(`Failed to read package.json version: ${error.message}`);
+    }
+
+    // Get latest migration from _prisma_migrations table
+    let dbVersion: string | null = null;
+    let dbCompatible = true;
+    try {
+      const migrations = await this.prisma.$queryRaw<
+        Array<{ migration_name: string; finished_at: Date | null }>
+      >`
+        SELECT migration_name, finished_at
+        FROM _prisma_migrations
+        WHERE finished_at IS NOT NULL
+        ORDER BY finished_at DESC
+        LIMIT 1
+      `;
+
+      if (migrations.length > 0) {
+        dbVersion = migrations[0].migration_name;
+      }
+
+      // For now, we consider DB compatible if we have a migration
+      // In the future, we could check against an expected migration name
+      dbCompatible = dbVersion !== null;
+    } catch (error) {
+      this.logger.warn(`Failed to query migrations table: ${error.message}`);
+      dbCompatible = false;
+    }
+
+    return {
+      current,
+      dbVersion,
+      dbCompatible,
+      nodeVersion: process.version,
+      uptime: Math.floor(process.uptime()),
+    };
+  }
+
+  async getLatestChangelog(): Promise<{
+    version: string;
+    date: string;
+    changes: string[];
+    dismissed: boolean;
+  } | null> {
+    try {
+      const systemConfig = await this.prisma.systemConfig.findUnique({
+        where: { key: 'latest_changelog' },
+      });
+
+      if (!systemConfig?.value || typeof systemConfig.value !== 'object') {
+        return null;
+      }
+
+      const changelog = systemConfig.value as {
+        version?: string;
+        date?: string;
+        changes?: string[];
+      };
+
+      return {
+        version: changelog.version || '0.1.0',
+        date: changelog.date || new Date().toISOString().split('T')[0],
+        changes: changelog.changes || [],
+        dismissed: false, // Will be user-specific in the controller if needed
+      };
+    } catch (error) {
+      this.logger.error(`Failed to get changelog: ${error.message}`);
+      return null;
+    }
+  }
+
+  async dismissChangelogForUser(userId: string): Promise<void> {
+    const key = `changelog_dismissed_${userId}`;
+    await this.prisma.systemConfig.upsert({
+      where: { key },
+      create: {
+        key,
+        value: { dismissed: true, timestamp: new Date().toISOString() },
+      },
+      update: {
+        value: { dismissed: true, timestamp: new Date().toISOString() },
+      },
+    });
   }
 }
