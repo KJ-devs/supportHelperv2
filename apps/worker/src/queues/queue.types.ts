@@ -128,7 +128,8 @@ export type AgentJobType =
   | 'auto-respond'
   | 'classify-ticket'
   | 'create-user-story' // Generate and create GitHub User Story from ticket
-  | 'generate-action-plan'; // Generate code-level action plan for a ticket (US-3.2)
+  | 'generate-action-plan' // Generate code-level action plan for a ticket (US-3.2)
+  | 'generate-code'; // Generate code changes, create branch and PR (US-3.3)
 
 export interface AgentJobData {
   type: AgentJobType;
@@ -186,6 +187,13 @@ export interface AgentResult {
     issueNumber?: number;
     issueUrl?: string;
     repository?: string;
+    // Code generation metadata (US-3.3)
+    agentTaskId?: string;
+    filesCount?: number;
+    complexity?: string;
+    prUrl?: string;
+    prNumber?: number;
+    branchName?: string;
   };
   error?: string;
 }
