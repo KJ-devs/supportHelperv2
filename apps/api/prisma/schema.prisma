@@ -22,16 +22,18 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users               User[]
-  applications        Application[]
-  tickets             Ticket[]
-  githubConnections   GithubConnection[]
-  githubInstallations GithubInstallation[]
-  integrations        Integration[]
-  aiConfig            AiConfig?
-  codebaseEmbeddings  CodebaseEmbedding[]
-  agentTasks          AgentTask[]
-  ticketEvents        TicketEvent[]
+  users                   User[]
+  applications            Application[]
+  tickets                 Ticket[]
+  githubConnections       GithubConnection[]
+  githubInstallations     GithubInstallation[]
+  integrations            Integration[]
+  aiConfig                AiConfig?
+  codebaseEmbeddings      CodebaseEmbedding[]
+  agentTasks              AgentTask[]
+  ticketEvents            TicketEvent[]
+  notificationPreferences NotificationPreference[]
+  notificationLogs        NotificationLog[]
 
   @@map("tenants")
 }
@@ -67,12 +69,13 @@ model Application {
   githubRepo String?  @map("github_repo") @db.VarChar(255)
   createdAt  DateTime @default(now()) @map("created_at")
 
-  tenant              Tenant               @relation(fields: [tenantId], references: [id])
-  tickets             Ticket[]
-  githubConfig        ProjectGithubConfig?
-  codebaseEmbeddings  CodebaseEmbedding[]
-  codebaseIndexStatus CodebaseIndexStatus?
-  agentTasks          AgentTask[]
+  tenant                  Tenant               @relation(fields: [tenantId], references: [id])
+  tickets                 Ticket[]
+  githubConfig            ProjectGithubConfig?
+  codebaseEmbeddings      CodebaseEmbedding[]
+  codebaseIndexStatus     CodebaseIndexStatus?
+  agentTasks              AgentTask[]
+  notificationPreferences NotificationPreference[]
 
   @@map("applications")
 }
@@ -109,6 +112,9 @@ model Ticket {
   aiAnalysis         Json?     @map("ai_analysis")
   keywords           String[]  @default([])
 
+  // Public tracking
+  publicId           String?   @unique @map("public_id") @db.VarChar(20)
+
   // Assignment
   assignedTo         String?   @map("assigned_to") @db.Uuid
   assignedAt         DateTime? @map("assigned_at")
@@ -129,6 +135,7 @@ model Ticket {
   integrationSyncLogs  IntegrationSyncLog[]
   agentTasks           AgentTask[]
   ticketEvents         TicketEvent[]
+  notificationLogs     NotificationLog[]
 
   @@index([tenantId])
   @@index([applicationId])
@@ -521,4 +528,47 @@ model TicketEvent {
   @@index([ticketId, createdAt])
   @@index([tenantId])
   @@map("ticket_events")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+model NotificationPreference {
+  id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  applicationId String   @map("application_id") @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  channel       String   @db.VarChar(50)
+  events        String[] @default([])
+  config        Json     @default("{}")
+  enabled       Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([applicationId])
+  @@index([tenantId])
+  @@map("notification_preferences")
+}
+
+model NotificationLog {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  channel   String   @db.VarChar(50)
+  eventType String   @map("event_type") @db.VarChar(100)
+  status    String   @default("pending") @db.VarChar(50)
+  metadata  Json     @default("{}")
+  error     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("notification_logs")
 }
