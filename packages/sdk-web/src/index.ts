@@ -218,6 +218,7 @@ export type {
   WidgetConfig,
   WidgetState,
   WidgetPosition,
+  WidgetTheme,
   WidgetEventMap,
   ReportPayload,
   ReportResponse,

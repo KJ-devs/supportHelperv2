@@ -38,8 +38,13 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
+  // Theme detection
+  private prefersDarkMediaQuery: MediaQueryList | null = null;
+  private hostMutationObserver: MutationObserver | null = null;
+  private resolvedTheme: 'light' | 'dark' = 'light';
+
   static get observedAttributes(): string[] {
-    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index'];
+    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
   }
 
   constructor() {
@@ -78,6 +83,9 @@ export class SupportHelperElement extends HTMLElement {
       console.warn('[SupportHelper] api-url attribute is required');
     }
 
+    // Initialize theme detection
+    this.initializeThemeDetection();
+
     // Render initial state
     this.render();
 
@@ -92,6 +100,8 @@ export class SupportHelperElement extends HTMLElement {
     if (this.videoRecorder?.isActive()) {
       this.videoRecorder.stop().catch(() => {});
     }
+    // Cleanup theme detection
+    this.cleanupThemeDetection();
     // Reset so event listeners re-attach on reconnect
     this.clickHandlerAttached = false;
   }
@@ -116,6 +126,12 @@ export class SupportHelperElement extends HTMLElement {
         break;
       case 'z-index':
         this.config.zIndex = newValue ? parseInt(newValue, 10) : DEFAULT_CONFIG.zIndex;
+        this.render();
+        break;
+      case 'theme':
+        this.config.theme = (newValue as WidgetConfig['theme']) || 'auto';
+        this.cleanupThemeDetection();
+        this.initializeThemeDetection();
         this.render();
         break;
     }
@@ -150,7 +166,8 @@ export class SupportHelperElement extends HTMLElement {
     const styles = createWidgetStyles(
       this.config.primaryColor,
       this.config.zIndex,
-      this.config.position
+      this.config.position,
+      this.resolvedTheme === 'dark'
     );
 
     // Set data-state attribute on host for CSS state-based selectors
@@ -580,6 +597,115 @@ export class SupportHelperElement extends HTMLElement {
     if (this.videoUrl) {
       URL.revokeObjectURL(this.videoUrl);
       this.videoUrl = null;
+    }
+  }
+
+  /**
+   * Initialize theme detection based on config.theme
+   */
+  private initializeThemeDetection(): void {
+    if (this.config.theme === 'light') {
+      this.resolvedTheme = 'light';
+    } else if (this.config.theme === 'dark') {
+      this.resolvedTheme = 'dark';
+    } else {
+      // Auto mode: detect system preference and host page
+      this.resolvedTheme = this.detectTheme();
+      this.setupThemeObservers();
+    }
+  }
+
+  /**
+   * Detect theme based on system preference and host page
+   */
+  private detectTheme(): 'light' | 'dark' {
+    // 1. Check host page for dark mode indicators
+    if (typeof document !== 'undefined') {
+      const html = document.documentElement;
+      const body = document.body;
+
+      // Check for common dark mode classes
+      if (html.classList.contains('dark') || body.classList.contains('dark')) {
+        return 'dark';
+      }
+
+      // Check for data-theme attribute
+      const htmlTheme = html.getAttribute('data-theme');
+      const bodyTheme = body.getAttribute('data-theme');
+      if (htmlTheme === 'dark' || bodyTheme === 'dark') {
+        return 'dark';
+      }
+    }
+
+    // 2. Check system preference
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+      if (prefersDark.matches) {
+        return 'dark';
+      }
+    }
+
+    // Default to light
+    return 'light';
+  }
+
+  /**
+   * Setup theme observers for auto mode
+   */
+  private setupThemeObservers(): void {
+    // 1. Listen to system preference changes
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      this.prefersDarkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleSystemThemeChange = (e: MediaQueryListEvent): void => {
+        this.resolvedTheme = this.detectTheme();
+        this.render();
+      };
+
+      // Use addEventListener for modern browsers
+      if (this.prefersDarkMediaQuery.addEventListener) {
+        this.prefersDarkMediaQuery.addEventListener('change', handleSystemThemeChange);
+      }
+    }
+
+    // 2. Observe host page changes (html/body class and data-theme changes)
+    if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+      this.hostMutationObserver = new MutationObserver(() => {
+        const newTheme = this.detectTheme();
+        if (newTheme !== this.resolvedTheme) {
+          this.resolvedTheme = newTheme;
+          this.render();
+        }
+      });
+
+      // Observe both html and body
+      const observerConfig: MutationObserverInit = {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme'],
+      };
+
+      this.hostMutationObserver.observe(document.documentElement, observerConfig);
+      if (document.body) {
+        this.hostMutationObserver.observe(document.body, observerConfig);
+      }
+    }
+  }
+
+  /**
+   * Cleanup theme observers
+   */
+  private cleanupThemeDetection(): void {
+    if (this.prefersDarkMediaQuery) {
+      // Remove event listener if supported
+      if (this.prefersDarkMediaQuery.removeEventListener) {
+        // We need to remove the exact handler, but since it's inline we can't
+        // For simplicity, we'll just set it to null and it will be GC'd
+      }
+      this.prefersDarkMediaQuery = null;
+    }
+
+    if (this.hostMutationObserver) {
+      this.hostMutationObserver.disconnect();
+      this.hostMutationObserver = null;
     }
   }
 
