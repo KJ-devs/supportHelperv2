@@ -13,6 +13,7 @@ import { ticketsApi } from '@/lib/api/tickets';
 import type { Ticket } from '@/lib/types/ticket';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TicketDetail } from '@/components/tickets/TicketDetail';
+import { TicketTimeline } from '@/components/tickets/TicketTimeline';
 import { PageLoader, Button } from '@/components/ui';
 
 export default function TicketDetailPage() {
@@ -143,6 +144,13 @@ export default function TicketDetailPage() {
                 </Button>
               </Link>
             </div>
+          </div>
+        )}
+
+        {/* Timeline */}
+        {ticket && !error && (
+          <div className="mb-6">
+            <TicketTimeline ticketId={ticketId} />
           </div>
         )}
 

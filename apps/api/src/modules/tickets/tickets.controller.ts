@@ -8,18 +8,22 @@ import {
   Delete,
   Query,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiBearerAuth,
   ApiResponse,
+  ApiParam,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
+import { TicketTimelineService } from './services/ticket-timeline.service';
 import { IntegrationsSyncService } from '../integrations/integrations-sync.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   CreateTicketDto,
   UpdateTicketDto,
@@ -49,7 +53,9 @@ export class TicketsController {
     private readonly ticketsService: TicketsService,
     private readonly ticketsSearchService: TicketsSearchService,
     private readonly ticketsAIService: TicketsAIService,
+    private readonly ticketTimelineService: TicketTimelineService,
     private readonly integrationsSyncService: IntegrationsSyncService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Post()
@@ -131,6 +137,23 @@ export class TicketsController {
     searchDto: SearchTicketsDto,
   ) {
     return this.ticketsSearchService.search(tenantId, searchDto);
+  }
+
+  @Get(':id/timeline')
+  @ApiOperation({ summary: 'Get ticket timeline events' })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'List of timeline events' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  async getTimeline(
+    @CurrentTenant() tenantId: string,
+    @Param('id') id: string,
+  ) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id, tenantId },
+      select: { id: true },
+    });
+    if (!ticket) throw new NotFoundException(`Ticket ${id} not found`);
+    return this.ticketTimelineService.getTimeline(id, tenantId);
   }
 
   @Get(':id')

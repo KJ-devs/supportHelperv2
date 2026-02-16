@@ -9,3 +9,4 @@ export { TicketDetail } from './TicketDetail';
 export { Pagination } from './Pagination';
 export { BulkActions } from './BulkActions';
 export { TicketCheckbox } from './TicketCheckbox';
+export { TicketTimeline } from './TicketTimeline';
