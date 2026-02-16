@@ -14,6 +14,9 @@ import {
   PullRequestService,
 } from './index';
 import { JobMonitoringService } from './job-monitoring.service';
+import { UsageSnapshotSchedulerService } from './usage-snapshot-scheduler.service';
+import { BullModule } from '@nestjs/bullmq';
+import { QUEUE_NAMES } from '../queues/queues.module';
 
 /**
  * Services Module
@@ -22,6 +25,7 @@ import { JobMonitoringService } from './job-monitoring.service';
  */
 @Global()
 @Module({
+  imports: [BullModule.registerQueue({ name: QUEUE_NAMES.USAGE_SNAPSHOT })],
   providers: [
     PrismaService,
     FFmpegService,
@@ -36,6 +40,7 @@ import { JobMonitoringService } from './job-monitoring.service';
     JobMonitoringService,
     GitAutomationService,
     PullRequestService,
+    UsageSnapshotSchedulerService,
   ],
   exports: [
     PrismaService,
@@ -51,6 +56,7 @@ import { JobMonitoringService } from './job-monitoring.service';
     JobMonitoringService,
     GitAutomationService,
     PullRequestService,
+    UsageSnapshotSchedulerService,
   ],
 })
 export class ServicesModule {}

@@ -141,6 +141,8 @@ export default function SettingsPage() {
   ] as const;
 
   const settingsPages = [
+    { href: '/dashboard/settings/plan', label: '💳 Plan & Usage' },
+    { href: '/dashboard/settings/license', label: '🔑 License' },
     { href: '/dashboard/settings/ai', label: '🤖 AI Configuration' },
     { href: '/dashboard/settings/github', label: '🐙 GitHub' },
     { href: '/dashboard/settings/status', label: '📊 Statut Systeme' },
