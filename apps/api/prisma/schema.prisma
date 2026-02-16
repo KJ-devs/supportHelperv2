@@ -30,6 +30,7 @@ model Tenant {
   integrations        Integration[]
   aiConfig            AiConfig?
   codebaseEmbeddings  CodebaseEmbedding[]
+  agentTasks          AgentTask[]
 
   @@map("tenants")
 }
@@ -70,6 +71,7 @@ model Application {
   githubConfig        ProjectGithubConfig?
   codebaseEmbeddings  CodebaseEmbedding[]
   codebaseIndexStatus CodebaseIndexStatus?
+  agentTasks          AgentTask[]
 
   @@map("applications")
 }
@@ -124,6 +126,7 @@ model Ticket {
   agentSessions        AgentSession[]
   feedbacks            ClassificationFeedback[]
   integrationSyncLogs  IntegrationSyncLog[]
+  agentTasks           AgentTask[]
 
   @@index([tenantId])
   @@index([applicationId])
@@ -458,4 +461,32 @@ model CodebaseIndexStatus {
   application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
   @@map("codebase_index_status")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AI AGENT TASKS
+// ═══════════════════════════════════════════════════════════════════════
+
+model AgentTask {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId        String    @map("ticket_id") @db.Uuid
+  tenantId        String    @map("tenant_id") @db.Uuid
+  applicationId   String    @map("application_id") @db.Uuid
+  status          String    @default("analyzing") @db.VarChar(50)
+  actionPlan      Json?     @map("action_plan") @db.JsonB
+  executionLog    Json      @default("[]") @map("execution_log") @db.JsonB
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  error           String?   @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  ticket      Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([tenantId, status])
+  @@index([applicationId])
+  @@map("agent_tasks")
 }

@@ -127,13 +127,16 @@ export type AgentJobType =
   | 'escalate-ticket'
   | 'auto-respond'
   | 'classify-ticket'
-  | 'create-user-story'; // Generate and create GitHub User Story from ticket
+  | 'create-user-story' // Generate and create GitHub User Story from ticket
+  | 'generate-action-plan'; // Generate code-level action plan for a ticket (US-3.2)
 
 export interface AgentJobData {
   type: AgentJobType;
   ticketId: string;
   tenantId: string;
   sessionId?: string;
+  applicationId?: string;
+  agentTaskId?: string;
   context?: AgentContext;
 }
 
