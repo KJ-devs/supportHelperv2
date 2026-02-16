@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, OnApplicationShutdown } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { Worker } from 'bullmq';
 import { QUEUE_NAMES } from '../queues/queues.module';
@@ -29,10 +29,7 @@ export class GracefulShutdownService implements OnApplicationShutdown {
   private readonly SHUTDOWN_TIMEOUT_MS = 30000; // 30 seconds
   private readonly workers: Map<string, Worker> = new Map();
 
-  constructor(@Inject(ModuleRef) moduleRef: ModuleRef) {
-    // ModuleRef available for future worker discovery
-    void moduleRef;
-  }
+  constructor(private readonly moduleRef: ModuleRef) {}
 
   /**
    * Lifecycle hook called when application receives shutdown signal
@@ -184,7 +181,7 @@ export class GracefulShutdownService implements OnApplicationShutdown {
   private async getActiveJobCounts(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {};
 
-    const countPromises = Array.from(this.workers.entries()).map(async ([name, _worker]) => {
+    const countPromises = Array.from(this.workers.entries()).map(async ([name, worker]) => {
       try {
         // Workers don't have a direct getActiveCount() method
         // We'd need to query the queue for active jobs

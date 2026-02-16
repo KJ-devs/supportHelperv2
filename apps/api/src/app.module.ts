@@ -6,6 +6,7 @@ import { APP_GUARD, APP_FILTER } from '@nestjs/core';
 import Redis from 'ioredis';
 import { ThrottlerStorageRedisService } from './common/services/throttler-storage-redis.service';
 import { ThrottlerExceptionFilter } from './common/filters/throttler-exception.filter';
+import { GracefulShutdownService } from './common/services/graceful-shutdown.service';
 
 // Configuration
 import configs, { validate } from './config';
@@ -216,6 +217,18 @@ import { SsoModule } from './modules/auth/sso/sso.module';
       provide: APP_FILTER,
       useClass: ThrottlerExceptionFilter,
     },
+    // Global structured logging interceptor
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: StructuredLoggingInterceptor,
+    },
+    // Global metrics interceptor (only active when PROMETHEUS_ENABLED=true)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: MetricsInterceptor,
+    },
+    // Graceful shutdown service (handles BullMQ queue cleanup)
+    GracefulShutdownService,
   ],
 })
 export class AppModule implements NestModule {

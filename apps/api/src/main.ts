@@ -11,12 +11,10 @@ import { validateEnvironmentVariables } from './config/validate-env';
 
 // BigInt cannot be serialized by JSON.stringify by default.
 // This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
-declare global {
-  interface BigInt {
-    toJSON(): number;
-  }
+interface BigInt {
+  toJSON(): number;
 }
-(BigInt.prototype as any).toJSON = function () {
+BigInt.prototype.toJSON = function () {
   return Number(this);
 };
 
@@ -26,6 +24,9 @@ async function bootstrap() {
 
   // Create the app
   const app = await NestFactory.create(AppModule);
+
+  // Enable graceful shutdown hooks
+  app.enableShutdownHooks();
 
   const config = app.get(ConfigService);
   const reflector = app.get(Reflector);
