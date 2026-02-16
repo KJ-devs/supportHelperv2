@@ -33,5 +33,6 @@ export const PLAN_FEATURES: Record<string, PlanType[]> = {
   auto_merge: ['pro', 'enterprise'],
   audit_logs: ['pro', 'enterprise'],
   multi_provider_ai: ['pro', 'enterprise'],
+  backup_restore: ['pro', 'enterprise'],
   sso: ['enterprise'],
 };
