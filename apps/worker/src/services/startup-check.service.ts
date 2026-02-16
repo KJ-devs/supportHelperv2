@@ -211,8 +211,8 @@ export class StartupCheckService implements OnModuleInit {
       const { encryptAES256GCM, decryptAES256GCM, parseEncryptionKey } = await import('@support-helper/shared');
       const encKey = parseEncryptionKey(key);
       const testPlaintext = 'startup-check-test';
-      const { ciphertext, iv } = encryptAES256GCM(testPlaintext, encKey);
-      const decrypted = decryptAES256GCM(ciphertext, iv, encKey);
+      const encrypted = encryptAES256GCM(testPlaintext, encKey);
+      const decrypted = decryptAES256GCM(encrypted, encKey);
 
       if (decrypted !== testPlaintext) {
         return {

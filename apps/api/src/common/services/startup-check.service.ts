@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
 import { execFile } from 'child_process';
@@ -56,7 +56,7 @@ export class StartupCheckService implements OnModuleInit {
       this.logger.error(
         `${fatalCount} fatal dependency check(s) failed. Application cannot start.`,
       );
-      throw new InternalServerErrorException('Fatal dependencies missing - see logs above');
+      throw new Error('Fatal dependencies missing - see logs above');
     }
   }
 
