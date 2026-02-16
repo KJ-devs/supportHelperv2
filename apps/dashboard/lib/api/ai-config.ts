@@ -1,32 +1,21 @@
 import { apiRequest } from './client';
+import type {
+  AIProviderType,
+  AiConfigResponse,
+  AIConfigUpdate,
+  ValidateKeyResponse,
+  TestConnectionPayload,
+} from '@/lib/types/ai-config';
 
-export interface AiConfigResponse {
-  configured: boolean;
-  id?: string;
-  tenantId?: string;
-  provider: string;
-  maskedApiKey: string | null;
-  model: string;
-  settings: Record<string, any>;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-export interface ValidateKeyResponse {
-  valid: boolean;
-  error?: string;
-}
+// Re-export types for convenience
+export type { AIProviderType, AiConfigResponse, AIConfigUpdate, ValidateKeyResponse, TestConnectionPayload };
 
 export const aiConfigApi = {
   getConfig: async (): Promise<AiConfigResponse> => {
     return apiRequest('/api/settings/ai');
   },
 
-  updateConfig: async (data: {
-    apiKey?: string;
-    model?: string;
-    settings?: Record<string, any>;
-  }): Promise<AiConfigResponse> => {
+  updateConfig: async (data: AIConfigUpdate): Promise<AiConfigResponse> => {
     return apiRequest('/api/settings/ai', {
       method: 'PATCH',
       body: JSON.stringify(data),
@@ -37,6 +26,13 @@ export const aiConfigApi = {
     return apiRequest('/api/settings/ai/validate-key', {
       method: 'POST',
       body: JSON.stringify({ apiKey }),
+    });
+  },
+
+  testConnection: async (payload: TestConnectionPayload): Promise<ValidateKeyResponse> => {
+    return apiRequest('/api/system/ai/test', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };
