@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
+import { TicketTimelineService } from './services/ticket-timeline.service';
 import { TicketsGateway } from './tickets.gateway';
 import { TicketsController } from './tickets.controller';
 import { SdkTicketsController } from './sdk-tickets.controller';
@@ -36,7 +37,7 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
     }),
   ],
   controllers: [TicketsController, SdkTicketsController],
-  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketsGateway, WsJwtGuard],
-  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketsGateway],
+  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, TicketsGateway, WsJwtGuard],
+  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, TicketsGateway],
 })
 export class TicketsModule {}

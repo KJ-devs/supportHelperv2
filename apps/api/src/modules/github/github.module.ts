@@ -10,6 +10,9 @@ import { AIModule } from '../../ai/ai.module';
 // Codebase Indexing
 import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 
+// Agent Tasks (CI feedback loop)
+import { AgentTasksModule } from '../agent-tasks/agent-tasks.module';
+
 // Services
 import {
   GithubOAuthService,
@@ -70,6 +73,7 @@ import { GithubWebhookProcessor } from './processors';
     PrismaModule,
     AIModule,
     forwardRef(() => CodebaseIndexModule),
+    forwardRef(() => AgentTasksModule),
     // Register BullMQ queue for async webhook processing
     BullModule.registerQueue({
       name: 'github',

@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubIssuesService } from '../services/github-issues.service';
 import { CodebaseIndexerService } from '../../codebase-index/services/codebase-indexer.service';
+import { CIFeedbackService } from '../../agent-tasks/services/ci-feedback.service';
 
 export interface GithubWebhookJobData {
   event: string;
@@ -32,6 +33,7 @@ export class GithubWebhookProcessor extends WorkerHost {
     private readonly issuesService: GithubIssuesService,
     @Inject(forwardRef(() => CodebaseIndexerService))
     private readonly codebaseIndexer: CodebaseIndexerService,
+    private readonly ciFeedbackService: CIFeedbackService,
   ) {
     super();
   }
@@ -236,7 +238,7 @@ export class GithubWebhookProcessor extends WorkerHost {
       `Processed check_run ${action}: ${check_run.name} on ${repository.full_name} - ${check_run.conclusion || 'pending'}`,
     );
 
-    // On completed check runs with failure, find linked tickets
+    // On completed check runs with failure, find linked tickets and trigger CI feedback loop
     if (action === 'completed' && check_run.conclusion === 'failure') {
       const linkedTickets: string[] = [];
 
@@ -257,6 +259,26 @@ export class GithubWebhookProcessor extends WorkerHost {
         this.logger.log(
           `CI failure for "${check_run.name}" linked to tickets: ${linkedTickets.join(', ')}`,
         );
+      }
+
+      // US-4.3: CI feedback loop — re-queue code generation for agent-generated PRs
+      const branchRef = check_run.pull_requests?.[0]?.head?.ref;
+      if (branchRef) {
+        const [repoOwner = '', repoName = ''] = (repository.full_name as string).split('/');
+        const ciResult = await this.ciFeedbackService.handleCIFailure({
+          owner: repoOwner,
+          repo: repoName,
+          branchName: branchRef,
+          checkName: check_run.name,
+          conclusion: check_run.conclusion,
+          headSha: check_run.head_sha,
+        });
+
+        if (ciResult.handled) {
+          this.logger.log(
+            `CI feedback loop: branch "${branchRef}" — action: ${ciResult.action}`,
+          );
+        }
       }
 
       return {
