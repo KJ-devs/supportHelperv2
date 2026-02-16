@@ -12,7 +12,7 @@ import type { Application, CreateApplicationData } from '@/lib/types/application
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
-import { PageLoader, Button, Card } from '@/components/ui';
+import { PageLoader, Button, EmptyState } from '@/components/ui';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -157,18 +157,14 @@ export default function ApplicationsPage() {
 
         {/* Empty State */}
         {!isLoading && applications.length === 0 && (
-          <Card className="text-center py-12">
-            <div className="text-6xl mb-4">📱</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Aucune application
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Créez votre première application pour commencer à recevoir des tickets.
-            </p>
-            <Button onClick={handleCreate}>
-              ➕ Créer une application
-            </Button>
-          </Card>
+          <EmptyState
+            icon="📱"
+            title="Aucune application"
+            description="Créez votre première application pour commencer à recevoir des tickets."
+            actionLabel="Créer une application"
+            onAction={handleCreate}
+            variant="bordered"
+          />
         )}
 
         {/* Applications Grid */}

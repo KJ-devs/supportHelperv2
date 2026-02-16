@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageLoader, Card, Button, Badge, Input } from '@/components/ui';
+import { PageLoader, Card, Button, Badge, Input, EmptyState } from '@/components/ui';
 import {
   auditLogsApi,
   type AuditLog,
@@ -399,8 +399,8 @@ export default function AuditLogPage() {
                 </span>
               </div>
             ) : logs.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 mb-4">
+              <EmptyState
+                icon={
                   <svg
                     className="w-8 h-8 text-gray-400"
                     fill="none"
@@ -414,14 +414,10 @@ export default function AuditLogPage() {
                       d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                     />
                   </svg>
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  No audit logs found
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  Actions will be recorded here automatically.
-                </p>
-              </div>
+                }
+                title="No audit logs found"
+                description="Actions will be recorded here automatically. User logins, ticket operations, and settings changes will all appear in this audit trail."
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

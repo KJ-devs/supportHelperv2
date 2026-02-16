@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageLoader, Card, Button, Badge, SeverityBadge, Modal } from '@/components/ui';
+import { PageLoader, Card, Button, Badge, SeverityBadge, Modal, EmptyState } from '@/components/ui';
 import { ConnectionStatus } from '@/components/github/ConnectionStatus';
 import { RepoCard } from '@/components/github/RepoCard';
 import {
@@ -284,12 +284,11 @@ function GitHubPageContent() {
                   </div>
                 </Card>
               ) : repos.length === 0 ? (
-                <Card className="text-center py-8">
-                  <p className="text-gray-500">No repositories found.</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Make sure your GitHub account has access to repositories.
-                  </p>
-                </Card>
+                <EmptyState
+                  icon="📚"
+                  title="No repositories found"
+                  description="Make sure your GitHub account has access to repositories. You may need to grant additional permissions."
+                />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {repos.map((repo) => (
@@ -337,12 +336,13 @@ function GitHubPageContent() {
                   </div>
                 </Card>
               ) : analyzedTickets.length === 0 ? (
-                <Card className="text-center py-8">
-                  <p className="text-gray-500">No eligible tickets found.</p>
-                  <p className="text-sm text-gray-400 mt-1">
-                    Tickets with status &quot;open&quot; or &quot;in_progress&quot; will appear here.
-                  </p>
-                </Card>
+                <EmptyState
+                  icon="🎫"
+                  title="No eligible tickets found"
+                  description="Tickets with status 'open' or 'in_progress' will appear here for user story generation."
+                  actionLabel="View all tickets"
+                  actionHref="/dashboard/tickets"
+                />
               ) : (
                 <Card padding={false}>
                   <div className="overflow-x-auto">

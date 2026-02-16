@@ -13,7 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatsCard } from '@/components/analytics/StatsCard';
 import { SimpleBarChart } from '@/components/analytics/SimpleBarChart';
 import { PieChart } from '@/components/analytics/PieChart';
-import { PageLoader, Card, Button, Select } from '@/components/ui';
+import { PageLoader, Card, Button, Select, EmptyState } from '@/components/ui';
 
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -104,6 +104,8 @@ export default function AnalyticsPage() {
   const resolvedTickets = (stats.byStatus.resolved || 0) + (stats.byStatus.closed || 0);
   const resolutionRate = stats.total > 0 ? ((resolvedTickets / stats.total) * 100).toFixed(1) : '0';
 
+  const hasNoData = stats.total === 0;
+
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
@@ -118,20 +120,35 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Time Range Selector */}
-            <Select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value as any)}
-              options={[
-                { value: '7d', label: '7 derniers jours' },
-                { value: '30d', label: '30 derniers jours' },
-                { value: '90d', label: '90 derniers jours' },
-                { value: 'all', label: 'Tout' },
-              ]}
-            />
+            {!hasNoData && (
+              <Select
+                value={timeRange}
+                onChange={(e) => setTimeRange(e.target.value as any)}
+                options={[
+                  { value: '7d', label: '7 derniers jours' },
+                  { value: '30d', label: '30 derniers jours' },
+                  { value: '90d', label: '90 derniers jours' },
+                  { value: 'all', label: 'Tout' },
+                ]}
+              />
+            )}
           </div>
         </div>
 
+        {/* Empty State */}
+        {hasNoData && (
+          <EmptyState
+            icon="📊"
+            title="Pas encore de données"
+            description="Les statistiques s'afficheront dès que vous recevrez vos premiers tickets. Créez une application et intégrez le SDK pour commencer."
+            actionLabel="Créer une application"
+            actionHref="/dashboard/applications"
+            variant="bordered"
+          />
+        )}
+
         {/* Key Metrics */}
+        {!hasNoData && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatsCard
             title="Total Tickets"
@@ -241,6 +258,7 @@ export default function AnalyticsPage() {
             🔄 Actualiser les données
           </Button>
         </div>
+        )}
       </div>
     </DashboardLayout>
   );
