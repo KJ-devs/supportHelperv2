@@ -13,7 +13,7 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards';
 import { LicenseFeatureGuard } from '../license/guards/license-feature.guard';
 import { RequireFeature } from '../license/decorators/require-feature.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';

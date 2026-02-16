@@ -1,7 +1,7 @@
 import { Controller, Get, Patch, Body, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { TenantsService } from './tenants.service';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @ApiTags('tenants')

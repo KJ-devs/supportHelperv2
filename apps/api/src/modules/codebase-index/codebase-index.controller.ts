@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards';
 import { CodebaseIndexerService } from './services/codebase-indexer.service';
 import { CodebaseSearchService } from './services/codebase-search.service';
 import { SearchCodebaseDto } from './dto/search-codebase.dto';

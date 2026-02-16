@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
 import { CacheService, CacheTTL, CacheKeys } from '../cache';
 import { Public } from '../common/decorators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards';
 
 @ApiTags('Health')
 @Controller('health')
