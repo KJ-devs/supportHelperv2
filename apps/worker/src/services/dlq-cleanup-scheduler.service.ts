@@ -55,7 +55,7 @@ export class DlqCleanupSchedulerService implements OnModuleInit {
 
       this.logger.log(`DLQ cleanup scheduled with cron: ${cronExpression}`);
     } catch (error) {
-      this.logger.error(`Failed to schedule DLQ cleanup: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(`Failed to schedule DLQ cleanup: ${error.message}`);
     }
   }
 

@@ -22,13 +22,22 @@ model Tenant {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users               User[]
-  applications        Application[]
-  tickets             Ticket[]
-  githubConnections   GithubConnection[]
-  githubInstallations GithubInstallation[]
-  integrations        Integration[]
-  aiConfig            AiConfig?
+  users                   User[]
+  applications            Application[]
+  tickets                 Ticket[]
+  githubConnections       GithubConnection[]
+  githubInstallations     GithubInstallation[]
+  integrations            Integration[]
+  aiConfig                AiConfig?
+  codebaseEmbeddings      CodebaseEmbedding[]
+  agentTasks              AgentTask[]
+  ticketEvents            TicketEvent[]
+  notificationPreferences NotificationPreference[]
+  notificationLogs        NotificationLog[]
+  licenseUsage            LicenseUsage[]
+  auditLogs               AuditLog[]
+  ssoConfig               SsoConfig?
+  archivedDeadLetterJobs  ArchivedDeadLetterJob[]
 
   @@map("tenants")
 }
