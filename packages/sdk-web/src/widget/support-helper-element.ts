@@ -38,6 +38,10 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
+  // Attention pulse timer
+  private attentionPulseTimer: number | null = null;
+  private attentionPulseDelay = 5000; // 5 seconds
+
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index'];
   }
@@ -83,11 +87,15 @@ export class SupportHelperElement extends HTMLElement {
 
     // Attach event listeners
     this.attachEventListeners();
+
+    // Start attention pulse timer for FAB
+    this.startAttentionPulseTimer();
   }
 
   disconnectedCallback(): void {
     // Cleanup
     this.stopRecordingTimer();
+    this.stopAttentionPulseTimer();
     this.cleanupVideoUrl();
     if (this.videoRecorder?.isActive()) {
       this.videoRecorder.stop().catch(() => {});
@@ -516,11 +524,14 @@ export class SupportHelperElement extends HTMLElement {
     // Emit events for state changes
     if (newState !== 'idle' && prevState === 'idle') {
       this.emit('sh:open', undefined);
+      this.stopAttentionPulseTimer();
     } else if (newState === 'idle' && prevState !== 'idle') {
       this.emit('sh:close', undefined);
       // Cleanup on close
       this.cleanupRecording();
       this.formData = { title: '', description: '' };
+      // Restart attention pulse timer when returning to idle
+      this.startAttentionPulseTimer();
     }
 
     // Re-render
@@ -580,6 +591,41 @@ export class SupportHelperElement extends HTMLElement {
     if (this.videoUrl) {
       URL.revokeObjectURL(this.videoUrl);
       this.videoUrl = null;
+    }
+  }
+
+  /**
+   * Start attention pulse timer - adds pulse animation to FAB after delay
+   */
+  private startAttentionPulseTimer(): void {
+    // Only pulse when in idle state
+    if (this.stateMachine.getState() !== 'idle') return;
+
+    this.stopAttentionPulseTimer();
+    this.attentionPulseTimer = window.setTimeout(() => {
+      const fab = this.shadow.querySelector('.sh-fab');
+      if (fab && this.stateMachine.getState() === 'idle') {
+        fab.classList.add('sh-attention-pulse');
+        // Remove class after animation completes (2s * 3 iterations = 6s)
+        setTimeout(() => {
+          fab.classList.remove('sh-attention-pulse');
+        }, 6000);
+      }
+    }, this.attentionPulseDelay);
+  }
+
+  /**
+   * Stop attention pulse timer
+   */
+  private stopAttentionPulseTimer(): void {
+    if (this.attentionPulseTimer !== null) {
+      clearTimeout(this.attentionPulseTimer);
+      this.attentionPulseTimer = null;
+    }
+    // Remove class if present
+    const fab = this.shadow.querySelector('.sh-fab');
+    if (fab) {
+      fab.classList.remove('sh-attention-pulse');
     }
   }
 
