@@ -34,7 +34,7 @@ export class NotionProvider extends BaseIntegrationProvider {
         database_id: config.databaseId,
       });
 
-      const dbTitle = (database as any).title?.[0]?.plain_text || 'Untitled';
+      const dbTitle = (database as { title?: Array<{ plain_text?: string }> }).title?.[0]?.plain_text || 'Untitled';
 
       return {
         success: true,
@@ -148,7 +148,7 @@ export class NotionProvider extends BaseIntegrationProvider {
       return {
         success: true,
         externalId: page.id,
-        externalUrl: (page as any).url,
+        externalUrl: (page as { url?: string }).url,
         message: 'Page created in Notion',
       };
     } catch (error) {
@@ -204,7 +204,7 @@ export class NotionProvider extends BaseIntegrationProvider {
       return {
         success: true,
         externalId: page.id,
-        externalUrl: (page as any).url,
+        externalUrl: (page as { url?: string }).url,
         message: 'Page updated in Notion',
       };
     } catch (error) {
@@ -239,7 +239,17 @@ export class NotionProvider extends BaseIntegrationProvider {
         });
 
         for (const page of response.results) {
-          const p = page as any;
+          type NotionPage = {
+            id: string;
+            url?: string;
+            created_time?: string;
+            last_edited_time?: string;
+            properties?: Record<string, {
+              title?: Array<{ plain_text?: string }>;
+              select?: { name?: string };
+            }>;
+          };
+          const p = page as NotionPage;
           const props = p.properties || {};
 
           const title = props.Name?.title?.[0]?.plain_text || 'Untitled';

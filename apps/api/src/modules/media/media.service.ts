@@ -210,6 +210,7 @@ export class MediaService {
     }
 
     // Update media record
+    const existingMetadata = (media.metadata as Record<string, unknown>) || {};
     const updatedMedia = await this.prisma.media.update({
       where: { id: mediaId },
       data: {
@@ -217,7 +218,7 @@ export class MediaService {
         storageUrl: this.s3Service.getPublicUrl(storageKey),
         fileSize: BigInt(s3Metadata.contentLength || 0),
         metadata: {
-          ...((media.metadata as any) || {}),
+          ...existingMetadata,
           uploadCompletedAt: new Date().toISOString(),
           s3Metadata,
           videoMetadata,

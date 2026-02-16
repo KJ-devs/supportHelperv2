@@ -195,8 +195,8 @@ export class SdkTicketsController {
         hasVideo: !!video,
         videoSize: video?.size,
       },
-      type: mappedType as any,
-      severity: mappedSeverity as any,
+      type: mappedType as 'bug' | 'feature_request' | 'question' | 'documentation' | 'performance' | 'security' | 'other',
+      severity: mappedSeverity as 'critical' | 'high' | 'medium' | 'low',
     });
 
     // Update keywords

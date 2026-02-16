@@ -69,7 +69,7 @@ export class NotificationPreferencesController {
         tenantId,
         channel: dto.channel,
         events: dto.events ?? [],
-        config: (dto.config ?? {}) as any,
+        config: dto.config ?? {},
         enabled: dto.enabled ?? true,
       },
     });
@@ -104,7 +104,7 @@ export class NotificationPreferencesController {
       data: {
         ...(dto.channel !== undefined && { channel: dto.channel }),
         ...(dto.events !== undefined && { events: dto.events }),
-        ...(dto.config !== undefined && { config: dto.config as any }),
+        ...(dto.config !== undefined && { config: dto.config }),
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
       },
     });

@@ -64,7 +64,13 @@ export class CIFeedbackService {
     ].join('\n');
 
     // 4. Update task: increment retry, store error, reset status, and append to execution log
-    const currentLog = (agentTask.executionLog as any[]) || [];
+    type ExecutionLogEntry = {
+      step: string;
+      message: string;
+      attempt?: number;
+      timestamp: string;
+    };
+    const currentLog = (agentTask.executionLog as ExecutionLogEntry[]) || [];
     await this.prisma.agentTask.update({
       where: { id: agentTask.id },
       data: {

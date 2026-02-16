@@ -550,6 +550,7 @@ export class GithubIssuesService {
       aiAnalysis = ticket.aiSummary;
     }
 
+    type TicketWithReporter = typeof ticket & { reporterEmail?: string };
     return {
       title: ticket.title || `Support Ticket #${ticket.id.slice(0, 8)}`,
       description: ticket.description || 'No description provided.',
@@ -558,7 +559,7 @@ export class GithubIssuesService {
       steps: stepsText,
       recording_url: recordingUrl,
       ticket_url: `${this.apiUrl}/tickets/${ticket.id}`,
-      reporter: (ticket as any).reporterEmail || 'Unknown',
+      reporter: (ticket as TicketWithReporter).reporterEmail || 'Unknown',
       ai_analysis: aiAnalysis,
       user_context: userContextText,
       ticket_id: ticket.id.slice(0, 8),

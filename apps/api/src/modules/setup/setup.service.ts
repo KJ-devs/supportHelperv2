@@ -152,10 +152,10 @@ export class SetupService {
       where: { key: 'smtp_config' },
       create: {
         key: 'smtp_config',
-        value: config as any,
+        value: config,
       },
       update: {
-        value: config as any,
+        value: config,
       },
     });
 
@@ -215,10 +215,10 @@ export class SetupService {
       where: { key: 'setup_progress' },
       create: {
         key: 'setup_progress',
-        value: progress as any,
+        value: progress,
       },
       update: {
-        value: progress as any,
+        value: progress,
       },
     });
 

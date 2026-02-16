@@ -124,7 +124,7 @@ export class GithubWebhooksService {
           : null,
         eventType: event,
         action: payload.action || null,
-        payload: payload as any,
+        payload: payload,
         processed: false,
       },
     });

@@ -148,7 +148,7 @@ export class AiConfigService {
       const providerType = provider || AIProviderType.ANTHROPIC;
 
       const config: AIProviderConfig = {
-        provider: providerType as any,
+        provider: providerType as 'anthropic' | 'openai' | 'ollama',
         apiKey,
         endpoint,
         model,

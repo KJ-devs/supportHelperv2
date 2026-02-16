@@ -83,7 +83,7 @@ export class NotificationService {
           channel: pref.channel,
           eventType,
           status: 'pending',
-          metadata: data as any,
+          metadata: data,
         },
       });
     }

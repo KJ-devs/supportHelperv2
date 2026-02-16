@@ -131,8 +131,9 @@ export class JiraProvider extends BaseIntegrationProvider {
         descriptionParts.push(`\n--- AI Summary ---\n${ticket.aiSummary}`);
       }
 
-      if ((ticket as any).aiAnalysis) {
-        descriptionParts.push(`\n--- AI Analysis ---\n${(ticket as any).aiAnalysis}`);
+      type TicketWithAiAnalysis = Ticket & { aiAnalysis?: string };
+      if ((ticket as TicketWithAiAnalysis).aiAnalysis) {
+        descriptionParts.push(`\n--- AI Analysis ---\n${(ticket as TicketWithAiAnalysis).aiAnalysis}`);
       }
 
       descriptionParts.push(`\n--- Ticket Info ---`);
@@ -225,8 +226,9 @@ export class JiraProvider extends BaseIntegrationProvider {
         descriptionParts.push(`\n--- AI Summary ---\n${ticket.aiSummary}`);
       }
 
-      if ((ticket as any).aiAnalysis) {
-        descriptionParts.push(`\n--- AI Analysis ---\n${(ticket as any).aiAnalysis}`);
+      type TicketWithAiAnalysis = Ticket & { aiAnalysis?: string };
+      if ((ticket as TicketWithAiAnalysis).aiAnalysis) {
+        descriptionParts.push(`\n--- AI Analysis ---\n${(ticket as TicketWithAiAnalysis).aiAnalysis}`);
       }
 
       descriptionParts.push(`\n--- Ticket Info ---`);
