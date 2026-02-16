@@ -131,6 +131,17 @@ export class TicketsGateway
       .emit('ticket:ai-analysis-completed', { event: 'ticket:ai-analysis-completed', ticket, timestamp: new Date() });
   }
 
+  emitTimelineEvent(tenantId: string, ticketId: string, event: any) {
+    this.server
+      .to(this.tenantRoom(tenantId))
+      .emit('ticket:timeline-event', {
+        event: 'ticket:timeline-event',
+        ticketId,
+        timelineEvent: event,
+        timestamp: new Date(),
+      });
+  }
+
   // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------

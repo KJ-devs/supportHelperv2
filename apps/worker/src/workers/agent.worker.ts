@@ -1290,8 +1290,8 @@ Keep responses concise but thorough.`,
           aiSummary: null,
         });
 
-        // Build prompt and call Claude
-        const userPrompt = this.buildCodeGenUserPrompt(file, currentContent, codeContext, actionPlan);
+        // Build prompt and call Claude, including CI error context for retries
+        const userPrompt = this.buildCodeGenUserPrompt(file, currentContent, codeContext, actionPlan, agentTask.ciErrorLog);
 
         apiCallCount++;
         this.logger.log(`Calling Claude for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`);
@@ -1502,8 +1502,19 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     currentContent: string,
     codeContext: Array<{ filePath: string; content: string; language: string; distance: number }>,
     actionPlan: { summary: string; rootCause: string; files: any[]; testingStrategy: string },
+    ciErrorLog?: string | null,
   ): string {
     const parts: string[] = [];
+
+    // US-4.3: If this is a CI retry, include the error context first
+    if (ciErrorLog) {
+      parts.push('## Previous CI Error');
+      parts.push('The previous code generation failed CI checks. Here is the error:');
+      parts.push(ciErrorLog);
+      parts.push('');
+      parts.push('Please fix the issues described above in your code generation.');
+      parts.push('');
+    }
 
     parts.push('## Task');
     parts.push(`**Operation:** ${file.operation}`);

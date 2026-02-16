@@ -31,6 +31,7 @@ model Tenant {
   aiConfig            AiConfig?
   codebaseEmbeddings  CodebaseEmbedding[]
   agentTasks          AgentTask[]
+  ticketEvents        TicketEvent[]
 
   @@map("tenants")
 }
@@ -127,6 +128,7 @@ model Ticket {
   feedbacks            ClassificationFeedback[]
   integrationSyncLogs  IntegrationSyncLog[]
   agentTasks           AgentTask[]
+  ticketEvents         TicketEvent[]
 
   @@index([tenantId])
   @@index([applicationId])
@@ -479,6 +481,10 @@ model AgentTask {
   completedAt     DateTime? @map("completed_at")
   error           String?   @db.Text
 
+  // CI retry tracking
+  retryCount      Int       @default(0) @map("retry_count")
+  ciErrorLog      String?   @map("ci_error_log") @db.Text
+
   // PR tracking
   prNumber        Int?      @map("pr_number")
   prUrl           String?   @map("pr_url") @db.Text
@@ -495,4 +501,24 @@ model AgentTask {
   @@index([tenantId, status])
   @@index([applicationId])
   @@map("agent_tasks")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TICKET EVENTS / TIMELINE
+// ═══════════════════════════════════════════════════════════════════════
+
+model TicketEvent {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  eventType String   @map("event_type") @db.VarChar(100)
+  data      Json     @default("{}") @db.JsonB
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+  @@index([tenantId])
+  @@map("ticket_events")
 }

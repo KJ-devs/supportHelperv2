@@ -1,12 +1,16 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
+import { TicketTimelineService } from '../tickets/services/ticket-timeline.service';
 import { ActionPlan, AgentTaskStatus } from './types/action-plan.types';
 
 @Injectable()
 export class AgentTasksService {
   private readonly logger = new Logger(AgentTasksService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ticketTimeline: TicketTimelineService,
+  ) {}
 
   async create(ticketId: string, tenantId: string, applicationId: string) {
     const task = await this.prisma.agentTask.create({
@@ -21,6 +25,14 @@ export class AgentTasksService {
     });
 
     this.logger.log(`Created agent task ${task.id} for ticket ${ticketId}`);
+
+    await this.ticketTimeline.recordEvent(
+      ticketId,
+      tenantId,
+      'agent_analysis_started',
+      { agentTaskId: task.id },
+    );
+
     return task;
   }
 
@@ -70,6 +82,14 @@ export class AgentTasksService {
     });
 
     this.logger.log(`Set action plan for agent task ${id}`);
+
+    await this.ticketTimeline.recordEvent(
+      task.ticketId,
+      task.tenantId,
+      'agent_plan_ready',
+      { agentTaskId: id },
+    );
+
     return task;
   }
 
@@ -80,6 +100,14 @@ export class AgentTasksService {
     });
 
     this.logger.log(`Approved agent task ${id}`);
+
+    await this.ticketTimeline.recordEvent(
+      task.ticketId,
+      task.tenantId,
+      'agent_plan_approved',
+      { agentTaskId: id },
+    );
+
     return task;
   }
 
