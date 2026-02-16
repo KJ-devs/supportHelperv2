@@ -57,6 +57,9 @@ import { NotificationModule } from './modules/notifications/notification.module'
 // Setup Wizard
 import { SetupModule } from './modules/setup/setup.module';
 
+// License Verification
+import { LicenseModule } from './modules/license/license.module';
+
 /**
  * Root Application Module
  *
@@ -178,6 +181,9 @@ import { SetupModule } from './modules/setup/setup.module';
 
     // Setup Wizard
     SetupModule,
+
+    // License Verification
+    LicenseModule,
   ],
   providers: [
     // Global rate limiting guard

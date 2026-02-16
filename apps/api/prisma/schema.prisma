@@ -34,6 +34,7 @@ model Tenant {
   ticketEvents            TicketEvent[]
   notificationPreferences NotificationPreference[]
   notificationLogs        NotificationLog[]
+  licenseUsage            LicenseUsage[]
 
   @@map("tenants")
 }
@@ -613,4 +614,24 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// LICENSE & USAGE TRACKING
+// ═══════════════════════════════════════════════════════════════════════
+
+model LicenseUsage {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  month     String   @db.VarChar(7) // "2026-02"
+  metric    String   @db.VarChar(50) // "tickets", "agent_tasks", "users"
+  count     Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, month, metric])
+  @@index([tenantId])
+  @@map("license_usage")
 }
