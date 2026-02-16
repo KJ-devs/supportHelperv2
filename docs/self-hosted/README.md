@@ -6,6 +6,7 @@ This directory contains documentation for self-hosting Support Helper Platform.
 
 - **[Installation Guide](./installation.md)** - Complete setup instructions using Docker Compose
 - **[Updating Guide](./updating.md)** - How to update your installation
+- **[Backup & Restore Guide](./backup-restore.md)** - Backup and restore procedures
 
 ## Overview
 
@@ -28,7 +29,11 @@ Support Helper Platform can be self-hosted using Docker Compose. The production 
 ## Maintenance
 
 - **Updating** - Use `./scripts/update.sh` for automated updates with backup and rollback
-- **Backup** - Database, MinIO, and Redis backup procedures in the installation guide
+- **Backup & Restore** - Comprehensive guide in [backup-restore.md](./backup-restore.md)
+  - Manual backups with `./scripts/backup.sh`
+  - Automated backups via cron with `./scripts/backup-cron.sh`
+  - Full restore procedure with `./scripts/restore.sh`
+  - Cloud storage sync (S3, GCS, Azure)
 - **Monitoring** - Health checks at `/health`, `/health/live`, and `/health/ready`
 
 ## Support

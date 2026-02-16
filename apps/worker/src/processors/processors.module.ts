@@ -4,6 +4,7 @@ import { GithubSyncWorker } from '../workers/github-sync.worker';
 import { AgentWorker } from '../workers/agent.worker';
 import { IntegrationSyncWorker } from '../workers/integration-sync.worker';
 import { CodebaseIndexingWorker } from '../workers/codebase-indexing.worker';
+import { BackupWorker } from '../workers/backup.worker';
 import { DeadLetterWorker } from '../workers/dead-letter.worker';
 
 /**
@@ -18,6 +19,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     AgentWorker,
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
+    BackupWorker,
     DeadLetterWorker,
   ],
   exports: [
@@ -26,6 +28,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     AgentWorker,
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
+    BackupWorker,
     DeadLetterWorker,
   ],
 })

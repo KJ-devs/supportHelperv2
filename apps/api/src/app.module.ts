@@ -63,6 +63,9 @@ import { LicenseModule } from './modules/license/license.module';
 // Audit Logging
 import { AuditModule } from './modules/audit/audit.module';
 
+// Backup & Restore
+import { BackupModule } from './modules/backup/backup.module';
+
 /**
  * Root Application Module
  *
@@ -190,6 +193,9 @@ import { AuditModule } from './modules/audit/audit.module';
 
     // Audit Logging
     AuditModule,
+
+    // Backup & Restore
+    BackupModule,
   ],
   providers: [
     // Global rate limiting guard

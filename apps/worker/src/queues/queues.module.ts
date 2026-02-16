@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   AGENT_ORCHESTRATION: 'agent-orchestration',
   INTEGRATION_SYNC: 'integration-sync',
   CODEBASE_INDEXING: 'codebase-indexing',
+  BACKUP: 'backup',
 } as const;
 
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
@@ -121,6 +122,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
         },
         removeOnComplete: 50,
         removeOnFail: 100,
+      },
+    }),
+
+    // Backup Queue
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.BACKUP,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
       },
     }),
 
