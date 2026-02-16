@@ -62,7 +62,8 @@ export class CacheService {
    */
   async invalidateByPrefix(prefix: string): Promise<void> {
     try {
-      const store = (this.cache as any).store;
+      // Access the underlying store (cache-manager's Redis store)
+      const store = (this.cache as { store?: { keys?: (pattern: string) => Promise<string[]> } }).store;
       if (store && typeof store.keys === 'function') {
         const keys: string[] = await store.keys(`sh:cache:${prefix}*`);
         if (keys.length > 0) {

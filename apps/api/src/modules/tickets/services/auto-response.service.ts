@@ -90,7 +90,7 @@ export class AutoResponseService {
                 prUrl: effectivePrDetails.prUrl,
                 branchName: effectivePrDetails.branchName,
               } : undefined,
-            } as any,
+            },
           },
         }),
       ]);
