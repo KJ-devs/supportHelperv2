@@ -8,6 +8,7 @@
 import { useState, useEffect } from 'react';
 import type { Application, CreateApplicationData } from '@/lib/types/application';
 import { Modal, Button, Input, Select } from '@/components/ui';
+import { Globe, Smartphone, Monitor, Package, Video, FileText, Bot, Bell, Lightbulb } from 'lucide-react';
 
 interface ApplicationModalProps {
   isOpen: boolean;
@@ -145,10 +146,10 @@ export function ApplicationModal({
           required
           disabled={isLoading}
           options={[
-            { value: 'web', label: '🌐 Web' },
-            { value: 'mobile', label: '📱 Mobile' },
-            { value: 'desktop', label: '💻 Desktop' },
-            { value: 'other', label: '📦 Autre' },
+            { value: 'web', label: 'Web' },
+            { value: 'mobile', label: 'Mobile' },
+            { value: 'desktop', label: 'Desktop' },
+            { value: 'other', label: 'Autre' },
           ]}
         />
 
@@ -169,8 +170,9 @@ export function ApplicationModal({
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  🎥 Enregistrement vidéo
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Video className="w-4 h-4" aria-hidden="true" />
+                  Enregistrement vidéo
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Permettre l&apos;enregistrement de vidéos avec les tickets
@@ -188,8 +190,9 @@ export function ApplicationModal({
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  📝 Capture des logs
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <FileText className="w-4 h-4" aria-hidden="true" />
+                  Capture des logs
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Capturer les logs console automatiquement
@@ -207,8 +210,9 @@ export function ApplicationModal({
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  🤖 Attribution automatique
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Bot className="w-4 h-4" aria-hidden="true" />
+                  Attribution automatique
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Assigner automatiquement les nouveaux tickets
@@ -226,8 +230,9 @@ export function ApplicationModal({
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  🔔 Notifications
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                  <Bell className="w-4 h-4" aria-hidden="true" />
+                  Notifications
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   Recevoir des notifications pour les nouveaux tickets
@@ -239,9 +244,10 @@ export function ApplicationModal({
 
         {application && (
           <div className="pt-4 border-t dark:border-gray-700">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              💡 La clé SDK ne peut pas être modifiée. Utilisez le bouton &quot;Régénérer&quot;
-              sur la carte de l&apos;application pour créer une nouvelle clé.
+            <p className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-2">
+              <Lightbulb className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <span>La clé SDK ne peut pas être modifiée. Utilisez le bouton &quot;Régénérer&quot;
+              sur la carte de l&apos;application pour créer une nouvelle clé.</span>
             </p>
           </div>
         )}

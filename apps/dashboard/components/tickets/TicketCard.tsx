@@ -8,6 +8,7 @@
 import Link from 'next/link';
 import type { Ticket } from '@/lib/types/ticket';
 import { StatusBadge, SeverityBadge, TypeBadge } from '@/components/ui';
+import { AppWindow, Bot } from 'lucide-react';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -44,8 +45,9 @@ export function TicketCard({ ticket }: TicketCardProps) {
         <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-3 border-t dark:border-gray-700">
           <div className="flex items-center space-x-2">
             {ticket.application && (
-              <span className="flex items-center">
-                📱 {ticket.application.name}
+              <span className="flex items-center gap-1">
+                <AppWindow className="w-3 h-3" aria-hidden="true" />
+                {ticket.application.name}
               </span>
             )}
           </div>
@@ -54,9 +56,10 @@ export function TicketCard({ ticket }: TicketCardProps) {
 
         {/* AI Summary */}
         {ticket.aiSummary && (
-          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 rounded p-2">
-            <span className="font-medium">🤖 IA:</span> {ticket.aiSummary.substring(0, 100)}
-            {ticket.aiSummary.length > 100 && '...'}
+          <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 rounded p-2 flex items-start gap-2">
+            <Bot className="w-3 h-3 flex-shrink-0 mt-0.5" aria-hidden="true" />
+            <span><span className="font-medium">IA:</span> {ticket.aiSummary.substring(0, 100)}
+            {ticket.aiSummary.length > 100 && '...'}</span>
           </div>
         )}
       </div>

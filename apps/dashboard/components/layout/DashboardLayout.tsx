@@ -11,22 +11,38 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import {
+  LayoutDashboard,
+  Ticket,
+  Bot,
+  AppWindow,
+  Plug,
+  Github,
+  BarChart3,
+  Settings,
+  Bug,
+  X,
+  Menu,
+  ChevronLeft,
+  LogOut,
+} from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
 
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Tableau de bord', icon: '📊' },
-  { href: '/dashboard/tickets', label: 'Tickets', icon: '🎫' },
-  { href: '/dashboard/agent-tasks', label: 'Agent Tasks', icon: '🤖' },
-  { href: '/dashboard/applications', label: 'Applications', icon: '📱' },
-  { href: '/dashboard/integrations', label: 'Integrations', icon: '🔌' },
-  { href: '/dashboard/github', label: 'GitHub', icon: '🐙' },
-  { href: '/dashboard/analytics', label: 'Analytiques', icon: '📈' },
-  { href: '/dashboard/settings', label: 'Paramètres', icon: '⚙️' },
+  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+  { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
+  { href: '/dashboard/agent-tasks', label: 'Agent Tasks', icon: Bot },
+  { href: '/dashboard/applications', label: 'Applications', icon: AppWindow },
+  { href: '/dashboard/integrations', label: 'Integrations', icon: Plug },
+  { href: '/dashboard/github', label: 'GitHub', icon: Github },
+  { href: '/dashboard/analytics', label: 'Analytiques', icon: BarChart3 },
+  { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
 ];
 
 interface DashboardLayoutProps {
@@ -53,14 +69,15 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Logo */}
         <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
           <Link href="/dashboard" className="flex items-center space-x-2">
-            <span className="text-2xl">🐛</span>
+            <Bug className="w-6 h-6 text-blue-600 dark:text-blue-400" aria-hidden="true" />
             <span className="font-bold text-gray-900 dark:text-gray-100">Support Helper</span>
           </Link>
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            aria-label="Fermer le menu"
           >
-            ✕
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
@@ -68,6 +85,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <nav className="px-4 py-6 space-y-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+            const Icon = item.icon;
             return (
               <Link
                 key={item.href}
@@ -78,7 +96,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
-                <span className="text-xl">{item.icon}</span>
+                <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
                 <span>{item.label}</span>
               </Link>
             );
@@ -96,8 +114,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               onClick={() => logout()}
               className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
               title="Se déconnecter"
+              aria-label="Se déconnecter"
             >
-              🚪
+              <LogOut className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -111,8 +130,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
               className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
             >
-              {sidebarOpen ? '◀' : '☰'}
+              {sidebarOpen ? <ChevronLeft className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
             </button>
 
             <div className="flex-1 flex items-center justify-center px-8">
