@@ -24,10 +24,10 @@ export class ThrottlerExceptionFilter implements ExceptionFilter {
   catch(exception: ThrottlerException, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
-    const request = ctx.getRequest();
+    const request = ctx.getRequest<Request & { __throttler__?: { limit?: number; ttl?: number } }>();
 
     // Extract throttler context from request metadata
-    const throttlerContext = (request as any).__throttler__;
+    const throttlerContext = request.__throttler__;
     const limit = throttlerContext?.limit || 0;
     const ttl = throttlerContext?.ttl || 60000; // default 1 minute
     const resetTime = Math.ceil(Date.now() / 1000) + Math.ceil(ttl / 1000);

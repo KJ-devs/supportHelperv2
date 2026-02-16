@@ -110,10 +110,10 @@ export class AIService {
       where: { key: 'ai_config' },
       create: {
         key: 'ai_config',
-        value: JSON.parse(JSON.stringify(config)),
+        value: config,
       },
       update: {
-        value: JSON.parse(JSON.stringify(config)),
+        value: config,
       },
     });
 

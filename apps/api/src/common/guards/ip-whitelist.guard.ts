@@ -38,13 +38,13 @@ export class IpWhitelistGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<Request & { __rateLimit_bypassed?: boolean }>();
     const clientIp = this.getClientIp(request);
 
     if (this.whitelist.has(clientIp)) {
       this.logger.debug(`Rate limiting bypassed for whitelisted IP: ${clientIp}`);
       // Mark request as whitelisted to skip throttler
-      (request as any).__rateLimit_bypassed = true;
+      request.__rateLimit_bypassed = true;
       return true;
     }
 
@@ -55,7 +55,7 @@ export class IpWhitelistGuard implements CanActivate {
    * Extract client IP from request
    * Handles proxies via X-Forwarded-For header
    */
-  private getClientIp(request: any): string {
+  private getClientIp(request: Request & { connection?: { remoteAddress?: string } }): string {
     const forwarded = request.headers['x-forwarded-for'];
     if (forwarded) {
       // X-Forwarded-For can be comma-separated list, take first

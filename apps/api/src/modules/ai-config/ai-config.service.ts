@@ -110,11 +110,22 @@ export class AiConfigService {
     try {
       const client = new Anthropic({ apiKey });
 
-      await client.messages.create({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Say "ok"' }],
-      });
+      const config: AIProviderConfig = {
+        provider: providerType as 'anthropic' | 'openai' | 'ollama',
+        apiKey,
+        endpoint,
+        model,
+      };
+
+      const providerInstance = this.providerFactory.create(config);
+      const isValid = await providerInstance.validateConfig();
+
+      if (!isValid) {
+        return {
+          valid: false,
+          error: `Failed to validate ${providerType} configuration`,
+        };
+      }
 
       return { valid: true };
     } catch (error: any) {
