@@ -6,6 +6,7 @@ import { IntegrationSyncWorker } from '../workers/integration-sync.worker';
 import { CodebaseIndexingWorker } from '../workers/codebase-indexing.worker';
 import { BackupWorker } from '../workers/backup.worker';
 import { DeadLetterWorker } from '../workers/dead-letter.worker';
+import { UsageSnapshotProcessor } from './usage-snapshot.processor';
 
 /**
  * Processors Module
@@ -21,6 +22,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     CodebaseIndexingWorker,
     BackupWorker,
     DeadLetterWorker,
+    UsageSnapshotProcessor,
   ],
   exports: [
     VideoAnalysisWorker,
@@ -30,6 +32,7 @@ import { DeadLetterWorker } from '../workers/dead-letter.worker';
     CodebaseIndexingWorker,
     BackupWorker,
     DeadLetterWorker,
+    UsageSnapshotProcessor,
   ],
 })
 export class ProcessorsModule {}
