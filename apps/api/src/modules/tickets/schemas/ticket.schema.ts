@@ -9,6 +9,7 @@ export const TICKET_STATUSES = [
   'in_progress',
   'pending',
   'resolved',
+  'merged',
   'closed',
 ] as const;
 

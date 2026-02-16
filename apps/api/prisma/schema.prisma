@@ -115,6 +115,9 @@ model Ticket {
   // Public tracking
   publicId           String?   @unique @map("public_id") @db.VarChar(20)
 
+  // Resolution
+  reopenToken        String?   @unique @map("reopen_token") @db.VarChar(255)
+
   // Assignment
   assignedTo         String?   @map("assigned_to") @db.Uuid
   assignedAt         DateTime? @map("assigned_at")
@@ -136,6 +139,7 @@ model Ticket {
   agentTasks           AgentTask[]
   ticketEvents         TicketEvent[]
   notificationLogs     NotificationLog[]
+  ticketMessages       TicketMessage[]
 
   @@index([tenantId])
   @@index([applicationId])
@@ -497,6 +501,12 @@ model AgentTask {
   prUrl           String?   @map("pr_url") @db.Text
   branchName      String?   @map("branch_name") @db.VarChar(255)
 
+  // Review tracking (US-3.4)
+  reviewRequestedAt DateTime? @map("review_requested_at")
+  reviewedAt        DateTime? @map("reviewed_at")
+  reviewedBy        String?   @map("reviewed_by") @db.VarChar(255)
+  rejectionReason   String?   @map("rejection_reason") @db.Text
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -571,4 +581,25 @@ model NotificationLog {
   @@index([tenantId])
   @@index([status])
   @@map("notification_logs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TICKET MESSAGES
+// ═══════════════════════════════════════════════════════════════════════
+
+model TicketMessage {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId  String   @map("ticket_id") @db.Uuid
+  type      String   @db.VarChar(50) // system, user, agent
+  content   String   @db.Text
+  sender    String   @db.VarChar(255)
+  metadata  Json?    @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([ticketId, createdAt])
+  @@map("ticket_messages")
 }

@@ -303,6 +303,7 @@ export class NotificationProcessor extends WorkerHost {
       pr_created: `PR Created: ${title}`,
       pr_merged: `PR Merged: ${title}`,
       fix_deployed: `Fix Deployed: ${title}`,
+      ticket_resolved: `Your issue has been resolved: ${title}`,
     };
     return eventLabels[eventType] || `Ticket Update: ${title}`;
   }
@@ -311,6 +312,10 @@ export class NotificationProcessor extends WorkerHost {
     eventType: string,
     data: Record<string, any>,
   ): string {
+    if (eventType === 'ticket_resolved') {
+      return this.buildResolutionEmailHtml(data);
+    }
+
     const title = data.ticketTitle || data.title || 'Ticket Update';
     const summary = data.summary || data.description || '';
     const emoji = this.getEventEmoji(eventType);
@@ -348,6 +353,82 @@ export class NotificationProcessor extends WorkerHost {
 </html>`.trim();
   }
 
+  private buildResolutionEmailHtml(data: Record<string, any>): string {
+    const title = data.ticketTitle || data.title || 'Your reported issue';
+    const summary = data.summary || '';
+    const changes: string[] = Array.isArray(data.changes) ? data.changes : [];
+    const reopenToken = data.reopenToken || '';
+    const ticketId = data.ticketId || '';
+    const prUrl = data.prUrl || '';
+
+    const apiUrl =
+      this.configService.get<string>('API_URL') ||
+      this.configService.get<string>('api.url') ||
+      'http://localhost:3001';
+
+    const reopenUrl = reopenToken
+      ? `${apiUrl}/api/sdk/tickets/${ticketId}/reopen?token=${reopenToken}`
+      : '';
+
+    const changesHtml = changes.length > 0
+      ? `<ul style="padding-left: 20px; margin: 12px 0;">${changes.map((c) => `<li style="margin-bottom: 4px;">${this.escapeHtml(c)}</li>`).join('')}</ul>`
+      : '';
+
+    const prSection = prUrl
+      ? `<p style="margin-top: 12px;"><a href="${this.escapeHtml(prUrl)}" style="color: #4F46E5; text-decoration: underline;">View the code changes</a></p>`
+      : '';
+
+    const reopenSection = reopenUrl
+      ? `
+      <div style="margin-top: 24px; padding: 16px; background: #FEF3C7; border-radius: 8px; border: 1px solid #FCD34D;">
+        <p style="margin: 0 0 8px 0; font-weight: 600; color: #92400E;">Still having this problem?</p>
+        <p style="margin: 0 0 12px 0; color: #78350F; font-size: 14px;">If the issue persists, you can reopen this ticket and our team will investigate further.</p>
+        <a href="${this.escapeHtml(reopenUrl)}" style="display: inline-block; background: #F59E0B; color: #78350F; padding: 8px 16px; border-radius: 6px; text-decoration: none; font-weight: 500;">Reopen Ticket</a>
+      </div>`
+      : '';
+
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: #059669; color: white; padding: 20px; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 20px; border: 1px solid #e5e7eb; border-top: none; border-radius: 0 0 8px 8px; }
+    .footer { margin-top: 20px; font-size: 12px; color: #6b7280; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h2 style="margin: 0;">Your issue has been resolved</h2>
+    </div>
+    <div class="content">
+      <h3 style="margin-top: 0;">${this.escapeHtml(title)}</h3>
+      ${summary ? `<p>${this.escapeHtml(summary)}</p>` : ''}
+      ${changesHtml ? `<h4 style="margin-bottom: 4px;">What changed:</h4>${changesHtml}` : ''}
+      ${prSection}
+      ${reopenSection}
+      <div class="footer">
+        <p>Ticket ID: ${ticketId}</p>
+        <p>This is an automated notification from Support Helper.</p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   private formatEventType(eventType: string): string {
     return eventType
       .split('_')
@@ -363,6 +444,7 @@ export class NotificationProcessor extends WorkerHost {
       pr_created: '🔀',
       pr_merged: '✅',
       fix_deployed: '🚀',
+      ticket_resolved: '🎉',
     };
     return emojis[eventType] || '📋';
   }

@@ -11,6 +11,7 @@ const NOTIFIABLE_EVENTS = new Set([
   'pr_created',
   'pr_merged',
   'fix_deployed',
+  'ticket_resolved',
 ]);
 
 export interface TimelineEntry {

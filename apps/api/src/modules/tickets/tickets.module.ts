@@ -4,10 +4,13 @@ import { TicketsService } from './tickets.service';
 import { TicketsSearchService } from './tickets-search.service';
 import { TicketsAIService } from './tickets-ai.service';
 import { TicketTimelineService } from './services/ticket-timeline.service';
+import { ResolutionSummaryService } from './services/resolution-summary.service';
+import { AutoResponseService } from './services/auto-response.service';
 import { TicketsGateway } from './tickets.gateway';
 import { TicketsController } from './tickets.controller';
 import { SdkTicketsController } from './sdk-tickets.controller';
 import { TicketTrackingController } from './ticket-tracking.controller';
+import { TicketReopenController } from './controllers/ticket-reopen.controller';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -39,8 +42,24 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
       name: 'github',
     }),
   ],
-  controllers: [TicketsController, SdkTicketsController, TicketTrackingController],
-  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, TicketsGateway, WsJwtGuard],
-  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, TicketsGateway],
+  controllers: [TicketsController, SdkTicketsController, TicketTrackingController, TicketReopenController],
+  providers: [
+    TicketsService,
+    TicketsSearchService,
+    TicketsAIService,
+    TicketTimelineService,
+    ResolutionSummaryService,
+    AutoResponseService,
+    TicketsGateway,
+    WsJwtGuard,
+  ],
+  exports: [
+    TicketsService,
+    TicketsSearchService,
+    TicketsAIService,
+    TicketTimelineService,
+    AutoResponseService,
+    TicketsGateway,
+  ],
 })
 export class TicketsModule {}

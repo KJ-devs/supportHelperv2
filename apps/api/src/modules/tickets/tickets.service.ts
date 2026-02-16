@@ -6,6 +6,7 @@ import {
   Inject,
   Logger,
   forwardRef,
+  Optional,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -14,6 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
 import { CacheService, CacheKeys, CacheTTL } from '../../cache';
+import { AutoResponseService } from './services/auto-response.service';
 import { Prisma } from '@prisma/client';
 
 @Injectable()
@@ -26,6 +28,9 @@ export class TicketsService {
     private readonly ticketsGateway: TicketsGateway,
     private readonly cacheService: CacheService,
     @InjectQueue('github') private readonly githubQueue: Queue,
+    @Optional()
+    @Inject(forwardRef(() => AutoResponseService))
+    private readonly autoResponseService?: AutoResponseService,
   ) {}
 
   /**
@@ -311,8 +316,8 @@ export class TicketsService {
       }),
     };
 
-    // Update resolvedAt if status changed to resolved
-    if (dto.status === 'resolved') {
+    // Update resolvedAt if status changed to resolved or merged
+    if (dto.status === 'resolved' || dto.status === 'merged') {
       data.resolvedAt = new Date();
     } else if (dto.status) {
       data.resolvedAt = null;
@@ -347,6 +352,17 @@ export class TicketsService {
       this.enqueueGithubStatusSync(ticketId, dto.status).catch((err) => {
         this.logger.warn(`Failed to enqueue GitHub status sync for ticket ${ticketId}: ${err.message}`);
       });
+    }
+
+    // Auto-response: when status changes to "merged", generate summary and notify client
+    if (dto.status === 'merged' && this.autoResponseService) {
+      this.autoResponseService
+        .handleTicketMerged(ticketId, tenantId)
+        .catch((err) => {
+          this.logger.warn(
+            `Failed to trigger auto-response for ticket ${ticketId}: ${err instanceof Error ? err.message : 'Unknown'}`,
+          );
+        });
     }
 
     return result;
