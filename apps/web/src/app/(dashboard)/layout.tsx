@@ -14,7 +14,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <Sidebar currentPath={pathname} />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-auto p-6">{children}</main>
+          <main id="main-content" className="flex-1 overflow-auto p-6" role="main">
+            {children}
+          </main>
         </div>
       </div>
     </AuthGuard>
