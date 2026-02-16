@@ -217,7 +217,23 @@ Access the MinIO web console at `http://localhost:9001` with your `MINIO_ROOT_US
 
 ## Updating
 
-### Standard Update
+See the [Updating Guide](./updating.md) for detailed instructions.
+
+### Quick Update
+
+```bash
+./scripts/update.sh
+```
+
+This automated script handles:
+- Database backup before update
+- Image pulling and service restart
+- Health check verification
+- Automatic rollback on failure
+
+### Manual Update
+
+If you prefer manual control:
 
 ```bash
 # 1. Pull the latest code
@@ -231,21 +247,6 @@ docker compose -f docker-compose.prod.yml up -d
 
 # 4. Verify health
 curl http://localhost:3001/health/ready
-```
-
-### Rolling Back
-
-If a migration fails, the API container will exit and print rollback instructions in the logs. To roll back manually:
-
-```bash
-# Check migration status
-docker compose -f docker-compose.prod.yml exec api \
-  npx prisma migrate status --schema=apps/api/prisma/schema.prisma
-
-# Mark a failed migration as rolled back
-docker compose -f docker-compose.prod.yml exec api \
-  npx prisma migrate resolve --rolled-back <migration_name> \
-  --schema=apps/api/prisma/schema.prisma
 ```
 
 ## Backup

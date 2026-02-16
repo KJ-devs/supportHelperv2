@@ -1,6 +1,36 @@
 # Changelog
 
-All notable changes to the Support Helper Platform will be documented in this file.
+All notable changes to Support Helper Platform will be documented in this file.
+
+## [0.2.0] - 2026-02-16
+
+### Added
+- Setup wizard for first-time configuration (US-7.3)
+- License verification system with plan-based features (US-9.1)
+- Auto-response to clients after ticket resolution (US-5.3)
+- Validation mode for agent tasks (auto vs review) (US-3.4)
+- Agent tasks dashboard with metrics and filters (US-6.1)
+- GitHub settings page with merge configuration (US-6.2)
+- Simplified update process with backup and health checks (US-7.5)
+
+### Improved
+- CI feedback loop for re-generation on failure (US-4.3)
+- Real-time ticket timeline in dashboard (US-5.1)
+- Client notifications with auto-merge support (US-5.2, US-4.4)
+
+## [0.1.0] - 2026-02-13
+
+### Added
+- Initial release
+- GitHub App integration (US-1.1 through US-1.4)
+- Automatic issue creation and bidirectional sync (US-2.1, US-2.2, US-2.3)
+- AI code agent with analysis and code generation (US-3.1, US-3.2, US-3.3)
+- Git automation: branch, commit, PR (US-4.1, US-4.2)
+- Docker Compose production-ready setup (US-7.1)
+- Automatic database migrations (US-7.2)
+- Health check and status page (US-7.4)
+- BYOK AI key configuration (US-8.1)
+- Data encryption at rest (US-10.1)
 
 ## [Unreleased] - 2026-02-08
 
