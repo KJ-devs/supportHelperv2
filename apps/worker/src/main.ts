@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { validateEnvironmentVariables } from './config/validate-env';
+import { PinoLoggerService } from './common/logger/pino-logger.service';
 
 async function bootstrap() {
   // Validate environment variables BEFORE NestJS initialization
@@ -12,8 +13,12 @@ async function bootstrap() {
   logger.log('Starting Support Helper Worker Service...');
 
   const app = await NestFactory.create(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug', 'verbose'],
+    bufferLogs: true,
   });
+
+  // Get and attach the Pino logger
+  const pinoLogger = app.get(PinoLoggerService);
+  app.useLogger(pinoLogger);
 
   // Enable graceful shutdown
   app.enableShutdownHooks();
