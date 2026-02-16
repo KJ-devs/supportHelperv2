@@ -5,7 +5,8 @@
 
 'use client';
 
-import { ReactNode, useEffect } from 'react';
+import { ReactNode, useEffect, useId } from 'react';
+import { useFocusTrap } from '@/lib/hooks/useFocusTrap';
 
 interface ModalProps {
   isOpen: boolean;
@@ -24,6 +25,9 @@ const sizeStyles = {
 };
 
 export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }: ModalProps) {
+  const titleId = useId();
+  const dialogRef = useFocusTrap(isOpen);
+
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -52,31 +56,40 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+    >
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div
-          className={`relative bg-white rounded-lg shadow-xl ${sizeStyles[size]} w-full`}
+          ref={dialogRef}
+          className={`relative bg-white dark:bg-gray-900 rounded-lg shadow-xl ${sizeStyles[size]} w-full`}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">{title}</h2>
+          <div className="flex items-center justify-between p-6 border-b dark:border-gray-700">
+            <h2 id={titleId} className="text-xl font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              aria-label="Fermer la fenêtre"
             >
               <svg
                 className="w-6 h-6"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <path
                   strokeLinecap="round"
@@ -93,7 +106,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
 
           {/* Footer */}
           {footer && (
-            <div className="flex items-center justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-lg">
+            <div className="flex items-center justify-end gap-3 p-6 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-800 rounded-b-lg">
               {footer}
             </div>
           )}

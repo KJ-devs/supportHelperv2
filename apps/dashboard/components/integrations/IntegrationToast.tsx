@@ -62,7 +62,11 @@ interface ToastContainerProps {
 
 function ToastContainer({ toasts, onRemove }: ToastContainerProps) {
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div
+      className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onRemove={onRemove} />
       ))}
@@ -136,18 +140,21 @@ function ToastItem({ toast, onRemove }: ToastItemProps) {
         transition-all duration-300 ease-in-out
         ${isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
       `}
+      role={toast.type === 'error' ? 'alert' : 'status'}
+      aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
     >
       <div className="flex items-start gap-3">
-        <div className={iconStyles[toast.type]}>{icons[toast.type]}</div>
+        <div className={iconStyles[toast.type]} aria-hidden="true">{icons[toast.type]}</div>
         <div className="flex-1">
           <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{toast.title}</h4>
           {toast.message && <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{toast.message}</p>}
         </div>
         <button
           onClick={handleClose}
-          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
+          className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+          aria-label="Fermer la notification"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
