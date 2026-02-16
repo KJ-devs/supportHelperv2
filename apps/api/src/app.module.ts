@@ -60,6 +60,9 @@ import { SetupModule } from './modules/setup/setup.module';
 // License Verification
 import { LicenseModule } from './modules/license/license.module';
 
+// Audit Logging
+import { AuditModule } from './modules/audit/audit.module';
+
 /**
  * Root Application Module
  *
@@ -184,6 +187,9 @@ import { LicenseModule } from './modules/license/license.module';
 
     // License Verification
     LicenseModule,
+
+    // Audit Logging
+    AuditModule,
   ],
   providers: [
     // Global rate limiting guard
