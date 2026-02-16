@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
@@ -68,16 +69,16 @@ export interface RateLimitState {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// OPENAI SERVICE
+// OPENAI SERVICE (now powered by Anthropic for completions/vision)
 // ═══════════════════════════════════════════════════════════════════════
 
 /**
- * OpenAI Service
+ * AI Service
  *
  * Comprehensive AI operations with:
- * - GPT-4o Vision multi-frame analysis
- * - GPT-4o-mini fast classification
- * - text-embedding-3-large (3072 dimensions)
+ * - Claude Sonnet 4.5 Vision multi-frame analysis
+ * - Claude Haiku 4.5 fast classification
+ * - OpenAI text-embedding-3-large (3072 dimensions) - optional
  * - Redis caching (24h TTL)
  * - Rate limiting (50 req/min)
  * - Cost tracking per tenant
@@ -86,8 +87,10 @@ export interface RateLimitState {
 @Injectable()
 export class OpenAIService implements OnModuleInit {
   private readonly logger = new Logger(OpenAIService.name);
-  private readonly client: OpenAI;
-  private readonly config: any;
+  private readonly anthropicClient: Anthropic;
+  private readonly openaiClient: OpenAI | null;
+  private readonly anthropicConfig: any;
+  private readonly openaiConfig: any;
   private redis!: Redis;
 
   // Rate limiting
@@ -101,8 +104,8 @@ export class OpenAIService implements OnModuleInit {
 
   // Cost per 1K tokens (approximate)
   private readonly MODEL_COSTS: Record<string, { input: number; output: number }> = {
-    'gpt-4o': { input: 0.005, output: 0.015 },
-    'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
+    'claude-sonnet-4-5-20250929': { input: 0.003, output: 0.015 },
+    'claude-haiku-4-5-20251001': { input: 0.0008, output: 0.004 },
     'text-embedding-3-large': { input: 0.00013, output: 0 },
   };
 
@@ -110,25 +113,36 @@ export class OpenAIService implements OnModuleInit {
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService
   ) {
-    this.config = this.configService.get('openai');
-    this.client = new OpenAI({
-      apiKey: this.config.apiKey,
+    this.anthropicConfig = this.configService.get('anthropic');
+    this.openaiConfig = this.configService.get('openai');
+
+    this.anthropicClient = new Anthropic({
+      apiKey: this.anthropicConfig?.apiKey || process.env.ANTHROPIC_API_KEY,
     });
+
+    // OpenAI is optional - only used for embeddings
+    const openaiApiKey = this.openaiConfig?.apiKey || process.env.OPENAI_API_KEY;
+    if (openaiApiKey) {
+      this.openaiClient = new OpenAI({ apiKey: openaiApiKey });
+    } else {
+      this.openaiClient = null;
+      this.logger.warn('OpenAI API key not set - embeddings will return empty vectors');
+    }
   }
 
   async onModuleInit() {
     // Initialize Redis connection
     const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
     this.redis = new Redis(redisUrl);
-    this.logger.log('OpenAI Service initialized with Redis caching');
+    this.logger.log('AI Service initialized (Anthropic for completions, OpenAI for embeddings)');
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // VIDEO ANALYSIS (GPT-4o Vision)
+  // VIDEO ANALYSIS (Claude Sonnet 4.5 Vision)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Analyze video frames with GPT-4o Vision
+   * Analyze video frames with Claude Sonnet 4.5 Vision
    * Multi-frame analysis for comprehensive bug understanding
    */
   async analyzeVideo(
@@ -136,7 +150,8 @@ export class OpenAIService implements OnModuleInit {
     tenantId: string,
     context?: { ocrText?: string; uiDetections?: any[] }
   ): Promise<VideoAnalysis> {
-    this.logger.log(`Analyzing ${frames.length} frames with GPT-4o Vision`);
+    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
+    this.logger.log(`Analyzing ${frames.length} frames with ${model}`);
 
     // Check rate limit
     await this.checkRateLimit(tenantId);
@@ -144,20 +159,22 @@ export class OpenAIService implements OnModuleInit {
     try {
       // Convert frames to base64 (max 10 frames for efficiency)
       const selectedFrames = this.selectKeyFrames(frames, 10);
-      const imageContents = selectedFrames.map(buffer => ({
-        type: 'image_url' as const,
-        image_url: {
-          url: `data:image/png;base64,${buffer.toString('base64')}`,
-          detail: 'high' as const,
+      const imageContents: Anthropic.ImageBlockParam[] = selectedFrames.map(buffer => ({
+        type: 'image' as const,
+        source: {
+          type: 'base64' as const,
+          media_type: 'image/png' as const,
+          data: buffer.toString('base64'),
         },
       }));
 
       const systemPrompt = this.buildVideoAnalysisPrompt(context);
 
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-4o',
+      const response = await this.anthropicClient.messages.create({
+        model,
+        max_tokens: 4096,
+        system: systemPrompt,
         messages: [
-          { role: 'system', content: systemPrompt },
           {
             role: 'user',
             content: [
@@ -166,20 +183,21 @@ export class OpenAIService implements OnModuleInit {
             ],
           },
         ],
-        max_tokens: 4096,
-        temperature: 0.3,
-        response_format: { type: 'json_object' },
       });
 
       // Track costs
-      await this.trackCost(tenantId, 'gpt-4o', response.usage);
+      await this.trackCost(tenantId, model, {
+        prompt_tokens: response.usage?.input_tokens,
+        completion_tokens: response.usage?.output_tokens,
+        total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
+      });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       if (!content) {
-        throw new Error('No response from GPT-4o Vision');
+        throw new Error('No response from Claude Vision');
       }
 
-      const parsed = JSON.parse(content);
+      const parsed = JSON.parse(this.extractJson(content));
       return this.normalizeVideoAnalysis(parsed);
     } catch (error) {
       this.logger.error(`Video analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
@@ -210,7 +228,7 @@ Provide confidence scores (0-1) for your classifications.`;
       prompt += `\n\nDetected UI elements: ${JSON.stringify(context.uiDetections.slice(0, 20))}`;
     }
 
-    prompt += `\n\nRespond in JSON format:
+    prompt += `\n\nRespond ONLY with valid JSON (no markdown, no code blocks):
 {
   "summary": "string",
   "severity": "critical|high|medium|low",
@@ -274,11 +292,11 @@ Provide confidence scores (0-1) for your classifications.`;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // TICKET CLASSIFICATION (GPT-4o-mini)
+  // TICKET CLASSIFICATION (Claude Haiku 4.5)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Fast ticket classification with GPT-4o-mini
+   * Fast ticket classification with Claude Haiku 4.5
    */
   async classifyTicket(text: string, tenantId: string): Promise<Classification> {
     this.logger.debug(`Classifying ticket (${text.length} chars)`);
@@ -286,46 +304,47 @@ Provide confidence scores (0-1) for your classifications.`;
     // Check rate limit
     await this.checkRateLimit(tenantId);
 
+    const model = this.anthropicConfig?.models?.chatFast || 'claude-haiku-4-5-20251001';
+
     try {
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a bug triage expert. Classify the following support ticket/bug report.
+      const response = await this.anthropicClient.messages.create({
+        model,
+        max_tokens: 500,
+        system: `You are a bug triage expert. Classify the following support ticket/bug report.
 
 Classify into:
 - Type: bug (error/crash), feature (missing functionality), ui (visual issue), performance (slow/laggy), security (vulnerability)
 - Severity: critical (app crash/data loss), high (major feature broken), medium (minor bug), low (cosmetic)
 - Keywords: Extract 3-7 relevant technical keywords
 
-Respond in JSON:
+Respond ONLY with valid JSON (no markdown, no code blocks):
 {
   "type": "bug|feature|ui|performance|security",
   "severity": "critical|high|medium|low",
   "keywords": ["keyword1", "keyword2", ...],
   "confidence": { "type": 0.0-1.0, "severity": 0.0-1.0 }
 }`,
-          },
+        messages: [
           {
             role: 'user',
             content: text.substring(0, 4000), // Limit input length
           },
         ],
-        max_tokens: 500,
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
       });
 
       // Track costs
-      await this.trackCost(tenantId, 'gpt-4o-mini', response.usage);
+      await this.trackCost(tenantId, model, {
+        prompt_tokens: response.usage?.input_tokens,
+        completion_tokens: response.usage?.output_tokens,
+        total_tokens: (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0),
+      });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       if (!content) {
-        throw new Error('No response from GPT-4o-mini');
+        throw new Error('No response from Claude');
       }
 
-      const parsed = JSON.parse(content);
+      const parsed = JSON.parse(this.extractJson(content));
       return this.normalizeClassification(parsed);
     } catch (error) {
       this.logger.error(`Classification failed: ${getErrorMessage(error)}`);
@@ -370,12 +389,33 @@ Respond in JSON:
     return 'bug';
   }
 
+  /**
+   * Extract JSON from text response (handles markdown code blocks)
+   */
+  private extractJson(text: string): string {
+    // Try to extract JSON from markdown code blocks
+    const codeBlockMatch = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+    if (codeBlockMatch?.[1]) {
+      return codeBlockMatch[1].trim();
+    }
+
+    // Try to find raw JSON object
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return jsonMatch[0];
+    }
+
+    // Return as-is, let JSON.parse handle it
+    return text;
+  }
+
   // ═══════════════════════════════════════════════════════════════════════
-  // EMBEDDINGS (text-embedding-3-large)
+  // EMBEDDINGS (text-embedding-3-large via OpenAI - optional)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
    * Generate embedding with Redis caching (24h TTL)
+   * Falls back to empty embedding if OpenAI is not configured
    */
   async generateEmbedding(text: string, tenantId?: string): Promise<EmbeddingResult> {
     this.logger.debug(`Generating embedding (${text.length} chars)`);
@@ -401,6 +441,17 @@ Respond in JSON:
       this.logger.warn(`Redis cache read error: ${getErrorMessage(error)}`);
     }
 
+    // Gracefully fail if no OpenAI client
+    if (!this.openaiClient) {
+      this.logger.warn('OpenAI not configured - returning empty embedding');
+      return {
+        embedding: [],
+        text,
+        dimensions: 0,
+        cached: false,
+      };
+    }
+
     // Rate limit check
     if (tenantId) {
       await this.checkRateLimit(tenantId);
@@ -410,7 +461,7 @@ Respond in JSON:
       // Truncate text if too long (max ~8000 tokens)
       const truncated = text.substring(0, 32000);
 
-      const response = await this.client.embeddings.create({
+      const response = await this.openaiClient.embeddings.create({
         model: 'text-embedding-3-large',
         input: truncated,
         dimensions: 3072, // Full dimensions for best quality
@@ -473,11 +524,10 @@ Respond in JSON:
 
     try {
       // Build the pgvector query with cosine similarity
-      // The embedding column should have an HNSW index: CREATE INDEX ON tickets USING hnsw (embedding vector_cosine_ops)
       const embeddingStr = `[${embedding.join(',')}]`;
 
       let query = `
-        SELECT 
+        SELECT
           id,
           title,
           description,
@@ -606,7 +656,7 @@ Respond in JSON:
 
     // Store in Redis for aggregation
     try {
-      const key = `openai:cost:${tenantId}:${new Date().toISOString().split('T')[0]}`;
+      const key = `ai:cost:${tenantId}:${new Date().toISOString().split('T')[0]}`;
 
       // Increment daily cost counter
       await this.redis.incrbyfloat(`${key}:total`, cost);
@@ -651,7 +701,7 @@ Respond in JSON:
         const dateStr = date.toISOString().split('T')[0];
         if (!dateStr) continue;
 
-        const key = `openai:cost:${tenantId}:${dateStr}`;
+        const key = `ai:cost:${tenantId}:${dateStr}`;
 
         const [cost, tokens, requests] = await Promise.all([
           this.redis.get(`${key}:total`),
@@ -686,16 +736,17 @@ Respond in JSON:
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Analyze video frames with GPT-4 Vision
+   * Analyze video frames with Claude Vision
    * @deprecated Use analyzeVideo instead
    */
   async analyzeFrames(framePaths: string[], ocrText: string, uiDetections: any[]): Promise<any> {
-    this.logger.log(`Analyzing ${framePaths.length} frames with GPT-4 Vision`);
+    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
+    this.logger.log(`Analyzing ${framePaths.length} frames with ${model}`);
     const fs = await import('fs/promises');
 
     try {
       // Process frames in batches
-      const batchSize = this.config.vision?.batchSize || 10;
+      const batchSize = this.anthropicConfig?.vision?.batchSize || 10;
       const batches: string[][] = [];
 
       for (let i = 0; i < framePaths.length; i += batchSize) {
@@ -728,15 +779,17 @@ Respond in JSON:
   ): Promise<any> {
     this.logger.debug(`Analyzing batch ${batchIndex + 1}`);
 
-    // Convert images to base64
-    const imageContents = await Promise.all(
+    // Convert images to base64 for Anthropic format
+    const imageContents: Anthropic.ImageBlockParam[] = await Promise.all(
       framePaths.map(async path => {
         const buffer = await fs.readFile(path);
         const base64 = buffer.toString('base64');
         return {
-          type: 'image_url' as const,
-          image_url: {
-            url: `data:image/png;base64,${base64}`,
+          type: 'image' as const,
+          source: {
+            type: 'base64' as const,
+            media_type: 'image/png' as const,
+            data: base64,
           },
         };
       })
@@ -763,24 +816,24 @@ Analyze these frames and provide:
 
 Format your response as JSON with keys: summary, uiElements, actions, errorMessages, recommendations`;
 
+    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
+
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.config.models?.vision || 'gpt-4o',
+      const response = await this.anthropicClient.messages.create({
+        model,
+        max_tokens: this.anthropicConfig?.vision?.maxTokens || 4096,
+        system: systemPrompt,
         messages: [
-          { role: 'system', content: systemPrompt },
           { role: 'user', content: imageContents },
         ],
-        max_tokens: this.config.vision?.maxTokens || 4096,
-        temperature: this.config.vision?.temperature || 0.7,
-        response_format: { type: 'json_object' },
       });
 
-      const content = response.choices[0]?.message?.content;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       if (!content) {
-        throw new Error('No response from GPT-4 Vision');
+        throw new Error('No response from Claude Vision');
       }
 
-      const parsed = JSON.parse(content);
+      const parsed = JSON.parse(this.extractJson(content));
       this.logger.debug(`Batch ${batchIndex + 1} analysis complete`);
 
       return {
@@ -827,7 +880,7 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
   }
 
   /**
-   * Chat completion with tools support for agent orchestration
+   * Chat completion for agent orchestration
    */
   async chat(options: {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
@@ -841,24 +894,41 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
   }> {
     this.logger.debug('Requesting chat completion');
 
+    const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-5-20250929';
+
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.config.models?.chat || 'gpt-4o',
-        messages: options.messages,
-        ...(options.tools && { tools: options.tools, tool_choice: 'auto' }),
-        ...(options.response_format && { response_format: options.response_format }),
-        temperature: options.temperature || 0.7,
+      // Separate system message from user/assistant messages
+      const systemMessages = options.messages.filter(m => m.role === 'system');
+      const conversationMessages = options.messages
+        .filter(m => m.role !== 'system')
+        .map(m => ({
+          role: m.role as 'user' | 'assistant',
+          content: m.content,
+        }));
+
+      let systemPrompt = systemMessages.map(m => m.content).join('\n\n');
+
+      // If response_format was json_object, instruct Claude to respond with JSON
+      if (options.response_format?.type === 'json_object') {
+        systemPrompt += '\n\nYou must respond with valid JSON only. No markdown, no code blocks, just raw JSON.';
+      }
+
+      // Ensure conversation starts with a user message
+      if (conversationMessages.length === 0 || conversationMessages[0]?.role !== 'user') {
+        conversationMessages.unshift({ role: 'user', content: 'Please respond.' });
+      }
+
+      const response = await this.anthropicClient.messages.create({
+        model,
         max_tokens: options.max_tokens || 4096,
+        ...(systemPrompt && { system: systemPrompt }),
+        messages: conversationMessages,
       });
 
-      const choice = response.choices[0];
-      if (!choice) {
-        throw new Error('No response from OpenAI');
-      }
-      const message = choice.message;
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       return {
-        content: message.content || '',
-        tool_calls: message.tool_calls,
+        content,
+        tool_calls: undefined, // Anthropic tool calling not used in this migration
       };
     } catch (error) {
       this.logger.error(`Chat completion failed: ${getErrorMessage(error)}`);
@@ -885,32 +955,30 @@ Text: ${options.text}
 
 Return JSON with each category as a key containing { value, confidence }`;
 
+    const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-5-20250929';
+
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.config.models?.chat || 'gpt-4o',
+      const response = await this.anthropicClient.messages.create({
+        model,
+        max_tokens: 1024,
+        system: 'You are a text classification expert. Classify text accurately. Respond ONLY with valid JSON.',
         messages: [
-          {
-            role: 'system',
-            content: 'You are a text classification expert. Classify text accurately.',
-          },
           {
             role: 'user',
             content: prompt,
           },
         ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
       });
 
-      const choice = response.choices[0];
-      if (!choice || !choice.message.content) {
+      const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
+      if (!content) {
         const defaults: Record<string, { value: string; confidence: number }> = {};
         for (const [name, values] of Object.entries(options.categories)) {
           defaults[name] = { value: values[0] || '', confidence: 0.5 };
         }
         return defaults;
       }
-      const result = JSON.parse(choice.message.content || '{}');
+      const result = JSON.parse(this.extractJson(content));
       return result;
     } catch (error) {
       this.logger.error(`Classification failed: ${getErrorMessage(error)}`);

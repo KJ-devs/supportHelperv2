@@ -5,16 +5,22 @@ import {
 } from './openai.service';
 import { PrismaService } from './prisma.service';
 
-// Mock OpenAI
+// Mock Anthropic SDK
+const mockAnthropicCreate = jest.fn();
+jest.mock('@anthropic-ai/sdk', () => {
+  return jest.fn().mockImplementation(() => ({
+    messages: {
+      create: mockAnthropicCreate,
+    },
+  }));
+});
+
+// Mock OpenAI (used for embeddings only)
+const mockEmbeddingsCreate = jest.fn();
 jest.mock('openai', () => {
   return jest.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: jest.fn(),
-      },
-    },
     embeddings: {
-      create: jest.fn(),
+      create: mockEmbeddingsCreate,
     },
   }));
 });
@@ -34,20 +40,26 @@ jest.mock('ioredis', () => {
 describe('OpenAIService', () => {
   let service: OpenAIService;
   let prismaService: PrismaService;
-  let mockOpenAI: any;
   let mockRedis: any;
 
-  const mockConfig = {
-    apiKey: 'test-api-key',
+  const mockAnthropicConfig = {
+    apiKey: 'test-anthropic-key',
     models: {
-      vision: 'gpt-4o',
-      chat: 'gpt-4o',
-      embedding: 'text-embedding-3-large',
+      vision: 'claude-sonnet-4-5-20250929',
+      chat: 'claude-sonnet-4-5-20250929',
+      chatFast: 'claude-haiku-4-5-20251001',
     },
     vision: {
       maxTokens: 4096,
-      temperature: 0.7,
+      temperature: 0.3,
       batchSize: 10,
+    },
+  };
+
+  const mockOpenaiConfig = {
+    apiKey: 'test-openai-key',
+    models: {
+      embedding: 'text-embedding-3-large',
     },
     embedding: {
       dimensions: 3072,
@@ -64,7 +76,11 @@ describe('OpenAIService', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: jest.fn().mockReturnValue(mockConfig),
+            get: jest.fn().mockImplementation((key: string) => {
+              if (key === 'anthropic') return mockAnthropicConfig;
+              if (key === 'openai') return mockOpenaiConfig;
+              return undefined;
+            }),
           },
         },
         {
@@ -78,11 +94,8 @@ describe('OpenAIService', () => {
     }).compile();
 
     service = module.get<OpenAIService>(OpenAIService);
-    module.get<ConfigService>(ConfigService); // Needed for module initialization
+    module.get<ConfigService>(ConfigService);
     prismaService = module.get<PrismaService>(PrismaService);
-
-    // Get mock instances
-    mockOpenAI = (service as any).client;
 
     // Initialize Redis mock
     await service.onModuleInit();
@@ -94,36 +107,34 @@ describe('OpenAIService', () => {
     const tenantId = 'test-tenant-id';
 
     const mockVideoAnalysisResponse = {
-      choices: [
+      content: [
         {
-          message: {
-            content: JSON.stringify({
-              summary: 'User clicked button and error appeared',
-              severity: 'high',
-              type: 'bug',
-              reproSteps: ['Open app', 'Click button', 'See error'],
-              component: 'Dashboard',
-              uiElements: ['button', 'modal'],
-              errorMessages: ['Error: Failed to load'],
-              confidence: {
-                overall: 0.9,
-                severity: 0.85,
-                type: 0.9,
-                component: 0.8,
-              },
-            }),
-          },
+          type: 'text',
+          text: JSON.stringify({
+            summary: 'User clicked button and error appeared',
+            severity: 'high',
+            type: 'bug',
+            reproSteps: ['Open app', 'Click button', 'See error'],
+            component: 'Dashboard',
+            uiElements: ['button', 'modal'],
+            errorMessages: ['Error: Failed to load'],
+            confidence: {
+              overall: 0.9,
+              severity: 0.85,
+              type: 0.9,
+              component: 0.8,
+            },
+          }),
         },
       ],
       usage: {
-        prompt_tokens: 1000,
-        completion_tokens: 200,
-        total_tokens: 1200,
+        input_tokens: 1000,
+        output_tokens: 200,
       },
     };
 
     it('should analyze video frames successfully', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockVideoAnalysisResponse);
+      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const result = await service.analyzeVideo(mockFrames, tenantId);
 
@@ -137,8 +148,20 @@ describe('OpenAIService', () => {
       expect(result.confidence.overall).toBe(0.9);
     });
 
+    it('should use Claude model for vision analysis', async () => {
+      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
+
+      await service.analyzeVideo(mockFrames, tenantId);
+
+      expect(mockAnthropicCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'claude-sonnet-4-5-20250929',
+        })
+      );
+    });
+
     it('should handle context with OCR text and UI detections', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockVideoAnalysisResponse);
+      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const context = {
         ocrText: 'Error: Something went wrong',
@@ -148,11 +171,11 @@ describe('OpenAIService', () => {
       const result = await service.analyzeVideo(mockFrames, tenantId, context);
 
       expect(result.summary).toBeDefined();
-      expect(mockOpenAI.chat.completions.create).toHaveBeenCalled();
+      expect(mockAnthropicCreate).toHaveBeenCalled();
     });
 
     it('should return fallback analysis on API error', async () => {
-      mockOpenAI.chat.completions.create.mockRejectedValue(new Error('API Error'));
+      mockAnthropicCreate.mockRejectedValue(new Error('API Error'));
 
       const result = await service.analyzeVideo(mockFrames, tenantId);
 
@@ -161,7 +184,7 @@ describe('OpenAIService', () => {
     });
 
     it('should select key frames when too many frames provided', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockVideoAnalysisResponse);
+      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const manyFrames = Array(50)
         .fill(null)
@@ -169,9 +192,9 @@ describe('OpenAIService', () => {
       await service.analyzeVideo(manyFrames, tenantId);
 
       // Should have selected max 10 key frames
-      const callArgs = mockOpenAI.chat.completions.create.mock.calls[0][0];
-      const imageCount = callArgs.messages[1].content.filter(
-        (c: any) => c.type === 'image_url'
+      const callArgs = mockAnthropicCreate.mock.calls[0][0];
+      const imageCount = callArgs.messages[0].content.filter(
+        (c: any) => c.type === 'image'
       ).length;
       expect(imageCount).toBeLessThanOrEqual(10);
     });
@@ -181,27 +204,25 @@ describe('OpenAIService', () => {
     const tenantId = 'test-tenant-id';
 
     const mockClassificationResponse = {
-      choices: [
+      content: [
         {
-          message: {
-            content: JSON.stringify({
-              type: 'bug',
-              severity: 'high',
-              keywords: ['crash', 'login', 'authentication'],
-              confidence: { type: 0.95, severity: 0.9 },
-            }),
-          },
+          type: 'text',
+          text: JSON.stringify({
+            type: 'bug',
+            severity: 'high',
+            keywords: ['crash', 'login', 'authentication'],
+            confidence: { type: 0.95, severity: 0.9 },
+          }),
         },
       ],
       usage: {
-        prompt_tokens: 100,
-        completion_tokens: 50,
-        total_tokens: 150,
+        input_tokens: 100,
+        output_tokens: 50,
       },
     };
 
     it('should classify ticket successfully', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockClassificationResponse);
+      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
 
       const result = await service.classifyTicket('App crashes when logging in', tenantId);
 
@@ -211,20 +232,20 @@ describe('OpenAIService', () => {
       expect(result.confidence.type).toBe(0.95);
     });
 
-    it('should use gpt-4o-mini for classification', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockClassificationResponse);
+    it('should use Claude Haiku for classification', async () => {
+      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
 
       await service.classifyTicket('Test ticket', tenantId);
 
-      expect(mockOpenAI.chat.completions.create).toHaveBeenCalledWith(
+      expect(mockAnthropicCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-4o-mini',
+          model: 'claude-haiku-4-5-20251001',
         })
       );
     });
 
     it('should return fallback classification on error', async () => {
-      mockOpenAI.chat.completions.create.mockRejectedValue(new Error('API Error'));
+      mockAnthropicCreate.mockRejectedValue(new Error('API Error'));
 
       const result = await service.classifyTicket('Test ticket', tenantId);
 
@@ -234,20 +255,19 @@ describe('OpenAIService', () => {
     });
 
     it('should normalize invalid severity values', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
           {
-            message: {
-              content: JSON.stringify({
-                type: 'bug',
-                severity: 'invalid-severity',
-                keywords: [],
-                confidence: { type: 0.5, severity: 0.5 },
-              }),
-            },
+            type: 'text',
+            text: JSON.stringify({
+              type: 'bug',
+              severity: 'invalid-severity',
+              keywords: [],
+              confidence: { type: 0.5, severity: 0.5 },
+            }),
           },
         ],
-        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+        usage: { input_tokens: 100, output_tokens: 50 },
       });
 
       const result = await service.classifyTicket('Test', tenantId);
@@ -256,13 +276,13 @@ describe('OpenAIService', () => {
     });
 
     it('should truncate long text input', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue(mockClassificationResponse);
+      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
 
       const longText = 'a'.repeat(10000);
       await service.classifyTicket(longText, tenantId);
 
-      const callArgs = mockOpenAI.chat.completions.create.mock.calls[0][0];
-      const userContent = callArgs.messages[1].content;
+      const callArgs = mockAnthropicCreate.mock.calls[0][0];
+      const userContent = callArgs.messages[0].content;
       expect(userContent.length).toBeLessThanOrEqual(4000);
     });
   });
@@ -274,9 +294,9 @@ describe('OpenAIService', () => {
       usage: { prompt_tokens: 50, total_tokens: 50 },
     };
 
-    it('should generate embedding successfully', async () => {
+    it('should generate embedding successfully via OpenAI', async () => {
       mockRedis.get.mockResolvedValue(null); // No cache
-      mockOpenAI.embeddings.create.mockResolvedValue(mockEmbeddingResponse);
+      mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
       const result = await service.generateEmbedding('Test text');
 
@@ -292,12 +312,12 @@ describe('OpenAIService', () => {
 
       expect(result.cached).toBe(true);
       expect(result.embedding).toHaveLength(3072);
-      expect(mockOpenAI.embeddings.create).not.toHaveBeenCalled();
+      expect(mockEmbeddingsCreate).not.toHaveBeenCalled();
     });
 
     it('should cache new embeddings in Redis', async () => {
       mockRedis.get.mockResolvedValue(null);
-      mockOpenAI.embeddings.create.mockResolvedValue(mockEmbeddingResponse);
+      mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
       await service.generateEmbedding('Test text');
 
@@ -310,11 +330,11 @@ describe('OpenAIService', () => {
 
     it('should use text-embedding-3-large model', async () => {
       mockRedis.get.mockResolvedValue(null);
-      mockOpenAI.embeddings.create.mockResolvedValue(mockEmbeddingResponse);
+      mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
       await service.generateEmbedding('Test text');
 
-      expect(mockOpenAI.embeddings.create).toHaveBeenCalledWith(
+      expect(mockEmbeddingsCreate).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'text-embedding-3-large',
           dimensions: 3072,
@@ -324,7 +344,7 @@ describe('OpenAIService', () => {
 
     it('should truncate long text', async () => {
       mockRedis.get.mockResolvedValue(null);
-      mockOpenAI.embeddings.create.mockResolvedValue(mockEmbeddingResponse);
+      mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
       const longText = 'a'.repeat(50000);
       const result = await service.generateEmbedding(longText);
@@ -334,7 +354,7 @@ describe('OpenAIService', () => {
 
     it('should handle Redis errors gracefully', async () => {
       mockRedis.get.mockRejectedValue(new Error('Redis error'));
-      mockOpenAI.embeddings.create.mockResolvedValue(mockEmbeddingResponse);
+      mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
       const result = await service.generateEmbedding('Test text');
 
@@ -448,12 +468,12 @@ describe('OpenAIService', () => {
     });
 
     it('should allow requests within rate limit', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [{ message: { content: '{}' } }],
-        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '{}' }],
+        usage: { input_tokens: 10, output_tokens: 10 },
       });
 
-      // Should not throw for first 50 requests
+      // Should not throw for first requests
       for (let i = 0; i < 10; i++) {
         await expect(service.classifyTicket('Test', tenantId)).resolves.toBeDefined();
       }
@@ -476,9 +496,9 @@ describe('OpenAIService', () => {
         windowStart: Date.now() - 70000, // 70 seconds ago
       });
 
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [{ message: { content: '{}' } }],
-        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '{}' }],
+        usage: { input_tokens: 10, output_tokens: 10 },
       });
 
       // Should not throw - window has reset
@@ -509,9 +529,9 @@ describe('OpenAIService', () => {
     const tenantId = 'cost-tracking-tenant';
 
     it('should track costs after API calls', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [{ message: { content: '{}' } }],
-        usage: { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 },
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '{}' }],
+        usage: { input_tokens: 1000, output_tokens: 500 },
       });
 
       await service.classifyTicket('Test', tenantId);
@@ -536,7 +556,7 @@ describe('OpenAIService', () => {
           return Promise.resolve({ input: '10000', output: '5000' });
         }
         if (key.includes('requests')) {
-          return Promise.resolve({ 'gpt-4o-mini': '100' });
+          return Promise.resolve({ 'claude-haiku-4-5-20251001': '100' });
         }
         return Promise.resolve({});
       });
@@ -556,18 +576,17 @@ describe('OpenAIService', () => {
         readFile: jest.fn().mockResolvedValue(Buffer.from('test-image')),
       }));
 
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
           {
-            message: {
-              content: JSON.stringify({
-                summary: 'Test summary',
-                uiElements: ['button'],
-                actions: ['click'],
-                errorMessages: ['error'],
-                recommendations: ['fix'],
-              }),
-            },
+            type: 'text',
+            text: JSON.stringify({
+              summary: 'Test summary',
+              uiElements: ['button'],
+              actions: ['click'],
+              errorMessages: ['error'],
+              recommendations: ['fix'],
+            }),
           },
         ],
       });
@@ -581,13 +600,11 @@ describe('OpenAIService', () => {
     });
 
     it('should maintain backward compatibility with chat method', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
           {
-            message: {
-              content: 'Test response',
-              tool_calls: [],
-            },
+            type: 'text',
+            text: 'Test response',
           },
         ],
       });
@@ -600,14 +617,13 @@ describe('OpenAIService', () => {
     });
 
     it('should maintain backward compatibility with classify method', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
           {
-            message: {
-              content: JSON.stringify({
-                category: { value: 'bug', confidence: 0.9 },
-              }),
-            },
+            type: 'text',
+            text: JSON.stringify({
+              category: { value: 'bug', confidence: 0.9 },
+            }),
           },
         ],
       });
@@ -622,9 +638,9 @@ describe('OpenAIService', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle OpenAI API errors gracefully', async () => {
-      mockOpenAI.chat.completions.create.mockRejectedValue(
-        new Error('OpenAI API rate limit exceeded')
+    it('should handle Anthropic API errors gracefully', async () => {
+      mockAnthropicCreate.mockRejectedValue(
+        new Error('Anthropic API rate limit exceeded')
       );
 
       const result = await service.classifyTicket('Test', 'tenant');
@@ -635,13 +651,14 @@ describe('OpenAIService', () => {
     });
 
     it('should handle malformed JSON responses', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
           {
-            message: { content: 'not valid json' },
+            type: 'text',
+            text: 'not valid json at all no braces',
           },
         ],
-        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+        usage: { input_tokens: 10, output_tokens: 10 },
       });
 
       const result = await service.classifyTicket('Test', 'tenant');
@@ -651,14 +668,31 @@ describe('OpenAIService', () => {
     });
 
     it('should handle empty API responses', async () => {
-      mockOpenAI.chat.completions.create.mockResolvedValue({
-        choices: [{ message: { content: null } }],
-        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '' }],
+        usage: { input_tokens: 10, output_tokens: 10 },
       });
 
       const result = await service.classifyTicket('Test', 'tenant');
 
       expect(result).toBeDefined();
+    });
+
+    it('should extract JSON from markdown code blocks', async () => {
+      mockAnthropicCreate.mockResolvedValue({
+        content: [
+          {
+            type: 'text',
+            text: '```json\n{"type":"bug","severity":"high","keywords":["crash"],"confidence":{"type":0.9,"severity":0.8}}\n```',
+          },
+        ],
+        usage: { input_tokens: 10, output_tokens: 10 },
+      });
+
+      const result = await service.classifyTicket('Test', 'tenant');
+
+      expect(result.type).toBe('bug');
+      expect(result.severity).toBe('high');
     });
   });
 });

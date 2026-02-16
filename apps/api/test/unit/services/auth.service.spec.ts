@@ -31,6 +31,11 @@ describe('AuthService', () => {
     authProvider: 'email',
     authProviderId: null,
     createdAt: new Date(),
+    tenant: {
+      id: 'tenant-123',
+      slug: 'test-tenant',
+      ssoConfig: null,
+    },
   };
 
   const mockTenant = {

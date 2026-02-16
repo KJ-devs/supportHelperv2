@@ -59,7 +59,12 @@ class EnvironmentVariables {
   @IsOptional()
   S3_REGION: string = 'us-east-1';
 
-  // OpenAI (optional)
+  // Anthropic (primary AI provider)
+  @IsString()
+  @IsOptional()
+  ANTHROPIC_API_KEY?: string;
+
+  // OpenAI (optional, for embeddings)
   @IsString()
   @IsOptional()
   OPENAI_API_KEY?: string;

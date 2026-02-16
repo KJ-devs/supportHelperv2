@@ -56,11 +56,8 @@ const REQUIRED_VARIABLES: Array<{
       return !insecureDefaults.includes(value) && value.length >= 32;
     },
   },
-  {
-    name: 'OPENAI_API_KEY',
-    setupHint: 'Get from: https://platform.openai.com/api-keys',
-    validator: (value: string) => value.startsWith('sk-'),
-  },
+  // Note: ANTHROPIC_API_KEY and OPENAI_API_KEY are optional — at least one should be configured
+  // They are listed under OPTIONAL_VARIABLES below
   {
     name: 'S3_ENDPOINT',
     setupHint: 'S3/MinIO endpoint (e.g., http://localhost:9000)',
@@ -99,6 +96,8 @@ const REQUIRED_VARIABLES: Array<{
  * Optional environment variables (documented but not required)
  */
 const OPTIONAL_VARIABLES = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
   'SENTRY_DSN',
   'POSTHOG_API_KEY',
   'BETTERSTACK_SOURCE_TOKEN',

@@ -8,7 +8,7 @@ describe('TenantGuard', () => {
 
   beforeEach(() => {
     prisma = {
-      $executeRaw: jest.fn().mockResolvedValue(undefined),
+      $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
     } as unknown as PrismaService;
 
     guard = new TenantGuard(prisma);
@@ -36,7 +36,8 @@ describe('TenantGuard', () => {
 
   describe('canActivate', () => {
     it('should set tenantId on request and execute RLS query for JWT user', async () => {
-      const user = { tenantId: 'tenant-123', id: 'user-1', role: 'admin' };
+      const tenantUuid = '550e8400-e29b-41d4-a716-446655440000';
+      const user = { tenantId: tenantUuid, id: 'user-1', role: 'admin' };
       const context = createMockContext(user);
 
       const result = await guard.canActivate(context);
@@ -44,8 +45,8 @@ describe('TenantGuard', () => {
       expect(result).toBe(true);
 
       const request = context.switchToHttp().getRequest();
-      expect(request.tenantId).toBe('tenant-123');
-      expect(prisma.$executeRaw).toHaveBeenCalled();
+      expect(request.tenantId).toBe(tenantUuid);
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
     });
 
     it('should extract tenantId from user.tenant.id for SDK key auth', async () => {
@@ -94,12 +95,13 @@ describe('TenantGuard', () => {
     });
 
     it('should set PostgreSQL RLS session variable with correct tenantId', async () => {
-      const user = { tenantId: 'tenant-rls-test' };
+      const tenantUuid = '660e8400-e29b-41d4-a716-446655440001';
+      const user = { tenantId: tenantUuid };
       const context = createMockContext(user);
 
       await guard.canActivate(context);
 
-      expect(prisma.$executeRaw).toHaveBeenCalled();
+      expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
     });
   });
 });
