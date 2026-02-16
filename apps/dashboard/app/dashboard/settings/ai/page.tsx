@@ -12,7 +12,51 @@ const MODEL_OPTIONS = [
   { value: 'claude-haiku-4-20250514', label: 'Claude Haiku 4 (Fast)' },
 ];
 
-type KeyStatus = 'idle' | 'testing' | 'valid' | 'invalid';
+// Model options by provider
+const MODEL_OPTIONS = {
+  openai: [
+    { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Fast)' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (Recommended)' },
+    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Fast)' },
+  ],
+  ollama: [
+    { value: 'llama3.1', label: 'Llama 3.1 (Default)' },
+    { value: 'llama3.2', label: 'Llama 3.2' },
+    { value: 'mistral', label: 'Mistral' },
+    { value: 'codellama', label: 'CodeLlama' },
+  ],
+};
+
+// Provider info
+const PROVIDER_INFO = {
+  openai: {
+    name: 'OpenAI',
+    description: 'Industry-leading models with exceptional reasoning capabilities',
+    icon: '🧠',
+    requiresApiKey: true,
+    defaultEndpoint: 'https://api.openai.com/v1',
+  },
+  anthropic: {
+    name: 'Anthropic',
+    description: 'Claude models with advanced context understanding and safety',
+    icon: '✨',
+    requiresApiKey: true,
+    defaultEndpoint: 'https://api.anthropic.com/v1',
+  },
+  ollama: {
+    name: 'Ollama (Local)',
+    description: 'Run AI models locally on your own hardware for privacy',
+    icon: 'Monitor',
+    requiresApiKey: false,
+    defaultEndpoint: 'http://localhost:11434',
+  },
+};
+
+type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
 export default function AiSettingsPage() {
   const { isLoading: authLoading } = useRequireAuth();

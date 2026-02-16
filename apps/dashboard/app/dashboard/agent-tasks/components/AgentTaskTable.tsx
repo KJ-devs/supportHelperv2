@@ -4,7 +4,8 @@ import Link from 'next/link';
 import type { AgentTask } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
-import { SeverityBadge, EmptyState } from '@/components/ui';
+import { SeverityBadge } from '@/components/ui';
+import { Bot } from 'lucide-react';
 
 interface AgentTaskTableProps {
   tasks: AgentTask[];
@@ -45,12 +46,14 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
 
   if (tasks.length === 0) {
     return (
-      <div className="p-6">
-        <EmptyState
-          icon="🤖"
-          title="No agent tasks found"
-          description="Agent tasks will appear here when tickets are analyzed by the AI agent. Make sure you have tickets submitted and the AI agent is enabled."
-        />
+      <div className="text-center py-12">
+        <Bot className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          No agent tasks found
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400">
+          Agent tasks will appear here when tickets are analyzed by the AI agent.
+        </p>
       </div>
     );
   }

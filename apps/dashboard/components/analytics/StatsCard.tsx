@@ -34,7 +34,6 @@ export function StatsCard({
   variant = 'default',
 }: StatsCardProps) {
   const Icon = typeof icon === 'string' ? null : icon;
-  const iconString = typeof icon === 'string' ? icon : null;
 
   return (
     <div className={`rounded-lg p-6 ${variantStyles[variant]}`}>
@@ -42,7 +41,7 @@ export function StatsCard({
         {Icon ? (
           <Icon className="w-8 h-8" aria-hidden="true" />
         ) : (
-          <span className="text-3xl">{iconString}</span>
+          <span className="text-3xl">{icon}</span>
         )}
         {trend && (
           <span
