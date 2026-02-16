@@ -306,7 +306,7 @@ export default function TicketsPage() {
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <span className="text-red-600 dark:text-red-400 text-xl">⚠️</span>
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Erreur</h3>
                 <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
@@ -353,6 +353,17 @@ export default function TicketsPage() {
               {tickets.map((ticket) => (
                 <TicketCard key={ticket.id} ticket={ticket} />
               ))}
+              {tickets.length === 0 && (
+                <div className="col-span-full text-center py-12">
+                  <div className="text-6xl mb-4">🎫</div>
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+                    Aucun ticket trouvé
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    Modifiez vos filtres pour voir plus de résultats.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
