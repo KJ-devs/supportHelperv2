@@ -91,7 +91,9 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       align-items: center;
       justify-content: center;
       box-shadow: 0 4px 14px var(--sh-shadow);
-      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.2s ease,
+                  background 0.2s ease;
     }
 
     .sh-fab:hover {
@@ -114,6 +116,22 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       height: 24px;
     }
 
+    /* FAB attention pulse animation - triggered after inactivity */
+    .sh-fab.sh-attention-pulse {
+      animation: sh-fab-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 3;
+    }
+
+    @keyframes sh-fab-pulse {
+      0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 14px var(--sh-shadow);
+      }
+      50% {
+        transform: scale(1.1);
+        box-shadow: 0 6px 24px rgba(var(--sh-primary), 0.4);
+      }
+    }
+
     /* Modal Backdrop */
     .sh-backdrop {
       position: fixed;
@@ -121,7 +139,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       z-index: calc(var(--sh-z-index) + 1);
       background: rgba(0, 0, 0, 0.3);
       backdrop-filter: blur(4px);
-      animation: sh-fade-in 0.2s ease;
+      animation: sh-fade-in 0.25s ease;
     }
 
     /* Hide backdrop and modal during recording so page is fully visible */
@@ -148,7 +166,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       font-size: 14px;
       font-weight: 500;
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-      animation: sh-fade-in 0.2s ease;
+      animation: sh-fade-in 0.25s ease;
     }
 
     .sh-recording-bar .sh-rec-dot {
@@ -156,12 +174,23 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       height: 10px;
       border-radius: 50%;
       background: #ef4444;
-      animation: sh-pulse 1s infinite;
+      animation: sh-rec-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 
     .sh-recording-bar .sh-rec-dot.paused {
       animation: none;
       background: #9ca3af;
+    }
+
+    @keyframes sh-rec-pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(1.2);
+      }
     }
 
     .sh-recording-bar .sh-rec-time {
@@ -178,7 +207,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       font-size: 13px;
       font-family: inherit;
       font-weight: 500;
-      transition: background 0.15s ease;
+      transition: background 0.15s ease, transform 0.15s ease;
       display: inline-flex;
       align-items: center;
       gap: 4px;
@@ -186,6 +215,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-recording-bar button:hover {
       background: rgba(255, 255, 255, 0.3);
+      transform: scale(1.05);
     }
 
     .sh-recording-bar button:focus-visible {
@@ -211,7 +241,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       to { opacity: 1; }
     }
 
-    /* Modal Container */
+    /* Modal Container - spring animation */
     .sh-modal {
       position: fixed;
       ${getModalPositionCSS(position)}
@@ -224,19 +254,31 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       box-shadow: 0 20px 50px var(--sh-shadow);
       display: flex;
       flex-direction: column;
-      animation: sh-slide-in 0.25s ease;
+      animation: sh-modal-spring 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
       overflow: hidden;
     }
 
-    @keyframes sh-slide-in {
-      from {
+    @keyframes sh-modal-spring {
+      0% {
         opacity: 0;
-        transform: translateY(20px) scale(0.95);
+        transform: translateY(30px) scale(0.9);
       }
-      to {
+      100% {
         opacity: 1;
         transform: translateY(0) scale(1);
       }
+    }
+
+    /* Error state shake animation */
+    :host([data-state="error"]) .sh-modal {
+      animation: sh-modal-spring 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+                 sh-shake 0.5s ease 0.4s;
+    }
+
+    @keyframes sh-shake {
+      0%, 100% { transform: translateX(0); }
+      10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); }
+      20%, 40%, 60%, 80% { transform: translateX(8px); }
     }
 
     /* Modal Header */
@@ -318,8 +360,16 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       font-weight: 500;
       border: none;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
       font-family: inherit;
+    }
+
+    .sh-btn:hover:not(:disabled) {
+      transform: translateY(-2px);
+    }
+
+    .sh-btn:active:not(:disabled) {
+      transform: translateY(0);
     }
 
     .sh-btn:disabled {
@@ -334,6 +384,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-btn-primary:hover:not(:disabled) {
       background: var(--sh-primary-hover);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
     .sh-btn-primary:focus-visible {
@@ -349,6 +400,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-btn-secondary:hover:not(:disabled) {
       background: var(--sh-border);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .sh-btn-secondary:focus-visible {
@@ -363,6 +415,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
 
     .sh-btn-danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--sh-error) 85%, black);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
     }
 
     .sh-btn-danger:focus-visible {
@@ -404,17 +457,12 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       height: 12px;
       border-radius: 50%;
       background: var(--sh-error);
-      animation: sh-pulse 1s infinite;
+      animation: sh-rec-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
 
     .sh-timer-dot.paused {
       animation: none;
       background: var(--sh-text-secondary);
-    }
-
-    @keyframes sh-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
     }
 
     .sh-timer-time {
@@ -460,13 +508,17 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       font-family: inherit;
       background: var(--sh-bg);
       color: var(--sh-text);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      transition: border-color 0.2s ease,
+                  box-shadow 0.2s ease,
+                  transform 0.2s ease;
     }
 
     .sh-input:focus, .sh-textarea:focus {
       outline: none;
       border-color: var(--sh-primary);
-      box-shadow: 0 0 0 3px var(--sh-primary-light);
+      box-shadow: 0 0 0 3px var(--sh-primary-light),
+                  0 2px 8px rgba(0, 0, 0, 0.05);
+      transform: translateY(-1px);
     }
 
     .sh-input:focus-visible, .sh-textarea:focus-visible {
@@ -539,7 +591,7 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       to { transform: rotate(360deg); }
     }
 
-    /* Success Icon */
+    /* Success Icon - animated checkmark */
     .sh-success-icon {
       width: 64px;
       height: 64px;
@@ -549,14 +601,43 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       display: flex;
       align-items: center;
       justify-content: center;
+      animation: sh-success-scale 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes sh-success-scale {
+      0% {
+        transform: scale(0);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.1);
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
     }
 
     .sh-success-icon svg {
       width: 32px;
       height: 32px;
+      animation: sh-check-draw 0.5s ease 0.3s both;
     }
 
-    /* Error Icon */
+    @keyframes sh-check-draw {
+      0% {
+        stroke-dasharray: 50;
+        stroke-dashoffset: 50;
+        opacity: 0;
+      }
+      100% {
+        stroke-dasharray: 50;
+        stroke-dashoffset: 0;
+        opacity: 1;
+      }
+    }
+
+    /* Error Icon - animated with pulse */
     .sh-error-icon {
       width: 64px;
       height: 64px;
@@ -566,6 +647,22 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       display: flex;
       align-items: center;
       justify-content: center;
+      animation: sh-error-pulse 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes sh-error-pulse {
+      0%, 100% {
+        transform: scale(1);
+      }
+      25% {
+        transform: scale(1.1);
+      }
+      50% {
+        transform: scale(0.95);
+      }
+      75% {
+        transform: scale(1.05);
+      }
     }
 
     .sh-error-icon svg {
@@ -688,6 +785,22 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       height: 40px;
     }
 
+    /* State transitions - crossfade effect */
+    .sh-modal-body {
+      animation: sh-crossfade 0.3s ease;
+    }
+
+    @keyframes sh-crossfade {
+      0% {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       .sh-modal {
@@ -701,6 +814,40 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
         right: auto;
         left: auto;
         top: auto;
+      }
+    }
+
+    /* Accessibility - Respect reduced motion preference */
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+
+      .sh-fab.sh-attention-pulse,
+      .sh-rec-dot,
+      .sh-timer-dot,
+      .sh-spinner {
+        animation: none !important;
+      }
+
+      .sh-fab:hover {
+        transform: scale(1.02);
+      }
+
+      .sh-btn:hover:not(:disabled) {
+        transform: none;
+      }
+
+      .sh-modal {
+        animation: sh-fade-in 0.2s ease;
+      }
+
+      :host([data-state="error"]) .sh-modal {
+        animation: sh-fade-in 0.2s ease;
       }
     }
   `;
