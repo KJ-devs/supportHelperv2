@@ -1,5 +1,6 @@
-import { Injectable, ExecutionContext } from '@nestjs/common';
-import { ThrottlerGuard, ThrottlerOptions } from '@nestjs/throttler';
+import { Inject, Injectable, ExecutionContext } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModuleOptions, ThrottlerOptions, ThrottlerStorage } from '@nestjs/throttler';
 import { UserEntity, ApplicationEntity } from '../dto/auth.dto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { RATE_LIMIT_PRESETS, RateLimitConfig } from '../../../tenants/dto/update-rate-limits.dto';
@@ -26,10 +27,13 @@ export class TenantRateLimitGuard extends ThrottlerGuard {
   private tenantConfigCache = new Map<string, { config: RateLimitConfig; timestamp: number }>();
   private readonly CACHE_TTL = 60000; // 1 minute cache
 
-  constructor(private readonly prisma: PrismaService) {
-    super({
-      throttlers: [],
-    } as any);
+  constructor(
+    @Inject('THROTTLER_OPTIONS') options: ThrottlerModuleOptions,
+    storageService: ThrottlerStorage,
+    reflector: Reflector,
+    private readonly prisma: PrismaService,
+  ) {
+    super(options, storageService, reflector);
   }
 
   /**
