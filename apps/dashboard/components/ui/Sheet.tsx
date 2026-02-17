@@ -9,62 +9,65 @@ import { ReactNode, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface SheetProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  isOpen: boolean;
+  onClose: () => void;
   children: ReactNode;
   side?: 'left' | 'right';
 }
 
-export function Sheet({ open, onOpenChange, children, side = 'left' }: SheetProps) {
-  // Lock body scroll when sheet is open
+export function Sheet({ isOpen, onClose, children, side = 'left' }: SheetProps) {
+  // Prevent body scroll when sheet is open
   useEffect(() => {
-    if (open) {
+    if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'unset';
     }
+
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = 'unset';
     };
-  }, [open]);
+  }, [isOpen]);
 
   // Close on Escape key
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && open) {
-        onOpenChange(false);
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
       }
     };
+
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [open, onOpenChange]);
+  }, [isOpen, onClose]);
 
   if (typeof window === 'undefined') return null;
 
-  const translateClass = side === 'left' ? '-translate-x-full' : 'translate-x-full';
+  const slideDirection = side === 'left' ? '-translate-x-full' : 'translate-x-full';
+  const slideIn = 'translate-x-0';
 
   return createPortal(
-    <>
-      {/* Overlay */}
+    <div className={`fixed inset-0 z-50 ${isOpen ? '' : 'pointer-events-none'}`}>
+      {/* Backdrop */}
       <div
-        className={`fixed inset-0 bg-black/50 z-50 transition-opacity duration-300 ${
-          open ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
+          isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={() => onOpenChange(false)}
+        onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Sheet */}
       <div
-        className={`fixed inset-y-0 ${side}-0 z-50 w-64 sm:w-80 bg-white dark:bg-gray-900 shadow-xl transition-transform duration-300 ${
-          open ? 'translate-x-0' : translateClass
+        className={`fixed inset-y-0 ${side}-0 w-[280px] max-w-[85vw] bg-white dark:bg-gray-900 shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          isOpen ? slideIn : slideDirection
         }`}
         role="dialog"
         aria-modal="true"
       >
         {children}
       </div>
-    </>,
+    </div>,
     document.body
   );
 }
