@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DeadLetterWorker } from '../dead-letter.worker';
 import { PrismaService } from '../../services/prisma.service';
+import { DlqAlertService } from '../../services/dlq-alert.service';
 import { Job } from 'bullmq';
 
 describe('DeadLetterWorker', () => {
   let worker: DeadLetterWorker;
   let prismaService: PrismaService;
+  let dlqAlertService: jest.Mocked<DlqAlertService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -19,11 +21,18 @@ describe('DeadLetterWorker', () => {
             },
           },
         },
+        {
+          provide: DlqAlertService,
+          useValue: {
+            alertIfNeeded: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
     worker = module.get<DeadLetterWorker>(DeadLetterWorker);
     prismaService = module.get<PrismaService>(PrismaService);
+    dlqAlertService = module.get(DlqAlertService);
   });
 
   it('should be defined', () => {
@@ -93,7 +102,7 @@ describe('DeadLetterWorker', () => {
       await expect(worker.process(mockJob)).resolves.toBeUndefined();
     });
 
-    it('should identify critical failures', async () => {
+    it('should identify critical failures and send alerts', async () => {
       const criticalJob = {
         id: 'critical-job',
         queueName: 'agent-orchestration',
@@ -115,12 +124,15 @@ describe('DeadLetterWorker', () => {
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('CRITICAL FAILURE'),
       );
+
+      // Should call alert service
+      expect(dlqAlertService.alertIfNeeded).toHaveBeenCalledWith(criticalJob);
     });
 
     it('should not mark non-critical queues as critical', async () => {
       const normalJob = {
         id: 'normal-job',
-        queueName: 'github-sync',
+        queueName: 'integration-sync',
         data: {
           tenantId: 'tenant-123',
         },

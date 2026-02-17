@@ -13,7 +13,7 @@ import { IntegrationCard } from '@/components/integrations/IntegrationCard';
 import { IntegrationModal } from '@/components/integrations/IntegrationModal';
 import { SyncLogsPanel } from '@/components/integrations/SyncLogsPanel';
 import { ToastProvider, useToast } from '@/components/integrations/IntegrationToast';
-import { PageLoader } from '@/components/ui';
+import { PageLoader, EmptyState } from '@/components/ui';
 
 function IntegrationsPageContent() {
   const { addToast } = useToast();
@@ -279,23 +279,19 @@ function IntegrationsPageContent() {
 
         {/* Empty State */}
         {!isLoading && integrations.length === 0 && !error && (
-          <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-600">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-900/30 dark:to-indigo-900/30 flex items-center justify-center">
+          <EmptyState
+            icon={
               <svg className="w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
               </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">No integrations yet</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-6 max-w-md mx-auto">
-              Connect to Slack, Discord, Notion, Jira or HubSpot to automatically sync your support tickets.
-            </p>
-            <button
-              onClick={handleCreate}
-              className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 transition-colors shadow-md"
-            >
-              Add Your First Integration
-            </button>
-          </div>
+            }
+            title="No integrations yet"
+            description="Connect to Slack, Discord, Notion, Jira or HubSpot to automatically sync your support tickets."
+            actionLabel="Add Your First Integration"
+            onAction={handleCreate}
+            variant="bordered"
+            size="lg"
+          />
         )}
 
         {/* Integrations Content */}
@@ -411,18 +407,17 @@ function IntegrationsPageContent() {
 
             {/* Grid */}
             {filteredIntegrations.length === 0 ? (
-              <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                <p className="text-gray-500 dark:text-gray-400">No integrations match your filters</p>
-                <button
-                  onClick={() => {
-                    setTypeFilter('');
-                    setEnabledFilter('');
-                  }}
-                  className="mt-4 px-4 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                >
-                  Clear filters
-                </button>
-              </div>
+              <EmptyState
+                icon="🔍"
+                title="No integrations match your filters"
+                description="Try adjusting your filter settings to see more results."
+                actionLabel="Clear filters"
+                onAction={() => {
+                  setTypeFilter('');
+                  setEnabledFilter('');
+                }}
+                variant="bordered"
+              />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredIntegrations.map((integration) => (

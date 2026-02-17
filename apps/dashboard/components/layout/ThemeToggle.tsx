@@ -11,15 +11,20 @@ export function ThemeToggle() {
     else setTheme('light');
   };
 
+  const themeLabels = {
+    light: 'Thème clair',
+    dark: 'Thème sombre',
+    system: 'Thème système'
+  };
+
   return (
     <button
       onClick={cycleTheme}
-      className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
-      title={`Theme: ${theme}`}
-      aria-label={`Current theme: ${theme}. Click to change.`}
+      className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+      aria-label={`Changer le thème. Thème actuel: ${themeLabels[theme as keyof typeof themeLabels] || theme}`}
     >
       {theme === 'light' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -29,7 +34,7 @@ export function ThemeToggle() {
         </svg>
       )}
       {theme === 'dark' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -39,7 +44,7 @@ export function ThemeToggle() {
         </svg>
       )}
       {theme === 'system' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

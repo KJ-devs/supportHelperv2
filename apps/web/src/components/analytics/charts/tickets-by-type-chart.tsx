@@ -12,6 +12,8 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { BarChart3 } from 'lucide-react';
 import type { TicketsByTypeData } from '@/types/analytics';
 
 interface TicketsByTypeChartProps {
@@ -49,6 +51,8 @@ export function TicketsByTypeChart({ data, isLoading }: TicketsByTypeChartProps)
     displayType: item.type.charAt(0).toUpperCase() + item.type.slice(1),
   }));
 
+  const isEmpty = !data || data.length === 0;
+
   return (
     <Card>
       <CardHeader>
@@ -56,8 +60,16 @@ export function TicketsByTypeChart({ data, isLoading }: TicketsByTypeChartProps)
         <CardDescription>Distribution of tickets by category</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {isEmpty ? (
+          <EmptyState
+            icon={BarChart3}
+            title="No data available"
+            description="There are no tickets in the selected date range."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
             <BarChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
@@ -89,6 +101,7 @@ export function TicketsByTypeChart({ data, isLoading }: TicketsByTypeChartProps)
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

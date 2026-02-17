@@ -12,6 +12,8 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Brain } from 'lucide-react';
 import type { AIConfidenceData } from '@/types/analytics';
 import { format, parseISO } from 'date-fns';
 
@@ -41,6 +43,8 @@ export function AIConfidenceChart({ data, isLoading }: AIConfidenceChartProps) {
     avgConfidenceFormatted: item.avgConfidence.toFixed(1),
   }));
 
+  const isEmpty = !data || data.length === 0;
+
   return (
     <Card>
       <CardHeader>
@@ -48,8 +52,16 @@ export function AIConfidenceChart({ data, isLoading }: AIConfidenceChartProps) {
         <CardDescription>Average AI prediction confidence over time</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {isEmpty ? (
+          <EmptyState
+            icon={Brain}
+            title="No data available"
+            description="There are no AI predictions in the selected date range."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
             <LineChart data={formattedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
               <XAxis
@@ -105,6 +117,7 @@ export function AIConfidenceChart({ data, isLoading }: AIConfidenceChartProps) {
             </LineChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -14,7 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { IntegrationsService } from './integrations.service';
 import { IntegrationsSyncService } from './integrations-sync.service';
 import { CreateIntegrationDto, UpdateIntegrationDto } from './dto';
-import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { createIntegrationSchema, updateIntegrationSchema } from './dto';

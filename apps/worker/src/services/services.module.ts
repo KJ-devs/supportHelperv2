@@ -13,6 +13,7 @@ import {
   GitAutomationService,
   PullRequestService,
 } from './index';
+import { DlqAlertService } from './dlq-alert.service';
 import { JobMonitoringService } from './job-monitoring.service';
 import { UsageSnapshotSchedulerService } from './usage-snapshot-scheduler.service';
 import { BullModule } from '@nestjs/bullmq';
@@ -38,6 +39,7 @@ import { QUEUE_NAMES } from '../queues/queues.module';
     EmailService,
     AgentService,
     JobMonitoringService,
+    DlqAlertService,
     GitAutomationService,
     PullRequestService,
     UsageSnapshotSchedulerService,
@@ -54,6 +56,7 @@ import { QUEUE_NAMES } from '../queues/queues.module';
     EmailService,
     AgentService,
     JobMonitoringService,
+    DlqAlertService,
     GitAutomationService,
     PullRequestService,
     UsageSnapshotSchedulerService,

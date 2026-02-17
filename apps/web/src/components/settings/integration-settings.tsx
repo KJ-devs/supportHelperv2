@@ -3,7 +3,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Github, Slack, Mail } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Github, Slack, Mail, Plug } from 'lucide-react';
 
 const integrations = [
   {
@@ -30,6 +31,9 @@ const integrations = [
 ];
 
 export function IntegrationSettings() {
+  const connectedIntegrations = integrations.filter(i => i.connected);
+  const isEmpty = connectedIntegrations.length === 0;
+
   return (
     <Card>
       <CardHeader>
@@ -39,8 +43,16 @@ export function IntegrationSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {integrations.map(integration => (
+        {isEmpty ? (
+          <EmptyState
+            icon={Plug}
+            title="No integrations configured"
+            description="Connect external services like GitHub, Slack, or email to streamline your support workflow."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="space-y-4">
+            {integrations.map(integration => (
             <div
               key={integration.id}
               className="flex items-center justify-between rounded-lg border p-4"
@@ -63,6 +75,7 @@ export function IntegrationSettings() {
             </div>
           ))}
         </div>
+        )}
       </CardContent>
     </Card>
   );

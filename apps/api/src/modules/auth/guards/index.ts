@@ -1,7 +1,8 @@
-export * from './jwt-auth.guard';
-export * from './api-key.guard';
-export * from './tenant.guard';
+// Re-export common guards for backwards compatibility
+export { JwtAuthGuard, SdkKeyGuard, TenantGuard, RolesGuard } from '../../../common/guards';
+
+// Keep tenant-specific rate limiting guard
 export * from './tenant-rate-limit.guard';
 
-// Alias for backwards compatibility
-export { ApiKeyGuard as ApiKeyAuthGuard } from './api-key.guard';
+// Deprecated aliases
+export { SdkKeyGuard as ApiKeyAuthGuard } from '../../../common/guards';

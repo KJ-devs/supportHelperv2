@@ -10,6 +10,7 @@ import type { Ticket, TicketStatus } from '@/lib/types/ticket';
 import { ticketsApi } from '@/lib/api/tickets';
 import { StatusBadge, SeverityBadge, TypeBadge, Button, Select, Card } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
+import { Bot, Monitor } from 'lucide-react';
 
 interface TicketDetailProps {
   ticket: Ticket;
@@ -138,7 +139,10 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       {/* AI Analysis Card */}
       {ticket.aiSummary && (
         <Card>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">🤖 Analyse IA</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <Bot className="w-5 h-5" aria-hidden="true" />
+            Analyse IA
+          </h2>
           <div className="space-y-3">
             <div>
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Résumé</p>
@@ -178,7 +182,10 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       {/* User Context Card */}
       {ticket.userContext && (
         <Card>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">💻 Contexte Utilisateur</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+            <Monitor className="w-5 h-5" aria-hidden="true" />
+            Contexte Utilisateur
+          </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {Object.entries(ticket.userContext).map(([key, value]) => (
               <div key={key} className="bg-gray-50 dark:bg-gray-800 p-3 rounded">

@@ -3,5 +3,7 @@ export * from './sentry.service';
 export * from './logger.service';
 export * from './posthog.service';
 export * from './health.service';
+export * from './metrics.service';
+export * from './metrics.controller';
 export * from './correlation-id.middleware';
 export * from './sentry-exception.filter';

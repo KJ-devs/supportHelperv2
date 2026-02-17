@@ -5,6 +5,7 @@ import { ProcessorsModule } from './processors';
 import { ServicesModule } from './services/services.module';
 import { HealthModule } from './health';
 import { LoggerModule } from './common/logger/logger.module';
+import { GracefulShutdownService } from './services/graceful-shutdown.service';
 
 // Config imports
 import anthropicConfig from './config/anthropic.config';
@@ -55,6 +56,10 @@ import queueConfig from './config/queue.config';
 
     // Health checks
     HealthModule,
+  ],
+  providers: [
+    // Graceful shutdown service (handles BullMQ worker cleanup)
+    GracefulShutdownService,
   ],
 })
 export class AppModule {}

@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
 import { CacheService, CacheTTL, CacheKeys } from '../cache';
 import { Public } from '../common/decorators';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards';
 
 @ApiTags('Health')
 @Controller('health')
@@ -132,6 +132,38 @@ export class HealthController {
     const check = await this.healthService.checkRedis();
     if (check.status === 'unhealthy') {
       throw new ServiceUnavailableException(check.message || 'Redis unhealthy');
+    }
+    return check;
+  }
+
+  @Get('s3')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'S3/MinIO health check (auth required)' })
+  @ApiResponse({ status: 200, description: 'S3/MinIO is healthy' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 503, description: 'S3/MinIO is unhealthy' })
+  async s3Health() {
+    const check = await this.healthService.checkS3();
+    if (check.status === 'unhealthy') {
+      throw new ServiceUnavailableException(check.message || 'S3/MinIO unhealthy');
+    }
+    return check;
+  }
+
+  @Get('search')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'MeiliSearch health check (auth required)' })
+  @ApiResponse({ status: 200, description: 'MeiliSearch is healthy' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 503, description: 'MeiliSearch is unhealthy' })
+  async searchHealth() {
+    const check = await this.healthService.checkMeiliSearch();
+    if (check.status === 'unhealthy') {
+      throw new ServiceUnavailableException(check.message || 'MeiliSearch unhealthy');
     }
     return check;
   }

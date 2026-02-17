@@ -3,6 +3,8 @@
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { AppWindow } from 'lucide-react';
 import type { TopApplicationData } from '@/types/analytics';
 
 interface TopApplicationsChartProps {
@@ -27,6 +29,7 @@ export function TopApplicationsChart({ data, isLoading }: TopApplicationsChartPr
 
   // Take only top 5
   const topFive = data?.slice(0, 5);
+  const isEmpty = !topFive || topFive.length === 0;
 
   return (
     <Card>
@@ -35,8 +38,16 @@ export function TopApplicationsChart({ data, isLoading }: TopApplicationsChartPr
         <CardDescription>Applications generating the most support tickets</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {isEmpty ? (
+          <EmptyState
+            icon={AppWindow}
+            title="No data available"
+            description="There are no applications with tickets in the selected date range."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={topFive}
               layout="vertical"
@@ -73,6 +84,7 @@ export function TopApplicationsChart({ data, isLoading }: TopApplicationsChartPr
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

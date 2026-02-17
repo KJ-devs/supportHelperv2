@@ -11,6 +11,8 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { TrendingUp } from 'lucide-react';
 import type { ResolutionTrendData } from '@/types/analytics';
 import { format, parseISO } from 'date-fns';
 
@@ -40,6 +42,8 @@ export function ResolutionTrendChart({ data, isLoading }: ResolutionTrendChartPr
     avgTimeFormatted: item.avgTime.toFixed(1),
   }));
 
+  const isEmpty = !data || data.length === 0;
+
   return (
     <Card>
       <CardHeader>
@@ -47,8 +51,16 @@ export function ResolutionTrendChart({ data, isLoading }: ResolutionTrendChartPr
         <CardDescription>Average resolution time in hours</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {isEmpty ? (
+          <EmptyState
+            icon={TrendingUp}
+            title="No data available"
+            description="There are no resolved tickets in the selected date range."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={formattedData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorResolution" x1="0" y1="0" x2="0" y2="1">
@@ -87,6 +99,7 @@ export function ResolutionTrendChart({ data, isLoading }: ResolutionTrendChartPr
             </AreaChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

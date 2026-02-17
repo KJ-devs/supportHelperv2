@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { GitFork, Star, AlertCircle } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { GitFork, Star, AlertCircle, FolderGit2, Github } from 'lucide-react';
 
 const repositories = [
   {
@@ -40,40 +41,58 @@ const repositories = [
 ];
 
 export function GitHubRepositories() {
+  // TODO: Replace with actual API call to check if GitHub is connected
+  const hasRepositories = repositories.length > 0;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Connected Repositories</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {repositories.map(repo => (
-            <div key={repo.id} className="flex items-center justify-between rounded-lg border p-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <GitFork className="h-4 w-4 text-muted-foreground" />
-                  <p className="font-medium">{repo.name}</p>
-                  {repo.synced ? (
-                    <Badge variant="success">Synced</Badge>
-                  ) : (
-                    <Badge variant="secondary">Not Synced</Badge>
-                  )}
+        {!hasRepositories ? (
+          <EmptyState
+            icon={FolderGit2}
+            title="No repositories connected"
+            description="Connect your GitHub account to sync repositories and issues."
+            action={{
+              label: 'Connect GitHub',
+              onClick: () => {
+                // TODO: Navigate to GitHub OAuth
+                console.log('Navigate to GitHub OAuth');
+              },
+            }}
+          />
+        ) : (
+          <div className="space-y-4">
+            {repositories.map(repo => (
+              <div key={repo.id} className="flex items-center justify-between rounded-lg border p-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <GitFork className="h-4 w-4 text-muted-foreground" />
+                    <p className="font-medium">{repo.name}</p>
+                    {repo.synced ? (
+                      <Badge variant="success">Synced</Badge>
+                    ) : (
+                      <Badge variant="secondary">Not Synced</Badge>
+                    )}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{repo.description}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">{repo.description}</p>
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4" />
+                    {repo.openIssues}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Star className="h-4 w-4" />
+                    {repo.stars}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <AlertCircle className="h-4 w-4" />
-                  {repo.openIssues}
-                </div>
-                <div className="flex items-center gap-1">
-                  <Star className="h-4 w-4" />
-                  {repo.stars}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

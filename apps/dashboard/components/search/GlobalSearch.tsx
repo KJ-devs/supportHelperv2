@@ -88,10 +88,14 @@ export function GlobalSearch() {
   };
 
   return (
-    <div ref={searchRef} className="relative">
+    <div ref={searchRef} className="relative w-full max-w-md">
       {/* Search Input */}
-      <div className="relative">
+      <div className="relative" role="search">
+        <label htmlFor="global-search" className="sr-only">
+          Rechercher dans les tickets
+        </label>
         <input
+          id="global-search"
           ref={inputRef}
           type="text"
           value={query}
@@ -101,13 +105,17 @@ export function GlobalSearch() {
           }}
           onFocus={() => setIsOpen(true)}
           placeholder="Rechercher... (Ctrl+K)"
-          className="w-64 px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500"
+          className="w-full px-4 py-2 pl-10 pr-10 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 min-h-[44px]"
+          aria-autocomplete="list"
+          aria-controls="search-results"
+          aria-expanded={isOpen && query ? 'true' : 'false'}
         />
         <svg
-          className="absolute left-3 top-2.5 w-5 h-5 text-gray-400 dark:text-gray-500"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-gray-500 pointer-events-none"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
+          aria-hidden="true"
         >
           <path
             strokeLinecap="round"
@@ -123,9 +131,10 @@ export function GlobalSearch() {
               setQuery('');
               setResults([]);
             }}
-            className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            aria-label="Effacer la recherche"
           >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path d="M10 8.586L2.929 1.515 1.515 2.929 8.586 10l-7.071 7.071 1.414 1.414L10 11.414l7.071 7.071 1.414-1.414L11.414 10l7.071-7.071-1.414-1.414L10 8.586z" />
             </svg>
           </button>
@@ -134,15 +143,21 @@ export function GlobalSearch() {
 
       {/* Results Dropdown */}
       {isOpen && query && (
-        <div className="absolute top-full mt-2 w-96 bg-white dark:bg-gray-900 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-50 max-h-96 overflow-y-auto">
+        <div
+          id="search-results"
+          className="fixed sm:absolute inset-0 sm:inset-auto sm:top-full sm:left-0 sm:right-0 sm:mt-2 sm:w-96 bg-white dark:bg-gray-900 sm:rounded-lg sm:shadow-xl sm:border border-gray-200 dark:border-gray-700 z-50 overflow-y-auto sm:max-h-96"
+          role="listbox"
+          aria-live="polite"
+        >
           {/* Loading */}
           {isLoading && (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+            <div className="p-4 text-center text-gray-500 dark:text-gray-400" role="status" aria-live="polite">
               <svg
                 className="animate-spin h-5 w-5 mx-auto mb-2"
                 xmlns="http://www.w3.org/2000/svg"
                 fill="none"
                 viewBox="0 0 24 24"
+                aria-hidden="true"
               >
                 <circle
                   className="opacity-25"
@@ -185,12 +200,14 @@ export function GlobalSearch() {
           {/* Results List */}
           {!isLoading && results.length > 0 && (
             <>
-              <div className="p-2">
+              <div className="p-2" role="list">
                 {results.map((ticket) => (
                   <button
                     key={ticket.id}
                     onClick={() => handleSelect(ticket.id)}
-                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                    className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    role="option"
+                    aria-label={`Ticket: ${ticket.title}, ${ticket.severity}, ${ticket.status}`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-1">

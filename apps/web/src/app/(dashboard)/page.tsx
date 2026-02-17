@@ -11,17 +11,17 @@ export const metadata: Metadata = {
 
 export default function DashboardPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">
+        <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Dashboard</h1>
+        <p className="text-sm text-muted-foreground sm:text-base">
           Overview of your support operations and key metrics.
         </p>
       </div>
 
       <OverviewCards />
 
-      <div className="grid gap-6 lg:grid-cols-7">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-7">
         <div className="lg:col-span-4">
           <TicketTrends />
         </div>
