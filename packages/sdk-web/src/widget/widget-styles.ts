@@ -28,20 +28,20 @@ function getModalPositionCSS(position: WidgetPosition): string {
 /**
  * Create widget styles
  */
-export function createWidgetStyles(primaryColor: string, zIndex: number, position: WidgetPosition): string {
+export function createWidgetStyles(primaryColor: string, zIndex: number, position: WidgetPosition, isDark: boolean): string {
   return `
     :host {
       --sh-primary: ${primaryColor};
-      --sh-primary-hover: color-mix(in srgb, ${primaryColor} 85%, black);
-      --sh-primary-light: color-mix(in srgb, ${primaryColor} 15%, white);
-      --sh-text: #1f2937;
-      --sh-text-secondary: #6b7280;
-      --sh-bg: #ffffff;
-      --sh-bg-secondary: #f3f4f6;
-      --sh-border: #e5e7eb;
+      --sh-primary-hover: color-mix(in srgb, ${primaryColor} 85%, ${isDark ? 'white' : 'black'});
+      --sh-primary-light: color-mix(in srgb, ${primaryColor} 15%, ${isDark ? 'black' : 'white'});
+      --sh-text: ${isDark ? '#e0e0e0' : '#1f2937'};
+      --sh-text-secondary: ${isDark ? '#9ca3af' : '#6b7280'};
+      --sh-bg: ${isDark ? '#1a1a2e' : '#ffffff'};
+      --sh-bg-secondary: ${isDark ? '#16213e' : '#f3f4f6'};
+      --sh-border: ${isDark ? '#374151' : '#e5e7eb'};
       --sh-error: #ef4444;
       --sh-success: #22c55e;
-      --sh-shadow: rgba(0, 0, 0, 0.15);
+      --sh-shadow: ${isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.15)'};
       --sh-radius: 12px;
       --sh-radius-sm: 8px;
       --sh-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;

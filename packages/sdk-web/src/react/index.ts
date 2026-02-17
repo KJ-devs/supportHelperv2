@@ -6,7 +6,7 @@
  * <SupportHelperWidget sdkKey="sk_xxx" apiUrl="https://..." onSubmit={({ticketId}) => ...} />
  */
 
-import type { ReportResponse, WidgetPosition } from '../widget/widget-types';
+import type { ReportResponse, WidgetPosition, WidgetTheme } from '../widget/widget-types';
 
 // Ensure the custom element is registered
 import '../widget/index';
@@ -26,6 +26,8 @@ export interface SupportHelperWidgetProps {
   primaryColor?: string;
   /** Z-index for the widget */
   zIndex?: number;
+  /** Theme: light, dark, or auto (default: auto) */
+  theme?: WidgetTheme;
   /** Called when the modal opens */
   onOpen?: () => void;
   /** Called when the modal closes */
@@ -83,6 +85,7 @@ export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
     position,
     primaryColor,
     zIndex,
+    theme,
     onOpen,
     onClose,
     onRecordingStart,
@@ -163,6 +166,7 @@ export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
   if (position) attrs['position'] = position;
   if (primaryColor) attrs['primary-color'] = primaryColor;
   if (zIndex !== undefined) attrs['z-index'] = zIndex;
+  if (theme) attrs['theme'] = theme;
 
   // Use createElement to render custom element
   return React.createElement('support-helper', {

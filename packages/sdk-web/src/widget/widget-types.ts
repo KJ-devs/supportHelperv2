@@ -1,5 +1,7 @@
 export type WidgetPosition = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 
+export type WidgetTheme = 'light' | 'dark' | 'auto';
+
 export type WidgetState =
   | 'idle'
   | 'open'
@@ -30,6 +32,7 @@ export interface WidgetConfig {
   position: WidgetPosition;
   primaryColor: string;
   zIndex: number;
+  theme: WidgetTheme;
 }
 
 export interface ReportPayload {
