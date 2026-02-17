@@ -28,6 +28,10 @@ async function main() {
       settings: {
         maxVideoSize: 100000000, // 100MB
         maxTicketsPerMonth: 500,
+        rateLimits: {
+          requestsPerMinute: 200,
+          requestsPerHour: 10000,
+        },
       },
     },
   });

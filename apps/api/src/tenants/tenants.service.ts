@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ConflictException } from '@nestjs/common
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { generateSlug } from '@support-helper/shared';
+import { RateLimitConfig, RATE_LIMIT_PRESETS } from './dto/update-rate-limits.dto';
 
 @Injectable()
 export class TenantsService {
@@ -85,5 +86,80 @@ export class TenantsService {
         openTickets: openTicketsCount,
       },
     };
+  }
+
+  /**
+   * Get rate limit configuration for a tenant
+   * Returns tenant-specific limits or plan-based defaults
+   */
+  async getRateLimits(tenantId: string): Promise<RateLimitConfig> {
+    const tenant = await this.findOne(tenantId);
+    const settings = tenant.settings as Record<string, unknown>;
+
+    // Check if tenant has custom rate limits
+    if (settings?.rateLimits && typeof settings.rateLimits === 'object') {
+      const limits = settings.rateLimits as RateLimitConfig;
+      return {
+        requestsPerMinute: limits.requestsPerMinute,
+        requestsPerHour: limits.requestsPerHour,
+      };
+    }
+
+    // Fall back to plan-based presets
+    const preset = RATE_LIMIT_PRESETS[tenant.plan] || RATE_LIMIT_PRESETS.default;
+    return preset;
+  }
+
+  /**
+   * Update rate limit configuration for a tenant
+   * Admin-only operation
+   */
+  async updateRateLimits(
+    tenantId: string,
+    limits: Partial<RateLimitConfig>,
+  ): Promise<RateLimitConfig> {
+    const tenant = await this.findOne(tenantId);
+    const currentLimits = await this.getRateLimits(tenantId);
+
+    // Merge with existing limits
+    const newLimits: RateLimitConfig = {
+      requestsPerMinute: limits.requestsPerMinute ?? currentLimits.requestsPerMinute,
+      requestsPerHour: limits.requestsPerHour ?? currentLimits.requestsPerHour,
+    };
+
+    // Update tenant settings
+    const settings = (tenant.settings as Record<string, unknown>) || {};
+    settings.rateLimits = newLimits;
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        settings: settings as Prisma.InputJsonValue,
+        updatedAt: new Date(),
+      },
+    });
+
+    return newLimits;
+  }
+
+  /**
+   * Reset rate limits to plan-based defaults
+   */
+  async resetRateLimits(tenantId: string): Promise<RateLimitConfig> {
+    const tenant = await this.findOne(tenantId);
+    const preset = RATE_LIMIT_PRESETS[tenant.plan] || RATE_LIMIT_PRESETS.default;
+
+    const settings = (tenant.settings as Record<string, unknown>) || {};
+    settings.rateLimits = preset;
+
+    await this.prisma.tenant.update({
+      where: { id: tenantId },
+      data: {
+        settings: settings as Prisma.InputJsonValue,
+        updatedAt: new Date(),
+      },
+    });
+
+    return preset;
   }
 }
