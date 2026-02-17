@@ -11,6 +11,8 @@ import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './w
 import { submitReport } from './widget-api';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
+import { KeyboardManager } from './keyboard-manager';
+import { ScreenReaderAnnouncer } from './screen-reader-announcer';
 
 /**
  * Support Helper Web Component
@@ -43,6 +45,10 @@ export class SupportHelperElement extends HTMLElement {
   private hostMutationObserver: MutationObserver | null = null;
   private resolvedTheme: 'light' | 'dark' = 'light';
 
+  // Keyboard and accessibility
+  private keyboardManager: KeyboardManager;
+  private announcer: ScreenReaderAnnouncer;
+
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
   }
@@ -58,6 +64,16 @@ export class SupportHelperElement extends HTMLElement {
 
     // Default config (will be updated when connected)
     this.config = { ...DEFAULT_CONFIG, sdkKey: '', apiUrl: '' };
+
+    // Initialize keyboard manager
+    this.keyboardManager = new KeyboardManager({
+      onEscape: () => this.handleClose(),
+      getShadowRoot: () => this.shadow,
+      getIsModalOpen: () => this.stateMachine.getState() !== 'idle',
+    });
+
+    // Initialize screen reader announcer
+    this.announcer = new ScreenReaderAnnouncer(this.shadow);
 
     // Listen to state changes
     this.stateMachine.onChange((newState, prevState) => {
@@ -91,6 +107,12 @@ export class SupportHelperElement extends HTMLElement {
 
     // Attach event listeners
     this.attachEventListeners();
+
+    // Initialize keyboard manager
+    this.keyboardManager.attach();
+
+    // Initialize screen reader announcer
+    this.announcer.initialize();
   }
 
   disconnectedCallback(): void {
@@ -104,6 +126,10 @@ export class SupportHelperElement extends HTMLElement {
     this.cleanupThemeDetection();
     // Reset so event listeners re-attach on reconnect
     this.clickHandlerAttached = false;
+
+    // Cleanup keyboard manager and announcer
+    this.keyboardManager.detach();
+    this.announcer.destroy();
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
@@ -142,6 +168,8 @@ export class SupportHelperElement extends HTMLElement {
    */
   open(): void {
     if (this.stateMachine.canTransition('OPEN')) {
+      // Save focus before opening
+      this.keyboardManager.saveFocus();
       this.stateMachine.dispatch('OPEN');
     }
   }
@@ -248,6 +276,8 @@ export class SupportHelperElement extends HTMLElement {
     switch (action) {
       case 'open':
         if (this.stateMachine.canTransition('OPEN')) {
+          // Save focus before opening
+          this.keyboardManager.saveFocus();
           this.stateMachine.dispatch('OPEN');
         }
         break;
@@ -347,10 +377,17 @@ export class SupportHelperElement extends HTMLElement {
       // Transition to recording state
       this.stateMachine.dispatch('START');
 
+      // Announce to screen readers
+      this.announcer.announce('Recording started', 'polite');
+
       this.emit('sh:recording-start', undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start recording';
       this.errorMessage = message;
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
+
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Start recording error:', error);
       // Cleanup on failure
@@ -397,6 +434,9 @@ export class SupportHelperElement extends HTMLElement {
       // Transition to preview state - this will trigger render()
       this.stateMachine.dispatch('STOP');
 
+      // Announce to screen readers
+      this.announcer.announce('Recording stopped. Review your video.', 'polite');
+
       this.emit('sh:recording-stop', {
         duration: this.videoDuration,
         size: this.videoSize,
@@ -404,6 +444,10 @@ export class SupportHelperElement extends HTMLElement {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to stop recording';
       this.errorMessage = message;
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
+
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Stop recording error:', error);
     } finally {
@@ -478,12 +522,30 @@ export class SupportHelperElement extends HTMLElement {
     if (!this.formData.title.trim() || !this.formData.description.trim()) {
       // Show validation error instead of silently ignoring
       this.errorMessage = 'Title and description are required.';
+
+      // Mark invalid fields with aria-invalid
+      const titleInput = this.shadow.querySelector('#sh-input-title') as HTMLInputElement | null;
+      const descInput = this.shadow.querySelector('#sh-input-description') as HTMLTextAreaElement | null;
+
+      if (titleInput && !this.formData.title.trim()) {
+        titleInput.setAttribute('aria-invalid', 'true');
+      }
+      if (descInput && !this.formData.description.trim()) {
+        descInput.setAttribute('aria-invalid', 'true');
+      }
+
+      // Announce validation error to screen readers
+      this.announcer.announce('Error: Title and description are required.', 'assertive');
+
       this.render();
       return;
     }
     this.errorMessage = '';
 
     if (this.stateMachine.canTransition('SUBMIT')) {
+      // Announce submission to screen readers
+      this.announcer.announce('Sending your report...', 'polite');
+
       this.stateMachine.dispatch('SUBMIT');
       this.doSubmit();
     }
@@ -509,6 +571,9 @@ export class SupportHelperElement extends HTMLElement {
         this.stateMachine.dispatch('SUCCESS');
       }
 
+      // Announce success to screen readers
+      this.announcer.announce('Report sent successfully!', 'polite');
+
       this.emit('sh:submit', {
         ticketId: response.ticket.id,
         aiAnalysis: response.aiAnalysis,
@@ -520,6 +585,9 @@ export class SupportHelperElement extends HTMLElement {
       if (this.stateMachine.canTransition('ERROR')) {
         this.stateMachine.dispatch('ERROR');
       }
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
 
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Submit error:', error);
@@ -533,8 +601,15 @@ export class SupportHelperElement extends HTMLElement {
     // Emit events for state changes
     if (newState !== 'idle' && prevState === 'idle') {
       this.emit('sh:open', undefined);
+
+      // Announce modal opened to screen readers
+      this.announcer.announce('Support helper opened', 'polite');
     } else if (newState === 'idle' && prevState !== 'idle') {
       this.emit('sh:close', undefined);
+
+      // Restore focus when closing
+      this.keyboardManager.restoreFocus();
+
       // Cleanup on close
       this.cleanupRecording();
       this.formData = { title: '', description: '' };
@@ -542,6 +617,14 @@ export class SupportHelperElement extends HTMLElement {
 
     // Re-render
     this.render();
+
+    // Focus first element after render if modal is open
+    if (newState !== 'idle' && newState !== 'recording') {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        this.keyboardManager.focusFirstElement();
+      }, 0);
+    }
   }
 
   /**

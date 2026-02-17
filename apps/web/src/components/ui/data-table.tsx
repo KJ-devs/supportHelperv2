@@ -47,6 +47,8 @@ export interface DataTableProps<TData, TValue> {
   // Callbacks
   onRowClick?: (row: TData) => void;
   getRowId?: (row: TData) => string;
+  // Empty state
+  emptyState?: React.ReactNode;
   // Styling
   containerClassName?: string;
   tableClassName?: string;
@@ -82,6 +84,8 @@ export function DataTable<TData, TValue>({
   // Callbacks
   onRowClick,
   getRowId,
+  // Empty state
+  emptyState,
   // Styling
   containerClassName,
   tableClassName,
@@ -197,6 +201,14 @@ export function DataTable<TData, TValue>({
 
   // Render empty state
   if (rows.length === 0) {
+    if (emptyState) {
+      return (
+        <div className={cn('rounded-md border', containerClassName)}>
+          {emptyState}
+        </div>
+      );
+    }
+
     return (
       <div className={cn('overflow-x-auto rounded-md border', containerClassName)}>
         <table className={cn('w-full min-w-[640px] caption-bottom text-sm', tableClassName)}>

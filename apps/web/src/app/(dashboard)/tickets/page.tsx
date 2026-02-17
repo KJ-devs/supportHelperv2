@@ -32,7 +32,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Plus, SlidersHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Inbox, SearchX } from 'lucide-react';
+import { Plus, SlidersHorizontal, PanelRightClose, PanelRightOpen, RefreshCw, Inbox, SearchX, Search } from 'lucide-react';
 import { EmptyState } from '@/components/ui/empty-state';
 
 import type { TicketStatus, TicketPriority } from '@/types';
@@ -242,6 +242,34 @@ export default function TicketsPage() {
       });
     }
   };
+
+  // Determine empty state based on search/filters
+  const hasActiveFilters =
+    filters.search ||
+    filters.status !== 'all' ||
+    filters.priority !== 'all' ||
+    filters.type !== 'all' ||
+    filters.assigneeId !== 'all' ||
+    filters.dateRange.from ||
+    filters.dateRange.to;
+
+  const emptyStateComponent = hasActiveFilters ? (
+    <EmptyState
+      icon={Search}
+      title="No results found"
+      description="No tickets match your current filters. Try adjusting your search criteria."
+      actionLabel="Clear filters"
+      onAction={resetFilters}
+    />
+  ) : (
+    <EmptyState
+      icon={Inbox}
+      title="No tickets yet"
+      description="Get started by creating your first support ticket or wait for tickets to arrive from your SDK integration."
+      actionLabel="Create ticket"
+      onAction={() => router.push('/tickets/new')}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col lg:flex-row">

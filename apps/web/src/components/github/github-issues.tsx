@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { formatRelativeTime } from '@/lib/utils';
-import { ExternalLink, GitBranch } from 'lucide-react';
+import { ExternalLink, GitBranch, FileText } from 'lucide-react';
 
 const issues = [
   {

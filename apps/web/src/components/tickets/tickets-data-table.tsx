@@ -49,6 +49,8 @@ interface TicketsDataTableProps {
   // Virtualization
   enableVirtualization?: boolean;
   virtualRowHeight?: number;
+  // Empty state
+  emptyState?: React.ReactNode;
 }
 
 const STATUS_STYLES: Record<TicketStatus, { color: string; bg: string }> = {
@@ -90,6 +92,7 @@ export function TicketsDataTable({
   onAssign,
   enableVirtualization = false,
   virtualRowHeight = 64,
+  emptyState,
 }: TicketsDataTableProps) {
   const router = useRouter();
 
@@ -354,6 +357,7 @@ export function TicketsDataTable({
       enableVirtualization={enableVirtualization}
       virtualRowHeight={virtualRowHeight}
       rowClassName={row => (row.priority === 'urgent' ? 'border-l-2 border-l-red-500' : '')}
+      emptyState={emptyState}
     />
   );
 }
