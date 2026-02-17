@@ -16,7 +16,7 @@ import { TicketFilters as Filters } from '@/components/tickets/TicketFilters';
 import { Pagination } from '@/components/tickets/Pagination';
 import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
-import { PageLoader, Button } from '@/components/ui';
+import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
 
 type ViewMode = 'table' | 'grid';
@@ -336,22 +336,19 @@ export default function TicketsPage() {
               onSelectTicket={handleSelectTicket}
               onSelectAll={handleSelectAll}
             />
+          ) : tickets.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                icon="🎫"
+                title="Aucun ticket trouvé"
+                description="Modifiez vos filtres pour voir plus de résultats ou attendez que les utilisateurs soumettent leurs premiers tickets."
+              />
+            </div>
           ) : (
             <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {tickets.map((ticket) => (
                 <TicketCard key={ticket.id} ticket={ticket} />
               ))}
-              {tickets.length === 0 && (
-                <div className="col-span-full text-center py-12">
-                  <div className="text-6xl mb-4">🎫</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Aucun ticket trouvé
-                  </h3>
-                  <p className="text-gray-600">
-                    Modifiez vos filtres pour voir plus de résultats.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 
