@@ -62,10 +62,10 @@ export default function AnalyticsPage() {
     return (
       <DashboardLayout>
         <div className="max-w-7xl mx-auto">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-            <div className="text-red-600 text-5xl mb-4">⚠️</div>
-            <h3 className="text-lg font-medium text-red-800 mb-2">Erreur</h3>
-            <p className="text-red-700 mb-4">{error || 'Données non disponibles'}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
+            <div className="text-red-600 dark:text-red-400 text-5xl mb-4">⚠️</div>
+            <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">Erreur</h3>
+            <p className="text-red-700 dark:text-red-400 mb-4">{error || 'Données non disponibles'}</p>
             <Button variant="secondary" onClick={fetchStats}>
               Réessayer
             </Button>
@@ -111,8 +111,8 @@ export default function AnalyticsPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Analytiques</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Analytiques</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Statistiques et métriques de vos tickets
               </p>
             </div>
@@ -199,37 +199,37 @@ export default function AnalyticsPage() {
         {/* Additional Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               🔴 Tickets Critiques
             </h3>
-            <p className="text-4xl font-bold text-red-600 mb-2">
+            <p className="text-4xl font-bold text-red-600 dark:text-red-400 mb-2">
               {stats.bySeverity.critical || 0}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Nécessitent une attention immédiate
             </p>
           </Card>
 
           <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               🐛 Bugs Rapportés
             </h3>
-            <p className="text-4xl font-bold text-blue-600 mb-2">
+            <p className="text-4xl font-bold text-blue-600 dark:text-blue-400 mb-2">
               {stats.byType.bug || 0}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Total des bugs signalés
             </p>
           </Card>
 
           <Card>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               💥 Crashes
             </h3>
-            <p className="text-4xl font-bold text-orange-600 mb-2">
+            <p className="text-4xl font-bold text-orange-600 dark:text-orange-400 mb-2">
               {stats.byType.crash || 0}
             </p>
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
               Applications crashées
             </p>
           </Card>

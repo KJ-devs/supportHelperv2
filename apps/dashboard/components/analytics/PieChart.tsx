@@ -20,7 +20,7 @@ interface PieChartProps {
 export function PieChart({ data, title, size = 200 }: PieChartProps) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
+      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
         Aucune donnée disponible
       </div>
     );
@@ -71,7 +71,7 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
   return (
     <div>
       {title && (
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{title}</h3>
       )}
 
       <div className="flex flex-col md:flex-row items-center gap-6">
@@ -84,6 +84,7 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
               fill={slice.color}
               stroke="white"
               strokeWidth="2"
+              className="dark:stroke-gray-900"
             />
           ))}
         </svg>
@@ -98,10 +99,10 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
               />
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-700 truncate">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                     {item.label}
                   </span>
-                  <span className="text-sm text-gray-900 font-semibold ml-2">
+                  <span className="text-sm text-gray-900 dark:text-gray-100 font-semibold ml-2">
                     {item.value} ({((item.value / total) * 100).toFixed(1)}%)
                   </span>
                 </div>
