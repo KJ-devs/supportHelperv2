@@ -11,6 +11,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
 import { usersApi, ApiError } from '@/lib/api/users';
 import toast, { Toaster } from 'react-hot-toast';
+import { User, Lock, Bell, Users, CreditCard, Key, Bot, Github, Shield, BarChart3 } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
@@ -134,19 +135,19 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { id: 'profile', label: '👤 Profil', icon: '👤' },
-    { id: 'security', label: '🔒 Sécurité', icon: '🔒' },
-    { id: 'notifications', label: '🔔 Notifications', icon: '🔔' },
-    { id: 'team', label: '👥 Équipe', icon: '👥' },
+    { id: 'profile', label: 'Profil', icon: User },
+    { id: 'security', label: 'Sécurité', icon: Lock },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'team', label: 'Équipe', icon: Users },
   ] as const;
 
   const settingsPages = [
-    { href: '/dashboard/settings/plan', label: '💳 Plan & Usage' },
-    { href: '/dashboard/settings/license', label: '🔑 License' },
-    { href: '/dashboard/settings/ai', label: '🤖 AI Configuration' },
-    { href: '/dashboard/settings/github', label: '🐙 GitHub' },
-    { href: '/dashboard/settings/auth/sso', label: '🔐 SSO' },
-    { href: '/dashboard/settings/status', label: '📊 Statut Systeme' },
+    { href: '/dashboard/settings/plan', label: 'Plan & Usage', icon: CreditCard },
+    { href: '/dashboard/settings/license', label: 'License', icon: Key },
+    { href: '/dashboard/settings/ai', label: 'AI Configuration', icon: Bot },
+    { href: '/dashboard/settings/github', label: 'GitHub', icon: Github },
+    { href: '/dashboard/settings/auth/sso', label: 'SSO', icon: Shield },
+    { href: '/dashboard/settings/status', label: 'Statut Systeme', icon: BarChart3 },
   ];
 
   return (
@@ -166,33 +167,41 @@ export default function SettingsPage() {
           <div className="lg:col-span-1">
             <Card padding={false}>
               <nav className="space-y-1">
-                {tabs.map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors ${
-                      activeTab === tab.id
-                        ? 'bg-blue-50 text-blue-600 border-l-4 border-blue-600'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full text-left px-4 py-3 text-sm font-medium transition-colors flex items-center gap-3 ${
+                        activeTab === tab.id
+                          ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-l-4 border-blue-600 dark:border-blue-400'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" aria-hidden="true" />
+                      {tab.label}
+                    </button>
+                  );
+                })}
               </nav>
             </Card>
 
             <Card padding={false} className="mt-4">
               <nav className="space-y-1">
-                {settingsPages.map((page) => (
-                  <a
-                    key={page.href}
-                    href={page.href}
-                    className="block w-full text-left px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    {page.label}
-                  </a>
-                ))}
+                {settingsPages.map((page) => {
+                  const Icon = page.icon;
+                  return (
+                    <a
+                      key={page.href}
+                      href={page.href}
+                      className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <Icon className="w-4 h-4" aria-hidden="true" />
+                      {page.label}
+                    </a>
+                  );
+                })}
               </nav>
             </Card>
           </div>

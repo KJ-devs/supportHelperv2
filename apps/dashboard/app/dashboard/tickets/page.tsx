@@ -18,6 +18,7 @@ import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
+import { AlertTriangle, Ticket as TicketIcon } from 'lucide-react';
 
 type ViewMode = 'table' | 'grid';
 
@@ -305,7 +306,7 @@ export default function TicketsPage() {
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <span className="text-red-600 dark:text-red-400 text-xl">⚠️</span>
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Erreur</h3>
                 <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>

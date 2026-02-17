@@ -10,6 +10,7 @@ import Link from 'next/link';
 import type { Ticket } from '@/lib/types/ticket';
 import { StatusBadge, SeverityBadge, TypeBadge } from '@/components/ui';
 import { TicketCheckbox } from './TicketCheckbox';
+import { Ticket as TicketIcon, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -41,8 +42,8 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
   };
 
   const SortIcon = ({ field }: { field: string }) => {
-    if (sortField !== field) return <span className="text-gray-400 dark:text-gray-500">⇅</span>;
-    return sortOrder === 'asc' ? <span>↑</span> : <span>↓</span>;
+    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />;
+    return sortOrder === 'asc' ? <ArrowUp className="w-4 h-4" aria-hidden="true" /> : <ArrowDown className="w-4 h-4" aria-hidden="true" />;
   };
 
   const allSelected = tickets.length > 0 && selectedTickets.length === tickets.length;
@@ -50,7 +51,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
   if (tickets.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="text-6xl mb-4">🎫</div>
+        <TicketIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
         <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Aucun ticket trouvé</h3>
         <p className="text-gray-600 dark:text-gray-400">Modifiez vos filtres pour voir plus de résultats.</p>
       </div>

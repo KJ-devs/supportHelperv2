@@ -14,6 +14,7 @@ import { StatsCard } from '@/components/analytics/StatsCard';
 import { SimpleBarChart } from '@/components/analytics/SimpleBarChart';
 import { PieChart } from '@/components/analytics/PieChart';
 import { PageLoader, Card, Button, Select, EmptyState } from '@/components/ui';
+import { AlertTriangle, Ticket, ClipboardList, CheckCircle, BarChart3, Target, Tag } from 'lucide-react';
 
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -63,7 +64,7 @@ export default function AnalyticsPage() {
       <DashboardLayout>
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-            <div className="text-red-600 dark:text-red-400 text-5xl mb-4">⚠️</div>
+            <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-600 dark:text-red-400" aria-hidden="true" />
             <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">Erreur</h3>
             <p className="text-red-700 dark:text-red-400 mb-4">{error || 'Données non disponibles'}</p>
             <Button variant="secondary" onClick={fetchStats}>
@@ -153,7 +154,7 @@ export default function AnalyticsPage() {
           <StatsCard
             title="Total Tickets"
             value={stats.total}
-            icon="🎫"
+            icon={Ticket}
             subtitle="Tous les tickets"
             variant="primary"
           />
@@ -161,7 +162,7 @@ export default function AnalyticsPage() {
           <StatsCard
             title="Tickets Ouverts"
             value={openTickets}
-            icon="📋"
+            icon={ClipboardList}
             subtitle="New + Open + In Progress"
             variant="warning"
           />
@@ -169,7 +170,7 @@ export default function AnalyticsPage() {
           <StatsCard
             title="Tickets Résolus"
             value={resolvedTickets}
-            icon="✅"
+            icon={CheckCircle}
             subtitle="Resolved + Closed"
             variant="success"
           />
@@ -177,7 +178,7 @@ export default function AnalyticsPage() {
           <StatsCard
             title="Taux de Résolution"
             value={`${resolutionRate}%`}
-            icon="📊"
+            icon={BarChart3}
             subtitle="Résolus / Total"
             variant="default"
           />
@@ -188,7 +189,7 @@ export default function AnalyticsPage() {
           {/* Status Distribution */}
           <Card>
             <SimpleBarChart
-              title="📊 Distribution par Statut"
+              title="Distribution par Statut"
               data={statusData}
             />
           </Card>
@@ -196,7 +197,7 @@ export default function AnalyticsPage() {
           {/* Severity Distribution */}
           <Card>
             <PieChart
-              title="🎯 Distribution par Sévérité"
+              title="Distribution par Sévérité"
               data={severityData}
               size={180}
             />
@@ -207,7 +208,7 @@ export default function AnalyticsPage() {
         <div className="grid grid-cols-1 gap-6 mb-6">
           <Card>
             <SimpleBarChart
-              title="🏷️ Distribution par Type"
+              title="Distribution par Type"
               data={typeData}
             />
           </Card>

@@ -13,6 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
+import { AlertTriangle, AppWindow, Plus } from 'lucide-react';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -138,7 +139,7 @@ export default function ApplicationsPage() {
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center">
-              <span className="text-red-600 dark:text-red-400 text-xl mr-3">⚠️</span>
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" aria-hidden="true" />
               <div>
                 <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</h3>
                 <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
