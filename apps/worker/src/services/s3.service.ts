@@ -227,8 +227,7 @@ export class S3Service implements OnModuleInit {
           ContinuationToken: continuationToken,
         });
 
-        const response: Awaited<ReturnType<typeof this.client.send<ListObjectsV2Command>>> =
-          await this.client.send(command);
+        const response = await this.client.send(command);
 
         if (response.Contents) {
           for (const item of response.Contents) {

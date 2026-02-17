@@ -18,7 +18,7 @@ import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
-import { AlertTriangle, Ticket as TicketIcon } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 type ViewMode = 'table' | 'grid';
 

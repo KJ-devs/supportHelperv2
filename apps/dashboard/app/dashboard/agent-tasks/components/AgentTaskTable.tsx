@@ -5,7 +5,6 @@ import type { AgentTask } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
 import { SeverityBadge, EmptyState } from '@/components/ui';
-import { Bot } from 'lucide-react';
 
 interface AgentTaskTableProps {
   tasks: AgentTask[];

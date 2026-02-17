@@ -96,7 +96,7 @@ export function TicketsBySeverityChart({ data, total, isLoading }: TicketsBySeve
             icon={PieChartIcon}
             title="No data available"
             description="There are no tickets in the selected date range."
-            variant="compact"
+            className="min-h-[200px]"
           />
         ) : (
           <div className="h-[300px]">

@@ -57,7 +57,7 @@ export function AIConfidenceChart({ data, isLoading }: AIConfidenceChartProps) {
             icon={Brain}
             title="No data available"
             description="There are no AI predictions in the selected date range."
-            variant="compact"
+            className="min-h-[200px]"
           />
         ) : (
           <div className="h-[300px]">

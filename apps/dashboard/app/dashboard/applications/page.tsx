@@ -13,7 +13,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
-import { AlertTriangle, AppWindow, Plus } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();

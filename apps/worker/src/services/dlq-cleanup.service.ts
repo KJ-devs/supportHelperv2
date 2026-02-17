@@ -110,8 +110,6 @@ export class DlqCleanupService {
           // Extract metadata from job data
           const jobData = job.data as any;
           const tenantId = jobData.tenantId || null;
-          const ticketId = jobData.ticketId || null;
-          const applicationId = jobData.applicationId || null;
 
           // Archive to database
           await this.prisma.archivedDeadLetterJob.create({

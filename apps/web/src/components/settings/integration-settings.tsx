@@ -48,7 +48,7 @@ export function IntegrationSettings() {
             icon={Plug}
             title="No integrations configured"
             description="Connect external services like GitHub, Slack, or email to streamline your support workflow."
-            variant="compact"
+            className="min-h-[200px]"
           />
         ) : (
           <div className="space-y-4">

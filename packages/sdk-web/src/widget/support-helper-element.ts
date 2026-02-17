@@ -46,8 +46,8 @@ export class SupportHelperElement extends HTMLElement {
   private resolvedTheme: 'light' | 'dark' = 'light';
 
   // Keyboard and accessibility
-  private keyboardManager: KeyboardManager;
-  private announcer: ScreenReaderAnnouncer;
+  private keyboardManager!: KeyboardManager;
+  private announcer!: ScreenReaderAnnouncer;
 
   // Attention pulse timer
   private attentionPulseTimer: number | null = null;
@@ -750,7 +750,7 @@ export class SupportHelperElement extends HTMLElement {
     // 1. Listen to system preference changes
     if (typeof window !== 'undefined' && window.matchMedia) {
       this.prefersDarkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleSystemThemeChange = (e: MediaQueryListEvent): void => {
+      const handleSystemThemeChange = (_e: MediaQueryListEvent): void => {
         this.resolvedTheme = this.detectTheme();
         this.render();
       };
@@ -789,11 +789,6 @@ export class SupportHelperElement extends HTMLElement {
    */
   private cleanupThemeDetection(): void {
     if (this.prefersDarkMediaQuery) {
-      // Remove event listener if supported
-      if (this.prefersDarkMediaQuery.removeEventListener) {
-        // We need to remove the exact handler, but since it's inline we can't
-        // For simplicity, we'll just set it to null and it will be GC'd
-      }
       this.prefersDarkMediaQuery = null;
     }
 
