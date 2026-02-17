@@ -243,48 +243,49 @@ export default function TicketsPage() {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col lg:flex-row">
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <div className="border-b bg-background p-6">
-          <div className="flex items-center justify-between">
+        <div className="border-b bg-background p-4 sm:p-6">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Tickets</h1>
-              <p className="text-sm text-muted-foreground">Manage and respond to support tickets</p>
+              <h1 className="text-xl font-bold sm:text-2xl">Tickets</h1>
+              <p className="text-xs text-muted-foreground sm:text-sm">Manage and respond to support tickets</p>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching}>
+              <Button variant="outline" size="icon" onClick={() => refetch()} disabled={isFetching} className="min-h-[44px] min-w-[44px]">
                 <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
               </Button>
-              <Button variant="outline" size="icon" onClick={toggleFacetsSidebar}>
+              <Button variant="outline" size="icon" onClick={toggleFacetsSidebar} className="min-h-[44px] min-w-[44px]">
                 {isFacetsSidebarOpen ? (
                   <PanelRightClose className="h-4 w-4" />
                 ) : (
                   <PanelRightOpen className="h-4 w-4" />
                 )}
               </Button>
-              <Button onClick={() => router.push('/tickets/new')}>
+              <Button onClick={() => router.push('/tickets/new')} className="min-h-[44px]">
                 <Plus className="mr-2 h-4 w-4" />
-                New Ticket
+                <span className="hidden sm:inline">New Ticket</span>
+                <span className="sm:hidden">New</span>
               </Button>
             </div>
           </div>
 
           {/* Search and filters */}
-          <div className="mt-4 space-y-4">
-            <div className="flex gap-4">
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:gap-4">
               <TicketSearchInput
                 value={filters.search}
                 onChange={handleSearchChange}
                 isLoading={isSearching}
-                className="w-80"
+                className="w-full sm:max-w-xs lg:max-w-sm"
                 placeholder="Search by title, description, ID..."
               />
 
               <Sheet>
                 <SheetTrigger asChild>
-                  <Button variant="outline">
+                  <Button variant="outline" className="min-h-[44px]">
                     <SlidersHorizontal className="mr-2 h-4 w-4" />
                     Filters
                   </Button>
@@ -310,22 +311,24 @@ export default function TicketsPage() {
               </Sheet>
             </div>
 
-            {/* Quick filters row */}
-            <AdvancedFilters
-              filters={filters}
-              onStatusChange={setStatus}
-              onPriorityChange={setPriority}
-              onTypeChange={setType}
-              onAssigneeChange={setAssignee}
-              onDateRangeChange={setDateRange}
-              onReset={resetFilters}
-            />
+            {/* Quick filters row - hidden on mobile */}
+            <div className="hidden md:block">
+              <AdvancedFilters
+                filters={filters}
+                onStatusChange={setStatus}
+                onPriorityChange={setPriority}
+                onTypeChange={setType}
+                onAssigneeChange={setAssignee}
+                onDateRangeChange={setDateRange}
+                onReset={resetFilters}
+              />
+            </div>
           </div>
         </div>
 
         {/* Bulk actions bar */}
         {selectedCount > 0 && (
-          <div className="border-b bg-muted/30 px-6 py-3">
+          <div className="border-b bg-muted/30 px-4 py-3 sm:px-6">
             <BulkActions
               selectedCount={selectedCount}
               onBulkAssign={handleBulkAssign}
@@ -339,7 +342,7 @@ export default function TicketsPage() {
         )}
 
         {/* Table */}
-        <div className="flex-1 overflow-hidden p-6">
+        <div className="flex-1 overflow-hidden p-4 sm:p-6">
           <TicketsDataTable
             data={tickets}
             isLoading={isLoading}
@@ -355,7 +358,7 @@ export default function TicketsPage() {
         </div>
 
         {/* Pagination */}
-        <div className="border-t bg-background px-6 py-4">
+        <div className="border-t bg-background px-4 py-3 sm:px-6 sm:py-4">
           <DataTablePagination
             page={pagination.page}
             pageSize={pagination.pageSize}
@@ -369,9 +372,9 @@ export default function TicketsPage() {
         </div>
       </div>
 
-      {/* Facets sidebar */}
+      {/* Facets sidebar - hidden on mobile, sheet on tablet, sidebar on desktop */}
       {isFacetsSidebarOpen && (
-        <div className="w-64 border-l bg-muted/20">
+        <div className="hidden w-64 border-l bg-muted/20 lg:block">
           <div className="p-4">
             <h3 className="font-semibold">Refine by</h3>
           </div>

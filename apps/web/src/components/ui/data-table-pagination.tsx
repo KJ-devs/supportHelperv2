@@ -43,8 +43,8 @@ export function DataTablePagination({
   const canNext = page < totalPages;
 
   return (
-    <div className={cn('flex items-center justify-between px-2', className)}>
-      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+    <div className={cn('flex flex-col gap-4 px-2 sm:flex-row sm:items-center sm:justify-between', className)}>
+      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground sm:gap-4 sm:text-sm">
         {selectedCount !== undefined && selectedCount > 0 && (
           <span className="font-medium text-foreground">
             {selectedCount} row{selectedCount !== 1 ? 's' : ''} selected
@@ -53,7 +53,8 @@ export function DataTablePagination({
         <span>
           {total > 0 ? (
             <>
-              Showing {startItem}-{endItem} of {total.toLocaleString()}
+              <span className="hidden sm:inline">Showing </span>
+              {startItem}-{endItem} of {total.toLocaleString()}
             </>
           ) : (
             'No results'
@@ -61,16 +62,19 @@ export function DataTablePagination({
         </span>
       </div>
 
-      <div className="flex items-center gap-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
         {onPageSizeChange && (
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Rows per page</span>
+            <span className="text-xs text-muted-foreground sm:text-sm">
+              <span className="hidden sm:inline">Rows per page</span>
+              <span className="sm:hidden">Per page</span>
+            </span>
             <Select
               value={pageSize.toString()}
               onValueChange={value => onPageSizeChange(Number(value))}
               disabled={isLoading}
             >
-              <SelectTrigger className="h-8 w-[70px]">
+              <SelectTrigger className="h-9 w-[70px] min-h-[44px]">
                 <SelectValue placeholder={pageSize} />
               </SelectTrigger>
               <SelectContent side="top">
@@ -85,7 +89,7 @@ export function DataTablePagination({
         )}
 
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground sm:text-sm">
             Page {page} of {totalPages || 1}
           </span>
 
@@ -93,7 +97,7 @@ export function DataTablePagination({
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-[32px] sm:min-w-[32px]"
               onClick={() => onPageChange(1)}
               disabled={!canPrevious || isLoading}
             >
@@ -103,7 +107,7 @@ export function DataTablePagination({
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-[32px] sm:min-w-[32px]"
               onClick={() => onPageChange(page - 1)}
               disabled={!canPrevious || isLoading}
             >
@@ -113,7 +117,7 @@ export function DataTablePagination({
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-[32px] sm:min-w-[32px]"
               onClick={() => onPageChange(page + 1)}
               disabled={!canNext || isLoading}
             >
@@ -123,7 +127,7 @@ export function DataTablePagination({
             <Button
               variant="outline"
               size="icon"
-              className="h-8 w-8"
+              className="h-9 w-9 min-h-[44px] min-w-[44px] sm:h-8 sm:w-8 sm:min-h-[32px] sm:min-w-[32px]"
               onClick={() => onPageChange(totalPages)}
               disabled={!canNext || isLoading}
             >
