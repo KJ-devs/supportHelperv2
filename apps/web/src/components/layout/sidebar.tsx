@@ -25,9 +25,10 @@ const navigation = [
 
 interface SidebarProps {
   currentPath: string;
+  onNavigate?: () => void;
 }
 
-export function Sidebar({ currentPath }: SidebarProps) {
+export function Sidebar({ currentPath, onNavigate }: SidebarProps) {
   const { isCollapsed, toggle } = useSidebarStore();
 
   return (
@@ -40,16 +41,16 @@ export function Sidebar({ currentPath }: SidebarProps) {
       {/* Logo */}
       <div className="flex h-16 items-center justify-between border-b px-4">
         {!isCollapsed && (
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
             <HelpCircle className="h-8 w-8 text-primary" />
-            <span className="font-bold text-lg">Support</span>
+            <span className="text-lg font-bold">Support</span>
           </Link>
         )}
         <Button
           variant="ghost"
           size="icon"
           onClick={toggle}
-          className={cn(isCollapsed && 'mx-auto')}
+          className={cn('min-h-[44px] min-w-[44px]', isCollapsed && 'mx-auto')}
         >
           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
@@ -65,8 +66,9 @@ export function Sidebar({ currentPath }: SidebarProps) {
             <Link
               key={item.name}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
-                'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                'flex min-h-[44px] items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 isActive
                   ? 'bg-primary text-primary-foreground'
                   : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',

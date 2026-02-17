@@ -8,7 +8,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { SdkKeyStrategy } from './strategies/sdk-key.strategy';
 import { UsersModule } from '../users/users.module';
 import { TenantsModule } from '../tenants/tenants.module';
-import { JwtAuthGuard, ApiKeyAuthGuard, RolesGuard, TenantGuard } from './guards';
+import { JwtAuthGuard, SdkKeyGuard, RolesGuard, TenantGuard } from '../common/guards';
 import { TenantContextMiddleware } from './middleware';
 
 @Module({
@@ -33,11 +33,11 @@ import { TenantContextMiddleware } from './middleware';
     JwtStrategy,
     SdkKeyStrategy,
     JwtAuthGuard,
-    ApiKeyAuthGuard,
+    SdkKeyGuard,
     RolesGuard,
     TenantGuard,
   ],
-  exports: [AuthService, JwtModule, JwtAuthGuard, ApiKeyAuthGuard, RolesGuard, TenantGuard],
+  exports: [AuthService, JwtModule, JwtAuthGuard, SdkKeyGuard, RolesGuard, TenantGuard],
 })
 export class AuthModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

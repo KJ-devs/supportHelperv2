@@ -4,6 +4,7 @@ export const DEFAULT_CONFIG: Omit<WidgetConfig, 'sdkKey' | 'apiUrl'> = {
   position: 'bottom-right',
   primaryColor: '#6366f1',
   zIndex: 99999,
+  theme: 'auto',
 };
 
 export const POSITION_STYLES: Record<
@@ -52,6 +53,11 @@ export function parseAttributeConfig(element: HTMLElement): Partial<WidgetConfig
     if (!isNaN(parsed)) config.zIndex = parsed;
   }
 
+  const theme = element.getAttribute('theme');
+  if (theme && isValidTheme(theme)) {
+    config.theme = theme;
+  }
+
   return config;
 }
 
@@ -60,4 +66,11 @@ export function parseAttributeConfig(element: HTMLElement): Partial<WidgetConfig
  */
 function isValidPosition(value: string): value is WidgetPosition {
   return ['bottom-right', 'bottom-left', 'top-right', 'top-left'].includes(value);
+}
+
+/**
+ * Validate theme value
+ */
+function isValidTheme(value: string): value is import('./widget-types').WidgetTheme {
+  return ['light', 'dark', 'auto'].includes(value);
 }

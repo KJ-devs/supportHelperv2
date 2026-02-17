@@ -3,6 +3,8 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PieChartIcon } from 'lucide-react';
 import type { TicketsBySeverityData } from '@/types/analytics';
 
 interface TicketsBySeverityChartProps {
@@ -78,6 +80,8 @@ export function TicketsBySeverityChart({ data, total, isLoading }: TicketsBySeve
     displaySeverity: item.severity.charAt(0).toUpperCase() + item.severity.slice(1),
   }));
 
+  const isEmpty = !data || data.length === 0;
+
   return (
     <Card>
       <CardHeader>
@@ -87,8 +91,16 @@ export function TicketsBySeverityChart({ data, total, isLoading }: TicketsBySeve
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+        {isEmpty ? (
+          <EmptyState
+            icon={PieChartIcon}
+            title="No data available"
+            description="There are no tickets in the selected date range."
+            className="min-h-[200px]"
+          />
+        ) : (
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
                 data={formattedData}
@@ -124,6 +136,7 @@ export function TicketsBySeverityChart({ data, total, isLoading }: TicketsBySeve
             </PieChart>
           </ResponsiveContainer>
         </div>
+        )}
       </CardContent>
     </Card>
   );

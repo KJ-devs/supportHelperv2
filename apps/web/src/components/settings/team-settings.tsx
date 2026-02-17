@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
+import { UserPlus, Users } from 'lucide-react';
 
 const teamMembers = [
   {
@@ -36,6 +37,14 @@ const roleVariants: Record<string, 'default' | 'secondary'> = {
 };
 
 export function TeamSettings() {
+  // TODO: Replace with actual API call
+  const hasTeamMembers = teamMembers.length > 0;
+
+  const handleInviteMember = () => {
+    // TODO: Implement invite modal
+    console.log('Open invite member modal');
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -43,42 +52,54 @@ export function TeamSettings() {
           <CardTitle>Team Members</CardTitle>
           <CardDescription>Manage your team and their permissions.</CardDescription>
         </div>
-        <Button>
+        <Button onClick={handleInviteMember}>
           <UserPlus className="mr-2 h-4 w-4" />
           Invite Member
         </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {teamMembers.map(member => (
-            <div
-              key={member.id}
-              className="flex items-center justify-between rounded-lg border p-4"
-            >
-              <div className="flex items-center gap-4">
-                <Avatar>
-                  <AvatarImage src={member.avatar || undefined} />
-                  <AvatarFallback>
-                    {member.name
-                      .split(' ')
-                      .map(n => n[0])
-                      .join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{member.name}</p>
-                  <p className="text-sm text-muted-foreground">{member.email}</p>
+        {!hasTeamMembers ? (
+          <EmptyState
+            icon={Users}
+            title="No team members yet"
+            description="Start building your support team by inviting members."
+            action={{
+              label: 'Invite first member',
+              onClick: handleInviteMember,
+            }}
+          />
+        ) : (
+          <div className="space-y-4">
+            {teamMembers.map(member => (
+              <div
+                key={member.id}
+                className="flex items-center justify-between rounded-lg border p-4"
+              >
+                <div className="flex items-center gap-4">
+                  <Avatar>
+                    <AvatarImage src={member.avatar || undefined} />
+                    <AvatarFallback>
+                      {member.name
+                        .split(' ')
+                        .map(n => n[0])
+                        .join('')}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-medium">{member.name}</p>
+                    <p className="text-sm text-muted-foreground">{member.email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <Badge variant={roleVariants[member.role]}>{member.role}</Badge>
+                  <Button variant="outline" size="sm">
+                    Edit
+                  </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <Badge variant={roleVariants[member.role]}>{member.role}</Badge>
-                <Button variant="outline" size="sm">
-                  Edit
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );

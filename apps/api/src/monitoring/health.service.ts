@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Client, ListBucketsCommand } from '@aws-sdk/client-s3';
 import Redis from 'ioredis';
+import { MeiliSearch } from 'meilisearch';
 
 export interface HealthStatus {
   status: 'healthy' | 'degraded' | 'unhealthy';
@@ -45,6 +46,8 @@ export class HealthService {
   private redisInitialized = false;
   private s3Client: S3Client | null = null;
   private s3Initialized = false;
+  private meiliSearchClient: MeiliSearch | null = null;
+  private meiliSearchInitialized = false;
   private cronJobs: Map<string, CronJobStatus> = new Map();
   private readonly startTime = Date.now();
 
@@ -101,6 +104,28 @@ export class HealthService {
     return this.s3Client;
   }
 
+  private getMeiliSearchClient(): MeiliSearch | null {
+    if (!this.meiliSearchInitialized) {
+      this.meiliSearchInitialized = true;
+      const host = this.config.get<string>('meilisearch.host');
+      const apiKey = this.config.get<string>('meilisearch.apiKey');
+
+      if (host) {
+        try {
+          this.meiliSearchClient = new MeiliSearch({
+            host,
+            apiKey,
+            timeout: 5000, // 5-second timeout
+          });
+        } catch (error) {
+          this.logger.warn('Failed to create MeiliSearch client for health checks', error);
+          this.meiliSearchClient = null;
+        }
+      }
+    }
+    return this.meiliSearchClient;
+  }
+
   async getBasicHealth(): Promise<HealthStatus> {
     return {
       status: 'healthy',
@@ -117,15 +142,17 @@ export class HealthService {
   async getComprehensiveHealth(): Promise<HealthStatus> {
     const services: Record<string, HealthCheck> = {};
 
-    const [dbCheck, redisCheck, s3Check] = await Promise.all([
+    const [dbCheck, redisCheck, s3Check, meiliSearchCheck] = await Promise.all([
       this.checkDatabase(),
       this.checkRedis(),
       this.checkS3(),
+      this.checkMeiliSearch(),
     ]);
 
     services.postgres = dbCheck;
     services.redis = redisCheck;
     services.minio = s3Check;
+    services.meilisearch = meiliSearchCheck;
     services.memory = this.checkMemory();
 
     // Determine overall status
@@ -169,6 +196,12 @@ export class HealthService {
     // S3/MinIO check
     checks.minio = await this.checkS3();
     if (checks.minio.status === 'unhealthy') {
+      overallStatus = overallStatus === 'unhealthy' ? 'unhealthy' : 'degraded';
+    }
+
+    // MeiliSearch check
+    checks.meilisearch = await this.checkMeiliSearch();
+    if (checks.meilisearch.status === 'unhealthy') {
       overallStatus = overallStatus === 'unhealthy' ? 'unhealthy' : 'degraded';
     }
 
@@ -246,7 +279,16 @@ export class HealthService {
 
     const start = Date.now();
     try {
-      await s3.send(new ListBucketsCommand({}));
+      // Add 5-second timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('S3 health check timeout')), 5000)
+      );
+
+      await Promise.race([
+        s3.send(new ListBucketsCommand({})),
+        timeoutPromise,
+      ]);
+
       return {
         status: 'healthy',
         responseTime: Date.now() - start,
@@ -257,6 +299,43 @@ export class HealthService {
         status: 'unhealthy',
         responseTime: Date.now() - start,
         message: error instanceof Error ? error.message : 'S3/MinIO connection failed',
+        lastCheck: new Date().toISOString(),
+      };
+    }
+  }
+
+  async checkMeiliSearch(): Promise<HealthCheck> {
+    const client = this.getMeiliSearchClient();
+    if (!client) {
+      return {
+        status: 'unhealthy',
+        message: 'MeiliSearch not configured',
+        lastCheck: new Date().toISOString(),
+      };
+    }
+
+    const start = Date.now();
+    try {
+      // Add 5-second timeout
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('MeiliSearch health check timeout')), 5000)
+      );
+
+      await Promise.race([
+        client.health(),
+        timeoutPromise,
+      ]);
+
+      return {
+        status: 'healthy',
+        responseTime: Date.now() - start,
+        lastCheck: new Date().toISOString(),
+      };
+    } catch (error) {
+      return {
+        status: 'unhealthy',
+        responseTime: Date.now() - start,
+        message: error instanceof Error ? error.message : 'MeiliSearch connection failed',
         lastCheck: new Date().toISOString(),
       };
     }

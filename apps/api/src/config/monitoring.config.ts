@@ -30,4 +30,9 @@ export default registerAs('monitoring', () => ({
     enabled: process.env.UPTIME_MONITORING_ENABLED === 'true',
     webhookUrl: process.env.UPTIME_WEBHOOK_URL,
   },
+
+  // Prometheus metrics
+  prometheus: {
+    enabled: process.env.PROMETHEUS_ENABLED === 'true',
+  },
 }));

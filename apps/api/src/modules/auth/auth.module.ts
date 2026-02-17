@@ -12,7 +12,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { ApiKeyStrategy } from './strategies/api-key.strategy';
 
 // Guards
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 // Middleware
 import { TenantContextMiddleware } from './middleware/tenant-context.middleware';

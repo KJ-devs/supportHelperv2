@@ -13,7 +13,7 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../common/guards';
 import { BackupService } from './backup.service';
 import { TriggerBackupDto } from './dto/trigger-backup.dto';
 import { RestoreBackupDto } from './dto/restore-backup.dto';

@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Design System CSS Variables (from shared/styles/base.css) */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -55,17 +56,32 @@
     --input: 217.2 32.6% 17.5%;
     --ring: 224.3 76.3% 48%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+
+  /* Accessibility: ensure focus states are visible */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Accessibility: improve contrast for reduced motion users */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 

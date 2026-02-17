@@ -3,10 +3,12 @@
  * Carte affichant une statistique avec icône
  */
 
+import { LucideIcon, TrendingUp, TrendingDown } from 'lucide-react';
+
 interface StatsCardProps {
   title: string;
   value: string | number;
-  icon: string;
+  icon: string | LucideIcon;
   subtitle?: string;
   trend?: {
     value: number;
@@ -31,17 +33,25 @@ export function StatsCard({
   trend,
   variant = 'default',
 }: StatsCardProps) {
+  const Icon = typeof icon === 'string' ? null : icon;
+  const iconString = typeof icon === 'string' ? icon : null;
+
   return (
     <div className={`rounded-lg p-6 ${variantStyles[variant]}`}>
       <div className="flex items-center justify-between mb-2">
-        <span className="text-3xl">{icon}</span>
+        {Icon ? (
+          <Icon className="w-8 h-8" aria-hidden="true" />
+        ) : (
+          <span className="text-3xl">{iconString}</span>
+        )}
         {trend && (
           <span
-            className={`text-sm font-medium ${
+            className={`text-sm font-medium flex items-center gap-1 ${
               trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}
           >
-            {trend.isPositive ? '↑' : '↓'} {Math.abs(trend.value)}%
+            {trend.isPositive ? <TrendingUp className="w-4 h-4" aria-hidden="true" /> : <TrendingDown className="w-4 h-4" aria-hidden="true" />}
+            {Math.abs(trend.value)}%
           </span>
         )}
       </div>

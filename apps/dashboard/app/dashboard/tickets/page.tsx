@@ -16,8 +16,9 @@ import { TicketFilters as Filters } from '@/components/tickets/TicketFilters';
 import { Pagination } from '@/components/tickets/Pagination';
 import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
-import { PageLoader, Button } from '@/components/ui';
+import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
+import { AlertTriangle } from 'lucide-react';
 
 type ViewMode = 'table' | 'grid';
 
@@ -187,34 +188,36 @@ export default function TicketsPage() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Tickets</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Tickets</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
                 Gérez et suivez tous les tickets de support
               </p>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {/* Export Button */}
               <ExportButton tickets={tickets} filters={filters} />
 
-              {/* View Mode Toggle */}
-              <div className="flex bg-gray-200 rounded-lg p-1">
+              {/* View Mode Toggle - Hidden on mobile, table shows cards automatically */}
+              <div className="hidden sm:flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('table')}
-                  className={`px-3 py-1 rounded ${
-                    viewMode === 'table' ? 'bg-white shadow' : 'text-gray-600'
+                  className={`px-3 py-2 rounded min-h-[40px] ${
+                    viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-600 dark:text-gray-400'
                   }`}
                   title="Vue table"
+                  aria-label="Vue table"
                 >
                   📋
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 rounded ${
-                    viewMode === 'grid' ? 'bg-white shadow' : 'text-gray-600'
+                  className={`px-3 py-2 rounded min-h-[40px] ${
+                    viewMode === 'grid' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-600 dark:text-gray-400'
                   }`}
                   title="Vue grille"
+                  aria-label="Vue grille"
                 >
                   📦
                 </button>
@@ -244,19 +247,19 @@ export default function TicketsPage() {
         )}
 
         {/* Stats */}
-        <div className="mb-6 bg-white p-4 rounded-lg shadow">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className="font-medium text-gray-900">{pagination.total}</span> ticket(s) au total
+        <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+              <span className="font-medium text-gray-900 dark:text-gray-100">{pagination.total}</span> ticket(s) au total
               {isConnected && (
-                <span className="inline-flex items-center gap-1 text-xs text-green-600" title="Real-time updates active">
+                <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400" title="Real-time updates active">
                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
                   Live
                 </span>
               )}
             </div>
             {isLoading && (
-              <div className="flex items-center text-sm text-gray-500">
+              <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
                 <svg
                   className="animate-spin h-4 w-4 mr-2"
                   xmlns="http://www.w3.org/2000/svg"
@@ -285,11 +288,12 @@ export default function TicketsPage() {
 
         {/* Real-time Notification */}
         {notification && (
-          <div className="mb-4 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 flex items-center justify-between text-sm text-blue-800 animate-in fade-in duration-300">
-            <span>{notification}</span>
+          <div className="mb-4 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg px-4 py-3 flex items-center justify-between text-sm text-blue-800 dark:text-blue-200 animate-in fade-in duration-300">
+            <span className="flex-1">{notification}</span>
             <button
               onClick={() => setNotification(null)}
-              className="ml-4 text-blue-400 hover:text-blue-600"
+              className="ml-4 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 min-w-[40px] min-h-[40px] flex items-center justify-center"
+              aria-label="Fermer la notification"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -300,18 +304,18 @@ export default function TicketsPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <span className="text-red-600 text-xl mr-3">⚠️</span>
-              <div>
-                <h3 className="text-sm font-medium text-red-800">Erreur</h3>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Erreur</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               </div>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={fetchTickets}
-                className="ml-auto"
+                className="w-full sm:w-auto"
               >
                 Réessayer
               </Button>
@@ -320,11 +324,11 @@ export default function TicketsPage() {
         )}
 
         {/* Content */}
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-white dark:bg-gray-900 rounded-lg shadow dark:shadow-gray-800/20 overflow-hidden">
           {isLoading && tickets.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-              <p className="mt-4 text-gray-600">Chargement des tickets...</p>
+              <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
+              <p className="mt-4 text-gray-600 dark:text-gray-400">Chargement des tickets...</p>
             </div>
           ) : viewMode === 'table' ? (
             <TicketTable
@@ -336,22 +340,19 @@ export default function TicketsPage() {
               onSelectTicket={handleSelectTicket}
               onSelectAll={handleSelectAll}
             />
+          ) : tickets.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                icon="🎫"
+                title="Aucun ticket trouvé"
+                description="Modifiez vos filtres pour voir plus de résultats ou attendez que les utilisateurs soumettent leurs premiers tickets."
+              />
+            </div>
           ) : (
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {tickets.map((ticket) => (
                 <TicketCard key={ticket.id} ticket={ticket} />
               ))}
-              {tickets.length === 0 && (
-                <div className="col-span-full text-center py-12">
-                  <div className="text-6xl mb-4">🎫</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    Aucun ticket trouvé
-                  </h3>
-                  <p className="text-gray-600">
-                    Modifiez vos filtres pour voir plus de résultats.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 

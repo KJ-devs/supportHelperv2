@@ -12,7 +12,8 @@ import type { Application, CreateApplicationData } from '@/lib/types/application
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
-import { PageLoader, Button, Card } from '@/components/ui';
+import { PageLoader, Button, EmptyState } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -123,8 +124,8 @@ export default function ApplicationsPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Applications</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Applications</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
                 Gérez vos applications et leurs clés SDK
               </p>
             </div>
@@ -136,12 +137,12 @@ export default function ApplicationsPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center">
-              <span className="text-red-600 text-xl mr-3">⚠️</span>
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" aria-hidden="true" />
               <div>
-                <h3 className="text-sm font-medium text-red-800">Erreur</h3>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</h3>
+                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
               </div>
               <Button
                 variant="ghost"
@@ -157,35 +158,31 @@ export default function ApplicationsPage() {
 
         {/* Empty State */}
         {!isLoading && applications.length === 0 && (
-          <Card className="text-center py-12">
-            <div className="text-6xl mb-4">📱</div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Aucune application
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Créez votre première application pour commencer à recevoir des tickets.
-            </p>
-            <Button onClick={handleCreate}>
-              ➕ Créer une application
-            </Button>
-          </Card>
+          <EmptyState
+            icon="📱"
+            title="Aucune application"
+            description="Créez votre première application pour commencer à recevoir des tickets."
+            actionLabel="Créer une application"
+            onAction={handleCreate}
+            variant="bordered"
+          />
         )}
 
         {/* Applications Grid */}
         {applications.length > 0 && (
           <>
             {/* Stats */}
-            <div className="mb-6 bg-white p-4 rounded-lg shadow">
+            <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20">
               <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600">
-                  <span className="font-medium text-gray-900">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
                     {applications.length}
                   </span>{' '}
                   application(s) active(s)
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   Total tickets:{' '}
-                  <span className="font-medium text-gray-900">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
                     {applications.reduce((sum, app) => sum + (app._count?.tickets || 0), 0)}
                   </span>
                 </div>

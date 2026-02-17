@@ -12,13 +12,13 @@ export const metadata: Metadata = {
 
 export default function GitHubPage() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">GitHub Integration</h1>
-          <p className="text-muted-foreground">Sync and manage GitHub issues and repositories.</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">GitHub Integration</h1>
+          <p className="text-sm text-muted-foreground sm:text-base">Sync and manage GitHub issues and repositories.</p>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" className="min-h-[44px] self-start sm:self-auto">
           <RefreshCw className="mr-2 h-4 w-4" />
           Sync Now
         </Button>
@@ -26,7 +26,7 @@ export default function GitHubPage() {
 
       <GitHubSyncStatus />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         <GitHubRepositories />
         <GitHubIssues />
       </div>

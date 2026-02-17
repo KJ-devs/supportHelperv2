@@ -10,7 +10,7 @@
  * </template>
  */
 
-import type { ReportResponse, WidgetPosition } from '../widget/widget-types';
+import type { ReportResponse, WidgetPosition, WidgetTheme } from '../widget/widget-types';
 
 // Ensure the custom element is registered
 import '../widget/index';
@@ -74,6 +74,8 @@ export interface SupportHelperWidgetProps {
   primaryColor?: string;
   /** Z-index for the widget */
   zIndex?: number;
+  /** Theme: light, dark, or auto (default: auto) */
+  theme?: WidgetTheme;
 }
 
 /**
@@ -119,6 +121,10 @@ export const SupportHelperWidget = /* @__PURE__ */ (() => {
       zIndex: {
         type: Number,
         default: undefined,
+      },
+      theme: {
+        type: String as () => WidgetTheme,
+        default: 'auto',
       },
     },
 
@@ -195,6 +201,7 @@ export const SupportHelperWidget = /* @__PURE__ */ (() => {
           'sdk-key': props.sdkKey,
           'api-url': props.apiUrl,
           position: props.position || 'bottom-right',
+          theme: props.theme || 'auto',
         };
 
         if (props.primaryColor) {

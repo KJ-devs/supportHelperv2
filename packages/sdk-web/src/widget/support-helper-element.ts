@@ -11,6 +11,8 @@ import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './w
 import { submitReport } from './widget-api';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
+import { KeyboardManager } from './keyboard-manager';
+import { ScreenReaderAnnouncer } from './screen-reader-announcer';
 
 /**
  * Support Helper Web Component
@@ -38,8 +40,21 @@ export class SupportHelperElement extends HTMLElement {
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
 
+  // Theme detection
+  private prefersDarkMediaQuery: MediaQueryList | null = null;
+  private hostMutationObserver: MutationObserver | null = null;
+  private resolvedTheme: 'light' | 'dark' = 'light';
+
+  // Keyboard and accessibility
+  private keyboardManager!: KeyboardManager;
+  private announcer!: ScreenReaderAnnouncer;
+
+  // Attention pulse timer
+  private attentionPulseTimer: number | null = null;
+  private attentionPulseDelay = 5000; // 5 seconds
+
   static get observedAttributes(): string[] {
-    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index'];
+    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
   }
 
   constructor() {
@@ -53,6 +68,16 @@ export class SupportHelperElement extends HTMLElement {
 
     // Default config (will be updated when connected)
     this.config = { ...DEFAULT_CONFIG, sdkKey: '', apiUrl: '' };
+
+    // Initialize keyboard manager
+    this.keyboardManager = new KeyboardManager({
+      onEscape: () => this.handleClose(),
+      getShadowRoot: () => this.shadow,
+      getIsModalOpen: () => this.stateMachine.getState() !== 'idle',
+    });
+
+    // Initialize screen reader announcer
+    this.announcer = new ScreenReaderAnnouncer(this.shadow);
 
     // Listen to state changes
     this.stateMachine.onChange((newState, prevState) => {
@@ -78,22 +103,41 @@ export class SupportHelperElement extends HTMLElement {
       console.warn('[SupportHelper] api-url attribute is required');
     }
 
+    // Initialize theme detection
+    this.initializeThemeDetection();
+
     // Render initial state
     this.render();
 
     // Attach event listeners
     this.attachEventListeners();
+
+    // Initialize keyboard manager
+    this.keyboardManager.attach();
+
+    // Initialize screen reader announcer
+    this.announcer.initialize();
+
+    // Start attention pulse timer for FAB
+    this.startAttentionPulseTimer();
   }
 
   disconnectedCallback(): void {
     // Cleanup
     this.stopRecordingTimer();
+    this.stopAttentionPulseTimer();
     this.cleanupVideoUrl();
     if (this.videoRecorder?.isActive()) {
       this.videoRecorder.stop().catch(() => {});
     }
+    // Cleanup theme detection
+    this.cleanupThemeDetection();
     // Reset so event listeners re-attach on reconnect
     this.clickHandlerAttached = false;
+
+    // Cleanup keyboard manager and announcer
+    this.keyboardManager.detach();
+    this.announcer.destroy();
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
@@ -118,6 +162,12 @@ export class SupportHelperElement extends HTMLElement {
         this.config.zIndex = newValue ? parseInt(newValue, 10) : DEFAULT_CONFIG.zIndex;
         this.render();
         break;
+      case 'theme':
+        this.config.theme = (newValue as WidgetConfig['theme']) || 'auto';
+        this.cleanupThemeDetection();
+        this.initializeThemeDetection();
+        this.render();
+        break;
     }
   }
 
@@ -126,6 +176,8 @@ export class SupportHelperElement extends HTMLElement {
    */
   open(): void {
     if (this.stateMachine.canTransition('OPEN')) {
+      // Save focus before opening
+      this.keyboardManager.saveFocus();
       this.stateMachine.dispatch('OPEN');
     }
   }
@@ -150,7 +202,8 @@ export class SupportHelperElement extends HTMLElement {
     const styles = createWidgetStyles(
       this.config.primaryColor,
       this.config.zIndex,
-      this.config.position
+      this.config.position,
+      this.resolvedTheme === 'dark'
     );
 
     // Set data-state attribute on host for CSS state-based selectors
@@ -231,6 +284,8 @@ export class SupportHelperElement extends HTMLElement {
     switch (action) {
       case 'open':
         if (this.stateMachine.canTransition('OPEN')) {
+          // Save focus before opening
+          this.keyboardManager.saveFocus();
           this.stateMachine.dispatch('OPEN');
         }
         break;
@@ -330,10 +385,17 @@ export class SupportHelperElement extends HTMLElement {
       // Transition to recording state
       this.stateMachine.dispatch('START');
 
+      // Announce to screen readers
+      this.announcer.announce('Recording started', 'polite');
+
       this.emit('sh:recording-start', undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to start recording';
       this.errorMessage = message;
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
+
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Start recording error:', error);
       // Cleanup on failure
@@ -380,6 +442,9 @@ export class SupportHelperElement extends HTMLElement {
       // Transition to preview state - this will trigger render()
       this.stateMachine.dispatch('STOP');
 
+      // Announce to screen readers
+      this.announcer.announce('Recording stopped. Review your video.', 'polite');
+
       this.emit('sh:recording-stop', {
         duration: this.videoDuration,
         size: this.videoSize,
@@ -387,6 +452,10 @@ export class SupportHelperElement extends HTMLElement {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to stop recording';
       this.errorMessage = message;
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
+
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Stop recording error:', error);
     } finally {
@@ -461,12 +530,30 @@ export class SupportHelperElement extends HTMLElement {
     if (!this.formData.title.trim() || !this.formData.description.trim()) {
       // Show validation error instead of silently ignoring
       this.errorMessage = 'Title and description are required.';
+
+      // Mark invalid fields with aria-invalid
+      const titleInput = this.shadow.querySelector('#sh-input-title') as HTMLInputElement | null;
+      const descInput = this.shadow.querySelector('#sh-input-description') as HTMLTextAreaElement | null;
+
+      if (titleInput && !this.formData.title.trim()) {
+        titleInput.setAttribute('aria-invalid', 'true');
+      }
+      if (descInput && !this.formData.description.trim()) {
+        descInput.setAttribute('aria-invalid', 'true');
+      }
+
+      // Announce validation error to screen readers
+      this.announcer.announce('Error: Title and description are required.', 'assertive');
+
       this.render();
       return;
     }
     this.errorMessage = '';
 
     if (this.stateMachine.canTransition('SUBMIT')) {
+      // Announce submission to screen readers
+      this.announcer.announce('Sending your report...', 'polite');
+
       this.stateMachine.dispatch('SUBMIT');
       this.doSubmit();
     }
@@ -492,6 +579,9 @@ export class SupportHelperElement extends HTMLElement {
         this.stateMachine.dispatch('SUCCESS');
       }
 
+      // Announce success to screen readers
+      this.announcer.announce('Report sent successfully!', 'polite');
+
       this.emit('sh:submit', {
         ticketId: response.ticket.id,
         aiAnalysis: response.aiAnalysis,
@@ -503,6 +593,9 @@ export class SupportHelperElement extends HTMLElement {
       if (this.stateMachine.canTransition('ERROR')) {
         this.stateMachine.dispatch('ERROR');
       }
+
+      // Announce error to screen readers
+      this.announcer.announce(`Error: ${message}`, 'assertive');
 
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Submit error:', error);
@@ -516,15 +609,33 @@ export class SupportHelperElement extends HTMLElement {
     // Emit events for state changes
     if (newState !== 'idle' && prevState === 'idle') {
       this.emit('sh:open', undefined);
+
+      // Announce modal opened to screen readers
+      this.announcer.announce('Support helper opened', 'polite');
+      this.stopAttentionPulseTimer();
     } else if (newState === 'idle' && prevState !== 'idle') {
       this.emit('sh:close', undefined);
+
+      // Restore focus when closing
+      this.keyboardManager.restoreFocus();
+
       // Cleanup on close
       this.cleanupRecording();
       this.formData = { title: '', description: '' };
+      // Restart attention pulse timer when returning to idle
+      this.startAttentionPulseTimer();
     }
 
     // Re-render
     this.render();
+
+    // Focus first element after render if modal is open
+    if (newState !== 'idle' && newState !== 'recording') {
+      // Use setTimeout to ensure DOM is updated
+      setTimeout(() => {
+        this.keyboardManager.focusFirstElement();
+      }, 0);
+    }
   }
 
   /**
@@ -580,6 +691,145 @@ export class SupportHelperElement extends HTMLElement {
     if (this.videoUrl) {
       URL.revokeObjectURL(this.videoUrl);
       this.videoUrl = null;
+    }
+  }
+
+  /**
+   * Initialize theme detection based on config.theme
+   */
+  private initializeThemeDetection(): void {
+    if (this.config.theme === 'light') {
+      this.resolvedTheme = 'light';
+    } else if (this.config.theme === 'dark') {
+      this.resolvedTheme = 'dark';
+    } else {
+      // Auto mode: detect system preference and host page
+      this.resolvedTheme = this.detectTheme();
+      this.setupThemeObservers();
+    }
+  }
+
+  /**
+   * Detect theme based on system preference and host page
+   */
+  private detectTheme(): 'light' | 'dark' {
+    // 1. Check host page for dark mode indicators
+    if (typeof document !== 'undefined') {
+      const html = document.documentElement;
+      const body = document.body;
+
+      // Check for common dark mode classes
+      if (html.classList.contains('dark') || body.classList.contains('dark')) {
+        return 'dark';
+      }
+
+      // Check for data-theme attribute
+      const htmlTheme = html.getAttribute('data-theme');
+      const bodyTheme = body.getAttribute('data-theme');
+      if (htmlTheme === 'dark' || bodyTheme === 'dark') {
+        return 'dark';
+      }
+    }
+
+    // 2. Check system preference
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)');
+      if (prefersDark.matches) {
+        return 'dark';
+      }
+    }
+
+    // Default to light
+    return 'light';
+  }
+
+  /**
+   * Setup theme observers for auto mode
+   */
+  private setupThemeObservers(): void {
+    // 1. Listen to system preference changes
+    if (typeof window !== 'undefined' && window.matchMedia) {
+      this.prefersDarkMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleSystemThemeChange = (_e: MediaQueryListEvent): void => {
+        this.resolvedTheme = this.detectTheme();
+        this.render();
+      };
+
+      // Use addEventListener for modern browsers
+      if (this.prefersDarkMediaQuery.addEventListener) {
+        this.prefersDarkMediaQuery.addEventListener('change', handleSystemThemeChange);
+      }
+    }
+
+    // 2. Observe host page changes (html/body class and data-theme changes)
+    if (typeof document !== 'undefined' && typeof MutationObserver !== 'undefined') {
+      this.hostMutationObserver = new MutationObserver(() => {
+        const newTheme = this.detectTheme();
+        if (newTheme !== this.resolvedTheme) {
+          this.resolvedTheme = newTheme;
+          this.render();
+        }
+      });
+
+      // Observe both html and body
+      const observerConfig: MutationObserverInit = {
+        attributes: true,
+        attributeFilter: ['class', 'data-theme'],
+      };
+
+      this.hostMutationObserver.observe(document.documentElement, observerConfig);
+      if (document.body) {
+        this.hostMutationObserver.observe(document.body, observerConfig);
+      }
+    }
+  }
+
+  /**
+   * Cleanup theme observers
+   */
+  private cleanupThemeDetection(): void {
+    if (this.prefersDarkMediaQuery) {
+      this.prefersDarkMediaQuery = null;
+    }
+
+    if (this.hostMutationObserver) {
+      this.hostMutationObserver.disconnect();
+      this.hostMutationObserver = null;
+    }
+  }
+
+  /**
+   * Start attention pulse timer - adds pulse animation to FAB after delay
+   */
+  private startAttentionPulseTimer(): void {
+    // Only pulse when in idle state
+    if (this.stateMachine.getState() !== 'idle') return;
+
+    this.stopAttentionPulseTimer();
+    this.attentionPulseTimer = window.setTimeout(() => {
+      const fab = this.shadow.querySelector('.sh-fab');
+      if (fab && this.stateMachine.getState() === 'idle') {
+        fab.classList.add('sh-attention-pulse');
+        // Remove class after animation completes (2s * 3 iterations = 6s)
+        setTimeout(() => {
+          fab.classList.remove('sh-attention-pulse');
+        }, 6000);
+      }
+    }, this.attentionPulseDelay);
+  }
+
+  /**
+   * Stop attention pulse timer
+   */
+  private stopAttentionPulseTimer(): void {
+    if (this.attentionPulseTimer !== null) {
+      clearTimeout(this.attentionPulseTimer);
+      this.attentionPulseTimer = null;
+    }
+    // Remove class if present
+    const fab = this.shadow.querySelector('.sh-fab');
+    if (fab) {
+      fab.classList.remove('sh-attention-pulse');
     }
   }
 

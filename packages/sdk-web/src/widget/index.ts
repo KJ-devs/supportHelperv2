@@ -34,6 +34,7 @@ export interface InitOptions {
   position?: 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
   primaryColor?: string;
   zIndex?: number;
+  theme?: 'light' | 'dark' | 'auto';
   container?: HTMLElement;
 }
 
@@ -56,6 +57,9 @@ export function init(options: InitOptions): SupportHelperElement {
   }
   if (options.zIndex !== undefined) {
     element.setAttribute('z-index', options.zIndex.toString());
+  }
+  if (options.theme) {
+    element.setAttribute('theme', options.theme);
   }
 
   // Append to container or body

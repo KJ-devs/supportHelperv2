@@ -8,6 +8,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui';
 import type { Ticket, TicketFilters } from '@/lib/types/ticket';
+import { FileSpreadsheet, FileJson } from 'lucide-react';
 
 interface ExportButtonProps {
   tickets: Ticket[];
@@ -158,7 +159,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <span>📊</span>
+              <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />
               <div>
                 <div className="font-medium">Exporter en CSV</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -173,7 +174,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
             className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="flex items-center gap-2">
-              <span>📄</span>
+              <FileJson className="w-4 h-4" aria-hidden="true" />
               <div>
                 <div className="font-medium">Exporter en JSON</div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
