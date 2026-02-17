@@ -37,10 +37,14 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
   }
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700 sm:px-6">
+    <nav
+      className="flex items-center justify-between px-4 py-3 bg-white dark:bg-gray-900 border-t dark:border-gray-700 sm:px-6"
+      role="navigation"
+      aria-label="Pagination"
+    >
       <div className="flex items-center justify-between w-full">
         <div>
-          <p className="text-sm text-gray-700 dark:text-gray-300">
+          <p className="text-sm text-gray-700 dark:text-gray-300" aria-live="polite">
             Page <span className="font-medium">{currentPage}</span> sur{' '}
             <span className="font-medium">{totalPages}</span>
           </p>
@@ -51,19 +55,21 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           <button
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
-            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Page précédente"
           >
             ← Précédent
           </button>
 
           {/* Page Numbers */}
-          <div className="hidden md:flex space-x-1">
+          <div className="hidden md:flex space-x-1" role="group" aria-label="Numéros de page">
             {visiblePages.map((page, index) => {
               if (page === -1) {
                 return (
                   <span
                     key={`ellipsis-${index}`}
                     className="px-3 py-2 text-sm text-gray-700 dark:text-gray-300"
+                    aria-hidden="true"
                   >
                     ...
                   </span>
@@ -74,11 +80,13 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
                 <button
                   key={page}
                   onClick={() => onPageChange(page)}
-                  className={`px-3 py-2 text-sm font-medium rounded-md ${
+                  className={`px-3 py-2 text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     currentPage === page
                       ? 'bg-blue-600 text-white'
                       : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                   }`}
+                  aria-label={`Page ${page}`}
+                  aria-current={currentPage === page ? 'page' : undefined}
                 >
                   {page}
                 </button>
@@ -90,12 +98,13 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
           <button
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
-            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Page suivante"
           >
             Suivant →
           </button>
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

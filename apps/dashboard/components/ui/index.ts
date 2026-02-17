@@ -9,3 +9,4 @@ export { Input } from './Input';
 export { Select } from './Select';
 export { Loader, PageLoader } from './Loader';
 export { Modal } from './Modal';
+export { SkipLink } from './SkipLink';

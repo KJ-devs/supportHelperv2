@@ -3,7 +3,7 @@
  * Champ de formulaire réutilisable
  */
 
-import { InputHTMLAttributes, forwardRef } from 'react';
+import { InputHTMLAttributes, forwardRef, useId } from 'react';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -12,17 +12,23 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, helperText, className = '', ...props }, ref) => {
+  ({ label, error, helperText, className = '', id: providedId, ...props }, ref) => {
+    const generatedId = useId();
+    const id = providedId || generatedId;
+    const errorId = `${id}-error`;
+    const helperId = `${id}-helper`;
+
     return (
       <div className="w-full">
         {label && (
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {label}
-            {props.required && <span className="text-red-500 ml-1">*</span>}
+            {props.required && <span className="text-red-500 ml-1" aria-label="requis">*</span>}
           </label>
         )}
         <input
           ref={ref}
+          id={id}
           className={`
             w-full px-3 py-2 border rounded-lg
             bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100
@@ -32,10 +38,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ${error ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}
             ${className}
           `}
+          aria-invalid={error ? 'true' : 'false'}
+          aria-describedby={error ? errorId : helperText ? helperId : undefined}
           {...props}
         />
-        {error && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</p>}
-        {helperText && !error && <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{helperText}</p>}
+        {error && <p id={errorId} className="mt-1 text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
+        {helperText && !error && <p id={helperId} className="mt-1 text-sm text-gray-500 dark:text-gray-400">{helperText}</p>}
       </div>
     );
   }
