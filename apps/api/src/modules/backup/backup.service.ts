@@ -161,7 +161,7 @@ export class BackupService {
 
       let status: BackupStatus = {
         jobId,
-        status: state as 'active' | 'completed' | 'failed' | 'delayed' | 'waiting' | 'paused',
+        status: state as 'active' | 'completed' | 'failed' | 'delayed' | 'waiting',
         progress: typeof progress === 'number' ? progress : undefined,
       };
 
