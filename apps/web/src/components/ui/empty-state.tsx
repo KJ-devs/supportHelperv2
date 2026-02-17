@@ -3,7 +3,7 @@ import { type LucideIcon, Inbox, Search, FileQuestion } from 'lucide-react';
 import { Button } from './button';
 import { cn } from '@/lib/utils';
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   icon?: LucideIcon;
   title: string;
   description?: string;
@@ -32,11 +32,11 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        'flex min-h-[300px] flex-col items-center justify-center gap-4 p-8 text-center',
+        'flex min-h-[300px] flex-col items-center justify-center gap-4 rounded-lg border border-dashed bg-muted/30 p-8 text-center',
         className
       )}
     >
-      <div className="rounded-full bg-muted p-4">
+      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-muted">
         <Icon className="h-8 w-8 text-muted-foreground" />
       </div>
       <div className="space-y-1.5 max-w-md">
