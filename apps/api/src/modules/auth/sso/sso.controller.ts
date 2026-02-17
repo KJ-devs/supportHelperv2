@@ -16,7 +16,7 @@ import {
   ApiOperation,
   ApiResponse,
 } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../../../auth/guards';
+import { JwtAuthGuard } from '../../../common/guards';
 import { RequireFeature } from '../../license/decorators/require-feature.decorator';
 import { SsoService } from './sso.service';
 import { UpdateSsoConfigDto } from './dto';

@@ -1,4 +1,5 @@
-export * from './jwt-auth.guard';
-export * from './sdk-key.guard';
-export * from './roles.guard';
-export * from './tenant.guard';
+// Re-export common guards for backwards compatibility
+export { JwtAuthGuard, SdkKeyGuard, TenantGuard, RolesGuard } from '../../common/guards';
+
+// Deprecated: use SdkKeyGuard instead
+export { SdkKeyGuard as ApiKeyAuthGuard } from '../../common/guards';
