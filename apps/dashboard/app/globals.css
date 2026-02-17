@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Unified Design System - shared between Dashboard and Web App */
+@import '@support-helper/shared/styles/base.css';
+
 @layer base {
   /* Screen reader only utility */
   .sr-only {
