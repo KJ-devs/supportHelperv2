@@ -13,6 +13,7 @@ import { Inject, Logger, UseGuards, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from './ws-jwt.guard';
 import { AgentService } from './agent.service';
+import { getWebSocketCorsConfig } from '../../config/websocket-cors.config';
 
 interface WsUser {
   userId: string;
@@ -23,7 +24,7 @@ interface WsUser {
 
 @WebSocketGateway({
   namespace: '/agent',
-  cors: { origin: '*' },
+  cors: getWebSocketCorsConfig(),
 })
 @UseGuards(WsJwtGuard)
 export class AgentGateway
