@@ -49,17 +49,27 @@ export interface DuplicateCheckResponse {
 
 // API functions
 async function createTicket(input: NewTicketInput): Promise<CreateTicketResponse> {
-  return api.post<CreateTicketResponse>('/tickets', {
-    ...input,
-    // Convert File objects to URLs if needed (handled separately via upload)
-    attachments: input.attachments.map(a => ({
-      id: a.id,
-      name: a.name,
-      size: a.size,
-      type: a.type,
-      url: a.url,
-    })),
-  });
+  // Map the form input to the API's expected format
+  const payload = {
+    title: input.title,
+    description: input.description,
+    applicationId: input.applicationId,
+    reproductionSteps: input.reproductionSteps.filter(step => step.trim()),
+    // Store type and severity in userContext for now (until API schema is updated)
+    userContext: {
+      type: input.type,
+      severity: input.severity,
+      attachments: input.attachments.map(a => ({
+        id: a.id,
+        name: a.name,
+        size: a.size,
+        type: a.type,
+        url: a.url,
+      })),
+    },
+  };
+
+  return api.post<CreateTicketResponse>('/api/tickets', payload);
 }
 
 async function checkDuplicateTitle(title: string): Promise<DuplicateCheckResponse> {
