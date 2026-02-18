@@ -47,7 +47,7 @@ export default function DashboardPage() {
         {/* Welcome Section */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Bienvenue, {user.name || user.email}!
+            Bienvenue, {user.name || user.email}! 👋
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Voici un aperçu rapide de votre plateforme de support
