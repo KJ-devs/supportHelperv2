@@ -17,7 +17,6 @@ import {
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { useCreateTicketMutation, useApplications } from '@/hooks/use-new-ticket-form';
-import { useToast } from '@/hooks/use-toast';
 
 const newTicketSchema = z.object({
   title: z.string().min(5, 'Title must be at least 5 characters'),
@@ -29,7 +28,6 @@ const newTicketSchema = z.object({
 
 export function NewTicketForm() {
   const router = useRouter();
-  const { toast } = useToast();
   const createTicket = useCreateTicketMutation();
   const { data: applications, isLoading: applicationsLoading } = useApplications();
 
