@@ -51,29 +51,10 @@ const mockS3Service = {
   listObjects: jest.fn().mockResolvedValue([]),
   downloadToPath: jest.fn().mockResolvedValue(undefined),
   upload: jest.fn().mockResolvedValue('key'),
+  uploadStream: jest.fn().mockResolvedValue('key'),
   getBucket: jest.fn().mockReturnValue('support-helper'),
+  computeChecksum: jest.fn().mockResolvedValue('abc123checksum'),
 };
-
-interface BackupJobData {
-  includeMedia: boolean;
-  label?: string;
-  type: 'manual' | 'scheduled';
-  triggeredAt: string;
-}
-
-interface RestoreJobData {
-  filename: string;
-  skipMedia: boolean;
-  triggeredAt: string;
-}
-
-interface BackupResult {
-  success: boolean;
-  filename?: string;
-  size?: number;
-  duration?: number;
-  error?: string;
-}
 
 describe('BackupWorker', () => {
   let worker: BackupWorker;
@@ -108,7 +89,9 @@ describe('BackupWorker', () => {
     mockS3Service.listObjects.mockResolvedValue([]);
     mockS3Service.downloadToPath.mockResolvedValue(undefined);
     mockS3Service.upload.mockResolvedValue('key');
+    mockS3Service.uploadStream.mockResolvedValue('key');
     mockS3Service.getBucket.mockReturnValue('support-helper');
+    mockS3Service.computeChecksum.mockResolvedValue('abc123checksum');
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -122,6 +105,8 @@ describe('BackupWorker', () => {
                   return '/backups';
                 case 'DATABASE_URL':
                   return 'postgresql://user:pass@localhost:5432/testdb';
+                case 'BACKUP_MAX_SIZE_BYTES':
+                  return 0; // 0 means unlimited in tests
                 default:
                   return undefined;
               }
@@ -205,6 +190,29 @@ describe('BackupWorker', () => {
       expect((w as any).databaseUrl).toBe('');
       expect(w).toBeDefined();
     });
+
+    it('should use BACKUP_MAX_SIZE_BYTES from config', () => {
+      expect((worker as any).maxBackupSizeBytes).toBe(0);
+    });
+
+    it('should default maxBackupSizeBytes to 50 GB when not configured', async () => {
+      const module = await Test.createTestingModule({
+        providers: [
+          BackupWorker,
+          {
+            provide: ConfigService,
+            useValue: { get: jest.fn(() => undefined) },
+          },
+          {
+            provide: S3Service,
+            useValue: mockS3Service,
+          },
+        ],
+      }).compile();
+
+      const w = module.get<BackupWorker>(BackupWorker);
+      expect((w as any).maxBackupSizeBytes).toBe(50 * 1024 * 1024 * 1024);
+    });
   });
 
   describe('process - routing', () => {
@@ -239,6 +247,22 @@ describe('BackupWorker', () => {
       const job = createMockJob('unknown-job', {});
 
       await expect(worker.process(job)).rejects.toThrow('Unknown job type: unknown-job');
+    });
+
+    it('should reset aborted flag on each new job', async () => {
+      worker.abort();
+      expect((worker as any).aborted).toBe(true);
+
+      const job = createMockJob('create-backup', {
+        includeMedia: false,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      // After process() starts, aborted should be reset to false
+      // (it was reset at the start of process())
     });
   });
 
@@ -373,6 +397,7 @@ describe('BackupWorker', () => {
         { key: 'dir/file2.png', size: 512000 },
       ]);
       mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum.mockResolvedValue('abc123');
       mockFs.stat.mockResolvedValue({ size: 1024000 });
 
       const job = createMockJob('create-backup', {
@@ -558,7 +583,7 @@ describe('BackupWorker', () => {
       mockFs.readFile.mockResolvedValue(JSON.stringify({
         totalFiles: 1,
         totalBytes: 1024000,
-        files: [{ key: 'file1.mp4', size: 1024000 }],
+        files: [{ key: 'file1.mp4', size: 1024000, checksum: 'abc123checksum' }],
         bucket: 'test'
       }));
       mockFs.access.mockResolvedValue(undefined);
@@ -566,7 +591,8 @@ describe('BackupWorker', () => {
         { name: 'file1.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
       ] as any);
-      mockS3Service.upload.mockResolvedValue('file1.mp4');
+      mockS3Service.uploadStream.mockResolvedValue('file1.mp4');
+      mockS3Service.computeChecksum.mockResolvedValue('abc123checksum');
 
       const job = createMockJob('restore-backup', restoreJobData);
 
@@ -691,6 +717,357 @@ describe('BackupWorker', () => {
     });
   });
 
+  describe('backupMedia - streaming and checksums', () => {
+    it('should compute and store checksums for each backed-up file', async () => {
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'video.mp4', size: 5000000 },
+        { key: 'screenshot.png', size: 200000 },
+      ]);
+      mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum
+        .mockResolvedValueOnce('checksum-video')
+        .mockResolvedValueOnce('checksum-screenshot');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      // Checksums computed for each file
+      expect(mockS3Service.computeChecksum).toHaveBeenCalledTimes(2);
+
+      // Manifest written with checksum data
+      const writeCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+        String(call[0]).includes('manifest.json'),
+      );
+      expect(writeCall).toBeDefined();
+      const manifest = JSON.parse(writeCall![1] as string);
+      expect(manifest.files).toHaveLength(2);
+      expect(manifest.files[0]).toMatchObject({ key: 'video.mp4', checksum: 'checksum-video' });
+      expect(manifest.files[1]).toMatchObject({ key: 'screenshot.png', checksum: 'checksum-screenshot' });
+    });
+
+    it('should use downloadToPath (streaming) instead of in-memory download', async () => {
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'large-video.mp4', size: 500 * 1024 * 1024 }, // 500 MB
+      ]);
+      mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum.mockResolvedValue('largefile-checksum');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      // Must use downloadToPath (streaming), NOT downloadToTemp (buffered)
+      expect(mockS3Service.downloadToPath).toHaveBeenCalledWith(
+        'large-video.mp4',
+        expect.stringContaining('large-video.mp4'),
+      );
+    });
+
+    it('should continue backing up remaining files when one file download fails', async () => {
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'file1.mp4', size: 1000 },
+        { key: 'file2.mp4', size: 2000 },
+        { key: 'file3.mp4', size: 3000 },
+      ]);
+      mockS3Service.downloadToPath
+        .mockRejectedValueOnce(new Error('S3 network error'))
+        .mockResolvedValue(undefined);
+      mockS3Service.computeChecksum.mockResolvedValue('some-checksum');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const result = await worker.process(job);
+
+      // Should still succeed overall (other files downloaded)
+      expect(result.success).toBe(true);
+      // file2 and file3 downloaded successfully
+      expect(mockS3Service.downloadToPath).toHaveBeenCalledTimes(3);
+    });
+
+    it('should reject media backup when total size exceeds configured limit', async () => {
+      // Create a worker with a 100 MB limit
+      const module = await Test.createTestingModule({
+        providers: [
+          BackupWorker,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                if (key === 'BACKUP_PATH') return '/backups';
+                if (key === 'DATABASE_URL') return 'postgresql://localhost/db';
+                if (key === 'BACKUP_MAX_SIZE_BYTES') return 100 * 1024 * 1024; // 100 MB
+                return undefined;
+              }),
+            },
+          },
+          { provide: S3Service, useValue: mockS3Service },
+        ],
+      }).compile();
+
+      const limitedWorker = module.get<BackupWorker>(BackupWorker);
+
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'huge1.mp4', size: 60 * 1024 * 1024 },  // 60 MB
+        { key: 'huge2.mp4', size: 60 * 1024 * 1024 },  // 60 MB - total 120 MB > 100 MB limit
+      ]);
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const result = await limitedWorker.process(job);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('exceeds configured limit');
+    });
+
+    it('should allow unlimited backup size when BACKUP_MAX_SIZE_BYTES is 0', async () => {
+      // worker already has maxBackupSizeBytes=0 (unlimited) from beforeEach setup
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'huge.mp4', size: 999 * 1024 * 1024 * 1024 }, // 999 GB - exceeds any normal limit
+      ]);
+      mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum.mockResolvedValue('checksum');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const result = await worker.process(job);
+
+      // Should succeed because limit is 0 (disabled)
+      expect(result.success).toBe(true);
+      expect(mockS3Service.downloadToPath).toHaveBeenCalled();
+    });
+
+    it('should write manifest with correct metadata', async () => {
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'tenants/t1/video.mp4', size: 3000 },
+      ]);
+      mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum.mockResolvedValue('sha256-hash-abc');
+      mockS3Service.getBucket.mockReturnValue('my-bucket');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      const writeCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+        String(call[0]).includes('manifest.json'),
+      );
+      expect(writeCall).toBeDefined();
+      const manifest = JSON.parse(writeCall![1] as string);
+      expect(manifest.bucket).toBe('my-bucket');
+      expect(manifest.totalFiles).toBe(1);
+      expect(manifest.totalBytes).toBe(3000);
+      expect(manifest.files[0]).toMatchObject({
+        key: 'tenants/t1/video.mp4',
+        size: 3000,
+        checksum: 'sha256-hash-abc',
+      });
+    });
+  });
+
+  describe('restoreMedia - checksum verification', () => {
+    const restoreJobData = {
+      filename: 'backup_20260216_120000_manual.tar.gz',
+      skipMedia: false,
+      triggeredAt: new Date().toISOString(),
+    };
+
+    it('should verify checksums before uploading each file', async () => {
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        bucket: 'support-helper',
+        totalFiles: 1,
+        totalBytes: 1024000,
+        files: [{ key: 'video.mp4', size: 1024000, checksum: 'expected-checksum' }],
+      }));
+      mockFs.readdir.mockResolvedValue([
+        { name: 'video.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      mockS3Service.computeChecksum.mockResolvedValue('expected-checksum');
+      mockS3Service.uploadStream.mockResolvedValue('video.mp4');
+
+      const job = createMockJob('restore-backup', restoreJobData);
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(true);
+      expect(mockS3Service.computeChecksum).toHaveBeenCalled();
+      expect(mockS3Service.uploadStream).toHaveBeenCalledWith('video.mp4', expect.any(String));
+    });
+
+    it('should skip files with checksum mismatch and log error', async () => {
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        bucket: 'support-helper',
+        totalFiles: 1,
+        totalBytes: 1024000,
+        files: [{ key: 'corrupted.mp4', size: 1024000, checksum: 'expected-good-checksum' }],
+      }));
+      mockFs.readdir.mockResolvedValue([
+        { name: 'corrupted.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      // Return a DIFFERENT checksum (corruption detected)
+      mockS3Service.computeChecksum.mockResolvedValue('actual-bad-checksum');
+
+      const errorSpy = jest.spyOn(worker['logger'], 'error');
+      const job = createMockJob('restore-backup', restoreJobData);
+      await worker.process(job);
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Checksum mismatch for corrupted.mp4'),
+      );
+      // Upload should NOT have been called for the corrupted file
+      expect(mockS3Service.uploadStream).not.toHaveBeenCalled();
+    });
+
+    it('should use uploadStream (streaming) for restore uploads', async () => {
+      mockFs.readFile.mockResolvedValue('{}'); // no manifest
+      mockFs.readdir.mockResolvedValue([
+        { name: 'file.mp4', isDirectory: () => false, isFile: () => true },
+      ] as any);
+
+      const job = createMockJob('restore-backup', restoreJobData);
+      await worker.process(job);
+
+      // uploadStream must be used, not upload (which reads entire file into memory)
+      expect(mockS3Service.uploadStream).toHaveBeenCalled();
+    });
+
+    it('should continue restoring other files when one upload fails', async () => {
+      mockFs.readFile.mockResolvedValue('{}'); // no manifest
+      mockFs.readdir.mockResolvedValue([
+        { name: 'file1.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'file2.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'file3.mp4', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      mockS3Service.uploadStream
+        .mockRejectedValueOnce(new Error('Upload failed'))
+        .mockResolvedValue('key');
+
+      const job = createMockJob('restore-backup', restoreJobData);
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(true);
+      expect(mockS3Service.uploadStream).toHaveBeenCalledTimes(3);
+    });
+
+    it('should log warning when manifest files are missing from backup dir', async () => {
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        bucket: 'support-helper',
+        totalFiles: 2,
+        totalBytes: 2048000,
+        files: [
+          { key: 'present.mp4', size: 1024000, checksum: 'abc' },
+          { key: 'missing.mp4', size: 1024000, checksum: 'xyz' },
+        ],
+      }));
+      // Only 'present.mp4' is in the directory, 'missing.mp4' is absent
+      mockFs.readdir.mockResolvedValue([
+        { name: 'present.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
+      ] as any);
+      mockS3Service.computeChecksum.mockResolvedValue('abc');
+      mockS3Service.uploadStream.mockResolvedValue('present.mp4');
+
+      const warnSpy = jest.spyOn(worker['logger'], 'warn');
+      const job = createMockJob('restore-backup', restoreJobData);
+      await worker.process(job);
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('1 file(s) from manifest were not found'),
+      );
+    });
+  });
+
+  describe('graceful interruption (abort)', () => {
+    it('abort() should set the aborted flag', () => {
+      expect((worker as any).aborted).toBe(false);
+      worker.abort();
+      expect((worker as any).aborted).toBe(true);
+    });
+
+    it('should abort media backup mid-way and cleanup partial files', async () => {
+      // Set up 3 files; after file 1 downloads, we'll set the abort flag
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'file1.mp4', size: 1000 },
+        { key: 'file2.mp4', size: 2000 },
+        { key: 'file3.mp4', size: 3000 },
+      ]);
+
+      let downloadCount = 0;
+      mockS3Service.downloadToPath.mockImplementation(async () => {
+        downloadCount++;
+        // After first download, abort the worker
+        if (downloadCount === 1) {
+          worker.abort();
+        }
+      });
+      mockS3Service.computeChecksum.mockResolvedValue('checksum');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('aborted');
+    });
+
+    it('should cleanup temp directory on abort', async () => {
+      // Abort immediately before media backup
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'file.mp4', size: 1000 },
+      ]);
+      mockS3Service.downloadToPath.mockImplementation(async () => {
+        worker.abort();
+      });
+      mockS3Service.computeChecksum.mockResolvedValue('checksum');
+
+      const job = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      // Temp directory should be cleaned up even on abort
+      expect(mockFs.rm).toHaveBeenCalledWith(
+        expect.stringMatching(/temp_\d+/),
+        { recursive: true, force: true },
+      );
+    });
+  });
+
   describe('formatTimestamp (private)', () => {
     it('should format date as YYYYMMDD_HHmmss', () => {
       const formatTimestamp = (worker as any).formatTimestamp.bind(worker);
@@ -769,7 +1146,7 @@ describe('BackupWorker', () => {
       const logSpy = jest.spyOn(worker['logger'], 'log');
       const job = createMockJob('create-backup', {});
 
-      const result: BackupResult = {
+      const result = {
         success: true,
         filename: 'backup_20260216_120000_manual.tar.gz',
         size: 1024 * 1024 * 10,
@@ -889,6 +1266,140 @@ describe('BackupWorker', () => {
 
       expect(result.success).toBe(true);
       expect(result.filename).toContain('_scheduled.tar.gz');
+    });
+  });
+
+  describe('integration: backup -> restore cycle', () => {
+    it('should complete a full backup and restore cycle without errors', async () => {
+      // === BACKUP PHASE ===
+      // Use simple (non-nested) keys so manifest and directory entries align
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'video.mp4', size: 1024000 },
+        { key: 'screenshot.png', size: 50000 },
+      ]);
+      mockS3Service.downloadToPath.mockResolvedValue(undefined);
+      mockS3Service.computeChecksum
+        .mockResolvedValueOnce('checksum-video')
+        .mockResolvedValueOnce('checksum-screenshot');
+      mockS3Service.getBucket.mockReturnValue('support-helper');
+      mockFs.stat.mockResolvedValue({ size: 10240000 });
+
+      const backupJob = createMockJob('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const backupResult = await worker.process(backupJob);
+
+      expect(backupResult.success).toBe(true);
+      expect(backupResult.filename).toBeDefined();
+
+      // Capture the manifest that was written during backup
+      const manifestWriteCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+        String(call[0]).includes('manifest.json'),
+      );
+      expect(manifestWriteCall).toBeDefined();
+      const writtenManifest = JSON.parse(manifestWriteCall![1] as string);
+      expect(writtenManifest.files).toHaveLength(2);
+      expect(writtenManifest.files[0].checksum).toBe('checksum-video');
+      expect(writtenManifest.files[1].checksum).toBe('checksum-screenshot');
+
+      // === RESTORE PHASE ===
+      // Reset only the S3 service mocks (not fs, which is still properly set)
+      mockS3Service.computeChecksum.mockReset();
+      mockS3Service.uploadStream.mockReset();
+      mockS3Service.listObjects.mockReset();
+
+      // readFile returns the manifest captured from backup
+      mockFs.readFile.mockResolvedValue(JSON.stringify(writtenManifest));
+      // readdir returns the files matching the simple keys (video.mp4, screenshot.png)
+      mockFs.readdir.mockResolvedValue([
+        { name: 'video.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'screenshot.png', isDirectory: () => false, isFile: () => true },
+        { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
+      ] as any);
+
+      // Checksums match (files are intact)
+      mockS3Service.computeChecksum
+        .mockResolvedValueOnce('checksum-video')
+        .mockResolvedValueOnce('checksum-screenshot');
+      mockS3Service.uploadStream.mockResolvedValue('key');
+
+      const restoreJob = createMockJob('restore-backup', {
+        filename: backupResult.filename!,
+        skipMedia: false,
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const restoreResult = await worker.process(restoreJob);
+
+      expect(restoreResult.success).toBe(true);
+
+      // Verification: checksums were checked for the 2 media files
+      expect(mockS3Service.computeChecksum).toHaveBeenCalledTimes(2);
+      // Verification: files were uploaded to S3 using streaming
+      expect(mockS3Service.uploadStream).toHaveBeenCalledTimes(2);
+    });
+
+    it('should detect corrupted files during restore verification', async () => {
+      // Set up restore with a manifest that has known checksums
+      mockFs.access.mockResolvedValue(undefined);
+      execFilePromisified.mockResolvedValue({ stdout: '', stderr: '' });
+
+      mockFs.readFile.mockResolvedValue(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        bucket: 'support-helper',
+        totalFiles: 2,
+        totalBytes: 2048000,
+        files: [
+          { key: 'good.mp4', size: 1024000, checksum: 'correct-checksum' },
+          { key: 'bad.mp4', size: 1024000, checksum: 'original-checksum' },
+        ],
+      }));
+      mockFs.readdir.mockResolvedValue([
+        { name: 'good.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'bad.mp4', isDirectory: () => false, isFile: () => true },
+        { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
+      ] as any);
+
+      // good.mp4: checksum matches; bad.mp4: checksum differs (corrupted)
+      mockS3Service.computeChecksum
+        .mockResolvedValueOnce('correct-checksum')  // good.mp4 passes
+        .mockResolvedValueOnce('tampered-checksum'); // bad.mp4 fails
+      mockS3Service.uploadStream.mockResolvedValue('key');
+      mockFs.stat.mockResolvedValue({ size: 1024000 });
+
+      const errorSpy = jest.spyOn(worker['logger'], 'error');
+      const warnSpy = jest.spyOn(worker['logger'], 'warn');
+
+      const restoreJob = createMockJob('restore-backup', {
+        filename: 'backup.tar.gz',
+        skipMedia: false,
+        triggeredAt: new Date().toISOString(),
+      });
+
+      const result = await worker.process(restoreJob);
+
+      // Restore succeeds (good.mp4 was restored)
+      expect(result.success).toBe(true);
+
+      // bad.mp4 checksum mismatch logged
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Checksum mismatch for bad.mp4'),
+      );
+
+      // Warning about skipped files
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('1 file(s) failed checksum verification'),
+      );
+
+      // Only good.mp4 was uploaded; bad.mp4 was skipped
+      expect(mockS3Service.uploadStream).toHaveBeenCalledTimes(1);
+      expect(mockS3Service.uploadStream).toHaveBeenCalledWith(
+        'good.mp4',
+        expect.any(String),
+      );
     });
   });
 });

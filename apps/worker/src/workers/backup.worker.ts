@@ -32,6 +32,20 @@ interface BackupResult {
   error?: string;
 }
 
+interface MediaManifestEntry {
+  key: string;
+  size: number;
+  checksum: string;
+}
+
+interface MediaManifest {
+  timestamp: string;
+  bucket: string;
+  totalFiles: number;
+  totalBytes: number;
+  files: MediaManifestEntry[];
+}
+
 /**
  * BackupWorker
  *
@@ -41,6 +55,13 @@ interface BackupResult {
  *
  * Uses pg_dump/pg_restore for PostgreSQL operations
  * Creates tar.gz archives in BACKUP_PATH
+ *
+ * Features:
+ * - Streaming downloads/uploads (no full-file memory buffering)
+ * - Configurable max backup size limit (BACKUP_MAX_SIZE_BYTES)
+ * - SHA-256 checksum verification on restore
+ * - Graceful interruption with partial file cleanup
+ * - Progress tracking throughout backup/restore
  */
 @Processor('backup', {
   concurrency: 1, // Only one backup/restore at a time
@@ -49,6 +70,13 @@ export class BackupWorker extends WorkerHost {
   private readonly logger = new Logger(BackupWorker.name);
   private readonly backupPath: string;
   private readonly databaseUrl: string;
+  private readonly maxBackupSizeBytes: number;
+
+  /**
+   * Abort flag for graceful interruption.
+   * Set to true to cancel an ongoing backup/restore cleanly.
+   */
+  private aborted = false;
 
   constructor(
     private readonly configService: ConfigService,
@@ -57,6 +85,13 @@ export class BackupWorker extends WorkerHost {
     super();
     this.backupPath = this.configService.get<string>('BACKUP_PATH') || '/backups';
     this.databaseUrl = this.configService.get<string>('DATABASE_URL') || '';
+
+    // Default: 50 GB max backup size (0 means unlimited)
+    const configuredLimit = this.configService.get<number>('BACKUP_MAX_SIZE_BYTES');
+    this.maxBackupSizeBytes =
+      configuredLimit !== undefined && configuredLimit !== null
+        ? configuredLimit
+        : 50 * 1024 * 1024 * 1024;
 
     if (!this.databaseUrl) {
       this.logger.warn('DATABASE_URL not configured - backup operations will fail');
@@ -67,6 +102,8 @@ export class BackupWorker extends WorkerHost {
    * Main processor method
    */
   async process(job: Job): Promise<BackupResult> {
+    // Reset abort flag for each new job
+    this.aborted = false;
     const startTime = Date.now();
 
     switch (job.name) {
@@ -77,6 +114,16 @@ export class BackupWorker extends WorkerHost {
       default:
         throw new Error(`Unknown job type: ${job.name}`);
     }
+  }
+
+  /**
+   * Signal graceful interruption of any ongoing backup/restore.
+   * The current file in-progress will finish, then the operation stops
+   * and cleans up all partial files.
+   */
+  abort(): void {
+    this.logger.warn('Abort signal received - will stop after current file');
+    this.aborted = true;
   }
 
   /**
@@ -110,8 +157,13 @@ export class BackupWorker extends WorkerHost {
       if (includeMedia) {
         this.logger.log('Step 2: Backing up media files');
         const mediaBackupPath = path.join(tempDir, 'media');
-        await this.backupMedia(mediaBackupPath);
+        await this.backupMedia(mediaBackupPath, job);
         await job.updateProgress(70);
+      }
+
+      // Check for abort before creating final archive
+      if (this.aborted) {
+        throw new Error('Backup aborted by signal');
       }
 
       // Step 3: Create tar.gz archive
@@ -155,8 +207,9 @@ export class BackupWorker extends WorkerHost {
         duration: Date.now() - startTime,
       };
     } finally {
-      // Cleanup temp directory if it still exists
+      // Cleanup temp directory if it still exists (covers abort + error paths)
       if (tempDir) {
+        this.logger.log(`Cleaning up partial temp directory: ${tempDir}`);
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
     }
@@ -203,7 +256,7 @@ export class BackupWorker extends WorkerHost {
         try {
           await fs.access(mediaBackupPath);
           this.logger.log('Step 3: Restoring media files');
-          await this.restoreMedia(mediaBackupPath);
+          await this.restoreMedia(mediaBackupPath, job);
         } catch {
           this.logger.warn('No media directory found in backup, skipping media restore');
         }
@@ -234,8 +287,9 @@ export class BackupWorker extends WorkerHost {
         duration: Date.now() - startTime,
       };
     } finally {
-      // Cleanup temp directory if it still exists
+      // Cleanup temp directory if it still exists (covers abort + error paths)
       if (tempDir) {
+        this.logger.log(`Cleaning up partial temp directory: ${tempDir}`);
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
     }
@@ -302,10 +356,16 @@ export class BackupWorker extends WorkerHost {
   }
 
   /**
-   * Backup media files from MinIO/S3
-   * Lists all objects in S3 bucket and downloads them to local directory
+   * Backup media files from MinIO/S3.
+   *
+   * - Lists all objects in S3 bucket
+   * - Downloads each file using streaming (no full-file memory buffering)
+   * - Enforces configurable max backup size limit
+   * - Computes SHA-256 checksums for later restore verification
+   * - Writes a manifest.json with file metadata and checksums
+   * - Supports graceful interruption via this.aborted flag
    */
-  private async backupMedia(outputPath: string): Promise<void> {
+  private async backupMedia(outputPath: string, job?: Job): Promise<void> {
     this.logger.log(`Backing up media files to: ${outputPath}`);
 
     try {
@@ -321,19 +381,64 @@ export class BackupWorker extends WorkerHost {
 
       this.logger.log(`Found ${objects.length} media files to backup`);
 
+      // Check total size against configured limit
+      const totalSizeEstimate = objects.reduce((sum, obj) => sum + obj.size, 0);
+      if (this.maxBackupSizeBytes > 0 && totalSizeEstimate > this.maxBackupSizeBytes) {
+        throw new Error(
+          `Media backup size (${this.formatSize(totalSizeEstimate)}) exceeds configured ` +
+            `limit of ${this.formatSize(this.maxBackupSizeBytes)}. ` +
+            `Set BACKUP_MAX_SIZE_BYTES to increase or set to 0 to disable.`,
+        );
+      }
+
       let downloadedCount = 0;
       let totalBytes = 0;
+      const manifestFiles: MediaManifestEntry[] = [];
+      const partialFiles: string[] = [];
 
       // Download each object, preserving directory structure
       for (const obj of objects) {
-        try {
-          const targetPath = path.join(outputPath, obj.key);
+        // Check for graceful abort signal
+        if (this.aborted) {
+          this.logger.warn(
+            `Media backup aborted after ${downloadedCount}/${objects.length} files. ` +
+              `Cleaning up ${partialFiles.length} partial file(s).`,
+          );
+          // Clean up any partially downloaded files
+          for (const partialPath of partialFiles) {
+            await fs.rm(partialPath, { force: true }).catch(() => {});
+          }
+          throw new Error('Media backup aborted by signal');
+        }
 
-          // Download file using S3Service
+        const targetPath = path.join(outputPath, obj.key);
+        partialFiles.push(targetPath);
+
+        try {
+          // Stream download directly to disk - no buffering in memory
           await this.s3Service.downloadToPath(obj.key, targetPath);
+
+          // Compute SHA-256 checksum for restore verification
+          const checksum = await this.s3Service.computeChecksum(targetPath);
+
+          manifestFiles.push({
+            key: obj.key,
+            size: obj.size,
+            checksum,
+          });
 
           downloadedCount++;
           totalBytes += obj.size;
+          // Remove from partials now that download is complete
+          partialFiles.pop();
+
+          // Update job progress within media step (40%-70% range)
+          if (job && objects.length > 0) {
+            const mediaProgress = Math.floor((downloadedCount / objects.length) * 100);
+            // Map media progress (0-100) into job progress range (40-70)
+            const jobProgress = 40 + Math.floor((mediaProgress * 30) / 100);
+            await job.updateProgress(jobProgress).catch(() => {});
+          }
 
           // Log progress every 10 files
           if (downloadedCount % 10 === 0) {
@@ -345,6 +450,9 @@ export class BackupWorker extends WorkerHost {
           this.logger.error(
             `Failed to backup file ${obj.key}: ${getErrorMessage(error)}`,
           );
+          // Remove failed partial file
+          await fs.rm(targetPath, { force: true }).catch(() => {});
+          partialFiles.pop();
           // Continue with other files even if one fails
         }
       }
@@ -353,16 +461,13 @@ export class BackupWorker extends WorkerHost {
         `Media backup completed: ${downloadedCount}/${objects.length} files (${this.formatSize(totalBytes)})`,
       );
 
-      // Create manifest file with backup metadata
-      const manifest = {
+      // Write manifest with checksums for later restore verification
+      const manifest: MediaManifest = {
         timestamp: new Date().toISOString(),
         bucket: this.s3Service.getBucket(),
         totalFiles: downloadedCount,
         totalBytes,
-        files: objects.map(obj => ({
-          key: obj.key,
-          size: obj.size,
-        })),
+        files: manifestFiles,
       };
 
       const manifestPath = path.join(outputPath, 'manifest.json');
@@ -376,23 +481,34 @@ export class BackupWorker extends WorkerHost {
   }
 
   /**
-   * Restore media files to MinIO/S3
-   * Uploads all files from backup directory to S3, preserving directory structure
+   * Restore media files to MinIO/S3.
+   *
+   * - Reads manifest.json for file metadata and checksums
+   * - Verifies local file checksums before uploading (detects corruption)
+   * - Uploads all files to S3 using streaming (no full-file memory buffering)
+   * - Logs any files from manifest that are missing in the backup directory
+   * - Supports graceful interruption via this.aborted flag
    */
-  private async restoreMedia(inputPath: string): Promise<void> {
+  private async restoreMedia(inputPath: string, job?: Job): Promise<void> {
     this.logger.log(`Restoring media from: ${inputPath}`);
 
     try {
-      // Check if manifest exists
+      // Load manifest for checksum verification
       const manifestPath = path.join(inputPath, 'manifest.json');
-      let manifest: any = null;
+      let manifest: MediaManifest | null = null;
 
       try {
         const manifestContent = await fs.readFile(manifestPath, 'utf-8');
-        manifest = JSON.parse(manifestContent);
-        this.logger.log(
-          `Found backup manifest: ${manifest.totalFiles} files (${this.formatSize(manifest.totalBytes)})`,
-        );
+        const parsed = JSON.parse(manifestContent) as Partial<MediaManifest>;
+        // Only treat as a valid manifest if it has the required fields
+        if (parsed && Array.isArray(parsed.files)) {
+          manifest = parsed as MediaManifest;
+          this.logger.log(
+            `Found backup manifest: ${manifest.totalFiles} files (${this.formatSize(manifest.totalBytes ?? 0)})`,
+          );
+        } else {
+          this.logger.warn('Manifest exists but has unexpected format, will scan directory for files');
+        }
       } catch {
         this.logger.warn('No manifest found, will scan directory for files');
       }
@@ -401,33 +517,71 @@ export class BackupWorker extends WorkerHost {
       const filesToRestore = await this.getAllFiles(inputPath);
 
       // Filter out manifest.json
-      const mediaFiles = filesToRestore.filter(f => !f.endsWith('manifest.json'));
+      const mediaFiles = filesToRestore.filter((f) => !f.endsWith('manifest.json'));
 
       if (mediaFiles.length === 0) {
         this.logger.log('No media files found in backup directory');
         return;
       }
 
+      // Build checksum lookup from manifest
+      const checksumByKey = new Map<string, string>();
+      if (manifest) {
+        for (const entry of manifest.files) {
+          checksumByKey.set(entry.key, entry.checksum);
+        }
+      }
+
       this.logger.log(`Found ${mediaFiles.length} files to restore`);
 
       let uploadedCount = 0;
       let totalBytes = 0;
+      let checksumMismatches = 0;
 
       // Upload each file to S3
       for (const filePath of mediaFiles) {
+        // Check for graceful abort signal
+        if (this.aborted) {
+          this.logger.warn(
+            `Media restore aborted after ${uploadedCount}/${mediaFiles.length} files.`,
+          );
+          throw new Error('Media restore aborted by signal');
+        }
+
         try {
           // Get relative path from backup directory (this becomes the S3 key)
           const relativePath = path.relative(inputPath, filePath);
           const s3Key = relativePath.replace(/\\/g, '/'); // Normalize path separators
 
-          // Get file stats
+          // Verify checksum before uploading (detects corruption)
+          const expectedChecksum = checksumByKey.get(s3Key);
+          if (expectedChecksum) {
+            const actualChecksum = await this.s3Service.computeChecksum(filePath);
+            if (actualChecksum !== expectedChecksum) {
+              checksumMismatches++;
+              this.logger.error(
+                `Checksum mismatch for ${s3Key}: expected=${expectedChecksum} actual=${actualChecksum}. Skipping.`,
+              );
+              continue;
+            }
+          }
+
+          // Get file stats for progress tracking
           const stats = await fs.stat(filePath);
 
-          // Upload file
-          await this.s3Service.upload(s3Key, filePath);
+          // Stream upload directly from disk - no buffering in memory
+          await this.s3Service.uploadStream(s3Key, filePath);
 
           uploadedCount++;
           totalBytes += stats.size;
+
+          // Update job progress within media restore step (70%-90% range)
+          if (job && mediaFiles.length > 0) {
+            const mediaProgress = Math.floor((uploadedCount / mediaFiles.length) * 100);
+            // Map media progress (0-100) into job progress range (70-90)
+            const jobProgress = 70 + Math.floor((mediaProgress * 20) / 100);
+            await job.updateProgress(jobProgress).catch(() => {});
+          }
 
           // Log progress every 10 files
           if (uploadedCount % 10 === 0) {
@@ -447,16 +601,24 @@ export class BackupWorker extends WorkerHost {
         `Media restore completed: ${uploadedCount}/${mediaFiles.length} files (${this.formatSize(totalBytes)})`,
       );
 
-      // Verify restore if manifest exists
+      if (checksumMismatches > 0) {
+        this.logger.warn(
+          `${checksumMismatches} file(s) failed checksum verification and were skipped`,
+        );
+      }
+
+      // Cross-check against manifest to report missing files
       if (manifest) {
-        const missingFiles = manifest.files.filter((file: any) => {
-          const localPath = path.join(inputPath, file.key);
-          return !mediaFiles.includes(localPath);
-        });
+        const restoredKeys = new Set(
+          mediaFiles.map((f) => path.relative(inputPath, f).replace(/\\/g, '/')),
+        );
+        const missingFiles = manifest.files.filter(
+          (entry) => !restoredKeys.has(entry.key),
+        );
 
         if (missingFiles.length > 0) {
           this.logger.warn(
-            `${missingFiles.length} files from manifest were not found in backup directory`,
+            `${missingFiles.length} file(s) from manifest were not found in backup directory`,
           );
         }
       }
