@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, ConfigField } from '../types/integration.types';
@@ -45,7 +46,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Discord API error: ${response.status} - ${errorText}`);
       }
 
       return {
@@ -114,7 +115,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Discord API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json() as { id: string };
@@ -181,7 +182,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Discord API error: ${response.status} - ${errorText}`);
       }
 
       const data = await response.json() as { id: string };
@@ -206,7 +207,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
 
     if (!response.ok && response.status !== 404) {
       const errorText = await response.text();
-      throw new Error(`Discord API error: ${response.status} - ${errorText}`);
+      throw new ServiceUnavailableException(`Discord API error: ${response.status} - ${errorText}`);
     }
   }
 

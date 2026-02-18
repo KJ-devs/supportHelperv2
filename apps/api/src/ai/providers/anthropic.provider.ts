@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
@@ -68,13 +68,13 @@ export class AnthropicProvider implements AIProvider {
 
       const content = response.content[0];
       if (content.type !== 'text') {
-        throw new Error('Expected text response from Anthropic');
+        throw new ServiceUnavailableException('Expected text response from Anthropic');
       }
 
       // Extract JSON from response (in case it's wrapped in markdown)
       const jsonMatch = content.text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+        throw new ServiceUnavailableException('No JSON found in response');
       }
 
       return JSON.parse(jsonMatch[0]);

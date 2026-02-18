@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { Queue } from 'bullmq';
@@ -64,7 +64,7 @@ export class TicketsAIService {
     });
 
     if (!ticket) {
-      throw new Error('Ticket not found');
+      throw new NotFoundException('Ticket not found');
     }
 
     // Note: pgvector extension needs to be enabled and embedding column indexed

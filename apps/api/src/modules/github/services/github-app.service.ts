@@ -3,6 +3,7 @@ import {
   Logger,
   BadRequestException,
   InternalServerErrorException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
@@ -129,7 +130,7 @@ export class GithubAppService {
       const data = response.data;
 
       if (!data) {
-        throw new Error('Empty response from GitHub API');
+        throw new ServiceUnavailableException('Empty response from GitHub API');
       }
 
       const slug = data.slug ?? this.appName;

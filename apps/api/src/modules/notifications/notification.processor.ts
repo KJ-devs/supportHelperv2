@@ -1,5 +1,5 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
-import { Logger } from '@nestjs/common';
+import { Logger, ServiceUnavailableException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -146,7 +146,7 @@ export class NotificationProcessor extends WorkerHost {
     });
 
     if (result.error) {
-      throw new Error(`Resend error: ${result.error.message}`);
+      throw new ServiceUnavailableException(`Resend error: ${result.error.message}`);
     }
   }
 
@@ -157,7 +157,7 @@ export class NotificationProcessor extends WorkerHost {
   ): Promise<void> {
     const webhookUrl = config.webhookUrl;
     if (!webhookUrl) {
-      throw new Error('webhookUrl not configured in notification preference');
+      throw new InternalServerErrorException('webhookUrl not configured in notification preference');
     }
 
     const payload = {
@@ -178,7 +178,7 @@ export class NotificationProcessor extends WorkerHost {
     });
 
     if (!response.ok) {
-      throw new Error(
+      throw new ServiceUnavailableException(
         `Webhook POST to ${webhookUrl} failed with status ${response.status}`,
       );
     }
@@ -191,7 +191,7 @@ export class NotificationProcessor extends WorkerHost {
   ): Promise<void> {
     const slackWebhookUrl = config.slackWebhookUrl;
     if (!slackWebhookUrl) {
-      throw new Error(
+      throw new InternalServerErrorException(
         'slackWebhookUrl not configured in notification preference',
       );
     }
@@ -251,7 +251,7 @@ export class NotificationProcessor extends WorkerHost {
     });
 
     if (!response.ok) {
-      throw new Error(
+      throw new ServiceUnavailableException(
         `Slack webhook failed with status ${response.status}`,
       );
     }

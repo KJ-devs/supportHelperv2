@@ -2,6 +2,7 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AnthropicClientFactory } from '../../ai-config/anthropic-client.factory';
@@ -280,7 +281,7 @@ export class CodeGenerationAgentService {
     );
 
     if (!textBlock || textBlock.type !== 'text') {
-      throw new Error(
+      throw new ServiceUnavailableException(
         `Claude returned an unexpected response format for ${planFile.filePath}`,
       );
     }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
 
@@ -88,7 +88,7 @@ export class OllamaProvider implements AIProvider {
       });
 
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
       }
 
       const data = (await response.json()) as OllamaChatResponse;
@@ -135,7 +135,7 @@ export class OllamaProvider implements AIProvider {
       });
 
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
       }
 
       const data = (await response.json()) as OllamaChatResponse;
@@ -144,7 +144,7 @@ export class OllamaProvider implements AIProvider {
       // Extract JSON from response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+        throw new ServiceUnavailableException('No JSON found in response');
       }
 
       return JSON.parse(jsonMatch[0]);
@@ -170,7 +170,7 @@ export class OllamaProvider implements AIProvider {
       });
 
       if (!response.ok) {
-        throw new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
       }
 
       const data = (await response.json()) as OllamaEmbeddingResponse;
