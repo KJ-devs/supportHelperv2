@@ -14,7 +14,7 @@ import { StatsCard } from '@/components/analytics/StatsCard';
 import { SimpleBarChart } from '@/components/analytics/SimpleBarChart';
 import { PieChart } from '@/components/analytics/PieChart';
 import { PageLoader, Card, Button, Select, EmptyState } from '@/components/ui';
-import { AlertTriangle, Ticket, ClipboardList, CheckCircle, BarChart3, Target, Tag } from 'lucide-react';
+import { AlertTriangle, Ticket, ClipboardList, CheckCircle, BarChart3 } from 'lucide-react';
 
 export default function AnalyticsPage() {
   const { isLoading: authLoading } = useRequireAuth();
