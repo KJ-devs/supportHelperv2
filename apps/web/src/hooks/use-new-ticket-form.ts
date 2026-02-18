@@ -12,6 +12,9 @@ import type { NewTicketInput } from '@/lib/validations/ticket';
 const DRAFT_STORAGE_KEY = 'new-ticket-draft';
 const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
+// API base URL for direct fetch calls (presigned upload)
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 // Types
 export interface CreateTicketResponse {
   id: string;
@@ -29,7 +32,9 @@ export interface CreateTicketResponse {
 export interface Application {
   id: string;
   name: string;
-  url: string;
+  url?: string;
+  platform?: string;
+  sdkKey?: string;
   createdAt: string;
 }
 
@@ -47,17 +52,29 @@ export interface DuplicateCheckResponse {
   }>;
 }
 
+// Map form type values to API type values
+const TYPE_MAP: Record<string, string> = {
+  bug: 'bug',
+  feature: 'feature_request',
+  ui: 'question', // closest match for UI/UX issues
+  performance: 'performance',
+};
+
 // API functions
+
+/**
+ * Create a ticket via POST /api/tickets
+ * The API uses userContext to store form-specific fields (type, severity, attachments)
+ * since the createTicket schema only exposes title, description, applicationId, reproductionSteps
+ */
 async function createTicket(input: NewTicketInput): Promise<CreateTicketResponse> {
-  // Map the form input to the API's expected format
   const payload = {
     title: input.title,
     description: input.description,
     applicationId: input.applicationId,
     reproductionSteps: input.reproductionSteps.filter(step => step.trim()),
-    // Store type and severity in userContext for now (until API schema is updated)
     userContext: {
-      type: input.type,
+      type: TYPE_MAP[input.type] ?? input.type,
       severity: input.severity,
       attachments: input.attachments.map(a => ({
         id: a.id,
@@ -72,37 +89,131 @@ async function createTicket(input: NewTicketInput): Promise<CreateTicketResponse
   return api.post<CreateTicketResponse>('/api/tickets', payload);
 }
 
+/**
+ * Check for duplicate titles
+ * Falls back gracefully if the endpoint is not available
+ */
 async function checkDuplicateTitle(title: string): Promise<DuplicateCheckResponse> {
   if (!title || title.length < 5) {
     return { isDuplicate: false };
   }
-  return api.post<DuplicateCheckResponse>('/tickets/check-duplicate', { title });
+  try {
+    return await api.post<DuplicateCheckResponse>('/api/tickets/check-duplicate', { title });
+  } catch {
+    // Endpoint may not exist; return safe default
+    return { isDuplicate: false };
+  }
 }
 
+/**
+ * Fetch applications for the current tenant from GET /api/applications
+ * The API returns an array directly (not a paginated wrapper)
+ */
 async function fetchApplications(): Promise<ApplicationsResponse> {
-  return api.get<ApplicationsResponse>('/applications');
+  const apps = await api.get<Application[]>('/api/applications');
+  return { data: Array.isArray(apps) ? apps : [], total: Array.isArray(apps) ? apps.length : 0 };
 }
 
+interface PresignedUrlResponse {
+  mediaId: string;
+  uploadUrl: string;
+  storageKey: string;
+  expiresIn: number;
+  maxSize: number;
+}
+
+interface CompleteUploadResponse {
+  id: string;
+  url?: string;
+  storageKey: string;
+  status: string;
+}
+
+/**
+ * Upload a file using the presigned URL flow:
+ * 1. POST /api/media/presigned-url  -> get uploadUrl + mediaId + storageKey
+ * 2. PUT uploadUrl                   -> upload file directly to S3/MinIO
+ * 3. POST /api/media/complete        -> confirm upload, trigger AI analysis
+ */
 async function uploadFile(file: File): Promise<{ url: string; id: string }> {
-  const formData = new FormData();
-  formData.append('file', file);
+  const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
 
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/uploads`,
-    {
-      method: 'POST',
-      body: formData,
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('accessToken')}`,
-      },
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error('Failed to upload file');
+  // Determine media type
+  let mediaType: 'video' | 'image' | 'screenshot' = 'image';
+  if (file.type.startsWith('video/')) {
+    mediaType = 'video';
+  } else if (file.type.startsWith('image/')) {
+    mediaType = 'image';
   }
 
-  return response.json();
+  // Validate that the file extension is supported
+  const supportedExtensions = /\.(mp4|webm|mov|png|jpg|jpeg|gif)$/i;
+  if (!supportedExtensions.test(file.name)) {
+    throw new Error(
+      `Unsupported file type. Allowed: mp4, webm, mov, png, jpg, jpeg, gif`
+    );
+  }
+
+  // Step 1: Request presigned URL
+  const presignedResponse = await fetch(`${API_URL}/api/media/presigned-url`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      ticketId: '', // Will be linked later; providing empty for standalone uploads
+      type: mediaType,
+      filename: file.name,
+      size: file.size,
+      contentType: file.type,
+    }),
+  });
+
+  if (!presignedResponse.ok) {
+    const error = await presignedResponse.json().catch(() => ({ message: 'Failed to get upload URL' }));
+    throw new Error(error.message || 'Failed to get upload URL');
+  }
+
+  const { mediaId, uploadUrl, storageKey }: PresignedUrlResponse = await presignedResponse.json();
+
+  // Step 2: Upload file directly to S3/MinIO via presigned URL
+  const uploadResponse = await fetch(uploadUrl, {
+    method: 'PUT',
+    body: file,
+    headers: {
+      'Content-Type': file.type,
+    },
+  });
+
+  if (!uploadResponse.ok) {
+    throw new Error('Failed to upload file to storage');
+  }
+
+  // Step 3: Confirm upload completion
+  const completeResponse = await fetch(`${API_URL}/api/media/complete`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      mediaId,
+      storageKey,
+    }),
+  });
+
+  if (!completeResponse.ok) {
+    const error = await completeResponse.json().catch(() => ({ message: 'Failed to complete upload' }));
+    throw new Error(error.message || 'Failed to complete upload');
+  }
+
+  const completeData: CompleteUploadResponse = await completeResponse.json();
+
+  return {
+    id: completeData.id || mediaId,
+    url: completeData.url || storageKey,
+  };
 }
 
 // Hook for creating a ticket with optimistic updates
@@ -148,7 +259,7 @@ export function useCreateTicketMutation() {
       }
       toast({
         title: 'Error creating ticket',
-        description: err instanceof Error ? err.message : 'An error occurred',
+        description: err instanceof Error ? err.message : 'An unexpected error occurred. Please try again.',
         variant: 'destructive',
       });
     },
@@ -156,15 +267,15 @@ export function useCreateTicketMutation() {
       // Clear the draft from localStorage
       clearDraft();
 
-      // Invalidate and refetch
+      // Invalidate and refetch ticket list cache
       queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
 
       toast({
-        title: 'Ticket created!',
-        description: `Ticket "${data.title}" has been created successfully.`,
+        title: 'Ticket created successfully',
+        description: `"${data.title}" has been submitted. Our team will review it shortly.`,
       });
 
-      // Redirect to the new ticket
+      // Redirect to the new ticket detail page
       router.push(`/tickets/${data.id}`);
     },
   });
@@ -190,7 +301,7 @@ export function useApplications() {
   });
 }
 
-// Hook for file uploads
+// Hook for file uploads using the presigned URL flow
 export function useFileUpload() {
   const { toast } = useToast();
 
@@ -199,7 +310,7 @@ export function useFileUpload() {
     onError: err => {
       toast({
         title: 'Upload failed',
-        description: err instanceof Error ? err.message : 'Failed to upload file',
+        description: err instanceof Error ? err.message : 'Failed to upload file. Please try again.',
         variant: 'destructive',
       });
     },
