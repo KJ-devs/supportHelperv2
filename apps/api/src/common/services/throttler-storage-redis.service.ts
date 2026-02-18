@@ -1,4 +1,4 @@
-import { Injectable, OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, OnApplicationShutdown, InternalServerErrorException } from '@nestjs/common';
 import { ThrottlerStorage } from '@nestjs/throttler';
 import { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 import Redis from 'ioredis';
@@ -31,7 +31,7 @@ export class ThrottlerStorageRedisService implements ThrottlerStorage, OnApplica
       .exec();
 
     if (!results) {
-      throw new Error('Redis transaction failed');
+      throw new InternalServerErrorException('Redis transaction failed');
     }
 
     const [[incrErr, totalHits], [pttlErr, timeToExpire]] = results;

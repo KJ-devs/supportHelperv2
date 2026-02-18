@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { encryptAES256GCM, decryptAES256GCM, parseEncryptionKey } from '@support-helper/shared';
 
@@ -11,7 +11,7 @@ export class SsoCryptoService {
     const keyString = this.config.get<string>('INTEGRATION_ENCRYPTION_KEY');
 
     if (!keyString) {
-      throw new Error('INTEGRATION_ENCRYPTION_KEY not configured. SSO requires encryption for secrets.');
+      throw new InternalServerErrorException('INTEGRATION_ENCRYPTION_KEY not configured. SSO requires encryption for secrets.');
     }
 
     this.key = parseEncryptionKey(keyString);

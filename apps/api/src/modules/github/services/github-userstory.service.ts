@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AIService } from '../../../ai/ai.service';
 import { GithubOAuthService } from './github-oauth.service';
@@ -232,7 +232,7 @@ export class GithubUserstoryService {
       // Extract JSON from response (in case wrapped in markdown code blocks)
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in AI response');
+        throw new ServiceUnavailableException('No JSON found in AI response');
       }
 
       const parsed = JSON.parse(jsonMatch[0]);

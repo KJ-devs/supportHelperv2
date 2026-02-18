@@ -1,5 +1,5 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { ValidationPipe, Logger } from '@nestjs/common';
+import { ValidationPipe, Logger, InternalServerErrorException } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
@@ -36,7 +36,7 @@ async function bootstrap() {
   const jwtSecret = config.get<string>('JWT_SECRET');
   const insecureDefault = 'your-super-secret-jwt-key-change-in-production';
   if (nodeEnv === 'production' && (!jwtSecret || jwtSecret === insecureDefault)) {
-    throw new Error(
+    throw new InternalServerErrorException(
       'FATAL: JWT_SECRET is not configured for production. ' +
       'Generate a secure secret with: openssl rand -hex 32',
     );

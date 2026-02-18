@@ -1,3 +1,4 @@
+import { ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { Ticket } from '@prisma/client';
 import { WebClient } from '@slack/web-api';
 import { BaseIntegrationProvider } from './base-provider.abstract';
@@ -33,7 +34,7 @@ export class SlackProvider extends BaseIntegrationProvider {
       const authTest = await client.auth.test();
 
       if (!authTest.ok) {
-        throw new Error('Authentication failed');
+        throw new UnauthorizedException('Authentication failed');
       }
 
       await client.conversations.list({
@@ -114,7 +115,7 @@ export class SlackProvider extends BaseIntegrationProvider {
       });
 
       if (!result.ok) {
-        throw new Error('Failed to post message to Slack');
+        throw new ServiceUnavailableException('Failed to post message to Slack');
       }
 
       return {
@@ -171,7 +172,7 @@ export class SlackProvider extends BaseIntegrationProvider {
       });
 
       if (!result.ok) {
-        throw new Error('Failed to update message in Slack');
+        throw new ServiceUnavailableException('Failed to update message in Slack');
       }
 
       return {
@@ -191,7 +192,7 @@ export class SlackProvider extends BaseIntegrationProvider {
       ts: externalId,
     });
     if (!result.ok) {
-      throw new Error('Failed to delete message from Slack');
+      throw new ServiceUnavailableException('Failed to delete message from Slack');
     }
   }
 
@@ -222,7 +223,7 @@ export class SlackProvider extends BaseIntegrationProvider {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to fetch channel history from Slack');
+          throw new ServiceUnavailableException('Failed to fetch channel history from Slack');
         }
 
         const messages = response.messages || [];

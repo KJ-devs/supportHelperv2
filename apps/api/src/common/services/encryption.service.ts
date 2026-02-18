@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, InternalServerErrorException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
@@ -24,7 +24,7 @@ export class EncryptionService implements OnModuleInit {
     const keyHex = this.config.get<string>('ENCRYPTION_KEY');
 
     if (!keyHex) {
-      throw new Error(
+      throw new InternalServerErrorException(
         'ENCRYPTION_KEY is not configured. ' +
           'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
       );
@@ -32,7 +32,7 @@ export class EncryptionService implements OnModuleInit {
 
     const key = Buffer.from(keyHex, 'hex');
     if (key.length !== 32) {
-      throw new Error(
+      throw new InternalServerErrorException(
         `ENCRYPTION_KEY must be exactly 32 bytes (64 hex chars), got ${key.length} bytes. ` +
           'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
       );
@@ -70,7 +70,7 @@ export class EncryptionService implements OnModuleInit {
   decrypt(encryptedPayload: string): string {
     const parts = encryptedPayload.split(':');
     if (parts.length !== 3) {
-      throw new Error(
+      throw new BadRequestException(
         'Invalid encrypted payload format. Expected iv:authTag:ciphertext',
       );
     }
@@ -81,10 +81,10 @@ export class EncryptionService implements OnModuleInit {
     const ciphertext = Buffer.from(ciphertextB64, 'base64');
 
     if (iv.length !== IV_LENGTH) {
-      throw new Error(`Invalid IV length: expected ${IV_LENGTH}, got ${iv.length}`);
+      throw new BadRequestException(`Invalid IV length: expected ${IV_LENGTH}, got ${iv.length}`);
     }
     if (authTag.length !== AUTH_TAG_LENGTH) {
-      throw new Error(
+      throw new BadRequestException(
         `Invalid auth tag length: expected ${AUTH_TAG_LENGTH}, got ${authTag.length}`,
       );
     }
@@ -109,7 +109,7 @@ export class EncryptionService implements OnModuleInit {
 
     const newKey = Buffer.from(newKeyHex, 'hex');
     if (newKey.length !== 32) {
-      throw new Error('New key must be exactly 32 bytes (64 hex chars)');
+      throw new BadRequestException('New key must be exactly 32 bytes (64 hex chars)');
     }
 
     const iv = randomBytes(IV_LENGTH);
