@@ -9,10 +9,15 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import * as fs from 'fs/promises';
+import { createReadStream, createWriteStream } from 'fs';
 import { getErrorMessage } from '../utils/error.utils';
 import * as path from 'path';
 import * as os from 'os';
-import { Readable } from 'stream';
+import { Readable, pipeline } from 'stream';
+import { promisify } from 'util';
+import * as crypto from 'crypto';
+
+const pipelineAsync = promisify(pipeline);
 
 /**
  * S3 Service
@@ -113,6 +118,34 @@ export class S3Service implements OnModuleInit {
       return key;
     } catch (error) {
       this.logger.error(`Failed to upload ${key}: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Upload file to S3 using streaming (avoids loading large files into memory)
+   */
+  async uploadStream(key: string, filePath: string, contentType?: string): Promise<string> {
+    this.logger.log(`Uploading (stream) to S3: ${key}`);
+
+    try {
+      const stat = await fs.stat(filePath);
+      const readStream = createReadStream(filePath);
+
+      const command = new PutObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        Body: readStream,
+        ContentLength: stat.size,
+        ContentType: contentType,
+      });
+
+      await this.client.send(command);
+
+      this.logger.log(`Uploaded ${key} to S3 via stream`);
+      return key;
+    } catch (error) {
+      this.logger.error(`Failed to stream-upload ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
   }
@@ -252,7 +285,8 @@ export class S3Service implements OnModuleInit {
   }
 
   /**
-   * Download file from S3 to specific path
+   * Download file from S3 to specific path using streaming
+   * Uses Node.js streams pipeline to avoid buffering the entire file in memory
    */
   async downloadToPath(key: string, targetPath: string): Promise<void> {
     this.logger.log(`Downloading ${key} to ${targetPath}`);
@@ -273,21 +307,33 @@ export class S3Service implements OnModuleInit {
       const dir = path.dirname(targetPath);
       await fs.mkdir(dir, { recursive: true });
 
-      // Stream body to file
-      const stream = response.Body as Readable;
-      const chunks: Buffer[] = [];
+      // Stream body to file using pipeline (true streaming, no memory buffering)
+      const readableStream = response.Body as Readable;
+      const writeableStream = createWriteStream(targetPath);
 
-      for await (const chunk of stream) {
-        chunks.push(Buffer.from(chunk));
-      }
-
-      await fs.writeFile(targetPath, Buffer.concat(chunks));
+      await pipelineAsync(readableStream, writeableStream);
 
       this.logger.log(`Downloaded ${key} to ${targetPath}`);
     } catch (error) {
+      // Clean up partial file on error
+      await fs.rm(targetPath, { force: true }).catch(() => {});
       this.logger.error(`Failed to download ${key}: ${getErrorMessage(error)}`);
       throw error;
     }
+  }
+
+  /**
+   * Compute SHA-256 checksum of a local file
+   */
+  async computeChecksum(filePath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha256');
+      const stream = createReadStream(filePath);
+
+      stream.on('data', (chunk) => hash.update(chunk));
+      stream.on('end', () => resolve(hash.digest('hex')));
+      stream.on('error', reject);
+    });
   }
 
   /**
