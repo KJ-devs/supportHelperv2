@@ -108,8 +108,8 @@ export class DlqCleanupService {
       if (job.processedOn && job.processedOn < cutoffDate.getTime()) {
         try {
           // Extract metadata from job data
-          const jobData = job.data as any;
-          const tenantId = jobData.tenantId || null;
+          const jobData = job.data as Record<string, unknown>;
+          const tenantId = (jobData.tenantId as string) || null;
 
           // Archive to database
           await this.prisma.archivedDeadLetterJob.create({

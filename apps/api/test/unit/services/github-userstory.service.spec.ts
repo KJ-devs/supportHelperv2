@@ -130,7 +130,7 @@ describe('GithubUserstoryService', () => {
 
       const result = await service.createUserStoryIssue('ticket-123', 'tenant-123', {
         repository: 'owner/repo',
-      } as any);
+      } as unknown);
 
       expect(mockOctokit.issues.create).toHaveBeenCalled();
       expect(prisma.githubIssue.create).toHaveBeenCalled();
@@ -144,7 +144,7 @@ describe('GithubUserstoryService', () => {
       (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue({ id: 'existing' });
 
       await expect(
-        service.createUserStoryIssue('ticket-123', 'tenant-123', { repository: 'owner/repo' } as any),
+        service.createUserStoryIssue('ticket-123', 'tenant-123', { repository: 'owner/repo' } as unknown),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -154,7 +154,7 @@ describe('GithubUserstoryService', () => {
       (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.createUserStoryIssue('ticket-123', 'tenant-123', { repository: 'invalid' } as any),
+        service.createUserStoryIssue('ticket-123', 'tenant-123', { repository: 'invalid' } as unknown),
       ).rejects.toThrow(BadRequestException);
     });
   });

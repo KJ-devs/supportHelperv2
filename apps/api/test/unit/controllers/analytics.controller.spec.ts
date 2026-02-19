@@ -49,7 +49,7 @@ describe('AnalyticsController', () => {
     it('should return overview with default period', async () => {
       (analyticsService.getOverview as jest.Mock).mockResolvedValue(mockOverview);
 
-      const result = await controller.getOverview('tenant-123', {} as any);
+      const result = await controller.getOverview('tenant-123', {} as unknown);
 
       expect(analyticsService.getOverview).toHaveBeenCalledWith('tenant-123', 'week');
       expect(result).toEqual(mockOverview);
@@ -58,7 +58,7 @@ describe('AnalyticsController', () => {
     it('should return overview with specified period', async () => {
       (analyticsService.getOverview as jest.Mock).mockResolvedValue(mockOverview);
 
-      const result = await controller.getOverview('tenant-123', { period: 'month' } as any);
+      const result = await controller.getOverview('tenant-123', { period: 'month' } as unknown);
 
       expect(analyticsService.getOverview).toHaveBeenCalledWith('tenant-123', 'month');
     });
@@ -68,7 +68,7 @@ describe('AnalyticsController', () => {
     it('should return trends with defaults', async () => {
       (analyticsService.getTrends as jest.Mock).mockResolvedValue(mockTrends);
 
-      const result = await controller.getTrends('tenant-123', {} as any);
+      const result = await controller.getTrends('tenant-123', {} as unknown);
 
       expect(analyticsService.getTrends).toHaveBeenCalledWith('tenant-123', 'week', 30);
       expect(result).toEqual(mockTrends);
@@ -77,7 +77,7 @@ describe('AnalyticsController', () => {
     it('should pass custom period and days', async () => {
       (analyticsService.getTrends as jest.Mock).mockResolvedValue(mockTrends);
 
-      await controller.getTrends('tenant-123', { period: 'day', days: 7 } as any);
+      await controller.getTrends('tenant-123', { period: 'day', days: 7 } as unknown);
 
       expect(analyticsService.getTrends).toHaveBeenCalledWith('tenant-123', 'day', 7);
     });

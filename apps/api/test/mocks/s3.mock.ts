@@ -9,7 +9,7 @@ import { vi } from 'vitest';
 export const mockS3Objects = new Map<string, { body: Buffer; contentType: string }>();
 
 export const mockS3Client = {
-  send: vi.fn().mockImplementation(async (command: any) => {
+  send: vi.fn().mockImplementation(async (command: { input: Record<string, unknown>; constructor: { name: string } }) => {
     const commandName = command.constructor.name;
 
     switch (commandName) {
@@ -31,7 +31,7 @@ export const mockS3Client = {
 
         if (!object) {
           const error = new Error('NoSuchKey');
-          (error as any).name = 'NoSuchKey';
+          (error as unknown as Record<string, string>).name = 'NoSuchKey';
           throw error;
         }
 
@@ -59,7 +59,7 @@ export const mockS3Client = {
 
         if (!object) {
           const error = new Error('NotFound');
-          (error as any).name = 'NotFound';
+          (error as unknown as Record<string, string>).name = 'NotFound';
           throw error;
         }
 

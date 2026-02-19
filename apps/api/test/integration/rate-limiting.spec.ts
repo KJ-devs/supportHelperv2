@@ -37,7 +37,7 @@ describe('Rate Limiting Integration', () => {
       exec: jest.fn(),
       pexpire: jest.fn(),
       quit: jest.fn(),
-    } as any;
+    } as unknown;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

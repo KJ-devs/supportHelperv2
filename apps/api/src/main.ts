@@ -14,7 +14,8 @@ import { validateEnvironmentVariables } from './config/validate-env';
 interface BigInt {
   toJSON(): number;
 }
-BigInt.prototype.toJSON = function () {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+(BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
   return Number(this);
 };
 

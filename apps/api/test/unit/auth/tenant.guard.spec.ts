@@ -11,7 +11,7 @@ describe('TenantGuard', () => {
   beforeEach(async () => {
     reflector = {
       getAllAndOverride: jest.fn(),
-    } as any;
+    } as unknown;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

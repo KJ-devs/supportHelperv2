@@ -40,7 +40,7 @@ describe('VideoAnalysisWorker', () => {
       attemptsMade,
       opts: { attempts: 4 },
       updateProgress: jest.fn().mockResolvedValue(undefined),
-    }) as any;
+    }) as unknown;
 
   const mockKeyframeResult = {
     frames: ['/tmp/frame-0001.png', '/tmp/frame-0002.png', '/tmp/frame-0003.png'],
@@ -719,7 +719,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(null as any);
+      openaiService.analyzeFrames.mockResolvedValue(null as unknown);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();

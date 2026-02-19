@@ -1472,9 +1472,9 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
         ticketId: session.ticketId,
         tenantId: session.ticket.tenantId,
         state: session.status as AgentState,
-        attempts: (session.agentState as any)?.attempts || 0,
-        confidence: (session.agentState as any)?.confidence || 0,
-        context: (session.agentState as any)?.context || { conversation: [] },
+        attempts: (session.agentState as Record<string, unknown>)?.attempts as number || 0,
+        confidence: (session.agentState as Record<string, unknown>)?.confidence as number || 0,
+        context: (session.agentState as Record<string, unknown>)?.context as AgentContextData || { conversation: [] },
         createdAt: session.createdAt,
         updatedAt: session.lastActionAt,
       };
@@ -1520,11 +1520,11 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       throw new Error(`Session ${sessionId} not found`);
     }
 
-    const state = session.agentState as any;
+    const agentState = session.agentState as Record<string, unknown> | null;
     return {
       state: session.status as AgentState,
-      confidence: state?.confidence || 0,
-      attempts: state?.attempts || 0,
+      confidence: (agentState?.confidence as number) || 0,
+      attempts: (agentState?.attempts as number) || 0,
     };
   }
 }

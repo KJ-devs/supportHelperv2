@@ -60,7 +60,7 @@ describe('ApplicationsController', () => {
 
       (applicationsService.create as jest.Mock).mockResolvedValue(mockApplication);
 
-      const result = await controller.create(createDto as any, { user: mockUser } as any);
+      const result = await controller.create(createDto as unknown, { user: mockUser } as unknown);
 
       expect(applicationsService.create).toHaveBeenCalledWith(mockUser.tenantId, createDto);
       expect(result).toEqual(mockApplication);
@@ -71,7 +71,7 @@ describe('ApplicationsController', () => {
     it('should return all applications for tenant', async () => {
       (applicationsService.findByTenant as jest.Mock).mockResolvedValue([mockApplication]);
 
-      const result = await controller.findAll({ user: mockUser } as any);
+      const result = await controller.findAll({ user: mockUser } as unknown);
 
       expect(applicationsService.findByTenant).toHaveBeenCalledWith(mockUser.tenantId);
       expect(result).toHaveLength(1);
@@ -82,7 +82,7 @@ describe('ApplicationsController', () => {
     it('should return a specific application', async () => {
       (applicationsService.findOne as jest.Mock).mockResolvedValue(mockApplication);
 
-      const result = await controller.findOne('app-123', { user: mockUser } as any);
+      const result = await controller.findOne('app-123', { user: mockUser } as unknown);
 
       expect(applicationsService.findOne).toHaveBeenCalledWith('app-123', mockUser.tenantId);
       expect(result).toEqual(mockApplication);
@@ -98,7 +98,7 @@ describe('ApplicationsController', () => {
         name: 'Updated App',
       });
 
-      const result = await controller.update('app-123', updateDto as any, { user: mockUser } as any);
+      const result = await controller.update('app-123', updateDto as unknown, { user: mockUser } as unknown);
 
       expect(applicationsService.update).toHaveBeenCalledWith(
         'app-123',
@@ -115,7 +115,7 @@ describe('ApplicationsController', () => {
         success: true,
       });
 
-      const result = await controller.delete('app-123', { user: mockUser } as any);
+      const result = await controller.delete('app-123', { user: mockUser } as unknown);
 
       expect(applicationsService.delete).toHaveBeenCalledWith('app-123', mockUser.tenantId);
       expect(result).toEqual({ success: true });

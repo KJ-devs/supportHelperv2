@@ -43,7 +43,7 @@ describe('LoggerService', () => {
 
     configService = {
       get: jest.fn(),
-    } as any;
+    } as unknown;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -410,7 +410,7 @@ describe('LoggerService', () => {
   describe('flush', () => {
     it('should flush logtail when enabled', async () => {
       const mockFlush = jest.fn().mockResolvedValue(undefined);
-      (service as any).logtail = { flush: mockFlush };
+      (service as unknown).logtail = { flush: mockFlush };
 
       await service.flush();
 
@@ -418,7 +418,7 @@ describe('LoggerService', () => {
     });
 
     it('should not throw when logtail is not enabled', async () => {
-      (service as any).logtail = null;
+      (service as unknown).logtail = null;
 
       await expect(service.flush()).resolves.not.toThrow();
     });

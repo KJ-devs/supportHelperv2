@@ -45,13 +45,13 @@ export class MetricsInterceptor implements NestInterceptor {
     request: Request,
     response: Response,
     startTime: number,
-    error?: any,
+    error?: { status?: number; constructor?: { name?: string }; code?: string },
   ): void {
     const durationSeconds = (Date.now() - startTime) / 1000;
     const method = request.method;
     const route = this.getRoute(request);
     const statusCode = error ? error.status || 500 : response.statusCode;
-    const tenantId = (request as any).user?.tenantId;
+    const tenantId = (request as Request & { user?: { tenantId?: string } }).user?.tenantId;
 
     this.metricsService.httpRequestsInFlight.dec();
     this.metricsService.recordHttpRequest(method, route, statusCode, durationSeconds, tenantId);

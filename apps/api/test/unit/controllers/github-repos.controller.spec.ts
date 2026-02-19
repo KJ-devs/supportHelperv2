@@ -50,7 +50,7 @@ describe('GithubReposController', () => {
 
   describe('listRepositories (POST)', () => {
     it('should call reposService.listRepositories with query', async () => {
-      const query = { page: 1, perPage: 30 } as any;
+      const query = { page: 1, perPage: 30 } as unknown;
       const mockResponse = { repositories: [mockRepo], total: 1, page: 1, hasMore: false };
       (reposService.listRepositories as jest.Mock).mockResolvedValue(mockResponse);
 
@@ -63,7 +63,7 @@ describe('GithubReposController', () => {
 
   describe('listRepositoriesGet (GET)', () => {
     it('should call reposService.listRepositories via GET', async () => {
-      const query = { page: 2 } as any;
+      const query = { page: 2 } as unknown;
       const mockResponse = { repositories: [], total: 0, page: 2, hasMore: false };
       (reposService.listRepositories as jest.Mock).mockResolvedValue(mockResponse);
 

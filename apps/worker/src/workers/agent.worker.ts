@@ -20,6 +20,41 @@ import { AgentService } from '../services/agent.service';
 import { GitAutomationService } from '../services/git-automation.service';
 import { PullRequestService } from '../services/pull-request.service';
 
+
+/** Typed representation of the action plan stored in agentTask.actionPlan (Prisma JSON) */
+interface ActionPlan {
+  summary: string;
+  rootCause: string;
+  files: Array<{
+    filePath: string;
+    operation: 'modify' | 'create' | 'delete';
+    description: string;
+    changeType: string;
+    order?: number;
+  }>;
+  testingStrategy?: string;
+  risks?: string[];
+  estimatedComplexity: string;
+}
+
+/** Typed representation of settings stored in ProjectGithubConfig.settings (Prisma JSON) */
+interface GitSettings {
+  branchFormat?: string;
+  commitAuthor?: { name?: string; email?: string };
+  reviewers?: string[];
+  autoLabel?: boolean;
+  agentMode?: string;
+}
+
+/** Typed log entry stored in agentTask.executionLog (Prisma JSON) */
+interface ExecutionLogEntry {
+  step: string;
+  timestamp?: string;
+  message?: string;
+  files?: Array<{ filePath: string; content: string; operation: 'modify' | 'create' | 'delete' }>;
+  [key: string]: unknown;
+}
+
 /**
  * Agent Function Tools for GPT-4o function calling
  */
@@ -519,7 +554,7 @@ Be precise and structured in your analysis.`,
     // Get full details of similar tickets
     const similarTicketDetails = await this.prisma.ticket.findMany({
       where: {
-        id: { in: similarTickets.hits.map((h: any) => h.id) },
+        id: { in: similarTickets.hits.map((h: { id: string }) => h.id) },
       },
     });
 
@@ -561,7 +596,7 @@ Please suggest a solution based on how similar issues were resolved.`,
     if (job.data.sessionId) {
       await this.storeAgentSession(ticketId, job.data.sessionId, {
         type: 'suggest-solution',
-        similarTickets: similarTickets.hits.map((h: any) => h.id),
+        similarTickets: similarTickets.hits.map((h: { id: string }) => h.id),
         suggestion: response.content,
       });
     }
@@ -1093,7 +1128,7 @@ Keep responses concise but thorough.`,
       await this.prisma.agentTask.update({
         where: { id: agentTaskId },
         data: {
-          actionPlan: actionPlan as any,
+          actionPlan: JSON.parse(JSON.stringify(actionPlan)),
           status: 'plan_pending_review',
           reviewRequestedAt: new Date(),
         },
@@ -1110,7 +1145,7 @@ Keep responses concise but thorough.`,
       await this.prisma.agentTask.update({
         where: { id: agentTaskId },
         data: {
-          actionPlan: actionPlan as any,
+          actionPlan: JSON.parse(JSON.stringify(actionPlan)),
           status: 'plan_approved',
         },
       });
@@ -1154,7 +1189,7 @@ Keep responses concise but thorough.`,
         filesCount: actionPlan.files.length,
         complexity: actionPlan.estimatedComplexity,
         needsReview: needsPlanReview,
-      } as any,
+      },
     };
   }
 
@@ -1221,7 +1256,7 @@ Keep responses concise but thorough.`,
       }
 
       // 3. Get action plan from agentTask
-      const actionPlan = agentTask.actionPlan as any;
+      const actionPlan = agentTask.actionPlan as unknown as ActionPlan | null;
       if (!actionPlan?.files?.length) {
         await this.setAgentTaskError(agentTaskId, 'No action plan files found. Generate an action plan first.');
         throw new Error('No action plan files found');
@@ -1419,20 +1454,20 @@ Keep responses concise but thorough.`,
               where: { id: agentTaskId },
               select: { executionLog: true },
             })
-          )?.executionLog as any[]
+          )?.executionLog as ExecutionLogEntry[] | null
         ) || [];
 
         await this.prisma.agentTask.update({
           where: { id: agentTaskId },
           data: {
-            executionLog: [
+            executionLog: JSON.parse(JSON.stringify([
               ...currentLog,
               {
                 step: 'generated_files_snapshot',
                 timestamp: new Date().toISOString(),
                 files: generatedFiles,
               },
-            ],
+            ])),
           },
         });
 
@@ -1449,7 +1484,7 @@ Keep responses concise but thorough.`,
             agentTaskId,
             filesCount: generatedFiles.length,
             needsReview: true,
-          } as any,
+          },
         };
       }
 
@@ -1460,7 +1495,7 @@ Keep responses concise but thorough.`,
       });
 
       // Read settings from ProjectGithubConfig
-      const gitSettings = (githubConfig.settings as any) || {};
+      const gitSettings = (githubConfig.settings as unknown as GitSettings) || {};
 
       // 7. Create branch via GitAutomationService
       const { branchName, baseSha } = await this.gitAutomationService.createBranch({
@@ -1572,7 +1607,7 @@ Keep responses concise but thorough.`,
           prUrl: prResult.prUrl,
           prNumber: prResult.prNumber,
           branchName,
-        } as any,
+        },
       };
     } catch (error) {
       // Set task to failed if not already set
@@ -1613,7 +1648,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     file: { filePath: string; operation: string; description: string; changeType: string },
     currentContent: string,
     codeContext: Array<{ filePath: string; content: string; language: string; distance: number }>,
-    actionPlan: { summary: string; rootCause: string; files: any[]; testingStrategy: string },
+    actionPlan: { summary: string; rootCause: string; files: Array<{ filePath: string; operation: string; description: string; changeType: string }>; testingStrategy?: string },
     ciErrorLog?: string | null,
   ): string {
     const parts: string[] = [];
@@ -1744,7 +1779,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       }
 
       // 3. Retrieve generated files from execution log snapshot
-      const executionLog = (agentTask.executionLog as any[]) || [];
+      const executionLog = (agentTask.executionLog as ExecutionLogEntry[] | null) || [];
       const snapshot = executionLog
         .reverse()
         .find((entry) => entry.step === 'generated_files_snapshot');
@@ -1775,8 +1810,8 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       }
 
       const octokit = new Octokit({ auth: connection.accessToken });
-      const actionPlan = agentTask.actionPlan as any;
-      const gitSettings = (githubConfig.settings as any) || {};
+      const actionPlan = agentTask.actionPlan as unknown as ActionPlan | null;
+      const gitSettings = (githubConfig.settings as unknown as GitSettings) || {};
 
       // 5. Create branch
       const { branchName, baseSha } = await this.gitAutomationService.createBranch({
@@ -1886,7 +1921,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
           prUrl: prResult.prUrl,
           prNumber: prResult.prNumber,
           branchName,
-        } as any,
+        },
       };
     } catch (error) {
       const currentTask = await this.prisma.agentTask.findUnique({

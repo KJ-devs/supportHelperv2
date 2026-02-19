@@ -87,9 +87,9 @@ describe('AutoResponseService', () => {
     };
 
     it('should handle ticket merged successfully', async () => {
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as unknown);
       jest.spyOn(resolutionSummaryService, 'generateResolutionSummary').mockResolvedValue(mockSummary);
-      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as any);
+      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as unknown);
       jest.spyOn(notificationService, 'dispatchNotification').mockResolvedValue(undefined);
       jest.spyOn(ticketTimelineService, 'recordEvent').mockResolvedValue(undefined);
 
@@ -144,9 +144,9 @@ describe('AutoResponseService', () => {
       jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue({
         ...mockTicket,
         agentTasks: [],
-      } as any);
+      } as unknown);
       jest.spyOn(resolutionSummaryService, 'generateResolutionSummary').mockResolvedValue(mockSummary);
-      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as any);
+      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as unknown);
 
       const prDetails = {
         prNumber: 99,

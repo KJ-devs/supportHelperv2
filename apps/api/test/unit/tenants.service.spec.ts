@@ -57,7 +57,7 @@ describe('TenantsService', () => {
         slug: 'test-tenant',
         plan: 'free',
         settings: { rateLimits: customLimits },
-      } as any);
+      } as unknown);
 
       const result = await service.getRateLimits(tenantId);
 
@@ -73,7 +73,7 @@ describe('TenantsService', () => {
         slug: 'test-tenant',
         plan: 'pro',
         settings: {},
-      } as any);
+      } as unknown);
 
       const result = await service.getRateLimits(tenantId);
 
@@ -89,7 +89,7 @@ describe('TenantsService', () => {
         slug: 'test-tenant',
         plan: 'unknown-plan',
         settings: {},
-      } as any);
+      } as unknown);
 
       const result = await service.getRateLimits(tenantId);
 
@@ -121,8 +121,8 @@ describe('TenantsService', () => {
         },
       };
 
-      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as any);
-      prismaService.tenant.update.mockResolvedValue(existingTenant as any);
+      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as unknown);
+      prismaService.tenant.update.mockResolvedValue(existingTenant as unknown);
 
       const newLimits = {
         requestsPerMinute: 100,
@@ -160,8 +160,8 @@ describe('TenantsService', () => {
         },
       };
 
-      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as any);
-      prismaService.tenant.update.mockResolvedValue(existingTenant as any);
+      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as unknown);
+      prismaService.tenant.update.mockResolvedValue(existingTenant as unknown);
 
       const newLimits = {
         requestsPerMinute: 500,
@@ -190,8 +190,8 @@ describe('TenantsService', () => {
         },
       };
 
-      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as any);
-      prismaService.tenant.update.mockResolvedValue(existingTenant as any);
+      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as unknown);
+      prismaService.tenant.update.mockResolvedValue(existingTenant as unknown);
 
       const result = await service.resetRateLimits(tenantId);
 
@@ -217,8 +217,8 @@ describe('TenantsService', () => {
         settings: {},
       };
 
-      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as any);
-      prismaService.tenant.update.mockResolvedValue(existingTenant as any);
+      prismaService.tenant.findUnique.mockResolvedValue(existingTenant as unknown);
+      prismaService.tenant.update.mockResolvedValue(existingTenant as unknown);
 
       const result = await service.resetRateLimits(tenantId);
 

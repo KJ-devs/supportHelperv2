@@ -57,7 +57,7 @@ describe('TicketGithubController', () => {
 
   describe('createIssue', () => {
     it('should create GitHub issue from ticket', async () => {
-      const dto = { repository: 'owner/repo', title: 'Bug' } as any;
+      const dto = { repository: 'owner/repo', title: 'Bug' } as unknown;
       (issuesService.createIssueFromTicket as jest.Mock).mockResolvedValue(mockIssueResponse);
 
       const result = await controller.createIssue('tenant-123', 'ticket-123', dto);
@@ -132,7 +132,7 @@ describe('TicketGithubController', () => {
 
   describe('createUserStory', () => {
     it('should create user story issue from ticket', async () => {
-      const dto = { repository: 'owner/repo' } as any;
+      const dto = { repository: 'owner/repo' } as unknown;
       const mockResult = {
         issue: mockIssueResponse,
         userStory: { title: 'As a user...', acceptanceCriteria: [] },

@@ -38,7 +38,7 @@ describe('CorrelationIdMiddleware', () => {
 
       middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect((mockRequest as any).correlationId).toBe(existingId);
+      expect((mockRequest as unknown).correlationId).toBe(existingId);
       expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', existingId);
       expect(mockNext).toHaveBeenCalled();
     });
@@ -54,7 +54,7 @@ describe('CorrelationIdMiddleware', () => {
 
       middleware.use(mockRequest, mockResponse, mockNext);
 
-      expect((mockRequest as any).correlationId).toBe('generated-uuid-1234');
+      expect((mockRequest as unknown).correlationId).toBe('generated-uuid-1234');
       expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', 'generated-uuid-1234');
       expect(mockNext).toHaveBeenCalled();
     });
@@ -120,7 +120,7 @@ describe('CorrelationIdMiddleware', () => {
       middleware.use(mockRequest, mockResponse, mockNext);
 
       // Should generate new ID since lowercase header is not found
-      expect((mockRequest as any).correlationId).toBe('generated-uuid-1234');
+      expect((mockRequest as unknown).correlationId).toBe('generated-uuid-1234');
     });
 
     it('should handle empty correlation ID header', () => {
@@ -137,7 +137,7 @@ describe('CorrelationIdMiddleware', () => {
       middleware.use(mockRequest, mockResponse, mockNext);
 
       // Empty string is falsy, should generate new ID
-      expect((mockRequest as any).correlationId).toBe('generated-uuid-1234');
+      expect((mockRequest as unknown).correlationId).toBe('generated-uuid-1234');
     });
 
     it('should run next callback with correlation ID context', () => {
@@ -172,7 +172,7 @@ describe('CorrelationIdMiddleware', () => {
       middleware.use(mockRequest, mockResponse, mockNext);
 
       // Verify both request and response have the same correlation ID
-      expect((mockRequest as any).correlationId).toBe(correlationId);
+      expect((mockRequest as unknown).correlationId).toBe(correlationId);
       expect(mockResponse.setHeader).toHaveBeenCalledWith('x-correlation-id', correlationId);
     });
   });

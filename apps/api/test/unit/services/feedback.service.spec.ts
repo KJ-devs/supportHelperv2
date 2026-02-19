@@ -52,7 +52,7 @@ describe('FeedbackService', () => {
       (prisma.classificationFeedback.create as jest.Mock).mockResolvedValue(mockFeedback);
 
       const dto = { ticketId: 'ticket-123', field: 'severity', originalValue: 'low', correctedValue: 'high' };
-      const result = await service.create('tenant-123', 'user-123', dto as any);
+      const result = await service.create('tenant-123', 'user-123', dto as unknown);
 
       expect(prisma.ticket.findFirst).toHaveBeenCalledWith({ where: { id: 'ticket-123', tenantId: 'tenant-123' } });
       expect(prisma.classificationFeedback.create).toHaveBeenCalled();
@@ -62,7 +62,7 @@ describe('FeedbackService', () => {
     it('should throw NotFoundException when ticket not found', async () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.create('tenant-123', 'user-123', { ticketId: 'missing' } as any)).rejects.toThrow(NotFoundException);
+      await expect(service.create('tenant-123', 'user-123', { ticketId: 'missing' } as unknown)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -104,7 +104,7 @@ describe('FeedbackService', () => {
       (prisma.classificationFeedback.findFirst as jest.Mock).mockResolvedValue(mockFeedback);
       (prisma.classificationFeedback.update as jest.Mock).mockResolvedValue({ ...mockFeedback, correctedValue: 'critical' });
 
-      const result = await service.update('fb-123', 'tenant-123', { correctedValue: 'critical' } as any);
+      const result = await service.update('fb-123', 'tenant-123', { correctedValue: 'critical' } as unknown);
 
       expect(result.correctedValue).toBe('critical');
     });

@@ -149,7 +149,7 @@ describe('IntegrationsService', () => {
         config: {},
       };
 
-      await expect(service.create(mockTenantId, dto as any)).rejects.toThrow(BadRequestException);
+      await expect(service.create(mockTenantId, dto as unknown)).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException for invalid config', async () => {

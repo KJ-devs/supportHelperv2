@@ -12,7 +12,7 @@ describe('ApiKeyStrategy', () => {
   beforeEach(async () => {
     authService = {
       validateApiKey: jest.fn(),
-    } as any;
+    } as unknown as jest.Mocked<AuthService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,9 +51,9 @@ describe('ApiKeyStrategy', () => {
         headers: {
           'x-api-key': 'test-api-key',
         },
-      } as any as Request;
+      } as unknown as Request;
 
-      authService.validateApiKey.mockResolvedValue(mockApplication as any);
+      authService.validateApiKey.mockResolvedValue(mockApplication as unknown as ApplicationEntity);
 
       const result = await strategy.validate(req);
 
@@ -66,9 +66,9 @@ describe('ApiKeyStrategy', () => {
         headers: {
           'x-sdk-key': 'test-sdk-key',
         },
-      } as any as Request;
+      } as unknown as Request;
 
-      authService.validateApiKey.mockResolvedValue(mockApplication as any);
+      authService.validateApiKey.mockResolvedValue(mockApplication as unknown as ApplicationEntity);
 
       const result = await strategy.validate(req);
 
@@ -82,9 +82,9 @@ describe('ApiKeyStrategy', () => {
           'x-api-key': 'api-key-value',
           'x-sdk-key': 'sdk-key-value',
         },
-      } as any as Request;
+      } as unknown as Request;
 
-      authService.validateApiKey.mockResolvedValue(mockApplication as any);
+      authService.validateApiKey.mockResolvedValue(mockApplication as unknown as ApplicationEntity);
 
       await strategy.validate(req);
 
@@ -94,7 +94,7 @@ describe('ApiKeyStrategy', () => {
     it('should throw UnauthorizedException when no API key provided', async () => {
       const req = {
         headers: {},
-      } as any as Request;
+      } as unknown as Request;
 
       await expect(strategy.validate(req)).rejects.toThrow(
         new UnauthorizedException('API key is required')
@@ -108,9 +108,9 @@ describe('ApiKeyStrategy', () => {
         headers: {
           'x-api-key': 'invalid-key',
         },
-      } as any as Request;
+      } as unknown as Request;
 
-      authService.validateApiKey.mockResolvedValue(null as any);
+      authService.validateApiKey.mockResolvedValue(null as unknown as ApplicationEntity);
 
       await expect(strategy.validate(req)).rejects.toThrow(
         new UnauthorizedException('Invalid API key')
@@ -124,7 +124,7 @@ describe('ApiKeyStrategy', () => {
         headers: {
           'x-api-key': '',
         },
-      } as any as Request;
+      } as unknown as Request;
 
       await expect(strategy.validate(req)).rejects.toThrow(
         new UnauthorizedException('API key is required')
@@ -144,9 +144,9 @@ describe('ApiKeyStrategy', () => {
         headers: {
           'x-api-key': 'test-api-key',
         },
-      } as any as Request;
+      } as unknown as Request;
 
-      authService.validateApiKey.mockResolvedValue(appWithoutTenant as any);
+      authService.validateApiKey.mockResolvedValue(appWithoutTenant as unknown as ApplicationEntity);
 
       const result = await strategy.validate(req);
 

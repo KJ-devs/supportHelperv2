@@ -19,7 +19,10 @@ describe('AIService', () => {
 
   describe('when OpenAI is configured', () => {
     beforeEach(async () => {
-      mockCreate.mockReset();
+      mockProvider = createMockProvider();
+      mockProviderFactory = {
+        create: jest.fn().mockReturnValue(mockProvider),
+      } as unknown;
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [

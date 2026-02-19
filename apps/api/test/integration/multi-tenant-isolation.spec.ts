@@ -243,7 +243,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         limit: 20,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].tenantId).toBe(tenantA);
@@ -267,7 +267,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
         search: 'bug',
-      } as any);
+      } as unknown);
 
       expect(result.data).toHaveLength(1);
       expect(result.data[0].tenantId).toBe(tenantA);
@@ -410,7 +410,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         limit: 100,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       // Verify no tenant B data leaked
       const hasTenantBData = ticketsResult.data.some((ticket: any) => ticket.tenantId === tenantB);
@@ -432,7 +432,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
         status: 'new',
-      } as any);
+      } as unknown);
 
       // Verify query included BOTH tenant and status filters
       expect(prisma.ticket.findMany).toHaveBeenCalledWith(
@@ -455,7 +455,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
         severity: 'critical',
-      } as any);
+      } as unknown);
 
       // Verify tenant filter is always present
       expect(prisma.ticket.findMany).toHaveBeenCalledWith(
@@ -519,7 +519,7 @@ describe('Multi-Tenant Isolation Integration', () => {
         limit: 20,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       expect(prisma.ticket.findMany).toHaveBeenCalledWith(
         expect.objectContaining({

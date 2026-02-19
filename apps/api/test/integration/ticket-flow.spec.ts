@@ -181,8 +181,8 @@ describe('Ticket Flow Integration', () => {
           keywords: ['mobile', 'login', 'button', 'touch'],
           processedAt: '2026-02-01T12:00:00Z',
         },
-        type: 'bug' as any,
-        severity: 'high' as any,
+        type: 'bug' as unknown,
+        severity: 'high' as unknown,
       });
 
       expect(result.aiSummary).toBe(
@@ -208,7 +208,7 @@ describe('Ticket Flow Integration', () => {
       prisma.ticket.update.mockResolvedValue(resolvedTicket);
 
       const result = await ticketsService.update('ticket-001', tenantId, {
-        status: 'resolved' as any,
+        status: 'resolved' as unknown,
       });
 
       expect(result.status).toBe('resolved');
@@ -244,7 +244,7 @@ describe('Ticket Flow Integration', () => {
       prisma.ticket.update.mockResolvedValue(reopenedTicket);
 
       const result = await ticketsService.update('ticket-001', tenantId, {
-        status: 'in_progress' as any,
+        status: 'in_progress' as unknown,
       });
 
       expect(result.status).toBe('in_progress');
@@ -283,7 +283,7 @@ describe('Ticket Flow Integration', () => {
       });
       await ticketsService.update('ticket-001', tenantId, {
         aiSummary: 'AI summary',
-        severity: 'high' as any,
+        severity: 'high' as unknown,
       });
 
       // Step 3: Assign to user
@@ -314,7 +314,7 @@ describe('Ticket Flow Integration', () => {
         assignee,
       });
       const resolved = await ticketsService.update('ticket-001', tenantId, {
-        status: 'resolved' as any,
+        status: 'resolved' as unknown,
       });
       expect(resolved.status).toBe('resolved');
 
@@ -355,7 +355,7 @@ describe('Ticket Flow Integration', () => {
         limit: 3,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       expect(result.data).toHaveLength(3);
       expect(result.pagination.total).toBe(25);
@@ -373,7 +373,7 @@ describe('Ticket Flow Integration', () => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
         status: 'resolved',
-      } as any);
+      } as unknown);
 
       expect(prisma.ticket.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -397,7 +397,7 @@ describe('Ticket Flow Integration', () => {
         limit: 20,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       expect(result).toEqual(cachedResult);
       // Prisma should not have been called
@@ -414,7 +414,7 @@ describe('Ticket Flow Integration', () => {
         sortBy: 'createdAt',
         sortOrder: 'desc',
         search: 'login',
-      } as any);
+      } as unknown);
 
       // Cache should not be checked for search queries
       // But Prisma should be called
@@ -451,7 +451,7 @@ describe('Ticket Flow Integration', () => {
         limit: 20,
         sortBy: 'createdAt',
         sortOrder: 'desc',
-      } as any);
+      } as unknown);
 
       expect(prisma.ticket.findMany).toHaveBeenCalledWith(
         expect.objectContaining({
