@@ -243,6 +243,16 @@ export default function TicketsPage() {
     }
   };
 
+  // Determine empty state based on search/filters
+  const hasActiveFilters =
+    filters.search ||
+    filters.status !== 'all' ||
+    filters.priority !== 'all' ||
+    filters.type !== 'all' ||
+    filters.assigneeId !== 'all' ||
+    filters.dateRange.from ||
+    filters.dateRange.to;
+
   return (
     <div className="flex h-full flex-col lg:flex-row">
       {/* Main content */}

@@ -16,6 +16,19 @@ jest.mock('openai', () => {
   };
 });
 
+// Mocks for nodemailer transport methods — reassigned per test
+const mockVerify = jest.fn();
+const mockSendMail = jest.fn();
+const mockClose = jest.fn();
+
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn().mockImplementation(() => ({
+    verify: mockVerify,
+    sendMail: mockSendMail,
+    close: mockClose,
+  })),
+}));
+
 describe('SetupService', () => {
   let service: SetupService;
   let prismaService: jest.Mocked<PrismaService>;
@@ -225,6 +238,241 @@ describe('SetupService', () => {
           value: { completed: true },
         },
       });
+    });
+  });
+
+  describe('testSmtp', () => {
+    const validDto = {
+      host: 'smtp.example.com',
+      port: 587,
+      username: 'user@example.com',
+      password: 'secret',
+      fromEmail: 'noreply@example.com',
+      secure: false,
+    };
+
+    beforeEach(() => {
+      mockVerify.mockReset();
+      mockSendMail.mockReset();
+      mockClose.mockReset();
+    });
+
+    it('should return success when SMTP connection and test email both succeed', async () => {
+      mockVerify.mockResolvedValue(true);
+      mockSendMail.mockResolvedValue({ messageId: 'test-id' });
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result).toEqual({ success: true });
+      expect(mockVerify).toHaveBeenCalledTimes(1);
+      expect(mockSendMail).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: validDto.fromEmail,
+          to: validDto.fromEmail,
+          subject: 'Support Helper - SMTP Test',
+        }),
+      );
+      expect(mockClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return success even when test email send fails after connection succeeds', async () => {
+      mockVerify.mockResolvedValue(true);
+      mockSendMail.mockRejectedValue(new Error('Send quota exceeded'));
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result).toEqual({ success: true });
+      expect(mockClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return failure with missing-field error when host is absent', async () => {
+      const result = await service.testSmtp({
+        ...validDto,
+        host: '',
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Missing required SMTP configuration fields',
+      });
+      expect(mockVerify).not.toHaveBeenCalled();
+    });
+
+    it('should return failure with missing-field error when fromEmail is absent', async () => {
+      const result = await service.testSmtp({
+        ...validDto,
+        fromEmail: '',
+      });
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Missing required SMTP configuration fields',
+      });
+    });
+
+    it('should return failure with missing-field error when port is 0 (falsy)', async () => {
+      // Port 0 is falsy, so the missing-field guard triggers before the range check
+      const result = await service.testSmtp({ ...validDto, port: 0 });
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Missing required SMTP configuration fields',
+      });
+    });
+
+    it('should return failure with invalid-port error when port exceeds 65535', async () => {
+      const result = await service.testSmtp({ ...validDto, port: 70000 });
+
+      expect(result).toEqual({
+        success: false,
+        error: 'Invalid SMTP port number',
+      });
+    });
+
+    it('should return timeout error message for ETIMEDOUT', async () => {
+      const err = Object.assign(new Error('Connection timed out'), { code: 'ETIMEDOUT' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/timed out/i);
+      expect(mockClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('should return timeout error message for ESOCKET', async () => {
+      const err = Object.assign(new Error('Socket error'), { code: 'ESOCKET' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/timed out/i);
+    });
+
+    it('should return connection refused error message for ECONNREFUSED', async () => {
+      const err = Object.assign(new Error('Connection refused'), { code: 'ECONNREFUSED' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/connection refused/i);
+    });
+
+    it('should return hostname-not-found error message for ENOTFOUND', async () => {
+      const err = Object.assign(new Error("getaddrinfo ENOTFOUND 'smtp.bad-host.com'"), { code: 'ENOTFOUND' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/hostname not found/i);
+    });
+
+    it('should return auth failed error message for EAUTH code', async () => {
+      const err = Object.assign(new Error('535 Authentication failed'), { code: 'EAUTH' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/authentication failed/i);
+    });
+
+    it('should return auth failed error message when message contains "Invalid login"', async () => {
+      const err = Object.assign(new Error('535 Invalid login'), { code: undefined });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/authentication failed/i);
+    });
+
+    it('should return TLS certificate error message for self-signed certificate', async () => {
+      const err = Object.assign(new Error('self-signed certificate in chain'), { code: undefined });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/TLS certificate error/i);
+    });
+
+    it('should return TLS certificate error message for UNABLE_TO_VERIFY_LEAF_SIGNATURE', async () => {
+      const err = Object.assign(new Error('UNABLE_TO_VERIFY_LEAF_SIGNATURE'), { code: undefined });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/TLS certificate error/i);
+    });
+
+    it('should return connection reset error message for ECONNRESET', async () => {
+      const err = Object.assign(new Error('read ECONNRESET'), { code: 'ECONNRESET' });
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/reset by the server/i);
+    });
+
+    it('should return raw error message for unrecognised errors', async () => {
+      const err = new Error('Unexpected SMTP server error');
+      mockVerify.mockRejectedValue(err);
+
+      const result = await service.testSmtp(validDto);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe('Unexpected SMTP server error');
+    });
+
+    it('should create transport with correct options including 10-second timeouts', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nodemailer = require('nodemailer') as { createTransport: jest.Mock };
+      mockVerify.mockResolvedValue(true);
+      mockSendMail.mockResolvedValue({});
+
+      await service.testSmtp(validDto);
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({
+          host: validDto.host,
+          port: validDto.port,
+          connectionTimeout: 10_000,
+          greetingTimeout: 10_000,
+          socketTimeout: 10_000,
+        }),
+      );
+    });
+
+    it('should omit auth when no username is provided', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nodemailer = require('nodemailer') as { createTransport: jest.Mock };
+      mockVerify.mockResolvedValue(true);
+      mockSendMail.mockResolvedValue({});
+
+      await service.testSmtp({ ...validDto, username: undefined, password: undefined });
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({ auth: undefined }),
+      );
+    });
+
+    it('should default secure to true when port is 465 and secure is not set', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const nodemailer = require('nodemailer') as { createTransport: jest.Mock };
+      mockVerify.mockResolvedValue(true);
+      mockSendMail.mockResolvedValue({});
+
+      await service.testSmtp({ ...validDto, port: 465, secure: undefined });
+
+      expect(nodemailer.createTransport).toHaveBeenCalledWith(
+        expect.objectContaining({ secure: true }),
+      );
     });
   });
 });

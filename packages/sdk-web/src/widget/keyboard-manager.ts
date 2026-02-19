@@ -94,10 +94,8 @@ export class KeyboardManager {
 
     if (focusableElements.length === 0) return;
 
-    const firstElement = focusableElements[0] as HTMLElement | undefined;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
-
-    if (!firstElement || !lastElement) return;
+    const firstElement = focusableElements[0] as HTMLElement;
+    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement;
 
     // If Shift+Tab on first element, focus last
     if (e.shiftKey && document.activeElement === firstElement) {

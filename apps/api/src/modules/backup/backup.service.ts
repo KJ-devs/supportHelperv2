@@ -23,7 +23,7 @@ export interface BackupMetadata {
 
 export interface BackupStatus {
   jobId: string;
-  status: 'active' | 'completed' | 'failed' | 'waiting' | 'delayed';
+  status: 'active' | 'completed' | 'failed' | 'waiting' | 'delayed' | 'paused';
   progress?: number;
   result?: any;
   error?: string;
@@ -161,7 +161,7 @@ export class BackupService {
 
       let status: BackupStatus = {
         jobId,
-        status: state as 'active' | 'completed' | 'failed' | 'delayed' | 'waiting',
+        status: state as 'active' | 'completed' | 'failed' | 'delayed' | 'waiting' | 'paused',
         progress: typeof progress === 'number' ? progress : undefined,
       };
 

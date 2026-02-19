@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
@@ -61,7 +62,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+        throw new ServiceUnavailableException(`HubSpot API error: ${response.status} - ${errorBody}`);
       }
 
       return {
@@ -91,7 +92,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+        throw new ServiceUnavailableException(`HubSpot API error: ${response.status} - ${errorBody}`);
       }
 
       const data = await response.json() as { id: string };
@@ -122,7 +123,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorBody = await response.text();
-        throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+        throw new ServiceUnavailableException(`HubSpot API error: ${response.status} - ${errorBody}`);
       }
 
       const data = await response.json() as { id: string };
@@ -146,7 +147,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
     if (!response.ok) {
       const errorBody = await response.text();
-      throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+      throw new ServiceUnavailableException(`HubSpot API error: ${response.status} - ${errorBody}`);
     }
   }
 
@@ -191,7 +192,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
           if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(`HubSpot search API error: ${response.status} - ${errorBody}`);
+            throw new ServiceUnavailableException(`HubSpot search API error: ${response.status} - ${errorBody}`);
           }
 
           const data = await response.json() as {
@@ -225,7 +226,7 @@ export class HubSpotProvider extends BaseIntegrationProvider {
 
           if (!response.ok) {
             const errorBody = await response.text();
-            throw new Error(`HubSpot API error: ${response.status} - ${errorBody}`);
+            throw new ServiceUnavailableException(`HubSpot API error: ${response.status} - ${errorBody}`);
           }
 
           const data = await response.json() as {

@@ -1,3 +1,4 @@
+import { ServiceUnavailableException } from '@nestjs/common';
 import { Ticket } from '@prisma/client';
 import { BaseIntegrationProvider } from './base-provider.abstract';
 import { IntegrationConfig, SyncResult, PullResult, PulledTicket, ConfigField } from '../types/integration.types';
@@ -98,7 +99,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jira API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Jira API error: ${response.status} - ${errorText}`);
       }
 
       const user = await response.json() as { displayName?: string; emailAddress?: string };
@@ -195,7 +196,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jira API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Jira API error: ${response.status} - ${errorText}`);
       }
 
       const issue = await response.json() as { key: string };
@@ -284,7 +285,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Jira API error: ${response.status} - ${errorText}`);
+        throw new ServiceUnavailableException(`Jira API error: ${response.status} - ${errorText}`);
       }
 
       return {
@@ -328,7 +329,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
         if (!response.ok) {
           const errorText = await response.text();
-          throw new Error(`Jira API error: ${response.status} - ${errorText}`);
+          throw new ServiceUnavailableException(`Jira API error: ${response.status} - ${errorText}`);
         }
 
         const data = await response.json() as {

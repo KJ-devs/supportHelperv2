@@ -81,7 +81,7 @@ export function Modal({ isOpen, onClose, title, children, footer, size = 'md' }:
             <h2 id={titleId} className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
               aria-label="Fermer la fenêtre"
             >
               <svg

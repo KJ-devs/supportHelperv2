@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleInit, OnModuleDestroy, Optional, ForbiddenException } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { EncryptionService } from '../common/services/encryption.service';
 import { createEncryptionMiddleware } from './prisma-encryption.middleware';
@@ -35,7 +35,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async cleanDatabase() {
     if (process.env.NODE_ENV === 'production') {
-      throw new Error('cleanDatabase is not allowed in production');
+      throw new ForbiddenException('cleanDatabase is not allowed in production');
     }
 
     const models = Reflect.ownKeys(this).filter(

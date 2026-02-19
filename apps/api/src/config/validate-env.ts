@@ -10,6 +10,8 @@
  * - Provides setup instructions for missing variables
  */
 
+import { InternalServerErrorException } from '@nestjs/common';
+
 interface ValidationError {
   variable: string;
   message: string;
@@ -151,7 +153,7 @@ export function validateEnvironmentVariables(): void {
   // If there are errors, format and throw
   if (errors.length > 0) {
     const errorMessage = formatValidationErrors(errors);
-    throw new Error(errorMessage);
+    throw new InternalServerErrorException(errorMessage);
   }
 
   // Log optional variables status (for informational purposes)

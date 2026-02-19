@@ -7,6 +7,7 @@ import {
   validateSync,
   IsUrl,
 } from 'class-validator';
+import { InternalServerErrorException } from '@nestjs/common';
 
 enum Environment {
   Development = 'development',
@@ -123,7 +124,7 @@ export function validate(config: Record<string, unknown>) {
   });
 
   if (errors.length > 0) {
-    throw new Error(
+    throw new InternalServerErrorException(
       `Environment validation error:\n${errors.map((e) => Object.values(e.constraints || {}).join(', ')).join('\n')}`,
     );
   }

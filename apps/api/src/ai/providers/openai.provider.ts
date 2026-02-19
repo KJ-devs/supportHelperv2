@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import OpenAI from 'openai';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
@@ -69,13 +69,13 @@ export class OpenAIProvider implements AIProvider {
 
       const content = response.choices[0].message.content;
       if (!content) {
-        throw new Error('Empty response from OpenAI');
+        throw new ServiceUnavailableException('Empty response from OpenAI');
       }
 
       // Extract JSON from response (in case it's wrapped)
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (!jsonMatch) {
-        throw new Error('No JSON found in response');
+        throw new ServiceUnavailableException('No JSON found in response');
       }
 
       return JSON.parse(jsonMatch[0]);

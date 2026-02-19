@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MeiliSearch, Index } from 'meilisearch';
 import { SearchTicketsDto } from './dto';
@@ -138,7 +138,7 @@ export class TicketsSearchService implements OnModuleInit {
    */
   async search(tenantId: string, dto: SearchTicketsDto) {
     if (!this.enabled) {
-      throw new Error('Search is not available (Meilisearch not configured)');
+      throw new ServiceUnavailableException('Search is not available (Meilisearch not configured)');
     }
 
     const { query, limit = 20, offset = 0, status, severity, type } = dto;

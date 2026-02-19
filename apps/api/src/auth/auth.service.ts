@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException, Logger, InternalServerErrorException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -31,7 +31,7 @@ export class AuthService {
     if (!configuredSecret) {
       const nodeEnv = this.configService.get<string>('NODE_ENV') || 'development';
       if (nodeEnv === 'production') {
-        throw new Error(
+        throw new InternalServerErrorException(
           'FATAL: JWT_REFRESH_SECRET must be set in production. ' +
           'Generate one with: openssl rand -hex 32',
         );
