@@ -17,7 +17,8 @@ declare global {
     toJSON(): number;
   }
 }
-(BigInt.prototype as any).toJSON = function () {
+// eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+(BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
   return Number(this);
 };
 

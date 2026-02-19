@@ -35,7 +35,7 @@ describe('TenantRateLimitGuard', () => {
     it('should return default limits for unauthenticated requests', async () => {
       const mockContext = createMockContext({ user: undefined });
 
-      const options = await (guard as any).getThrottlerOptions(mockContext);
+      const options = await guard['getThrottlerOptions'](mockContext);
 
       expect(options).toHaveLength(1);
       expect(options[0]).toEqual({
@@ -56,11 +56,11 @@ describe('TenantRateLimitGuard', () => {
         id: tenantId,
         settings: { rateLimits: customLimits },
         plan: 'free',
-      } as any);
+      } as unknown as import('@prisma/client').Tenant);
 
       const mockContext = createMockContext({ user: { tenantId, role: 'member' } });
 
-      const options = await (guard as any).getThrottlerOptions(mockContext);
+      const options = await guard['getThrottlerOptions'](mockContext);
 
       expect(options).toHaveLength(2);
       expect(options[0]).toEqual({
@@ -82,11 +82,11 @@ describe('TenantRateLimitGuard', () => {
         id: tenantId,
         settings: {},
         plan: 'pro',
-      } as any);
+      } as unknown as import('@prisma/client').Tenant);
 
       const mockContext = createMockContext({ user: { tenantId, role: 'member' } });
 
-      const options = await (guard as any).getThrottlerOptions(mockContext);
+      const options = await guard['getThrottlerOptions'](mockContext);
 
       expect(options).toHaveLength(2);
       expect(options[0]).toEqual({
@@ -108,11 +108,11 @@ describe('TenantRateLimitGuard', () => {
         id: tenantId,
         settings: {},
         plan: 'enterprise',
-      } as any);
+      } as unknown as import('@prisma/client').Tenant);
 
       const mockContext = createMockContext({ user: { tenantId, role: 'member' } });
 
-      const options = await (guard as any).getThrottlerOptions(mockContext);
+      const options = await guard['getThrottlerOptions'](mockContext);
 
       expect(options).toHaveLength(2);
       expect(options[0].limit).toBe(RATE_LIMIT_PRESETS.enterprise.requestsPerMinute);
@@ -126,15 +126,15 @@ describe('TenantRateLimitGuard', () => {
         id: tenantId,
         settings: {},
         plan: 'free',
-      } as any);
+      } as unknown as import('@prisma/client').Tenant);
 
       const mockContext = createMockContext({ user: { tenantId, role: 'member' } });
 
       // First call
-      await (guard as any).getThrottlerOptions(mockContext);
+      await guard['getThrottlerOptions'](mockContext);
 
       // Second call
-      await (guard as any).getThrottlerOptions(mockContext);
+      await guard['getThrottlerOptions'](mockContext);
 
       // Should only call DB once due to cache
       expect(prismaService.tenant.findUnique).toHaveBeenCalledTimes(1);
@@ -147,7 +147,7 @@ describe('TenantRateLimitGuard', () => {
         user: { tenantId: 'tenant-123', role: 'member' },
       });
 
-      const key = (guard as any).generateKey(mockContext, 'suffix', 'test');
+      const key = guard['generateKey'](mockContext, 'suffix', 'test');
 
       expect(key).toContain('tenant:tenant-123:test:suffix');
     });
@@ -155,7 +155,7 @@ describe('TenantRateLimitGuard', () => {
     it('should fall back to IP-based key for unauthenticated requests', () => {
       const mockContext = createMockContext({ user: undefined });
 
-      const key = (guard as any).generateKey(mockContext, 'suffix', 'test');
+      const key = guard['generateKey'](mockContext, 'suffix', 'test');
 
       // Should call super.generateKey which uses IP
       expect(key).toBeDefined();
@@ -163,7 +163,7 @@ describe('TenantRateLimitGuard', () => {
   });
 });
 
-function createMockContext(requestData: any): ExecutionContext {
+function createMockContext(requestData: Record<string, unknown>): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => ({
@@ -171,5 +171,5 @@ function createMockContext(requestData: any): ExecutionContext {
         ip: '127.0.0.1',
       }),
     }),
-  } as any;
+  } as unknown as ExecutionContext;
 }

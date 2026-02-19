@@ -12,6 +12,12 @@ import { GithubAppService } from '../../../src/modules/github/services/github-ap
 import { TemplateRendererService } from '../../../src/modules/github/services/template-renderer.service';
 import { CacheService } from '../../../src/cache/cache.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { CreateGithubIssueDto } from '../../../src/modules/github/dto/github-issues.dto';
+
+// Helper type for accessing private properties in tests
+type ServiceInternals = Record<string, unknown>;
+// Helper type for adding dynamic prisma model mocks
+type PrismaMock = Record<string, Record<string, jest.Mock>>;
 
 describe('GithubIssuesService', () => {
   let service: GithubIssuesService;
@@ -134,7 +140,7 @@ describe('GithubIssuesService', () => {
 
       const result = await service.createIssueFromTicket('ticket-123', 'tenant-123', {
         repository: 'owner/repo',
-      } as any);
+      } as CreateGithubIssueDto);
 
       expect(mockOctokit.issues.create).toHaveBeenCalled();
       expect(prisma.githubIssue.create).toHaveBeenCalled();
@@ -145,7 +151,7 @@ describe('GithubIssuesService', () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.createIssueFromTicket('missing', 'tenant-123', { repository: 'owner/repo' } as any),
+        service.createIssueFromTicket('missing', 'tenant-123', { repository: 'owner/repo' } as CreateGithubIssueDto),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -154,7 +160,7 @@ describe('GithubIssuesService', () => {
       (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue({ id: 'existing' });
 
       await expect(
-        service.createIssueFromTicket('ticket-123', 'tenant-123', { repository: 'owner/repo' } as any),
+        service.createIssueFromTicket('ticket-123', 'tenant-123', { repository: 'owner/repo' } as CreateGithubIssueDto),
       ).rejects.toThrow(BadRequestException);
     });
 
@@ -163,7 +169,7 @@ describe('GithubIssuesService', () => {
       (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.createIssueFromTicket('ticket-123', 'tenant-123', { repository: 'invalid' } as any),
+        service.createIssueFromTicket('ticket-123', 'tenant-123', { repository: 'invalid' } as CreateGithubIssueDto),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -260,7 +266,7 @@ describe('GithubIssuesService', () => {
 
       await service.createIssueFromTicket('ticket-123', 'tenant-123', {
         repository: 'owner/repo',
-      } as any);
+      } as CreateGithubIssueDto);
 
       const createCall = mockOctokit.issues.create.mock.calls[0][0];
       expect(createCall.labels).toContain('support');
@@ -276,7 +282,7 @@ describe('GithubIssuesService', () => {
 
       await service.createIssueFromTicket('ticket-123', 'tenant-123', {
         repository: 'owner/repo',
-      } as any);
+      } as CreateGithubIssueDto);
 
       const createCall = mockOctokit.issues.create.mock.calls[0][0];
       expect(createCall.labels).toContain('support');
@@ -291,7 +297,7 @@ describe('GithubIssuesService', () => {
       await service.createIssueFromTicket('ticket-123', 'tenant-123', {
         repository: 'owner/repo',
         labels: ['urgent', 'support'], // 'support' is already added
-      } as any);
+      } as CreateGithubIssueDto);
 
       const createCall = mockOctokit.issues.create.mock.calls[0][0];
       expect(createCall.labels).toContain('urgent');
@@ -304,13 +310,13 @@ describe('GithubIssuesService', () => {
   // ─── Auto-create issue from ticket ────────────────────────────
 
   describe('autoCreateIssueFromTicket', () => {
-    let appService: any;
+    let appService: Record<string, jest.Mock>;
 
     beforeEach(() => {
-      appService = (service as any).appService;
+      appService = (service as unknown as ServiceInternals).appService as Record<string, jest.Mock>;
       // Add missing prisma mocks for autoCreate
-      (prisma as any).ticket.findUnique = jest.fn();
-      (prisma as any).projectGithubConfig = { findUnique: jest.fn() };
+      (prisma as unknown as PrismaMock).ticket.findUnique = jest.fn();
+      (prisma as unknown as PrismaMock).projectGithubConfig = { findUnique: jest.fn() };
       // Clear shared mock to avoid leaking from previous tests
       mockOctokit.issues.create.mockClear();
       mockOctokit.issues.create.mockResolvedValue({
@@ -319,8 +325,8 @@ describe('GithubIssuesService', () => {
     });
 
     it('should create issue via installation token when config exists', async () => {
-      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -339,8 +345,8 @@ describe('GithubIssuesService', () => {
     });
 
     it('should include default labels from config settings', async () => {
-      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -358,7 +364,7 @@ describe('GithubIssuesService', () => {
     });
 
     it('should skip when ticket has no applicationId', async () => {
-      (prisma as any).ticket.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({
         ...mockTicket,
         applicationId: null,
         application: null,
@@ -370,8 +376,8 @@ describe('GithubIssuesService', () => {
     });
 
     it('should skip when no ProjectGithubConfig exists', async () => {
-      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue(null);
+      (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue(null);
 
       await service.autoCreateIssueFromTicket('ticket-123');
 
@@ -379,8 +385,8 @@ describe('GithubIssuesService', () => {
     });
 
     it('should skip when issue already exists for ticket+repo', async () => {
-      (prisma as any).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -400,7 +406,7 @@ describe('GithubIssuesService', () => {
     it('should store sync origin in cache with 30s TTL', async () => {
       await service.setSyncOrigin('ticket-123', 'github');
 
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       expect(cs.set).toHaveBeenCalledWith(
         'github:sync-origin:ticket-123',
         'github',
@@ -409,42 +415,42 @@ describe('GithubIssuesService', () => {
     });
 
     it('isSyncFromGithub should return true when origin is "github"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue('github');
 
       expect(await service.isSyncFromGithub('ticket-123')).toBe(true);
     });
 
     it('isSyncFromGithub should return false when origin is "platform"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue('platform');
 
       expect(await service.isSyncFromGithub('ticket-123')).toBe(false);
     });
 
     it('isSyncFromGithub should return false when no flag is set', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
 
       expect(await service.isSyncFromGithub('ticket-123')).toBe(false);
     });
 
     it('isSyncFromPlatform should return true when origin is "platform"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue('platform');
 
       expect(await service.isSyncFromPlatform('ticket-123')).toBe(true);
     });
 
     it('isSyncFromPlatform should return false when origin is "github"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue('github');
 
       expect(await service.isSyncFromPlatform('ticket-123')).toBe(false);
     });
 
     it('isSyncFromPlatform should return false when no flag is set', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
 
       expect(await service.isSyncFromPlatform('ticket-123')).toBe(false);
@@ -467,14 +473,14 @@ describe('GithubIssuesService', () => {
     };
 
     beforeEach(() => {
-      (prisma as any).projectGithubConfig = { findUnique: jest.fn() };
+      (prisma as unknown as PrismaMock).projectGithubConfig = { findUnique: jest.fn() };
       // Reset shared mock call history
       mockOctokit.issues.update.mockClear();
       mockOctokit.issues.update.mockResolvedValue({ data: {} });
     });
 
     it('should skip sync when change originated from GitHub (anti-loop)', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue('github');
 
       await service.syncTicketStatusToGithub('ticket-123', 'resolved');
@@ -484,10 +490,10 @@ describe('GithubIssuesService', () => {
     });
 
     it('should close issue when ticket status is "resolved"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -505,10 +511,10 @@ describe('GithubIssuesService', () => {
     });
 
     it('should reopen issue when ticket status is "open"', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -521,10 +527,10 @@ describe('GithubIssuesService', () => {
     });
 
     it('should set sync-origin to "platform" before calling GitHub API', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -541,7 +547,7 @@ describe('GithubIssuesService', () => {
     });
 
     it('should do nothing when no GitHub issues are linked', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([]);
 
@@ -551,10 +557,10 @@ describe('GithubIssuesService', () => {
     });
 
     it('should mark syncStatus as "error" when GitHub API fails', async () => {
-      const cs = (service as any).cacheService;
+      const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as any).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
         installationId: BigInt(12345),
       });
       mockOctokit.issues.update.mockRejectedValueOnce(new Error('API error'));

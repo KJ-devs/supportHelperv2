@@ -220,7 +220,7 @@ describe('HealthService', () => {
           if (key === 'database.redisUrl') return null; // No Redis
           return null;
         }),
-      } as any;
+      } as unknown;
       const newService = new HealthService(mockConfigNoRedis, prisma);
 
       const result = await newService.checkRedis();
@@ -267,7 +267,7 @@ describe('HealthService', () => {
           if (key.startsWith('s3.')) return null;
           return null;
         }),
-      } as any;
+      } as unknown;
       const newService = new HealthService(mockConfigNoS3, prisma);
 
       const result = await newService.checkS3();
@@ -286,7 +286,7 @@ describe('HealthService', () => {
         external: 0,
         rss: 0,
         arrayBuffers: 0,
-      })) as any;
+      })) as unknown;
 
       const result = service.checkMemory();
 
@@ -304,7 +304,7 @@ describe('HealthService', () => {
         external: 0,
         rss: 0,
         arrayBuffers: 0,
-      })) as any;
+      })) as unknown;
 
       const result = service.checkMemory();
 
@@ -380,7 +380,7 @@ describe('HealthService', () => {
           if (key === 'database.redisUrl') return null; // No Redis
           return null;
         }),
-      } as any;
+      } as unknown;
       const newService = new HealthService(mockConfigNoRedis, prisma);
 
       const result = await newService.getQueueStatus('test-queue');
@@ -409,7 +409,7 @@ describe('HealthService', () => {
           if (key === 'database.redisUrl') return null; // No Redis
           return null;
         }),
-      } as any;
+      } as unknown;
       const newService = new HealthService(mockConfigNoRedis, prisma);
 
       const result = await newService.getDeadLetterQueueCount();

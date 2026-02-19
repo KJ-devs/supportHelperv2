@@ -13,11 +13,11 @@ describe('JwtStrategy', () => {
   beforeEach(async () => {
     authService = {
       validateUser: jest.fn(),
-    } as any;
+    } as unknown;
 
     configService = {
       get: jest.fn().mockReturnValue('test-jwt-secret'),
-    } as any;
+    } as unknown;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,7 +44,7 @@ describe('JwtStrategy', () => {
     it('should throw error if JWT_SECRET is not defined', () => {
       const badConfigService = {
         get: jest.fn().mockReturnValue(null),
-      } as any;
+      } as unknown;
 
       expect(() => {
         new JwtStrategy(authService, badConfigService);
@@ -113,7 +113,7 @@ describe('JwtStrategy', () => {
         type: 'access',
       };
 
-      authService.validateUser.mockResolvedValue(null as any);
+      authService.validateUser.mockResolvedValue(null as unknown);
 
       await expect(strategy.validate(payload)).rejects.toThrow(
         new UnauthorizedException('User not found')

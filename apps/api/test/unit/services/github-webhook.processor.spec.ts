@@ -252,7 +252,7 @@ describe('GithubWebhookProcessor', () => {
       const jobData: GithubWebhookJobData = {
         event: 'issues',
         eventData: { action: 'opened' },
-        payload: null as any, // Invalid payload will cause error
+        payload: null as unknown, // Invalid payload will cause error
         deliveryId: 'delivery-error',
         receivedAt: new Date().toISOString(),
       };
@@ -266,7 +266,7 @@ describe('GithubWebhookProcessor', () => {
       const jobData: GithubWebhookJobData = {
         event: 'issues',
         eventData: { action: 'opened' },
-        payload: null as any, // This will cause an error
+        payload: null as unknown, // This will cause an error
         deliveryId: 'delivery-error',
         receivedAt: new Date().toISOString(),
       };

@@ -99,7 +99,7 @@ describe('OpenAIService', () => {
 
     // Initialize Redis mock
     await service.onModuleInit();
-    mockRedis = (service as any).redis;
+    mockRedis = (service as unknown).redis;
   });
 
   describe('analyzeVideo', () => {
@@ -464,7 +464,7 @@ describe('OpenAIService', () => {
 
     beforeEach(() => {
       // Reset rate limit state
-      (service as any).rateLimitState.clear();
+      (service as unknown).rateLimitState.clear();
     });
 
     it('should allow requests within rate limit', async () => {
@@ -481,7 +481,7 @@ describe('OpenAIService', () => {
 
     it('should throw when rate limit exceeded', async () => {
       // Manually set rate limit state to exceeded
-      (service as any).rateLimitState.set(tenantId, {
+      (service as unknown).rateLimitState.set(tenantId, {
         requestCount: 50,
         windowStart: Date.now(),
       });
@@ -491,7 +491,7 @@ describe('OpenAIService', () => {
 
     it('should reset rate limit after window expires', async () => {
       // Set rate limit state from the past
-      (service as any).rateLimitState.set(tenantId, {
+      (service as unknown).rateLimitState.set(tenantId, {
         requestCount: 50,
         windowStart: Date.now() - 70000, // 70 seconds ago
       });
@@ -506,7 +506,7 @@ describe('OpenAIService', () => {
     });
 
     it('should return correct rate limit status', () => {
-      (service as any).rateLimitState.set(tenantId, {
+      (service as unknown).rateLimitState.set(tenantId, {
         requestCount: 30,
         windowStart: Date.now(),
       });

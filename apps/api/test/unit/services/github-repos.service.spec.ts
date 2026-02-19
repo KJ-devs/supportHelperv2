@@ -74,7 +74,7 @@ describe('GithubReposService', () => {
 
   describe('listRepositories', () => {
     it('should list repositories with pagination', async () => {
-      const result = await service.listRepositories('tenant-123', {} as any);
+      const result = await service.listRepositories('tenant-123', {} as unknown);
 
       expect(result.repositories).toHaveLength(1);
       expect(result.repositories[0].fullName).toBe('owner/repo1');

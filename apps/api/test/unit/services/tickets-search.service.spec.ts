@@ -82,7 +82,7 @@ describe('TicketsSearchService', () => {
 
     describe('search', () => {
       it('should search with filters', async () => {
-        const result = await service.search('tenant-1', { query: 'bug' } as any);
+        const result = await service.search('tenant-1', { query: 'bug' } as unknown);
 
         expect(mockIndex.search).toHaveBeenCalledWith('bug', expect.objectContaining({
           filter: expect.stringContaining('tenantId = tenant-1'),
@@ -92,7 +92,7 @@ describe('TicketsSearchService', () => {
       });
 
       it('should add status filter when provided', async () => {
-        await service.search('tenant-1', { query: 'bug', status: 'open' } as any);
+        await service.search('tenant-1', { query: 'bug', status: 'open' } as unknown);
 
         expect(mockIndex.search).toHaveBeenCalledWith('bug', expect.objectContaining({
           filter: expect.stringContaining('status = open'),
@@ -141,11 +141,11 @@ describe('TicketsSearchService', () => {
     });
 
     it('should throw when searching', async () => {
-      await expect(service.search('t-1', { query: 'bug' } as any)).rejects.toThrow();
+      await expect(service.search('t-1', { query: 'bug' } as unknown)).rejects.toThrow();
     });
 
     it('should no-op on indexTicket', async () => {
-      await service.indexTicket({ id: 'x' } as any);
+      await service.indexTicket({ id: 'x' } as unknown);
       // Should not throw
     });
   });

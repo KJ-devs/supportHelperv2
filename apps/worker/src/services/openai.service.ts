@@ -539,7 +539,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
         WHERE embedding IS NOT NULL
       `;
 
-      const params: any[] = [embeddingStr];
+      const params: (string | number)[] = [embeddingStr];
       let paramIndex = 2;
 
       if (tenantId) {
@@ -560,13 +560,21 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       `;
       params.push(limit);
 
-      const results = await this.prisma.$queryRawUnsafe(query, ...params) as any[];
+      const results = await this.prisma.$queryRawUnsafe(query, ...params) as Array<{
+        id: string;
+        title: string | null;
+        description: string | null;
+        type: string | null;
+        severity: string | null;
+        status: string | null;
+        similarity: number;
+      }>;
 
       return results.map(row => ({
         id: row.id,
         title: row.title || '',
         description: row.description || '',
-        similarity: parseFloat(row.similarity) || 0,
+        similarity: parseFloat(String(row.similarity)) || 0,
         type: row.type || 'bug',
         severity: row.severity || 'medium',
         status: row.status || 'new',

@@ -46,7 +46,7 @@ describe('GithubWebhooksController', () => {
       const result = await controller.handleWebhook(
         'issues', 'sha256=abc123', 'delivery-123',
         { action: 'opened', issue: { number: 42 } },
-        mockRequest as any,
+        mockRequest as unknown,
       );
 
       expect(webhooksService.processWebhook).toHaveBeenCalledWith(
@@ -58,21 +58,21 @@ describe('GithubWebhooksController', () => {
     it('should use "unknown" when deliveryId is missing', async () => {
       (webhooksService.processWebhook as jest.Mock).mockResolvedValue(undefined);
 
-      await controller.handleWebhook('push', 'sha256=def', undefined as any, {}, mockRequest as any);
+      await controller.handleWebhook('push', 'sha256=def', undefined as unknown, {}, mockRequest as unknown);
 
       expect(webhooksService.processWebhook).toHaveBeenCalledWith('push', {}, 'sha256=def', 'unknown');
     });
 
     it('should throw UnauthorizedException when event header is missing', async () => {
       await expect(
-        controller.handleWebhook(undefined as any, 'sha256=abc', 'del-1', {}, mockRequest as any),
+        controller.handleWebhook(undefined as unknown, 'sha256=abc', 'del-1', {}, mockRequest as unknown),
       ).rejects.toThrow(UnauthorizedException);
       expect(webhooksService.processWebhook).not.toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException when signature header is missing', async () => {
       await expect(
-        controller.handleWebhook('issues', undefined as any, 'del-1', {}, mockRequest as any),
+        controller.handleWebhook('issues', undefined as unknown, 'del-1', {}, mockRequest as unknown),
       ).rejects.toThrow(UnauthorizedException);
       expect(webhooksService.processWebhook).not.toHaveBeenCalled();
     });
@@ -81,7 +81,7 @@ describe('GithubWebhooksController', () => {
       (webhooksService.processWebhook as jest.Mock).mockRejectedValue(new Error('Processing failed'));
 
       await expect(
-        controller.handleWebhook('issues', 'sha256=abc', 'del-1', {}, mockRequest as any),
+        controller.handleWebhook('issues', 'sha256=abc', 'del-1', {}, mockRequest as unknown),
       ).rejects.toThrow('Processing failed');
     });
   });

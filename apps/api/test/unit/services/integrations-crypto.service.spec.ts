@@ -141,7 +141,7 @@ describe('IntegrationsCryptoService', () => {
 
   describe('security', () => {
     it('should use 32-byte key', () => {
-      const key = (service as any).key;
+      const key = (service as unknown).key;
       expect(key.length).toBe(32);
     });
 

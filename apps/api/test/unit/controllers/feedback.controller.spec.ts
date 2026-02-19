@@ -47,7 +47,7 @@ describe('FeedbackController', () => {
       const req = { user: { id: 'user-123' } };
       (feedbackService.create as jest.Mock).mockResolvedValue(mockFeedback);
 
-      const result = await controller.create('tenant-123', dto as any, req as any);
+      const result = await controller.create('tenant-123', dto as unknown, req as unknown);
 
       expect(feedbackService.create).toHaveBeenCalledWith('tenant-123', 'user-123', dto);
       expect(result).toEqual(mockFeedback);
@@ -81,7 +81,7 @@ describe('FeedbackController', () => {
       const dto = { correctedValue: 'critical' };
       (feedbackService.update as jest.Mock).mockResolvedValue({ ...mockFeedback, correctedValue: 'critical' });
 
-      const result = await controller.update('tenant-123', 'fb-123', dto as any);
+      const result = await controller.update('tenant-123', 'fb-123', dto as unknown);
 
       expect(feedbackService.update).toHaveBeenCalledWith('fb-123', 'tenant-123', dto);
     });

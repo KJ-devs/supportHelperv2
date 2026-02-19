@@ -50,6 +50,6 @@ describe('AnthropicClientFactory', () => {
     const client = await factory.createForTenant('tenant-123');
 
     expect(client).not.toBeNull();
-    expect((client as any)._apiKey).toBe('sk-ant-api03-test');
+    expect((client as unknown)._apiKey).toBe('sk-ant-api03-test');
   });
 });

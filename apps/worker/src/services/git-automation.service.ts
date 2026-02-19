@@ -83,8 +83,8 @@ export class GitAutomationService {
         ref: `refs/heads/${branchName}`,
         sha: baseSha,
       });
-    } catch (error: any) {
-      const status = error?.status;
+    } catch (error: unknown) {
+      const status = (error as { status?: number })?.status;
       if (status === 409 || status === 422) {
         // Branch already exists — retry with timestamp suffix
         const timestamp = Date.now();
@@ -164,7 +164,7 @@ export class GitAutomationService {
       owner,
       repo,
       base_tree: baseSha,
-      tree: treeEntries as any,
+      tree: treeEntries as Array<{ path: string; mode: '100644'; type: 'blob'; sha: string | null }>,
     });
 
     // Build commit message in conventional format

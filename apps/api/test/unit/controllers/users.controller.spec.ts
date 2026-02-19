@@ -4,6 +4,7 @@ import { UsersController } from '../../../src/users/users.controller';
 import { UsersService } from '../../../src/users/users.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CacheService } from '../../../src/cache';
+import { UserRole } from '../../../src/users/dto/update-user.dto';
 
 const mockCacheService = {
   get: jest.fn().mockResolvedValue(undefined),
@@ -187,7 +188,7 @@ describe('UsersController', () => {
       mockPrismaService.user.update.mockResolvedValue(updatedUser);
 
       const req = { user: { id: 'user-001', tenantId: mockTenantId, role: 'owner' } };
-      const result = await controller.update('user-003', { role: 'admin' as any }, req);
+      const result = await controller.update('user-003', { role: UserRole.ADMIN }, req);
 
       expect(result.role).toBe('admin');
     });
@@ -203,7 +204,7 @@ describe('UsersController', () => {
       mockPrismaService.user.update.mockResolvedValue(updatedUser);
 
       const req = { user: { id: 'user-002', tenantId: mockTenantId, role: 'admin' } };
-      const result = await controller.update('user-003', { role: 'admin' as any }, req);
+      const result = await controller.update('user-003', { role: UserRole.ADMIN }, req);
 
       expect(result.role).toBe('admin');
     });
@@ -212,10 +213,10 @@ describe('UsersController', () => {
       const req = { user: { id: 'user-003', tenantId: mockTenantId, role: 'member' } };
 
       await expect(
-        controller.update('user-002', { role: 'admin' as any }, req),
+        controller.update('user-002', { role: UserRole.ADMIN }, req),
       ).rejects.toThrow(ForbiddenException);
       await expect(
-        controller.update('user-002', { role: 'admin' as any }, req),
+        controller.update('user-002', { role: UserRole.ADMIN }, req),
       ).rejects.toThrow('Only owners and admins can change user roles');
     });
 
@@ -223,10 +224,10 @@ describe('UsersController', () => {
       const req = { user: { id: 'user-001', tenantId: mockTenantId, role: 'owner' } };
 
       await expect(
-        controller.update('user-001', { role: 'member' as any }, req),
+        controller.update('user-001', { role: UserRole.MEMBER }, req),
       ).rejects.toThrow(ForbiddenException);
       await expect(
-        controller.update('user-001', { role: 'member' as any }, req),
+        controller.update('user-001', { role: UserRole.MEMBER }, req),
       ).rejects.toThrow('Cannot change your own role');
     });
 
@@ -234,10 +235,10 @@ describe('UsersController', () => {
       const req = { user: { id: 'user-002', tenantId: mockTenantId, role: 'admin' } };
 
       await expect(
-        controller.update('user-002', { role: 'member' as any }, req),
+        controller.update('user-002', { role: UserRole.MEMBER }, req),
       ).rejects.toThrow(ForbiddenException);
       await expect(
-        controller.update('user-002', { role: 'member' as any }, req),
+        controller.update('user-002', { role: UserRole.MEMBER }, req),
       ).rejects.toThrow('Cannot change your own role');
     });
 

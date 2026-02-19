@@ -19,7 +19,7 @@ jest.mock('child_process', () => {
   const { promisify } = jest.requireActual('util');
   const fn = jest.fn();
   // Attach the custom promisify implementation
-  (fn as any)[promisify.custom] = execFilePromisified;
+  (fn as unknown as Record<symbol, unknown>)[promisify.custom] = execFilePromisified;
   return { execFile: fn };
 });
 
@@ -81,7 +81,7 @@ describe('BackupWorker', () => {
   let worker: BackupWorker;
   let configService: ConfigService;
 
-  const createMockJob = <T = any>(name: string, data: T, overrides: Partial<Job> = {}): Job<T> =>
+  const createMockJob = <T = unknown>(name: string, data: T, overrides: Partial<Job> = {}): Job<T> =>
     ({
       id: 'job-001',
       name,
@@ -90,7 +90,7 @@ describe('BackupWorker', () => {
       opts: { attempts: 3 },
       updateProgress: jest.fn().mockResolvedValue(undefined),
       ...overrides,
-    }) as any;
+    }) as unknown as Job<T>;
 
   beforeEach(async () => {
     // Reset mocks
@@ -155,11 +155,11 @@ describe('BackupWorker', () => {
     });
 
     it('should use configured BACKUP_PATH', () => {
-      expect((worker as any).backupPath).toBe('/backups');
+      expect(worker['backupPath']).toBe('/backups');
     });
 
     it('should use configured DATABASE_URL', () => {
-      expect((worker as any).databaseUrl).toBe(
+      expect(worker['databaseUrl']).toBe(
         'postgresql://user:pass@localhost:5432/testdb',
       );
     });
@@ -188,7 +188,7 @@ describe('BackupWorker', () => {
       }).compile();
 
       const w = module.get<BackupWorker>(BackupWorker);
-      expect((w as any).backupPath).toBe('/backups');
+      expect(w['backupPath']).toBe('/backups');
     });
 
     it('should warn when DATABASE_URL is not set', async () => {
@@ -207,12 +207,12 @@ describe('BackupWorker', () => {
       }).compile();
 
       const w = module.get<BackupWorker>(BackupWorker);
-      expect((w as any).databaseUrl).toBe('');
+      expect(w['databaseUrl']).toBe('');
       expect(w).toBeDefined();
     });
 
     it('should use BACKUP_MAX_SIZE_BYTES from config', () => {
-      expect((worker as any).maxBackupSizeBytes).toBe(0);
+      expect(worker['maxBackupSizeBytes']).toBe(0);
     });
 
     it('should default maxBackupSizeBytes to 50 GB when not configured', async () => {
@@ -231,7 +231,7 @@ describe('BackupWorker', () => {
       }).compile();
 
       const w = module.get<BackupWorker>(BackupWorker);
-      expect((w as any).maxBackupSizeBytes).toBe(50 * 1024 * 1024 * 1024);
+      expect(w['maxBackupSizeBytes']).toBe(50 * 1024 * 1024 * 1024);
     });
   });
 
@@ -264,14 +264,14 @@ describe('BackupWorker', () => {
     });
 
     it('should throw error for unknown job type', async () => {
-      const job = createMockJob<any>('unknown-job-type', {});
+      const job = createMockJob<Record<string, never>>('unknown-job-type', {});
 
       await expect(worker.process(job)).rejects.toThrow('Unknown job type: unknown-job-type');
     });
 
     it('should reset aborted flag on each new job', async () => {
       worker.abort();
-      expect((worker as any).aborted).toBe(true);
+      expect(worker['aborted']).toBe(true);
 
       const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
@@ -323,7 +323,7 @@ describe('BackupWorker', () => {
 
       // Verify tar was called
       const tarCall = execFilePromisified.mock.calls.find(
-        (call: any[]) => call[0] === 'tar',
+        (call: unknown[]) => call[0] === 'tar',
       );
       expect(tarCall).toBeDefined();
       expect(tarCall![1]).toContain('-czf');
@@ -405,7 +405,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const progressCalls = (job.updateProgress as jest.Mock).mock.calls.map(
-        (c: any[]) => c[0],
+        (c: unknown[]) => c[0],
       );
       expect(progressCalls).toEqual([10, 40, 90, 100]);
     });
@@ -421,7 +421,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const progressCalls = (job.updateProgress as jest.Mock).mock.calls.map(
-        (c: any[]) => c[0],
+        (c: unknown[]) => c[0],
       );
       expect(progressCalls).toContain(10);
       expect(progressCalls).toContain(40);
@@ -455,7 +455,7 @@ describe('BackupWorker', () => {
       expect(mockS3Service.downloadToPath).toHaveBeenCalledTimes(2);
 
       const progressCalls = (job.updateProgress as jest.Mock).mock.calls.map(
-        (c: any[]) => c[0],
+        (c: unknown[]) => c[0],
       );
       expect(progressCalls).toContain(70);
     });
@@ -620,13 +620,13 @@ describe('BackupWorker', () => {
 
       // Verify tar extraction was called
       const tarCall = execFilePromisified.mock.calls.find(
-        (call: any[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
+        (call: unknown[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
       );
       expect(tarCall).toBeDefined();
 
       // Verify psql restore was called
       const psqlCall = execFilePromisified.mock.calls.find(
-        (call: any[]) => call[0] === 'psql',
+        (call: unknown[]) => call[0] === 'psql',
       );
       expect(psqlCall).toBeDefined();
       expect(psqlCall![1]).toContain('postgresql://user:pass@localhost:5432/testdb');
@@ -653,7 +653,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const tarCall = execFilePromisified.mock.calls.find(
-        (call: any[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
+        (call: unknown[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
       );
       expect(tarCall).toBeDefined();
       expect(tarCall![1]).toEqual(
@@ -669,7 +669,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const psqlCall = execFilePromisified.mock.calls.find(
-        (call: any[]) => call[0] === 'psql',
+        (call: unknown[]) => call[0] === 'psql',
       );
       expect(psqlCall).toBeDefined();
       expect(psqlCall![1]).toContain('postgresql://user:pass@localhost:5432/testdb');
@@ -688,7 +688,7 @@ describe('BackupWorker', () => {
       mockFs.readdir.mockResolvedValue([
         { name: 'file1.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
       mockS3Service.uploadStream.mockResolvedValue('file1.mp4');
       mockS3Service.computeChecksum.mockResolvedValue('abc123checksum');
 
@@ -710,7 +710,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const accessCalls = mockFs.access.mock.calls;
-      const mediaCalls = accessCalls.filter((call: any[]) =>
+      const mediaCalls = accessCalls.filter((call: unknown[]) =>
         String(call[0]).includes('media'),
       );
       expect(mediaCalls).toHaveLength(0);
@@ -769,7 +769,7 @@ describe('BackupWorker', () => {
       await worker.process(job);
 
       const progressCalls = (job.updateProgress as jest.Mock).mock.calls.map(
-        (c: any[]) => c[0],
+        (c: unknown[]) => c[0],
       );
       expect(progressCalls).toEqual([10, 30, 70, 90, 100]);
     });
@@ -838,7 +838,7 @@ describe('BackupWorker', () => {
       expect(mockS3Service.computeChecksum).toHaveBeenCalledTimes(2);
 
       // Manifest written with checksum data
-      const writeCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+      const writeCall = mockFs.writeFile.mock.calls.find((call: unknown[]) =>
         String(call[0]).includes('manifest.json'),
       );
       expect(writeCall).toBeDefined();
@@ -970,7 +970,7 @@ describe('BackupWorker', () => {
 
       await worker.process(job);
 
-      const writeCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+      const writeCall = mockFs.writeFile.mock.calls.find((call: unknown[]) =>
         String(call[0]).includes('manifest.json'),
       );
       expect(writeCall).toBeDefined();
@@ -1004,7 +1004,7 @@ describe('BackupWorker', () => {
       mockFs.readdir.mockResolvedValue([
         { name: 'video.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
       mockS3Service.computeChecksum.mockResolvedValue('expected-checksum');
       mockS3Service.uploadStream.mockResolvedValue('video.mp4');
 
@@ -1027,7 +1027,7 @@ describe('BackupWorker', () => {
       mockFs.readdir.mockResolvedValue([
         { name: 'corrupted.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
       // Return a DIFFERENT checksum (corruption detected)
       mockS3Service.computeChecksum.mockResolvedValue('actual-bad-checksum');
 
@@ -1046,7 +1046,7 @@ describe('BackupWorker', () => {
       mockFs.readFile.mockResolvedValue('{}'); // no manifest
       mockFs.readdir.mockResolvedValue([
         { name: 'file.mp4', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
 
       const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
       await worker.process(job);
@@ -1061,7 +1061,7 @@ describe('BackupWorker', () => {
         { name: 'file1.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'file2.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'file3.mp4', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
       mockS3Service.uploadStream
         .mockRejectedValueOnce(new Error('Upload failed'))
         .mockResolvedValue('key');
@@ -1088,7 +1088,7 @@ describe('BackupWorker', () => {
       mockFs.readdir.mockResolvedValue([
         { name: 'present.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
       mockS3Service.computeChecksum.mockResolvedValue('abc');
       mockS3Service.uploadStream.mockResolvedValue('present.mp4');
 
@@ -1104,9 +1104,9 @@ describe('BackupWorker', () => {
 
   describe('graceful interruption (abort)', () => {
     it('abort() should set the aborted flag', () => {
-      expect((worker as any).aborted).toBe(false);
+      expect(worker['aborted']).toBe(false);
       worker.abort();
-      expect((worker as any).aborted).toBe(true);
+      expect(worker['aborted']).toBe(true);
     });
 
     it('should abort media backup mid-way and cleanup partial files', async () => {
@@ -1164,14 +1164,14 @@ describe('BackupWorker', () => {
 
   describe('formatTimestamp (private)', () => {
     it('should format date as YYYYMMDD_HHmmss', () => {
-      const formatTimestamp = (worker as any).formatTimestamp.bind(worker);
+      const formatTimestamp = worker['formatTimestamp'].bind(worker);
       const date = new Date(2026, 1, 16, 14, 30, 45);
 
       expect(formatTimestamp(date)).toBe('20260216_143045');
     });
 
     it('should zero-pad single digit months and days', () => {
-      const formatTimestamp = (worker as any).formatTimestamp.bind(worker);
+      const formatTimestamp = worker['formatTimestamp'].bind(worker);
       const date = new Date(2026, 0, 5, 3, 7, 9);
 
       expect(formatTimestamp(date)).toBe('20260105_030709');
@@ -1188,22 +1188,22 @@ describe('BackupWorker', () => {
 
   describe('formatSize (private)', () => {
     it('should format bytes', () => {
-      const formatSize = (worker as any).formatSize.bind(worker);
+      const formatSize = worker['formatSize'].bind(worker);
       expect(formatSize(500)).toBe('500 B');
     });
 
     it('should format kilobytes', () => {
-      const formatSize = (worker as any).formatSize.bind(worker);
+      const formatSize = worker['formatSize'].bind(worker);
       expect(formatSize(2048)).toBe('2.00 KB');
     });
 
     it('should format megabytes', () => {
-      const formatSize = (worker as any).formatSize.bind(worker);
+      const formatSize = worker['formatSize'].bind(worker);
       expect(formatSize(5 * 1024 * 1024)).toBe('5.00 MB');
     });
 
     it('should format gigabytes', () => {
-      const formatSize = (worker as any).formatSize.bind(worker);
+      const formatSize = worker['formatSize'].bind(worker);
       expect(formatSize(2 * 1024 * 1024 * 1024)).toBe('2.00 GB');
     });
 
@@ -1291,7 +1291,7 @@ describe('BackupWorker', () => {
     it('should handle job failure without job context', async () => {
       const errorSpy = jest.spyOn(worker['logger'], 'error');
 
-      await worker.onFailed(undefined as any, new Error('No job'));
+      await worker.onFailed(undefined as unknown as Job, new Error('No job'));
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('Job failed without job context'),
@@ -1394,7 +1394,7 @@ describe('BackupWorker', () => {
       expect(backupResult.filename).toBeDefined();
 
       // Capture the manifest that was written during backup
-      const manifestWriteCall = mockFs.writeFile.mock.calls.find((call: any[]) =>
+      const manifestWriteCall = mockFs.writeFile.mock.calls.find((call: unknown[]) =>
         String(call[0]).includes('manifest.json'),
       );
       expect(manifestWriteCall).toBeDefined();
@@ -1413,7 +1413,7 @@ describe('BackupWorker', () => {
         { name: 'video.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'screenshot.png', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
 
       // Checksums match (files are intact)
       mockS3Service.computeChecksum
@@ -1452,7 +1452,7 @@ describe('BackupWorker', () => {
         { name: 'good.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'bad.mp4', isDirectory: () => false, isFile: () => true },
         { name: 'manifest.json', isDirectory: () => false, isFile: () => true },
-      ] as any);
+      ] as unknown as import('fs').Dirent[]);
 
       // good.mp4: checksum matches; bad.mp4: checksum differs (corrupted)
       mockS3Service.computeChecksum

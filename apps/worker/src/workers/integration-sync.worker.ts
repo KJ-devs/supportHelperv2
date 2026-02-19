@@ -88,11 +88,11 @@ export class IntegrationSyncWorker extends WorkerHost {
 
       try {
         if (action === 'create' || !metadata?.externalId) {
-          result = await provider.syncTicket(ticket, config, integration.mappings as any);
+          result = await provider.syncTicket(ticket, config, integration.mappings as Record<string, string> | undefined);
         } else if (action === 'update') {
-          result = await provider.updateTicket(metadata.externalId, ticket, config, integration.mappings as any);
+          result = await provider.updateTicket(metadata.externalId, ticket, config, integration.mappings as Record<string, string> | undefined);
         } else if (action === 'delete' && 'deleteTicket' in provider) {
-          await (provider as any).deleteTicket(metadata.externalId, config);
+          await (provider as { deleteTicket: (externalId: string, config: Record<string, string>) => Promise<void> }).deleteTicket(metadata.externalId, config);
           result = { success: true };
         } else {
           throw new Error(`Unsupported action: ${action}`);

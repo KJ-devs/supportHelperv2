@@ -15,7 +15,7 @@ describe('GracefulShutdownService', () => {
       pause: jest.fn().mockResolvedValue(undefined),
       close: jest.fn().mockResolvedValue(undefined),
       getActiveCount: jest.fn().mockResolvedValue(0),
-    } as any;
+    } as unknown;
 
     // Mock ModuleRef
     const mockModuleRef = {
@@ -87,7 +87,7 @@ describe('GracefulShutdownService', () => {
       mockQueue.getActiveCount.mockResolvedValue(5);
 
       // Mock sleep to speed up test
-      jest.spyOn(service as any, 'sleep').mockResolvedValue(undefined);
+      jest.spyOn(service as unknown, 'sleep').mockResolvedValue(undefined);
 
       await service.onApplicationShutdown('SIGTERM');
 

@@ -35,7 +35,7 @@ import { parseEncryptionKey } from '@support-helper/shared';
 
 // Mock external API calls
 const mockFetch = jest.fn();
-global.fetch = mockFetch as any;
+global.fetch = mockFetch as unknown as typeof fetch;
 
 // Mock Slack SDK
 jest.mock('@slack/web-api', () => ({
@@ -201,7 +201,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ displayName: 'Test User', emailAddress: 'test@example.com' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.testConnection(config);
@@ -224,7 +224,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: false,
         status: 401,
         text: async () => 'Unauthorized',
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.testConnection(config);
@@ -238,7 +238,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 201,
         json: async () => ({ key: 'TEST-123' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.syncTicket(testTicket, config);
@@ -259,7 +259,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.updateTicket('TEST-123', testTicket, config);
@@ -298,7 +298,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
             },
           ],
         }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.pullTickets(config);
@@ -314,7 +314,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: false,
         status: 429,
         text: async () => 'Rate limit exceeded',
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(jiraIntegration);
       const result = await jiraProvider.syncTicket(testTicket, config);
@@ -474,7 +474,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ total: 0, results: [] }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(hubspotIntegration);
       const result = await hubspotProvider.testConnection(config);
@@ -495,7 +495,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 201,
         json: async () => ({ id: '123456' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(hubspotIntegration);
       const result = await hubspotProvider.syncTicket(testTicket, config);
@@ -510,7 +510,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ id: '123456' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(hubspotIntegration);
       const result = await hubspotProvider.updateTicket('123456', testTicket, config);
@@ -526,7 +526,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(hubspotIntegration);
 
@@ -554,7 +554,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
             },
           ],
         }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(hubspotIntegration);
       const result = await hubspotProvider.pullTickets(config);
@@ -620,7 +620,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(discordIntegration);
       const result = await discordProvider.testConnection(config);
@@ -640,7 +640,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ id: '987654321' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(discordIntegration);
       const result = await discordProvider.syncTicket(testTicket, config);
@@ -660,7 +660,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ id: '987654321' }),
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(discordIntegration);
       const result = await discordProvider.updateTicket('987654321', testTicket, config);
@@ -676,7 +676,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(discordIntegration);
 
@@ -690,7 +690,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: false,
         status: 404,
         text: async () => 'Unknown Webhook',
-      } as any);
+      } as unknown as Response);
 
       const config = decryptConfig(discordIntegration);
       const result = await discordProvider.syncTicket(testTicket, config);
@@ -710,7 +710,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const integration = await integrationsService.create(testTenantId, {
         type: 'discord',
@@ -739,7 +739,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const integration = await prisma.integration.create({
         data: {
@@ -769,7 +769,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: true,
         status: 200,
         json: async () => ({ displayName: 'Test User' }),
-      } as any);
+      } as unknown as Response);
 
       const config = {
         host: 'https://test.atlassian.net',
@@ -789,7 +789,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         ok: false,
         status: 403,
         text: async () => 'Forbidden',
-      } as any);
+      } as unknown as Response);
 
       const config = {
         host: 'https://test.atlassian.net',
@@ -822,7 +822,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const integration = await prisma.integration.create({
         data: {
@@ -870,7 +870,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
         json: async () => {
           throw new Error('Invalid JSON');
         },
-      } as any);
+      } as unknown as Response);
 
       const jiraProvider = new JiraProvider();
       const config = {
@@ -947,7 +947,7 @@ describeIf(isIntegrationTest)('Integrations E2E', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 204,
-      } as any);
+      } as unknown as Response);
 
       const integration = await prisma.integration.create({
         data: {

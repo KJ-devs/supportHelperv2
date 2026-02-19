@@ -143,7 +143,7 @@ describe('TicketsController', () => {
         undefined,
       );
 
-      const result = await controller.create('tenant-123', 'user-123', dto as any);
+      const result = await controller.create('tenant-123', 'user-123', dto as unknown);
 
       expect(ticketsService.create).toHaveBeenCalledWith('tenant-123', dto, 'user-123');
       expect(ticketsSearchService.isEnabled).toHaveBeenCalled();
@@ -171,7 +171,7 @@ describe('TicketsController', () => {
         undefined,
       );
 
-      await controller.create('tenant-123', 'user-123', dto as any);
+      await controller.create('tenant-123', 'user-123', dto as unknown);
 
       expect(ticketsSearchService.indexTicket).not.toHaveBeenCalled();
       expect(ticketsAIService.enqueueAnalysis).toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('TicketsController', () => {
         status: 'open',
       };
 
-      const result = await controller.findAll('tenant-123', filters as any);
+      const result = await controller.findAll('tenant-123', filters as unknown);
 
       expect(ticketsService.findAll).toHaveBeenCalledWith('tenant-123', filters);
       expect(result).toEqual(mockPaginatedResponse);
@@ -197,7 +197,7 @@ describe('TicketsController', () => {
     it('should handle empty filters', async () => {
       (ticketsService.findAll as jest.Mock).mockResolvedValue(mockPaginatedResponse);
 
-      await controller.findAll('tenant-123', {} as any);
+      await controller.findAll('tenant-123', {} as unknown);
 
       expect(ticketsService.findAll).toHaveBeenCalledWith('tenant-123', {});
     });
@@ -238,7 +238,7 @@ describe('TicketsController', () => {
 
       (ticketsSearchService.search as jest.Mock).mockResolvedValue(mockSearchResults);
 
-      const result = await controller.search('tenant-123', searchDto as any);
+      const result = await controller.search('tenant-123', searchDto as unknown);
 
       expect(ticketsSearchService.search).toHaveBeenCalledWith('tenant-123', searchDto);
       expect(result).toEqual(mockSearchResults);
@@ -293,7 +293,7 @@ describe('TicketsController', () => {
         undefined,
       );
 
-      const result = await controller.update('tenant-123', 'ticket-123', dto as any);
+      const result = await controller.update('tenant-123', 'ticket-123', dto as unknown);
 
       expect(ticketsService.update).toHaveBeenCalledWith('ticket-123', 'tenant-123', dto);
       expect(ticketsSearchService.updateTicket).toHaveBeenCalledWith(updatedTicket);
@@ -314,7 +314,7 @@ describe('TicketsController', () => {
         undefined,
       );
 
-      await controller.update('tenant-123', 'ticket-123', dto as any);
+      await controller.update('tenant-123', 'ticket-123', dto as unknown);
 
       expect(ticketsSearchService.updateTicket).not.toHaveBeenCalled();
       expect(integrationsSyncService.syncTicketToAllEnabledIntegrations).toHaveBeenCalled();
@@ -336,7 +336,7 @@ describe('TicketsController', () => {
 
       (ticketsService.assign as jest.Mock).mockResolvedValue(assignedTicket);
 
-      const result = await controller.assign('tenant-123', 'ticket-123', assignDto as any);
+      const result = await controller.assign('tenant-123', 'ticket-123', assignDto as unknown);
 
       expect(ticketsService.assign).toHaveBeenCalledWith('ticket-123', 'tenant-123', 'user-456');
       expect(result).toEqual(assignedTicket);
@@ -351,7 +351,7 @@ describe('TicketsController', () => {
         assignee: null,
       });
 
-      const result = await controller.assign('tenant-123', 'ticket-123', assignDto as any);
+      const result = await controller.assign('tenant-123', 'ticket-123', assignDto as unknown);
 
       expect(ticketsService.assign).toHaveBeenCalledWith('ticket-123', 'tenant-123', null);
       expect(result.assignedTo).toBeNull();

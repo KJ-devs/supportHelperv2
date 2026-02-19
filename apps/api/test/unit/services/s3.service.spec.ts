@@ -124,7 +124,7 @@ describe('S3Service', () => {
     it('should return true when object exists', async () => {
       const mockSend = jest.fn().mockResolvedValue({});
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       const result = await service.objectExists('test-key.mp4');
 
@@ -135,7 +135,7 @@ describe('S3Service', () => {
     it('should return false when object not found', async () => {
       const mockSend = jest.fn().mockRejectedValue({ name: 'NotFound' });
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       const result = await service.objectExists('missing-key.mp4');
 
@@ -145,7 +145,7 @@ describe('S3Service', () => {
     it('should throw error for non-NotFound errors', async () => {
       const mockSend = jest.fn().mockRejectedValue(new Error('S3 error'));
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       await expect(service.objectExists('test-key.mp4')).rejects.toThrow(
         'S3 error',
@@ -164,7 +164,7 @@ describe('S3Service', () => {
       };
       const mockSend = jest.fn().mockResolvedValue(mockMetadata);
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       const result = await service.getObjectMetadata('test-key.mp4');
 
@@ -180,7 +180,7 @@ describe('S3Service', () => {
     it('should throw error when metadata retrieval fails', async () => {
       const mockSend = jest.fn().mockRejectedValue(new Error('S3 error'));
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       await expect(service.getObjectMetadata('test-key.mp4')).rejects.toThrow(
         'S3 error',
@@ -192,7 +192,7 @@ describe('S3Service', () => {
     it('should delete object', async () => {
       const mockSend = jest.fn().mockResolvedValue({});
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       await service.deleteObject('test-key.mp4');
 
@@ -202,7 +202,7 @@ describe('S3Service', () => {
     it('should throw error when delete fails', async () => {
       const mockSend = jest.fn().mockRejectedValue(new Error('S3 error'));
       s3Client.send = mockSend;
-      (service as any).s3Client = s3Client;
+      (service as unknown).s3Client = s3Client;
 
       await expect(service.deleteObject('test-key.mp4')).rejects.toThrow(
         'S3 error',

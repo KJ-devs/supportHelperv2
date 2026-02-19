@@ -23,7 +23,7 @@ describe('AIService', () => {
       mockProvider = createMockProvider();
       mockProviderFactory = {
         create: jest.fn().mockReturnValue(mockProvider),
-      } as any;
+      } as unknown;
 
       const module: TestingModule = await Test.createTestingModule({
         providers: [

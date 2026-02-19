@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { IntegrationsController } from '../../../src/modules/integrations/integrations.controller';
 import { IntegrationsService } from '../../../src/modules/integrations/integrations.service';
 import { IntegrationsSyncService } from '../../../src/modules/integrations/integrations-sync.service';
+import { CreateIntegrationDto, UpdateIntegrationDto } from '../../../src/modules/integrations/dto';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('IntegrationsController', () => {
@@ -70,7 +71,7 @@ describe('IntegrationsController', () => {
     it('should create integration', async () => {
       (integrationsService.create as jest.Mock).mockResolvedValue(mockIntegration);
 
-      const result = await controller.create('tenant-123', { type: 'jira', name: 'Jira' } as any);
+      const result = await controller.create('tenant-123', { type: 'jira', name: 'Jira' } as CreateIntegrationDto);
 
       expect(integrationsService.create).toHaveBeenCalledWith('tenant-123', { type: 'jira', name: 'Jira' });
       expect(result).toEqual(mockIntegration);
@@ -122,7 +123,7 @@ describe('IntegrationsController', () => {
     it('should update integration', async () => {
       (integrationsService.update as jest.Mock).mockResolvedValue({ ...mockIntegration, name: 'Updated' });
 
-      const result = await controller.update('int-123', 'tenant-123', { name: 'Updated' } as any);
+      const result = await controller.update('int-123', 'tenant-123', { name: 'Updated' } as UpdateIntegrationDto);
 
       expect(integrationsService.update).toHaveBeenCalledWith('int-123', 'tenant-123', { name: 'Updated' });
     });

@@ -70,7 +70,7 @@ describe('IntegrationSyncWorker', () => {
     id: 'job-123',
     data,
     attemptsMade,
-  } as any);
+  } as unknown);
 
   beforeEach(async () => {
     // Set up encryption key for tests
@@ -578,7 +578,7 @@ describe('IntegrationSyncWorker', () => {
     it('should throw error when INTEGRATION_ENCRYPTION_KEY not set', () => {
       delete process.env.INTEGRATION_ENCRYPTION_KEY;
 
-      const mockDeadLetterQueue = {} as any;
+      const mockDeadLetterQueue = {} as unknown;
       expect(() => new IntegrationSyncWorker(prisma, mockDeadLetterQueue)).toThrow('INTEGRATION_ENCRYPTION_KEY not configured');
 
       // Restore for other tests

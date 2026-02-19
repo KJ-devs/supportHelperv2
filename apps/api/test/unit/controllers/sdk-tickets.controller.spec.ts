@@ -24,7 +24,7 @@ describe('SdkTicketsController', () => {
   let aiService: jest.Mocked<TicketsAIService>;
   let aiProcessingService: jest.Mocked<AIService>;
   let integrationsSyncService: jest.Mocked<IntegrationsSyncService>;
-  let prisma: any;
+  let prisma: { media: { create: jest.Mock } };
 
   const mockTenantId = 'tenant-123';
   const mockApplicationId = 'app-123';
@@ -55,7 +55,7 @@ describe('SdkTicketsController', () => {
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
-      const config: Record<string, any> = {
+      const config: Record<string, string | undefined> = {
         's3.endpoint': 'http://localhost:9000',
         's3.accessKeyId': 'minioadmin',
         's3.secretAccessKey': 'minioadmin',
@@ -138,7 +138,7 @@ describe('SdkTicketsController', () => {
     };
 
     it('should create a ticket and return success response', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       const result = await controller.create(mockTenantId, createDto);
 
@@ -154,7 +154,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should call ticketsService.create with tenantId and no reporter', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.create(mockTenantId, createDto);
 
@@ -166,7 +166,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should enqueue AI analysis with priority 3', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.create(mockTenantId, createDto);
 
@@ -174,7 +174,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should trigger integration sync', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.create(mockTenantId, createDto);
 
@@ -186,7 +186,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should index in Meilisearch when enabled', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
       mockSearchService.isEnabled.mockReturnValue(true);
 
       await controller.create(mockTenantId, createDto);
@@ -195,7 +195,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should not index in Meilisearch when disabled', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
       mockSearchService.isEnabled.mockReturnValue(false);
 
       await controller.create(mockTenantId, createDto);
@@ -207,7 +207,7 @@ describe('SdkTicketsController', () => {
   describe('report', () => {
     const mockRequest = {
       sdk: { applicationId: mockApplicationId },
-    } as any;
+    } as unknown as Record<string, unknown>;
 
     const mockBody = {
       title: 'Bug found',
@@ -216,7 +216,7 @@ describe('SdkTicketsController', () => {
     };
 
     it('should process report and return AI analysis', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       const result = await controller.report(
         mockRequest,
@@ -234,7 +234,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should call AI service to process description', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -245,7 +245,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should use default title when not provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, {
         description: 'A bug',
@@ -259,7 +259,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should use empty description when not provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, {});
 
@@ -270,7 +270,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should handle malformed userContext JSON gracefully', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, {
         description: 'test',
@@ -284,7 +284,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should throw InternalServerErrorException when applicationId is missing from sdk', async () => {
-      const reqWithoutAppId = { sdk: {} } as any;
+      const reqWithoutAppId = { sdk: {} } as unknown as Record<string, unknown>;
 
       await expect(
         controller.report(reqWithoutAppId, mockTenantId, undefined, mockBody),
@@ -292,7 +292,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should throw InternalServerErrorException when sdk is undefined on request', async () => {
-      const reqWithoutSdk = {} as any;
+      const reqWithoutSdk = {} as unknown as Record<string, unknown>;
 
       await expect(
         controller.report(reqWithoutSdk, mockTenantId, undefined, mockBody),
@@ -300,7 +300,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should update ticket with AI analysis fields', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -316,7 +316,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should update keywords when AI returns them', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -327,7 +327,7 @@ describe('SdkTicketsController', () => {
     });
 
     it('should handle video upload when provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
       mockPrismaService.media.create.mockResolvedValue({
         id: 'media-001',
         storageKey: `${mockTenantId}/${mockTicket.id}/video-123.webm`,
@@ -340,7 +340,7 @@ describe('SdkTicketsController', () => {
         mimetype: 'video/webm',
         buffer: Buffer.from('fake-video-data'),
         size: 1024,
-        stream: null as any,
+        stream: null as unknown as import('stream').Readable,
         destination: '',
         filename: '',
         path: '',
@@ -370,7 +370,7 @@ describe('SdkTicketsController', () => {
     it('should map AI crash type to bug', async () => {
       const resultWithCrash = { ...mockAiResult, type: 'crash' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithCrash);
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -384,7 +384,7 @@ describe('SdkTicketsController', () => {
     it('should map AI feature-request type to feature_request', async () => {
       const resultWithFeature = { ...mockAiResult, type: 'feature-request' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithFeature);
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -398,7 +398,7 @@ describe('SdkTicketsController', () => {
     it('should default unknown severity to medium', async () => {
       const resultWithUnknownSeverity = { ...mockAiResult, severity: 'unknown' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithUnknownSeverity);
-      mockTicketsService.create.mockResolvedValue(mockTicket as any);
+      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 

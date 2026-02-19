@@ -14,6 +14,14 @@ import {
   AssignTicketDto,
 } from './dto';
 
+// Local type aliases for mock return values (avoids complex Prisma inferred types)
+type TicketResult = Awaited<ReturnType<TicketsService['findOne']>>;
+type TicketUpdateResult = Awaited<ReturnType<TicketsService['update']>>;
+type TicketRemoveResult = Awaited<ReturnType<TicketsService['remove']>>;
+type TicketAssignResult = Awaited<ReturnType<TicketsService['assign']>>;
+type PaginatedResult = Awaited<ReturnType<TicketsService['findAll']>>;
+type SearchResult = Awaited<ReturnType<TicketsSearchService['search']>>;
+
 describe('TicketsController', () => {
   let controller: TicketsController;
   let ticketsService: TicketsService;
@@ -25,7 +33,7 @@ describe('TicketsController', () => {
   const mockTicketId = 'ticket-123';
   const mockApplicationId = 'app-123';
 
-  const mockTicket: any = {
+  const mockTicket: Record<string, unknown> = {
     id: mockTicketId,
     tenantId: mockTenantId,
     applicationId: mockApplicationId,
@@ -194,7 +202,7 @@ describe('TicketsController', () => {
         },
       };
 
-      jest.spyOn(ticketsService, 'findAll').mockResolvedValue(paginatedResult as any);
+      jest.spyOn(ticketsService, 'findAll').mockResolvedValue(paginatedResult as unknown as PaginatedResult);
 
       const result = await controller.findAll(mockTenantId, {
         page: 0,
@@ -232,7 +240,7 @@ describe('TicketsController', () => {
           totalPages: 0,
           hasMore: false,
         },
-      } as any);
+      } as unknown as PaginatedResult);
 
       await controller.findAll(mockTenantId, filters);
 
@@ -262,7 +270,7 @@ describe('TicketsController', () => {
 
   describe('findOne', () => {
     it('should return a ticket by ID', async () => {
-      jest.spyOn(ticketsService, 'findOne').mockResolvedValue(mockTicket as any);
+      jest.spyOn(ticketsService, 'findOne').mockResolvedValue(mockTicket as unknown as TicketResult);
 
       const result = await controller.findOne(mockTenantId, mockTicketId);
 
@@ -332,7 +340,7 @@ describe('TicketsController', () => {
 
     it('should update a ticket', async () => {
       const updatedTicket = { ...mockTicket, ...updateDto };
-      jest.spyOn(ticketsService, 'update').mockResolvedValue(updatedTicket as any);
+      jest.spyOn(ticketsService, 'update').mockResolvedValue(updatedTicket as unknown as TicketUpdateResult);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(false);
 
       const result = await controller.update(
@@ -351,7 +359,7 @@ describe('TicketsController', () => {
 
     it('should update ticket in Meilisearch if enabled', async () => {
       const updatedTicket = { ...mockTicket, ...updateDto };
-      jest.spyOn(ticketsService, 'update').mockResolvedValue(updatedTicket as any);
+      jest.spyOn(ticketsService, 'update').mockResolvedValue(updatedTicket as unknown as TicketUpdateResult);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(true);
       jest.spyOn(searchService, 'updateTicket').mockResolvedValue();
 
@@ -388,7 +396,7 @@ describe('TicketsController', () => {
         },
       };
 
-      jest.spyOn(ticketsService, 'assign').mockResolvedValue(assignedTicket as any);
+      jest.spyOn(ticketsService, 'assign').mockResolvedValue(assignedTicket as unknown as TicketAssignResult);
 
       const result = await controller.assign(
         mockTenantId,
@@ -412,7 +420,7 @@ describe('TicketsController', () => {
         assignee: null,
       };
 
-      jest.spyOn(ticketsService, 'assign').mockResolvedValue(unassignedTicket as any);
+      jest.spyOn(ticketsService, 'assign').mockResolvedValue(unassignedTicket as unknown as TicketResult);
 
       await controller.assign(mockTenantId, mockTicketId, { userId: null });
 
@@ -442,7 +450,7 @@ describe('TicketsController', () => {
         resolvedAt: new Date(),
       };
 
-      jest.spyOn(ticketsService, 'remove').mockResolvedValue(deletedTicket as any);
+      jest.spyOn(ticketsService, 'remove').mockResolvedValue(deletedTicket as unknown as TicketRemoveResult);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(false);
 
       const result = await controller.remove(mockTenantId, mockTicketId);
@@ -461,7 +469,7 @@ describe('TicketsController', () => {
         resolvedAt: new Date(),
       };
 
-      jest.spyOn(ticketsService, 'remove').mockResolvedValue(deletedTicket as any);
+      jest.spyOn(ticketsService, 'remove').mockResolvedValue(deletedTicket as unknown as TicketRemoveResult);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(true);
       jest.spyOn(searchService, 'removeTicket').mockResolvedValue();
 
@@ -504,7 +512,7 @@ describe('TicketsController', () => {
         offset: 0,
       };
 
-      jest.spyOn(searchService, 'search').mockResolvedValue(searchResults as any);
+      jest.spyOn(searchService, 'search').mockResolvedValue(searchResults as unknown as SearchResult);
 
       const result = await controller.search(mockTenantId, searchDto);
 
@@ -588,7 +596,7 @@ describe('TicketsController', () => {
         assignedTo: assigneeId,
         assignedAt: new Date(),
       };
-      mockPrismaService.ticket.update.mockResolvedValue(assignedTicket as any);
+      mockPrismaService.ticket.update.mockResolvedValue(assignedTicket);
 
       await controller.assign(mockTenantId, mockTicketId, {
         userId: assigneeId,
@@ -600,7 +608,7 @@ describe('TicketsController', () => {
         status: 'resolved',
         resolvedAt: new Date(),
       };
-      mockPrismaService.ticket.update.mockResolvedValue(resolvedTicket as any);
+      mockPrismaService.ticket.update.mockResolvedValue(resolvedTicket);
 
       const result = await controller.update(mockTenantId, mockTicketId, {
         status: 'resolved',
@@ -632,7 +640,7 @@ describe('TicketsController', () => {
           totalPages: 0,
           hasMore: false,
         },
-      } as any);
+      } as unknown as PaginatedResult);
 
       await controller.findAll('different-tenant', {
         page: 0,

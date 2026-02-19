@@ -53,8 +53,8 @@ describe('TicketReopenController', () => {
     };
 
     it('should reopen ticket with valid token', async () => {
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as any);
-      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as unknown);
+      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as unknown);
       jest.spyOn(ticketTimelineService, 'recordEvent').mockResolvedValue(undefined);
 
       const result = await controller.reopen('ticket-123', 'valid-token-123');
@@ -82,22 +82,22 @@ describe('TicketReopenController', () => {
     });
 
     it('should throw BadRequestException when token is invalid', async () => {
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as unknown);
 
       await expect(controller.reopen('ticket-123', 'wrong-token')).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException when ticket is not reopenable', async () => {
       const newTicket = { ...mockTicket, status: 'new' };
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(newTicket as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(newTicket as unknown);
 
       await expect(controller.reopen('ticket-123', 'valid-token-123')).rejects.toThrow(BadRequestException);
     });
 
     it('should allow reopening from resolved status', async () => {
       const resolvedTicket = { ...mockTicket, status: 'resolved' };
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(resolvedTicket as any);
-      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(resolvedTicket as unknown);
+      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as unknown);
 
       const result = await controller.reopen('ticket-123', 'valid-token-123');
 
@@ -106,8 +106,8 @@ describe('TicketReopenController', () => {
 
     it('should allow reopening from closed status', async () => {
       const closedTicket = { ...mockTicket, status: 'closed' };
-      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(closedTicket as any);
-      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as any);
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(closedTicket as unknown);
+      jest.spyOn(prismaService, '$transaction').mockResolvedValue([null, null] as unknown);
 
       const result = await controller.reopen('ticket-123', 'valid-token-123');
 
