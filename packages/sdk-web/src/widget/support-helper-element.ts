@@ -53,7 +53,6 @@ export class SupportHelperElement extends HTMLElement {
   private attentionPulseTimer: number | null = null;
   private attentionPulseDelay = 5000; // 5 seconds
 
-
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
   }
