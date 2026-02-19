@@ -94,10 +94,8 @@ export class KeyboardManager {
 
     if (focusableElements.length === 0) return;
 
-    const firstElement = focusableElements[0] as HTMLElement | undefined;
-    const lastElement = focusableElements[focusableElements.length - 1] as HTMLElement | undefined;
-
-    if (!firstElement || !lastElement) return;
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
 
     // If Shift+Tab on first element, focus last
     if (e.shiftKey && document.activeElement === firstElement) {
@@ -186,11 +184,9 @@ export class KeyboardManager {
       // Skip the close button, focus the first interactive element
       const firstNonCloseButton = focusableElements.find(
         el => !el.classList.contains('sh-close-btn')
-      ) ?? focusableElements[0];
+      ) || focusableElements[0];
 
-      if (firstNonCloseButton) {
-        firstNonCloseButton.focus();
-      }
+      firstNonCloseButton.focus();
     }
   }
 }
