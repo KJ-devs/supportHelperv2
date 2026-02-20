@@ -1,11 +1,13 @@
 import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Inject, Logger, forwardRef } from '@nestjs/common';
-import { Job } from 'bullmq';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Job, Queue } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubIssuesService } from '../services/github-issues.service';
 import { AutoMergeService } from '../services/auto-merge.service';
 import { CodebaseIndexerService } from '../../codebase-index/services/codebase-indexer.service';
 import { CIFeedbackService } from '../../agent-tasks/services/ci-feedback.service';
+import { CacheService } from '../../../cache/cache.service';
 
 export interface GithubWebhookJobData {
   event: string;
@@ -25,6 +27,12 @@ export interface SyncTicketStatusJobData {
   newStatus: string;
 }
 
+// Indexable file extensions for per-file reindex triggered by push events
+const INDEXABLE_PUSH_EXTENSIONS = new Set([
+  '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.rb',
+  '.vue', '.svelte', '.css', '.scss', '.yml', '.yaml',
+]);
+
 @Processor('github')
 export class GithubWebhookProcessor extends WorkerHost {
   private readonly logger = new Logger(GithubWebhookProcessor.name);
@@ -36,8 +44,24 @@ export class GithubWebhookProcessor extends WorkerHost {
     @Inject(forwardRef(() => CodebaseIndexerService))
     private readonly codebaseIndexer: CodebaseIndexerService,
     private readonly ciFeedbackService: CIFeedbackService,
+    private readonly cacheService: CacheService,
+    @InjectQueue('codebase-indexing') private readonly codebaseIndexQueue: Queue,
   ) {
     super();
+  }
+
+  /**
+   * Determine if a file path should be reindexed on push.
+   */
+  private isIndexableFile(filePath: string): boolean {
+    const fileName = filePath.split('/').pop() ?? '';
+    // Skip minified and map files
+    if (fileName.endsWith('.min.js') || fileName.endsWith('.map')) return false;
+    // Allow package.json and README.md as special cases
+    if (fileName === 'package.json' || fileName === 'README.md') return true;
+    const lastDot = fileName.lastIndexOf('.');
+    const ext = lastDot === -1 ? '' : fileName.slice(lastDot).toLowerCase();
+    return INDEXABLE_PUSH_EXTENSIONS.has(ext);
   }
 
   async process(job: Job<GithubWebhookJobData | CreateGithubIssueJobData | SyncTicketStatusJobData>): Promise<any> {
@@ -188,7 +212,7 @@ export class GithubWebhookProcessor extends WorkerHost {
 
   private async processPushEvent(data: GithubWebhookJobData) {
     const { payload } = data;
-    const { repository, commits, ref, before } = payload;
+    const { repository, commits, ref, before, after } = payload;
     const repoFullName: string = repository.full_name;
     const defaultBranch: string = repository.default_branch;
 
@@ -200,6 +224,11 @@ export class GithubWebhookProcessor extends WorkerHost {
     const pushedBranch = (ref as string)?.replace('refs/heads/', '');
     if (pushedBranch === defaultBranch && before) {
       await this.triggerCodebaseIndexing(repoFullName, before);
+
+      // Also enqueue per-file reindex for modified/added files (US-5.2)
+      await this.triggerPerFileReindex(repoFullName, commits, after as string).catch((err) => {
+        this.logger.warn(`Failed to enqueue per-file reindex for ${repoFullName}: ${err.message}`);
+      });
     }
 
     return {
@@ -208,6 +237,80 @@ export class GithubWebhookProcessor extends WorkerHost {
       ref,
       commitCount: commits?.length || 0,
     };
+  }
+
+  /**
+   * Enqueue reindex-file jobs for modified/added files and delete embeddings
+   * for removed files on push to the default branch (US-5.2).
+   */
+  private async triggerPerFileReindex(
+    repoFullName: string,
+    commits: Array<{ added?: string[]; modified?: string[]; removed?: string[] }> | undefined,
+    commitSha: string,
+  ): Promise<void> {
+    if (!commits?.length) return;
+
+    const [owner, repo] = repoFullName.split('/');
+    if (!owner || !repo) return;
+
+    // Find the application linked to this repo
+    const config = await this.prisma.projectGithubConfig.findFirst({
+      where: { owner, repo },
+      include: { application: true },
+    });
+
+    if (!config) return;
+
+    const applicationId = config.applicationId;
+    const tenantId = config.application.tenantId;
+
+    // Collect unique modified/added and removed files
+    const modifiedFiles = [...new Set([
+      ...commits.flatMap((c) => c.added ?? []),
+      ...commits.flatMap((c) => c.modified ?? []),
+    ])];
+
+    const deletedFiles = [...new Set(
+      commits.flatMap((c) => c.removed ?? []),
+    )];
+
+    // Enqueue reindex for modified files that are indexable
+    for (const filePath of modifiedFiles) {
+      if (this.isIndexableFile(filePath)) {
+        await this.codebaseIndexQueue.add(
+          'reindex-file',
+          { type: 'reindex-file', applicationId, tenantId, filePath, commitSha },
+          {
+            attempts: 2,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: 50,
+            removeOnFail: 100,
+          },
+        );
+      }
+    }
+
+    // Delete embeddings for removed files
+    for (const filePath of deletedFiles) {
+      await this.prisma.codebaseEmbedding.deleteMany({
+        where: { applicationId, filePath },
+      });
+    }
+
+    // Invalidate repo-structure Redis cache
+    await this.cacheService.del(`repo-structure:${applicationId}`);
+
+    // Invalidate per-file cache entries for all modified/added/removed files
+    const allChangedFiles = [...new Set([...modifiedFiles, ...deletedFiles])];
+    for (const filePath of allChangedFiles) {
+      await this.cacheService.del(`repo-file:${applicationId}:${filePath}`);
+    }
+
+    if (modifiedFiles.length > 0 || deletedFiles.length > 0) {
+      this.logger.log(
+        `Push to ${repoFullName}: queued ${modifiedFiles.filter((f) => this.isIndexableFile(f)).length} file reindexes, deleted ${deletedFiles.length} embeddings`,
+      );
+    }
   }
 
   /**

@@ -4,6 +4,7 @@ import { GithubSyncWorker } from '../workers/github-sync.worker';
 import { AgentWorker } from '../workers/agent.worker';
 import { IntegrationSyncWorker } from '../workers/integration-sync.worker';
 import { CodebaseIndexingWorker } from '../workers/codebase-indexing.worker';
+import { DeepAnalysisWorker } from '../workers/deep-analysis.worker';
 import { BackupWorker } from '../workers/backup.worker';
 import { DeadLetterWorker } from '../workers/dead-letter.worker';
 import { UsageSnapshotProcessor } from './usage-snapshot.processor';
@@ -20,6 +21,7 @@ import { UsageSnapshotProcessor } from './usage-snapshot.processor';
     AgentWorker,
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
+    DeepAnalysisWorker,
     BackupWorker,
     DeadLetterWorker,
     UsageSnapshotProcessor,
@@ -30,6 +32,7 @@ import { UsageSnapshotProcessor } from './usage-snapshot.processor';
     AgentWorker,
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
+    DeepAnalysisWorker,
     BackupWorker,
     DeadLetterWorker,
     UsageSnapshotProcessor,

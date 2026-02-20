@@ -18,11 +18,13 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 // ═══════════════════════════════════════════════════════════════════════
 
 const INDEXABLE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.py', '.java', '.go', '.rs', '.rb',
-  '.php', '.cs', '.md', '.prisma', '.sql', '.graphql', '.yaml', '.yml',
+  '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.java', '.rb',
+  '.vue', '.svelte', '.css', '.scss', '.yml', '.yaml',
 ]);
 
-const INDEXABLE_JSON = new Set(['package.json', 'tsconfig.json', 'turbo.json']);
+// Special: .json only if filename is package.json; .md only if README.md
+const INDEXABLE_JSON_NAMES = new Set(['package.json']);
+const INDEXABLE_MD_NAMES = new Set(['README.md']);
 
 const SKIP_DIRS = new Set([
   'node_modules', 'dist', '.git', '.next', 'coverage', '__pycache__',
@@ -42,8 +44,14 @@ function shouldIndexFile(filePath: string): boolean {
 
   if (SKIP_FILES.has(fileName)) return false;
 
+  // Skip minified and map files
+  if (fileName.endsWith('.min.js') || fileName.endsWith('.map')) return false;
+
   const ext = getFileExtension(fileName);
-  if (ext === '.json') return INDEXABLE_JSON.has(fileName);
+
+  if (ext === '.json') return INDEXABLE_JSON_NAMES.has(fileName);
+  if (ext === '.md') return INDEXABLE_MD_NAMES.has(fileName);
+
   return INDEXABLE_EXTENSIONS.has(ext);
 }
 
@@ -207,6 +215,7 @@ function chunkCodeFile(content: string, filePath: string): CodeChunk[] {
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB
 const EMBEDDING_BATCH_SIZE = 100;
+const FILE_PARALLEL_BATCH = 10; // Process files in parallel batches
 
 /**
  * CodebaseIndexingWorker
@@ -292,6 +301,12 @@ export class CodebaseIndexingWorker extends WorkerHost {
   async process(job: Job<CodebaseIndexingJobData>): Promise<CodebaseIndexingResult> {
     const { type, applicationId, tenantId, repoFullName, installationId, sinceCommitSha } = job.data;
     const startTime = Date.now();
+
+    // Handle single-file reindex jobs separately (US-5.2)
+    if (type === 'reindex-file') {
+      return this.processReindexFile(job);
+    }
+
     const tempDir = path.join(os.tmpdir(), `codebase-${applicationId}-${Date.now()}`);
 
     let filesProcessed = 0;
@@ -310,6 +325,9 @@ export class CodebaseIndexingWorker extends WorkerHost {
       await job.updateProgress(5);
 
       // 2. Get GitHub access token
+      if (!installationId) {
+        throw new Error(`installationId is required for ${type} job`);
+      }
       const token = await this.getAccessToken(tenantId, installationId);
       this.logger.log('Obtained GitHub access token');
 
@@ -394,29 +412,42 @@ export class CodebaseIndexingWorker extends WorkerHost {
       this.logger.log(`Found ${filesToProcess.length} files to index`);
       await job.updateProgress(25);
 
-      // 6. Chunk all files
+      // 6. Chunk all files in parallel batches (US-5.1)
       const allChunks: { filePath: string; chunk: CodeChunk }[] = [];
+      let successfulFiles = 0;
 
-      for (const relPath of filesToProcess) {
-        const absPath = path.join(tempDir, relPath);
+      for (let batchStart = 0; batchStart < filesToProcess.length; batchStart += FILE_PARALLEL_BATCH) {
+        const batch = filesToProcess.slice(batchStart, batchStart + FILE_PARALLEL_BATCH);
 
-        try {
-          const stat = fs.statSync(absPath);
-          if (stat.size > MAX_FILE_SIZE) continue;
+        const batchResults = await Promise.all(
+          batch.map(async (relPath) => {
+            const absPath = path.join(tempDir, relPath);
+            try {
+              const stat = fs.statSync(absPath);
+              if (stat.size > MAX_FILE_SIZE) return [];
 
-          const content = fs.readFileSync(absPath, 'utf-8');
-          const chunks = chunkCodeFile(content, relPath);
+              const content = fs.readFileSync(absPath, 'utf-8');
+              return chunkCodeFile(content, relPath).map((chunk) => ({ filePath: relPath, chunk }));
+            } catch {
+              // Skip unreadable files (binary, permission issues)
+              return [];
+            }
+          }),
+        );
 
-          for (const chunk of chunks) {
-            allChunks.push({ filePath: relPath, chunk });
+        for (const fileChunks of batchResults) {
+          if (fileChunks.length > 0) {
+            successfulFiles++;
+            allChunks.push(...fileChunks);
           }
-        } catch {
-          // Skip unreadable files (binary, permission issues)
-          continue;
         }
+
+        // Emit progress during chunking phase (25% to 40%)
+        const chunkProgress = 25 + Math.floor(((batchStart + batch.length) / filesToProcess.length) * 15);
+        await job.updateProgress(Math.min(chunkProgress, 40));
       }
 
-      filesProcessed = filesToProcess.length;
+      filesProcessed = successfulFiles;
       this.logger.log(`Generated ${allChunks.length} chunks from ${filesProcessed} files`);
       await job.updateProgress(40);
 
@@ -571,6 +602,196 @@ export class CodebaseIndexingWorker extends WorkerHost {
       } catch (cleanupError) {
         this.logger.warn(`Failed to clean temp dir ${tempDir}`, cleanupError);
       }
+    }
+  }
+
+  /**
+   * Handle a reindex-file job: fetch a single file from GitHub,
+   * re-chunk, re-embed, and upsert in codebase_embeddings (US-5.2).
+   */
+  private async processReindexFile(job: Job<CodebaseIndexingJobData>): Promise<CodebaseIndexingResult> {
+    const { applicationId, tenantId, filePath, commitSha } = job.data;
+    const startTime = Date.now();
+
+    if (!filePath) {
+      return {
+        success: false,
+        type: 'reindex-file',
+        filesProcessed: 0,
+        chunksCreated: 0,
+        duration: Date.now() - startTime,
+        error: 'filePath is required for reindex-file job',
+      };
+    }
+
+    this.logger.log(`Reindexing file ${filePath} for application ${applicationId}`);
+    await job.updateProgress(10);
+
+    try {
+      // Look up the application's GitHub config to get repo details
+      const config = await this.prisma.projectGithubConfig.findUnique({
+        where: { applicationId },
+        include: { installation: true },
+      });
+
+      if (!config) {
+        this.logger.warn(`No ProjectGithubConfig for application ${applicationId}, skipping reindex-file`);
+        return {
+          success: true,
+          type: 'reindex-file',
+          filesProcessed: 0,
+          chunksCreated: 0,
+          duration: Date.now() - startTime,
+        };
+      }
+
+      const token = await this.getAccessToken(config.installation.tenantId, Number(config.installationId));
+      await job.updateProgress(20);
+
+      // Fetch file content from GitHub
+      const { Octokit } = await import('@octokit/rest');
+      const octokit = new Octokit({ auth: token });
+
+      let fileContent: string;
+      try {
+        const { data } = await octokit.repos.getContent({
+          owner: config.owner,
+          repo: config.repo,
+          path: filePath,
+          ref: commitSha,
+        });
+
+        if (Array.isArray(data) || data.type !== 'file' || !('content' in data)) {
+          this.logger.warn(`${filePath} is not a regular file, skipping`);
+          return {
+            success: true,
+            type: 'reindex-file',
+            filesProcessed: 0,
+            chunksCreated: 0,
+            duration: Date.now() - startTime,
+          };
+        }
+
+        // Check size (GitHub API returns size in bytes)
+        if (data.size > MAX_FILE_SIZE) {
+          this.logger.debug(`File ${filePath} exceeds size limit (${data.size} bytes), skipping`);
+          return {
+            success: true,
+            type: 'reindex-file',
+            filesProcessed: 0,
+            chunksCreated: 0,
+            duration: Date.now() - startTime,
+          };
+        }
+
+        fileContent = Buffer.from(data.content, 'base64').toString('utf-8');
+      } catch (error) {
+        this.logger.warn(`Failed to fetch file ${filePath}: ${getErrorMessage(error)}`);
+        return {
+          success: false,
+          type: 'reindex-file',
+          filesProcessed: 0,
+          chunksCreated: 0,
+          duration: Date.now() - startTime,
+          error: getErrorMessage(error),
+        };
+      }
+
+      await job.updateProgress(40);
+
+      // Delete existing chunks for this file
+      await this.prisma.codebaseEmbedding.deleteMany({
+        where: { applicationId, filePath },
+      });
+
+      // Chunk the file
+      const chunks = chunkCodeFile(fileContent, filePath);
+      if (chunks.length === 0) {
+        return {
+          success: true,
+          type: 'reindex-file',
+          filesProcessed: 1,
+          chunksCreated: 0,
+          duration: Date.now() - startTime,
+        };
+      }
+
+      await job.updateProgress(50);
+
+      // Generate embeddings
+      const openai = this.getOpenAI();
+      const texts = chunks.map((c) => c.content);
+
+      const response = await openai.embeddings.create({
+        model: 'text-embedding-3-small',
+        input: texts,
+      });
+
+      await job.updateProgress(80);
+
+      // Upsert embeddings
+      for (let i = 0; i < chunks.length; i++) {
+        const chunk = chunks[i]!;
+        const embeddingData = response.data[i]?.embedding;
+        if (!embeddingData) continue;
+
+        const embeddingStr = `[${embeddingData.join(',')}]`;
+        const metadata = JSON.stringify({
+          type: chunk.metadata.type,
+          name: chunk.metadata.name,
+          startLine: chunk.startLine,
+          endLine: chunk.endLine,
+        });
+
+        await this.prisma.$executeRawUnsafe(
+          `INSERT INTO codebase_embeddings
+            (id, tenant_id, application_id, file_path, chunk_index, content, embedding, language, last_commit_sha, metadata, created_at, updated_at)
+          VALUES
+            (uuid_generate_v4(), $1::uuid, $2::uuid, $3, $4, $5, $6::vector, $7, $8, $9::jsonb, NOW(), NOW())
+          ON CONFLICT (application_id, file_path, chunk_index)
+          DO UPDATE SET
+            content = EXCLUDED.content,
+            embedding = EXCLUDED.embedding,
+            language = EXCLUDED.language,
+            last_commit_sha = EXCLUDED.last_commit_sha,
+            metadata = EXCLUDED.metadata,
+            updated_at = NOW()`,
+          tenantId,
+          applicationId,
+          filePath,
+          chunk.chunkIndex,
+          chunk.content,
+          embeddingStr,
+          chunk.language,
+          commitSha || 'unknown',
+          metadata,
+        );
+      }
+
+      await job.updateProgress(100);
+
+      this.logger.log(`Reindexed ${filePath} for application ${applicationId}: ${chunks.length} chunks`);
+
+      return {
+        success: true,
+        type: 'reindex-file',
+        filesProcessed: 1,
+        chunksCreated: chunks.length,
+        duration: Date.now() - startTime,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Failed to reindex file ${filePath} for application ${applicationId}: ${getErrorMessage(error)}`,
+        getErrorStack(error),
+      );
+      return {
+        success: false,
+        type: 'reindex-file',
+        filesProcessed: 0,
+        chunksCreated: 0,
+        duration: Date.now() - startTime,
+        error: getErrorMessage(error),
+      };
     }
   }
 
