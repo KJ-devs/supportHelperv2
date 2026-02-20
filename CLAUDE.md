@@ -240,16 +240,16 @@ Key variables (see `.env.example` for full list):
 | `API_PORT` | API port (default 3001) |
 | `DASHBOARD_URL` | CORS origin for dashboard |
 
-## Pre-Merge Checklist (MANDATORY)
+## Pre-Commit Checklist (MANDATORY)
 
-Before merging any branch or PR, you **MUST**:
+Before pushing to `main`, you **MUST**:
 1. Run `pnpm build` and ensure **all packages build successfully** (0 errors)
-2. Run `pnpm dev` and verify services start without errors
-3. Fix any build or runtime errors **before** creating the PR or merging
+2. Fix any build or runtime errors **before** committing
 
 **Git workflow:**
-- Always use `git rebase` instead of `git merge` to keep a clean linear history
-- Use `git rebase origin/main` to sync with upstream, never `git merge origin/main`
+- **Push directly to `main`** — no feature branches, no PRs
+- Commit and push all changes directly on the `main` branch
+- Remote name: `supportHelperv2`
 
 ## Common Pitfalls
 
