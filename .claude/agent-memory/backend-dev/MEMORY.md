@@ -151,3 +151,17 @@ Worker checks `'deleteTicket' in provider` before calling, so adding method is s
 - Worker job types `process-user-message` and `auto-escalate-timeout` are in `queue.types.ts`
 - `AgentModule` imports `TicketsModule` and `NotificationModule` (for escalation notifications)
 - `TicketsGateway` and `NotificationService` are `@Optional()` in `AgentService` constructor
+
+### Agent-V2 Architecture
+- Module: `apps/api/src/modules/agent-v2/`
+- Services: `DeepAnalysisService`, `AgenticLoopService`, `DiagnosisService`, `CodeInvestigationService`, `ToolExecutorService`
+- Gateway: `AgentV2Gateway` (WebSocket)
+- Controller: `AgentV2Controller` (`/api/agent/v2/...`)
+- Internal endpoint: `POST /api/agent/v2/internal/analyze` (protected by `x-internal-secret` header, `@Public()`)
+- Worker delegates to API via HTTP: `apps/worker/src/workers/deep-analysis.worker.ts` calls internal endpoint
+- Env var `INTERNAL_API_SECRET` required for worker→API internal calls; `API_URL` defaults to `http://localhost:3001`
+- Visual cues flow: VideoAnalysisWorker extracts cues after OCR → saves to `media.metadata.visualCues` → DeepAnalysisService reads and appends to system prompt
+
+### CacheService.del Pattern
+- `del(key: string)` deletes a single key — no wildcard support
+- For multi-key invalidation, iterate over known keys explicitly

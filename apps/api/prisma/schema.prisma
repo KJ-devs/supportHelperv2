@@ -129,6 +129,10 @@ model Ticket {
   updatedAt          DateTime  @updatedAt @map("updated_at")
   resolvedAt         DateTime? @map("resolved_at")
 
+  // AI Diagnosis
+  diagnosis          Json?     @map("diagnosis") @db.JsonB
+  diagnosisUpdatedAt DateTime? @map("diagnosis_updated_at")
+
   // Vector Embedding (pgvector)
   embedding          Unsupported("vector(3072)")?
 
@@ -391,8 +395,10 @@ model AgentSession {
   agentState       Json      @default("{}") @map("agent_state")
   lastActionAt     DateTime  @default(now()) @map("last_action_at")
   escalatedTo      String?   @map("escalated_to") @db.Uuid
-  escalationReason String?   @map("escalation_reason") @db.Text
-  createdAt        DateTime  @default(now()) @map("created_at")
+  escalationReason  String?   @map("escalation_reason") @db.Text
+  anthropicMessages Json?     @map("anthropic_messages") @db.JsonB
+  toolCallLog       Json?     @map("tool_call_log") @db.JsonB
+  createdAt         DateTime  @default(now()) @map("created_at")
 
   ticket    Ticket         @relation(fields: [ticketId], references: [id])
   escalatee User?          @relation(fields: [escalatedTo], references: [id])
@@ -511,6 +517,8 @@ model AgentTask {
   prNumber        Int?      @map("pr_number")
   prUrl           String?   @map("pr_url") @db.Text
   branchName      String?   @map("branch_name") @db.VarChar(255)
+
+  diagnosisSnapshot Json?     @map("diagnosis_snapshot") @db.JsonB
 
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")

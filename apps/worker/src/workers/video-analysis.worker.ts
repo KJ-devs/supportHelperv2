@@ -13,6 +13,28 @@ import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
+// ═══════════════════════════════════════════════════════════════════════
+// VISUAL CUES EXTRACTION
+// ═══════════════════════════════════════════════════════════════════════
+
+interface VisualCues {
+  errors: string[];
+  urls: string[];
+  components: string[];
+}
+
+function extractVisualCues(ocrText: string): VisualCues {
+  const errorRegex = /(?:TypeError|Error|Exception|Warning|WARN|ERROR)[\s:][^\n]{5,80}/g;
+  const urlRegex = /(?:https?:\/\/[^\s"'<>]{3,}|\/[a-z][a-z0-9/_-]{2,})/gi;
+  const componentRegex = /\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g;
+
+  const errors = [...new Set(ocrText.match(errorRegex) ?? [])].slice(0, 10);
+  const urls = [...new Set(ocrText.match(urlRegex) ?? [])].slice(0, 10);
+  const components = [...new Set(ocrText.match(componentRegex) ?? [])].slice(0, 15);
+
+  return { errors, urls, components };
+}
+
 /**
  * VideoAnalysisWorker
  *
@@ -101,6 +123,11 @@ export class VideoAnalysisWorker extends WorkerHost {
         this.logger.log('Step 3: Running OCR with Tesseract');
         ocrResults = await this.ocrService.extractTextBatch(framesToProcess);
         await this.saveVideoEvents(mediaId, framesToProcess, ocrResults);
+
+        // Extract visual cues (errors, URLs, component names) from combined OCR text
+        const visualCues = extractVisualCues(ocrResults.totalText || '');
+        await this.saveVisualCues(mediaId, visualCues);
+
         await job.updateProgress(50);
       }
 
@@ -271,6 +298,32 @@ export class VideoAnalysisWorker extends WorkerHost {
     await this.prisma.videoEvent.createMany({
       data: events,
       skipDuplicates: true,
+    });
+  }
+
+  /**
+   * Save extracted visual cues to media.metadata for use by DeepAnalysisService
+   */
+  private async saveVisualCues(mediaId: string, visualCues: VisualCues): Promise<void> {
+    if (visualCues.errors.length === 0 && visualCues.urls.length === 0 && visualCues.components.length === 0) {
+      return;
+    }
+
+    const existing = await this.prisma.media.findUnique({
+      where: { id: mediaId },
+      select: { metadata: true },
+    });
+
+    const existingMetadata =
+      existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
+        ? (existing.metadata as Record<string, unknown>)
+        : {};
+
+    await this.prisma.media.update({
+      where: { id: mediaId },
+      data: {
+        metadata: { ...existingMetadata, visualCues } as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 

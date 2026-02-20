@@ -1,0 +1,12 @@
+export { AgentV2Module } from './agent-v2.module';
+export { DeepAnalysisService } from './deep-analysis.service';
+export { DiagnosisService } from './diagnosis.service';
+export type { Diagnosis, AffectedFile, InvestigationLogEntry } from './diagnosis.service';
+export { CodeInvestigationService } from './code-investigation.service';
+export type { RepoContext, TreeEntry, CodeSearchHit, CommitInfo } from './code-investigation.service';
+export { AgenticLoopService } from './agentic-loop.service';
+export type { AgenticLoopOptions, AgenticLoopResult } from './agentic-loop.service';
+export { ToolExecutorService } from './tool-executor.service';
+export type { ToolExecutionContext } from './tool-executor.service';
+export { AGENT_TOOLS } from './agent-tools';
+export type { ToolName, ToolCallResult } from './agent-tools';

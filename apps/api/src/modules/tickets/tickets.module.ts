@@ -41,6 +41,10 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
     BullModule.registerQueue({
       name: 'github',
     }),
+    // Deep analysis queue (US-3.2)
+    BullModule.registerQueue({
+      name: 'deep-analysis',
+    }),
   ],
   controllers: [TicketsController, SdkTicketsController, TicketTrackingController, TicketReopenController],
   providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, WsJwtGuard],
