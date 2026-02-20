@@ -20,6 +20,7 @@ import {
   ExternalLink,
   Copy,
   Check,
+  GitPullRequest,
 } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,8 @@ import type {
   AIAnalysis,
   ActivityEvent,
   AgentMessage,
+  TicketEvent,
+  FixProposedEventData,
 } from '@/types/ticket';
 
 interface TicketTabsProps {
@@ -349,8 +352,54 @@ function AIAnalysisTab({ analysis }: { analysis: AIAnalysis | null }) {
   );
 }
 
+// Fix Proposed Event Row
+function FixProposedRow({
+  data,
+  createdAt,
+  isLast,
+}: {
+  data: FixProposedEventData;
+  createdAt: string;
+  isLast: boolean;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="relative flex flex-col items-center">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100 dark:bg-green-950/40">
+          <GitPullRequest className="h-4 w-4 text-green-600 dark:text-green-400" />
+        </div>
+        {!isLast && <div className="flex-1 w-px bg-border mt-2" />}
+      </div>
+      <div className="flex-1 pb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-sm font-medium">Fix proposé</span>
+          <span className="text-xs text-muted-foreground">{formatRelativeTime(createdAt)}</span>
+        </div>
+        <div className="mt-1 flex items-center gap-2 flex-wrap text-sm">
+          <a
+            href={data.prUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+          >
+            PR #{data.prNumber}
+            {data.title ? `: ${data.title}` : ''}
+          </a>
+          <span className="text-xs text-muted-foreground">branche: {data.branch}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Activity History Tab
-function ActivityHistoryTab({ events }: { events: ActivityEvent[] }) {
+function ActivityHistoryTab({
+  events,
+  ticketEvents,
+}: {
+  events: ActivityEvent[];
+  ticketEvents?: TicketEvent[];
+}) {
   const eventIcons: Record<ActivityEvent['type'], typeof History> = {
     created: Check,
     assigned: MessageCircle,
@@ -362,9 +411,15 @@ function ActivityHistoryTab({ events }: { events: ActivityEvent[] }) {
     linked_github: ExternalLink,
     ai_analysis: Bot,
     resolved: Check,
+    fix_proposed: GitPullRequest,
   };
 
-  if (events.length === 0) {
+  // Raw TicketEvent items of type fix_proposed from the API
+  const fixProposedEvents = (ticketEvents ?? []).filter(e => e.type === 'fix_proposed');
+
+  const totalCount = events.length + fixProposedEvents.length;
+
+  if (totalCount === 0) {
     return (
       <Card>
         <CardContent className="pt-6">
@@ -383,13 +438,28 @@ function ActivityHistoryTab({ events }: { events: ActivityEvent[] }) {
         <div className="space-y-4">
           {events.map((event, index) => {
             const Icon = eventIcons[event.type] || History;
+            const isLast = index === events.length - 1 && fixProposedEvents.length === 0;
+
+            // Special rendering for fix_proposed coming via activityHistory
+            if (event.type === 'fix_proposed' && event.metadata) {
+              const data = event.metadata as unknown as FixProposedEventData;
+              return (
+                <FixProposedRow
+                  key={event.id}
+                  data={data}
+                  createdAt={event.createdAt}
+                  isLast={isLast}
+                />
+              );
+            }
+
             return (
               <div key={event.id} className="flex gap-3">
                 <div className="relative flex flex-col items-center">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
                     <Icon className="h-4 w-4 text-muted-foreground" />
                   </div>
-                  {index < events.length - 1 && <div className="flex-1 w-px bg-border mt-2" />}
+                  {!isLast && <div className="flex-1 w-px bg-border mt-2" />}
                 </div>
                 <div className="flex-1 pb-4">
                   <div className="flex items-center gap-2">
@@ -410,6 +480,20 @@ function ActivityHistoryTab({ events }: { events: ActivityEvent[] }) {
                   <p className="mt-1 text-sm text-muted-foreground">{event.message}</p>
                 </div>
               </div>
+            );
+          })}
+
+          {/* Raw TicketEvents of type fix_proposed from the API */}
+          {fixProposedEvents.map((event, index) => {
+            const data = event.data as unknown as FixProposedEventData;
+            const isLast = index === fixProposedEvents.length - 1;
+            return (
+              <FixProposedRow
+                key={event.id}
+                data={data}
+                createdAt={event.createdAt}
+                isLast={isLast}
+              />
             );
           })}
         </div>
@@ -557,7 +641,7 @@ export function TicketTabs({ ticket, onJumpToTimestamp }: TicketTabsProps) {
       </TabsContent>
 
       <TabsContent value="activity" className="mt-4">
-        <ActivityHistoryTab events={ticket.activityHistory} />
+        <ActivityHistoryTab events={ticket.activityHistory} ticketEvents={ticket.events} />
       </TabsContent>
 
       <TabsContent value="conversation" className="mt-4">

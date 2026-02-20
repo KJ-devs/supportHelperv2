@@ -377,6 +377,19 @@ if (!hasAccess) {
   pageUrl: 'https://app.example.com/dashboard',
   createdAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
   updatedAt: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+  events: [
+    {
+      id: 'tevt-1',
+      type: 'fix_proposed',
+      data: {
+        prUrl: 'https://github.com/example/repo/pull/42',
+        prNumber: 42,
+        branch: 'fix/permission-token-validation',
+        title: 'Fix permission token validation on dashboard load',
+      },
+      createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
+    },
+  ],
 });
 
 const mockUsers: User[] = [

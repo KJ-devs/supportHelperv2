@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { GitPullRequest } from 'lucide-react';
 import { Card } from '@/components/ui';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
@@ -44,6 +45,7 @@ const EVENT_CONFIG: Record<string, { label: string; color: string }> = {
   agent_retry: { label: 'Agent Retrying', color: 'bg-yellow-500' },
   agent_failed: { label: 'Agent Failed', color: 'bg-red-500' },
   agent_escalated: { label: 'Escalated', color: 'bg-red-600' },
+  fix_proposed: { label: 'Fix Proposed', color: 'bg-green-500' },
 };
 
 // --- Relative time helper ---
@@ -134,6 +136,38 @@ function EventDataLinks({ data }: { data: Record<string, any> }) {
   if (links.length === 0) return null;
 
   return <div className="flex flex-wrap gap-2 mt-1">{links}</div>;
+}
+
+// --- Fix proposed detail renderer ---
+
+function FixProposedDetail({ data }: { data: Record<string, any> }) {
+  const prUrl: string = data.prUrl || '';
+  const prNumber: number | undefined = data.prNumber;
+  const title: string | undefined = data.title;
+  const branch: string | undefined = data.branch;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 mt-1">
+      <GitPullRequest className="h-4 w-4 text-green-500 shrink-0" />
+      {prUrl ? (
+        <a
+          href={prUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-blue-600 underline hover:text-blue-800"
+        >
+          PR #{prNumber ?? 'link'}{title ? `: ${title}` : ''}
+        </a>
+      ) : (
+        <span className="text-xs text-gray-700">
+          PR #{prNumber ?? '—'}{title ? `: ${title}` : ''}
+        </span>
+      )}
+      {branch && (
+        <span className="text-xs text-muted-foreground">branche: {branch}</span>
+      )}
+    </div>
+  );
 }
 
 // --- Skeleton loader ---
@@ -247,7 +281,11 @@ export function TicketTimeline({ ticketId }: TicketTimelineProps) {
                     <span className="text-sm font-medium text-gray-900">{config.label}</span>
                     <span className="text-xs text-gray-400">{relativeTime(entry.createdAt)}</span>
                   </div>
-                  <EventDataLinks data={entry.data || {}} />
+                  {entry.eventType === 'fix_proposed' ? (
+                    <FixProposedDetail data={entry.data || {}} />
+                  ) : (
+                    <EventDataLinks data={entry.data || {}} />
+                  )}
                 </div>
               </div>
             );
