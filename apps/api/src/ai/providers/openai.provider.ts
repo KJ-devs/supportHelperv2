@@ -2,9 +2,16 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import OpenAI from 'openai';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
+import {
+  AgentTool,
+  AgentMessage,
+  AgentTurnResult,
+  ToolCapableProvider,
+} from './tool-capable-provider.interface';
+import { ToolFormatConverter } from './tool-format.converter';
 
 @Injectable()
-export class OpenAIProvider implements AIProvider {
+export class OpenAIProvider implements AIProvider, ToolCapableProvider {
   private readonly logger = new Logger(OpenAIProvider.name);
   private client: OpenAI;
   private config: AIProviderConfig;
@@ -82,6 +89,33 @@ export class OpenAIProvider implements AIProvider {
     } catch (error) {
       this.logger.error(
         `OpenAI structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  async chat(options: {
+    model: string;
+    maxTokens: number;
+    systemPrompt: string;
+    messages: AgentMessage[];
+    tools: AgentTool[];
+  }): Promise<AgentTurnResult> {
+    try {
+      const response = await this.client.chat.completions.create({
+        model: options.model,
+        max_tokens: options.maxTokens,
+        messages: [
+          { role: 'system', content: options.systemPrompt },
+          ...ToolFormatConverter.toOpenAIMessages(options.messages),
+        ],
+        tools: ToolFormatConverter.toOpenAITools(options.tools),
+        tool_choice: options.tools.length > 0 ? 'auto' : undefined,
+      });
+      return ToolFormatConverter.fromOpenAIResponse(response);
+    } catch (error) {
+      this.logger.error(
+        `OpenAI chat failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
     }

@@ -2,9 +2,16 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import Anthropic from '@anthropic-ai/sdk';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
+import {
+  AgentTool,
+  AgentMessage,
+  AgentTurnResult,
+  ToolCapableProvider,
+} from './tool-capable-provider.interface';
+import { ToolFormatConverter } from './tool-format.converter';
 
 @Injectable()
-export class AnthropicProvider implements AIProvider {
+export class AnthropicProvider implements AIProvider, ToolCapableProvider {
   private readonly logger = new Logger(AnthropicProvider.name);
   private client: Anthropic;
   private config: AIProviderConfig;
@@ -81,6 +88,30 @@ export class AnthropicProvider implements AIProvider {
     } catch (error) {
       this.logger.error(
         `Anthropic structured output failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      throw error;
+    }
+  }
+
+  async chat(options: {
+    model: string;
+    maxTokens: number;
+    systemPrompt: string;
+    messages: AgentMessage[];
+    tools: AgentTool[];
+  }): Promise<AgentTurnResult> {
+    try {
+      const response = await this.client.messages.create({
+        model: options.model,
+        max_tokens: options.maxTokens,
+        system: options.systemPrompt,
+        messages: ToolFormatConverter.toAnthropicMessages(options.messages),
+        tools: ToolFormatConverter.toAnthropicTools(options.tools),
+      });
+      return ToolFormatConverter.fromAnthropicResponse(response);
+    } catch (error) {
+      this.logger.error(
+        `Anthropic chat failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       throw error;
     }

@@ -162,6 +162,30 @@ export class AiConfigService {
     }
   }
 
+  async getFullConfig(tenantId: string): Promise<{
+    provider: string;
+    apiKey: string;
+    model: string;
+    endpoint?: string;
+  } | null> {
+    const config = await this.prisma.aiConfig.findUnique({
+      where: { tenantId },
+    });
+
+    if (!config || !config.encryptedApiKey) {
+      return null;
+    }
+
+    const settings = config.settings as Record<string, any>;
+
+    return {
+      provider: config.provider,
+      apiKey: config.encryptedApiKey, // auto-decrypted by Prisma encryption middleware
+      model: config.model,
+      endpoint: settings?.endpoint,
+    };
+  }
+
   async getDecryptedApiKey(tenantId: string): Promise<string | null> {
     const config = await this.prisma.aiConfig.findUnique({
       where: { tenantId },
