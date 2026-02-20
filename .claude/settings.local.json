@@ -38,7 +38,20 @@
       "Task(security-auditor)",
       "Task(doc-writer)",
       "Bash(cat:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(du:*)",
+      "Bash(tar:*)",
+      "Bash(awk:*)",
+      "Bash(./node_modules/.bin/prisma migrate dev:*)",
+      "Bash(/c/Users/maxto/Documents/Claude/support-helper/apps/api/node_modules/.bin/prisma migrate dev:*)",
+      "Bash(kill:*)",
+      "Bash(PGPASSWORD=support123 psql:*)",
+      "Bash(openssl rand:*)",
+      "Bash(Start-Process \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(start \"\" \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
+      "Bash(for pid in 14600 12408 19300 12852 23488)",
+      "Bash(do)",
+      "Bash(done)"
     ]
   }
 }

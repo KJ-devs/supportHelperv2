@@ -24,6 +24,7 @@ export class TicketsService {
     private readonly ticketsGateway: TicketsGateway,
     private readonly cacheService: CacheService,
     @InjectQueue('github') private readonly githubQueue: Queue,
+    @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue,
   ) {}
 
   /**
@@ -88,6 +89,13 @@ export class TicketsService {
     if (dto.applicationId) {
       this.enqueueGithubIssueCreation(ticket.id).catch((err) => {
         this.logger.warn(`Failed to enqueue GitHub issue creation for ticket ${ticket.id}: ${err.message}`);
+      });
+    }
+
+    // Trigger deep analysis if application has a GitHub config (US-3.2)
+    if (dto.applicationId) {
+      this.enqueueDeepAnalysis(ticket.id, tenantId, dto.applicationId).catch((err) => {
+        this.logger.warn(`Failed to enqueue deep analysis for ticket ${ticket.id}: ${err.message}`);
       });
     }
 
@@ -718,6 +726,44 @@ export class TicketsService {
         removeOnFail: 500,
       },
     );
+  }
+
+  /**
+   * Enqueue deep analysis if the application has a linked GitHub repo.
+   * Checks for ProjectGithubConfig first to avoid unnecessary jobs.
+   * Non-blocking: failure here does not affect ticket creation.
+   */
+  private async enqueueDeepAnalysis(
+    ticketId: string,
+    tenantId: string,
+    applicationId: string,
+  ): Promise<void> {
+    const githubConfig = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+      select: { githubConfig: { select: { id: true } } },
+    });
+
+    if (!githubConfig?.githubConfig) {
+      // No GitHub config linked, skip deep analysis
+      return;
+    }
+
+    await this.deepAnalysisQueue.add(
+      'analyze',
+      { ticketId, tenantId, applicationId },
+      {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 30000,
+        },
+        delay: 5000, // Give the ticket a moment to settle before analysis
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
+    );
+
+    this.logger.debug(`Enqueued deep analysis for ticket ${ticketId}`);
   }
 
   /**

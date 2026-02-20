@@ -11,10 +11,14 @@ import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
 import { agentApi } from '@/lib/api/agent';
+import { getTicketDiagnosis } from '@/lib/api/agent-v2';
 import type { Ticket } from '@/lib/types/ticket';
+import type { Diagnosis } from '@/components/diagnosis';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TicketDetail } from '@/components/tickets/TicketDetail';
 import { TicketTimeline } from '@/components/tickets/TicketTimeline';
+import { DiagnosisPanel } from '@/components/diagnosis';
+import { AgentChatV2 } from '@/components/agent-chat';
 import { PageLoader, Button } from '@/components/ui';
 import { AlertTriangle, Bot, Trash2 } from 'lucide-react';
 
@@ -28,6 +32,10 @@ export default function TicketDetailPage() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
+  const [isDiagnosisLoading, setIsDiagnosisLoading] = useState(false);
+  const [showAgentChat, setShowAgentChat] = useState(false);
 
   const fetchTicket = useCallback(async () => {
     try {
@@ -43,11 +51,24 @@ export default function TicketDetailPage() {
     }
   }, [ticketId]);
 
+  const fetchDiagnosis = useCallback(async () => {
+    try {
+      setIsDiagnosisLoading(true);
+      const data = await getTicketDiagnosis(ticketId);
+      setDiagnosis(data);
+    } catch (err) {
+      console.error('Error fetching diagnosis:', err);
+    } finally {
+      setIsDiagnosisLoading(false);
+    }
+  }, [ticketId]);
+
   useEffect(() => {
     if (!authLoading && ticketId) {
       fetchTicket();
+      fetchDiagnosis();
     }
-  }, [ticketId, authLoading, fetchTicket]);
+  }, [ticketId, authLoading, fetchTicket, fetchDiagnosis]);
 
   const handleUpdate = (updatedTicket: Ticket) => {
     setTicket(updatedTicket);
@@ -96,6 +117,10 @@ export default function TicketDetailPage() {
       setIsAgentLoading(false);
     }
   }, [ticket, ticketId, router]);
+
+  const handleAskAgent = useCallback(() => {
+    setShowAgentChat(true);
+  }, []);
 
   if (authLoading || isLoading) {
     return <PageLoader />;
@@ -179,6 +204,25 @@ export default function TicketDetailPage() {
         {/* Content */}
         {ticket && !error && (
           <TicketDetail ticket={ticket} onUpdate={handleUpdate} />
+        )}
+
+        {/* Diagnosis Panel */}
+        {ticket && !error && (
+          <div className="mt-6">
+            <DiagnosisPanel
+              ticketId={ticketId}
+              diagnosis={diagnosis}
+              isLoading={isDiagnosisLoading}
+              onAskAgent={handleAskAgent}
+            />
+          </div>
+        )}
+
+        {/* Agent Chat V2 */}
+        {ticket && !error && showAgentChat && (
+          <div className="mt-6">
+            <AgentChatV2 ticketId={ticketId} />
+          </div>
         )}
 
       </div>

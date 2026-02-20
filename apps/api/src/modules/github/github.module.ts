@@ -91,6 +91,10 @@ import { GithubWebhookProcessor } from './processors';
         removeOnFail: 500,
       },
     }),
+    // Codebase indexing queue for per-file reindex on push events (US-5.2)
+    BullModule.registerQueue({
+      name: 'codebase-indexing',
+    }),
   ],
   controllers: [
     // New modular controllers

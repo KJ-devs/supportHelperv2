@@ -9,6 +9,7 @@ export const QUEUE_NAMES = {
   AGENT_ORCHESTRATION: 'agent-orchestration',
   INTEGRATION_SYNC: 'integration-sync',
   CODEBASE_INDEXING: 'codebase-indexing',
+  DEEP_ANALYSIS: 'deep-analysis',
   BACKUP: 'backup',
   USAGE_SNAPSHOT: 'usage-snapshot',
 } as const;
@@ -117,6 +118,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
       name: QUEUE_NAMES.CODEBASE_INDEXING,
       defaultJobOptions: {
         attempts: 2,
+        backoff: {
+          type: 'exponential',
+          delay: 30000,
+        },
+        removeOnComplete: 50,
+        removeOnFail: 100,
+      },
+    }),
+
+    // Deep Analysis Queue (US-3.2)
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.DEEP_ANALYSIS,
+      defaultJobOptions: {
+        attempts: 3,
         backoff: {
           type: 'exponential',
           delay: 30000,

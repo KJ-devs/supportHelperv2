@@ -228,13 +228,16 @@ export interface FunctionCallResult {
 // ═══════════════════════════════════════════════════════════════════════
 
 export interface CodebaseIndexingJobData {
-  type: 'full-index' | 'incremental-index';
+  type: 'full-index' | 'incremental-index' | 'reindex-file';
   applicationId: string;
   tenantId: string;
-  repoFullName: string;
-  installationId: number;
+  repoFullName?: string;
+  installationId?: number;
   sinceCommitSha?: string;
-  triggeredBy: 'webhook' | 'manual';
+  triggeredBy?: 'webhook' | 'manual';
+  // For reindex-file jobs only
+  filePath?: string;
+  commitSha?: string;
 }
 
 export interface CodebaseIndexingResult {
@@ -242,6 +245,24 @@ export interface CodebaseIndexingResult {
   type: string;
   filesProcessed: number;
   chunksCreated: number;
+  duration: number;
+  error?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// DEEP ANALYSIS JOBS (US-3.2)
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface DeepAnalysisJobData {
+  ticketId: string;
+  tenantId: string;
+  applicationId: string;
+}
+
+export interface DeepAnalysisResult {
+  success: boolean;
+  ticketId: string;
+  diagnosisFound: boolean;
   duration: number;
   error?: string;
 }

@@ -2,7 +2,8 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { BullModule } from '@nestjs/bullmq';
-import { APP_GUARD, APP_FILTER } from '@nestjs/core';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import Redis from 'ioredis';
 import { ThrottlerStorageRedisService } from './common/services/throttler-storage-redis.service';
 import { ThrottlerExceptionFilter } from './common/filters/throttler-exception.filter';
@@ -51,6 +52,9 @@ import { CodebaseIndexModule } from './modules/codebase-index/codebase-index.mod
 
 // Agent Tasks (Code Analysis)
 import { AgentTasksModule } from './modules/agent-tasks/agent-tasks.module';
+
+// Agent V2 (Deep Analysis)
+import { AgentV2Module } from './modules/agent-v2/agent-v2.module';
 
 // Notifications
 import { NotificationModule } from './modules/notifications/notification.module';
@@ -148,6 +152,9 @@ import { SsoModule } from './modules/auth/sso/sso.module';
       },
     }),
 
+    // Event Emitter (global)
+    EventEmitterModule.forRoot(),
+
     // Core Infrastructure
     PrismaModule,
     RedisCacheModule,
@@ -187,6 +194,9 @@ import { SsoModule } from './modules/auth/sso/sso.module';
 
     // Agent Tasks (Code Analysis)
     AgentTasksModule,
+
+    // Agent V2 (Deep Analysis with GitHub code investigation)
+    AgentV2Module,
 
     // Notifications
     NotificationModule,
