@@ -1,7 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CodeInvestigationService } from './code-investigation.service';
-import { AgenticLoopService, AgenticLoopOptions } from './agentic-loop.service';
+import { AgenticLoopService, AgenticLoopOptions, AgenticLoopResult } from './agentic-loop.service';
 import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface';
 import { DiagnosisService, Diagnosis } from './diagnosis.service';
 import { AGENT_TOOLS } from './agent-tools';
@@ -42,6 +43,7 @@ export class DeepAnalysisService {
     private readonly codeInvestigation: CodeInvestigationService,
     private readonly agenticLoop: AgenticLoopService,
     private readonly diagnosisService: DiagnosisService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async analyze(ticketId: string, tenantId: string): Promise<Diagnosis | null> {
@@ -123,6 +125,8 @@ Start by identifying which parts of the codebase are likely involved, then read 
           `Deep analysis complete for ticket ${ticketId}: confidence=${diagnosis.confidence}`,
         );
       }
+
+      this.emitFixProposedIfPresent(result.toolCallLog, ticketId, tenantId);
 
       // Even if no update_diagnosis call was made, save what we have from the final content
       const finalDiagnosis = diagnosis ?? (result.finalContent
@@ -304,6 +308,8 @@ Start by identifying which parts of the codebase are likely involved, then read 
       );
     }
 
+    this.emitFixProposedIfPresent(result.toolCallLog, ticket.id, tenantId, sessionId);
+
     return {
       content: result.finalContent,
       toolsUsed: result.toolCallLog.map((t) => t.name),
@@ -357,6 +363,28 @@ Start by identifying which parts of the codebase are likely involved, then read 
       urls: [...new Set(merged.urls)].slice(0, 10),
       components: [...new Set(merged.components)].slice(0, 15),
     };
+  }
+
+  private emitFixProposedIfPresent(
+    toolCallLog: AgenticLoopResult['toolCallLog'],
+    ticketId: string,
+    tenantId: string,
+    sessionId?: string,
+  ): void {
+    const prCall = toolCallLog.find(
+      (t) => t.name === 'create_pull_request' && !t.error,
+    );
+    if (!prCall) return;
+
+    const pr = prCall.result as { number: number; url: string; title: string };
+    this.eventEmitter.emit('ticket:fix_proposed', {
+      ticketId,
+      tenantId,
+      sessionId,
+      prUrl: pr.url,
+      prNumber: pr.number,
+      prTitle: pr.title,
+    });
   }
 
   private buildAgentSystemPrompt(
