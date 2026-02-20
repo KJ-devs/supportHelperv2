@@ -229,6 +229,36 @@ export class AgentV2Gateway
     });
   }
 
+  @OnEvent('ticket:fix_proposed')
+  handleTicketFixProposedEvent(event: {
+    ticketId: string;
+    tenantId: string;
+    sessionId?: string;
+    prUrl: string;
+    prNumber: number;
+    prTitle: string;
+  }) {
+    const payload = {
+      ticketId: event.ticketId,
+      prUrl: event.prUrl,
+      prNumber: event.prNumber,
+      prTitle: event.prTitle,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Broadcast to all clients watching this ticket
+    this.server.to(this.ticketRoomName(event.ticketId)).emit('ticket:fix_proposed', payload);
+
+    // Also notify the active session room if available
+    if (event.sessionId) {
+      this.server.to(this.sessionRoomName(event.sessionId)).emit('ticket:fix_proposed', payload);
+    }
+
+    this.logger.log(
+      `Broadcast ticket:fix_proposed for ticket ${event.ticketId} (PR #${event.prNumber})`,
+    );
+  }
+
   // ── Server-side emit helpers ──────────────────────────────
 
   emitToolCall(sessionId: string, toolName: string, input: Record<string, unknown>) {

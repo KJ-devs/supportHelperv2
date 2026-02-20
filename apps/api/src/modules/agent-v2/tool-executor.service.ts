@@ -255,13 +255,40 @@ export class ToolExecutorService {
       case 'create_pull_request': {
         const ctx = await this.resolveRepoContext(input, context);
         if (!ctx) return { error: NO_REPO_ERROR };
-        return this.codeInvestigation.createPullRequest(
+
+        const pr = await this.codeInvestigation.createPullRequest(
           ctx,
           input.title as string,
           input.body as string,
           input.head_branch as string,
           input.base_branch as string | undefined,
         );
+
+        // Transition ticket to fix_proposed and record the event
+        await this.prisma.ticket.update({
+          where: { id: context.ticket.id },
+          data: { status: 'fix_proposed' },
+        });
+
+        await this.prisma.ticketEvent.create({
+          data: {
+            ticketId: context.ticket.id,
+            tenantId: context.tenantId,
+            eventType: 'fix_proposed',
+            data: {
+              prUrl: pr.url,
+              prNumber: pr.number,
+              prTitle: pr.title,
+              branch: input.head_branch as string,
+            },
+          },
+        });
+
+        this.logger.log(
+          `Ticket ${context.ticket.id} → fix_proposed (PR #${pr.number})`,
+        );
+
+        return pr;
       }
 
       default: {
