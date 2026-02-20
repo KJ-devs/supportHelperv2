@@ -629,7 +629,7 @@ export class CodebaseIndexingWorker extends WorkerHost {
 
     try {
       // Look up the application's GitHub config to get repo details
-      const config = await this.prisma.projectGithubConfig.findUnique({
+      const config = await this.prisma.projectGithubConfig.findFirst({
         where: { applicationId },
         include: { installation: true },
       });

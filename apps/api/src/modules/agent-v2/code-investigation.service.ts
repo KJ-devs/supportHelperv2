@@ -12,6 +12,10 @@ export interface RepoContext {
   installationId: string;
   tenantId: string;
   applicationId: string;
+  repoConfigId: string;
+  role: string;
+  fullName: string;
+  isPrimary: boolean;
 }
 
 export interface TreeEntry {
@@ -44,21 +48,80 @@ export class CodeInvestigationService {
   ) {}
 
   /**
-   * Resolve the GitHub config for an application and return a scoped Octokit.
+   * Resolve the primary GitHub config for an application and return a scoped Octokit.
+   * Falls back to the first config if none is marked as primary.
    */
   async getRepoContext(applicationId: string): Promise<RepoContext | null> {
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    return this.getPrimaryRepoContext(applicationId);
+  }
+
+  /**
+   * Get the primary repo context for an application.
+   */
+  async getPrimaryRepoContext(applicationId: string): Promise<RepoContext | null> {
+    const config = await this.prisma.projectGithubConfig.findFirst({
+      where: { applicationId, isPrimary: true },
+      include: { installation: true },
+    });
+
+    // Fallback to first config if none is primary
+    const resolvedConfig = config ?? await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
-      include: {
-        installation: true,
-        application: true,
-      },
+      include: { installation: true },
+    });
+
+    if (!resolvedConfig) {
+      return null;
+    }
+
+    return this.buildRepoContext(resolvedConfig, applicationId);
+  }
+
+  /**
+   * Get all repo contexts for an application (multi-repo support).
+   */
+  async getAllRepoContexts(applicationId: string): Promise<RepoContext[]> {
+    const configs = await this.prisma.projectGithubConfig.findMany({
+      where: { applicationId },
+      include: { installation: true },
+      orderBy: { isPrimary: 'desc' },
+    });
+
+    const contexts: RepoContext[] = [];
+    for (const config of configs) {
+      contexts.push(await this.buildRepoContext(config, applicationId));
+    }
+    return contexts;
+  }
+
+  /**
+   * Resolve a specific repo context by owner/repo.
+   */
+  async getRepoContextByName(applicationId: string, owner: string, repo: string): Promise<RepoContext | null> {
+    const config = await this.prisma.projectGithubConfig.findFirst({
+      where: { applicationId, owner, repo },
+      include: { installation: true },
     });
 
     if (!config) {
       return null;
     }
 
+    return this.buildRepoContext(config, applicationId);
+  }
+
+  private async buildRepoContext(
+    config: {
+      id: string;
+      owner: string;
+      repo: string;
+      defaultBranch: string;
+      isPrimary: boolean;
+      role: string;
+      installation: { installationId: bigint; tenantId: string };
+    },
+    applicationId: string,
+  ): Promise<RepoContext> {
     const octokit = await this.githubAppService.getInstallationOctokit(
       Number(config.installation.installationId),
     );
@@ -71,6 +134,10 @@ export class CodeInvestigationService {
       installationId: String(config.installation.installationId),
       tenantId: config.installation.tenantId,
       applicationId,
+      repoConfigId: config.id,
+      role: config.role,
+      fullName: `${config.owner}/${config.repo}`,
+      isPrimary: config.isPrimary,
     };
   }
 

@@ -1,8 +1,24 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TicketTimelineService } from '../tickets/services/ticket-timeline.service';
 import { ActionPlan, AgentTaskStatus } from './types/action-plan.types';
+
+/** Maps AgentTask status → Ticket status for automatic sync */
+const TASK_TO_TICKET_STATUS: Record<string, string | null> = {
+  analyzing: 'analyzing',
+  plan_pending_review: 'in_progress',
+  code_pending_review: 'in_progress',
+  plan_approved: 'in_progress',
+  code_approved: 'in_progress',
+  generating: 'in_progress',
+  pushing: 'in_progress',
+  pr_created: 'in_progress',
+  completed: 'resolved',
+  failed: 'open',
+  expired: 'open',
+};
 
 @Injectable()
 export class AgentTasksService {
@@ -11,6 +27,7 @@ export class AgentTasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ticketTimeline: TicketTimelineService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async create(ticketId: string, tenantId: string, applicationId: string) {
@@ -58,6 +75,12 @@ export class AgentTasksService {
   }
 
   async updateStatus(id: string, status: AgentTaskStatus) {
+    // Read previous status for event emission
+    const previous = await this.prisma.agentTask.findUnique({
+      where: { id },
+      select: { status: true, ticketId: true, tenantId: true },
+    });
+
     const data: Prisma.AgentTaskUpdateInput = { status };
 
     if (status === 'completed' || status === 'failed') {
@@ -70,6 +93,28 @@ export class AgentTasksService {
     });
 
     this.logger.log(`Updated agent task ${id} status to ${status}`);
+
+    // Emit WebSocket event for real-time UI updates
+    this.eventEmitter.emit('agent-task:status-changed', {
+      taskId: id,
+      previousStatus: previous?.status,
+      newStatus: status,
+    });
+
+    // Sync ticket status based on agent task status
+    if (previous) {
+      const ticketStatus = TASK_TO_TICKET_STATUS[status];
+      if (ticketStatus) {
+        await this.prisma.ticket.update({
+          where: { id: previous.ticketId },
+          data: { status: ticketStatus },
+        });
+        this.logger.log(
+          `Synced ticket ${previous.ticketId} status to '${ticketStatus}' (from task status '${status}')`,
+        );
+      }
+    }
+
     return task;
   }
 

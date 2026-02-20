@@ -509,7 +509,7 @@ export class CodebaseIndexerService {
     applicationId: string,
     tenantId: string,
   ): Promise<{ repoFullName: string; installationId: number }> {
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
       include: { installation: true },
     });

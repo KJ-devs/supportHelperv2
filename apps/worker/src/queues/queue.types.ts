@@ -132,7 +132,9 @@ export type AgentJobType =
   | 'create-user-story' // Generate and create GitHub User Story from ticket
   | 'generate-action-plan' // Generate code-level action plan for a ticket (US-3.2)
   | 'generate-code' // Generate code changes, create branch and PR (US-3.3)
-  | 'push-code'; // Push approved code to GitHub after review (US-3.4)
+  | 'push-code' // Push approved code to GitHub after review (US-3.4)
+  | 'generate-proposal' // Generate technical proposal for feature requests
+  | 'auto-answer'; // Auto-answer support questions via RAG
 
 export interface AgentJobData {
   type: AgentJobType;
@@ -263,6 +265,26 @@ export interface DeepAnalysisResult {
   success: boolean;
   ticketId: string;
   diagnosisFound: boolean;
+  duration: number;
+  error?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TRIAGE JOBS
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface TriageJobData {
+  ticketId: string;
+  tenantId: string;
+  applicationId: string;
+  source?: 'dashboard' | 'sdk' | 'manual' | 'auto';
+  skipClassification?: boolean;
+}
+
+export interface TriageWorkerResult {
+  success: boolean;
+  ticketId: string;
+  routedTo: string | null;
   duration: number;
   error?: string;
 }

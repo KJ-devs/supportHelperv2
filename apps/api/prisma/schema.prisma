@@ -75,7 +75,7 @@ model Application {
 
   tenant                  Tenant               @relation(fields: [tenantId], references: [id])
   tickets                 Ticket[]
-  githubConfig            ProjectGithubConfig?
+  githubConfigs           ProjectGithubConfig[]
   codebaseEmbeddings      CodebaseEmbedding[]
   codebaseIndexStatus     CodebaseIndexStatus?
   agentTasks              AgentTask[]
@@ -268,18 +268,24 @@ model GithubInstallation {
 
 model ProjectGithubConfig {
   id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  applicationId  String   @unique @map("application_id") @db.Uuid
+  applicationId  String   @map("application_id") @db.Uuid
   installationId BigInt   @map("installation_id")
   owner          String
   repo           String
   defaultBranch  String   @default("main") @map("default_branch")
+  isPrimary      Boolean  @default(false) @map("is_primary")
+  role           String   @default("main") @db.VarChar(50)
   settings       Json     @default("{}")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  application    Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
-  installation   GithubInstallation @relation(fields: [installationId], references: [installationId])
+  application          Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  installation         GithubInstallation   @relation(fields: [installationId], references: [installationId])
+  codebaseEmbeddings   CodebaseEmbedding[]
+  codebaseIndexStatus  CodebaseIndexStatus?
 
+  @@unique([applicationId, owner, repo])
+  @@index([applicationId])
   @@map("project_github_configs")
 }
 
@@ -451,6 +457,7 @@ model CodebaseEmbedding {
   id            String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   tenantId      String   @map("tenant_id") @db.Uuid
   applicationId String   @map("application_id") @db.Uuid
+  repoConfigId  String?  @map("repo_config_id") @db.Uuid
   filePath      String   @map("file_path") @db.VarChar(500)
   chunkIndex    Int      @map("chunk_index")
   content       String   @db.Text
@@ -461,18 +468,21 @@ model CodebaseEmbedding {
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
-  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  application Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  repoConfig  ProjectGithubConfig? @relation(fields: [repoConfigId], references: [id], onDelete: SetNull)
 
   @@unique([applicationId, filePath, chunkIndex])
   @@index([tenantId, applicationId])
   @@index([applicationId, filePath])
+  @@index([repoConfigId])
   @@map("codebase_embeddings")
 }
 
 model CodebaseIndexStatus {
   id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
   applicationId   String    @unique @map("application_id") @db.Uuid
+  repoConfigId    String?   @unique @map("repo_config_id") @db.Uuid
   status          String    @default("idle") @db.VarChar(20)
   lastIndexedAt   DateTime? @map("last_indexed_at")
   lastCommitSha   String?   @map("last_commit_sha") @db.VarChar(40)
@@ -482,7 +492,8 @@ model CodebaseIndexStatus {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  application Application          @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  repoConfig  ProjectGithubConfig? @relation(fields: [repoConfigId], references: [id], onDelete: SetNull)
 
   @@map("codebase_index_status")
 }
@@ -520,6 +531,10 @@ model AgentTask {
 
   diagnosisSnapshot Json?     @map("diagnosis_snapshot") @db.JsonB
 
+  // Multi-repo support
+  repoConfigId    String?   @map("repo_config_id") @db.Uuid
+  taskGroupId     String?   @map("task_group_id") @db.Uuid
+
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -530,6 +545,7 @@ model AgentTask {
   @@index([ticketId])
   @@index([tenantId, status])
   @@index([applicationId])
+  @@index([taskGroupId])
   @@map("agent_tasks")
 }
 
@@ -601,19 +617,24 @@ model NotificationLog {
 // ═══════════════════════════════════════════════════════════════════════
 
 model TicketMessage {
-  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
-  ticketId  String   @map("ticket_id") @db.Uuid
-  type      String   @db.VarChar(50) // "system", "user", "agent"
-  content   String   @db.Text
-  sender    String   @db.VarChar(255)
-  metadata  Json?    @default("{}")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  ticketId    String   @map("ticket_id") @db.Uuid
+  parentId    String?  @map("parent_id") @db.Uuid
+  type        String   @db.VarChar(50) // "system", "user", "agent", "diagnosis", "action_plan", "pr_status"
+  content     String   @db.Text
+  sender      String   @db.VarChar(255)
+  metadata    Json?    @default("{}")
+  actionState String?  @map("action_state") @db.VarChar(20) // "pending", "approved", "rejected", null
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  ticket  Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  parent  TicketMessage? @relation("MessageThread", fields: [parentId], references: [id])
+  replies TicketMessage[] @relation("MessageThread")
 
   @@index([ticketId])
   @@index([ticketId, createdAt])
+  @@index([parentId])
   @@map("ticket_messages")
 }
 

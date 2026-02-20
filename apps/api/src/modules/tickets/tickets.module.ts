@@ -11,6 +11,8 @@ import { TicketsController } from './tickets.controller';
 import { SdkTicketsController } from './sdk-tickets.controller';
 import { TicketTrackingController } from './ticket-tracking.controller';
 import { TicketReopenController } from './controllers/ticket-reopen.controller';
+import { TicketMessagesController } from './controllers/ticket-messages.controller';
+import { TicketMessagesService } from './services/ticket-messages.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -45,9 +47,13 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
     BullModule.registerQueue({
       name: 'deep-analysis',
     }),
+    // Triage queue (automatic ticket classification & routing)
+    BullModule.registerQueue({
+      name: 'triage',
+    }),
   ],
-  controllers: [TicketsController, SdkTicketsController, TicketTrackingController, TicketReopenController],
-  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, WsJwtGuard],
-  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway],
+  controllers: [TicketsController, SdkTicketsController, TicketTrackingController, TicketReopenController, TicketMessagesController],
+  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, WsJwtGuard, TicketMessagesService],
+  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, TicketMessagesService],
 })
 export class TicketsModule {}

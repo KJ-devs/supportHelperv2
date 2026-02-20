@@ -362,7 +362,7 @@ export class GithubIssuesService {
         let octokit;
         const appId = ghIssue.ticket?.applicationId;
         if (appId) {
-          const config = await this.prisma.projectGithubConfig.findUnique({
+          const config = await this.prisma.projectGithubConfig.findFirst({
             where: { applicationId: appId },
           });
           if (config) {
@@ -424,7 +424,7 @@ export class GithubIssuesService {
     });
     if (!ticket || !ticket.applicationId) return;
 
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId: ticket.applicationId },
     });
     if (!config) return;

@@ -8,6 +8,7 @@ export type ToolName =
   | 'get_repo_structure'
   | 'get_file_history'
   | 'get_file_blame'
+  | 'list_repos'
   | 'update_diagnosis'
   | 'search_similar_tickets'
   | 'get_ticket_details'
@@ -28,7 +29,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'read_file',
     description:
-      'Read the content of a file from the connected GitHub repository. Use this to examine source code, configuration files, or any file in the repo.',
+      'Read the content of a file from a connected GitHub repository. Use this to examine source code, configuration files, or any file in the repo.',
     input_schema: {
       type: 'object',
       properties: {
@@ -43,6 +44,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         end_line: {
           type: 'number',
           description: 'Optional: stop reading at this line',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['file_path'],
@@ -63,6 +68,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
           type: 'boolean',
           description: 'If true, list recursively (max 2 levels deep). Default: false',
         },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
       },
       required: ['path'],
     },
@@ -70,7 +79,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'search_code',
     description:
-      'Search for a text pattern across the repository (like grep). Returns matching lines with file paths and line numbers.',
+      'Search for a text pattern across a repository (like grep). Returns matching lines with file paths and line numbers.',
     input_schema: {
       type: 'object',
       properties: {
@@ -85,6 +94,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         max_results: {
           type: 'number',
           description: 'Maximum number of results (default: 20)',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['query'],
@@ -126,6 +139,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
           description:
             'Patterns to exclude (default: ["node_modules", "dist", ".git", "*.lock"])',
         },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
       },
     },
   },
@@ -144,6 +161,10 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
           type: 'number',
           description: 'Number of commits to retrieve (default: 5)',
         },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
       },
       required: ['file_path'],
     },
@@ -161,8 +182,21 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         },
         start_line: { type: 'number' },
         end_line: { type: 'number' },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
       },
       required: ['file_path'],
+    },
+  },
+  {
+    name: 'list_repos',
+    description:
+      'List all connected repositories for this application. Returns each repo with its role (main, frontend, backend, etc.) and whether it is the primary repo.',
+    input_schema: {
+      type: 'object',
+      properties: {},
     },
   },
   // ── DIAGNOSTIC ────────────────────────────────────────────

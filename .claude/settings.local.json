@@ -51,7 +51,9 @@
       "Bash(start \"\" \"C:\\\\Program Files\\\\Docker\\\\Docker\\\\Docker Desktop.exe\")",
       "Bash(for pid in 14600 12408 19300 12852 23488)",
       "Bash(do)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(node_modules/.bin/jest:*)",
+      "Bash(node_modules/.bin/tsc:*)"
     ]
   }
 }

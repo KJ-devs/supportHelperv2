@@ -81,6 +81,9 @@ import { BackupModule } from './modules/backup/backup.module';
 // SSO Authentication
 import { SsoModule } from './modules/auth/sso/sso.module';
 
+// Triage (Automatic ticket classification & routing)
+import { TriageModule } from './modules/triage/triage.module';
+
 /**
  * Root Application Module
  *
@@ -222,6 +225,9 @@ import { SsoModule } from './modules/auth/sso/sso.module';
 
     // SSO Authentication
     SsoModule,
+
+    // Triage (Automatic ticket classification & routing)
+    TriageModule,
   ],
   providers: [
     // Global rate limiting guard

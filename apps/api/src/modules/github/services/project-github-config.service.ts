@@ -64,7 +64,7 @@ export class ProjectGithubConfigService {
     }
 
     // Check if application already has a config
-    const existing = await this.prisma.projectGithubConfig.findUnique({
+    const existing = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
     });
 
@@ -104,7 +104,7 @@ export class ProjectGithubConfigService {
       throw new NotFoundException('Application not found');
     }
 
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
     });
 
@@ -136,7 +136,7 @@ export class ProjectGithubConfigService {
       throw new NotFoundException('Application not found');
     }
 
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
       include: { installation: true },
     });
@@ -173,7 +173,7 @@ export class ProjectGithubConfigService {
       throw new NotFoundException('Application not found');
     }
 
-    const config = await this.prisma.projectGithubConfig.findUnique({
+    const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId },
     });
 

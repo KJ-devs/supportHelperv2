@@ -10,6 +10,7 @@ export const QUEUE_NAMES = {
   INTEGRATION_SYNC: 'integration-sync',
   CODEBASE_INDEXING: 'codebase-indexing',
   DEEP_ANALYSIS: 'deep-analysis',
+  TRIAGE: 'triage',
   BACKUP: 'backup',
   USAGE_SNAPSHOT: 'usage-snapshot',
 } as const;
@@ -138,6 +139,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
         },
         removeOnComplete: 50,
         removeOnFail: 100,
+      },
+    }),
+
+    // Triage Queue (Automatic ticket classification & routing)
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.TRIAGE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
       },
     }),
 
