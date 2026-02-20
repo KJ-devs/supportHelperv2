@@ -55,120 +55,9 @@ interface ExecutionLogEntry {
   [key: string]: unknown;
 }
 
-/**
- * Agent Function Tools for GPT-4o function calling
- */
-const AGENT_TOOLS = [
-  {
-    type: 'function' as const,
-    function: {
-      name: 'search_similar_tickets',
-      description: 'Search for similar tickets in the knowledge base',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description: 'The search query to find similar tickets',
-          },
-          limit: {
-            type: 'number',
-            description: 'Maximum number of results to return',
-            default: 5,
-          },
-        },
-        required: ['query'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'get_ticket_details',
-      description: 'Get full details of a specific ticket',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticketId: {
-            type: 'string',
-            description: 'The ID of the ticket to retrieve',
-          },
-        },
-        required: ['ticketId'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'update_ticket_status',
-      description: 'Update the status of a ticket',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticketId: {
-            type: 'string',
-            description: 'The ID of the ticket to update',
-          },
-          status: {
-            type: 'string',
-            enum: ['new', 'open', 'in_progress', 'resolved', 'closed'],
-            description: 'The new status for the ticket',
-          },
-        },
-        required: ['ticketId', 'status'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'escalate_to_human',
-      description: 'Escalate the ticket to a human support agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticketId: {
-            type: 'string',
-            description: 'The ID of the ticket to escalate',
-          },
-          reason: {
-            type: 'string',
-            description: 'The reason for escalation',
-          },
-          priority: {
-            type: 'string',
-            enum: ['low', 'medium', 'high', 'critical'],
-            description: 'The priority level for escalation',
-          },
-        },
-        required: ['ticketId', 'reason'],
-      },
-    },
-  },
-  {
-    type: 'function' as const,
-    function: {
-      name: 'suggest_solution',
-      description: 'Suggest a solution based on similar resolved tickets',
-      parameters: {
-        type: 'object',
-        properties: {
-          ticketId: {
-            type: 'string',
-            description: 'The ID of the ticket to suggest a solution for',
-          },
-          similarTicketIds: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'IDs of similar tickets to base the suggestion on',
-          },
-        },
-        required: ['ticketId'],
-      },
-    },
-  },
-];
+// Note: AGENT_TOOLS definitions and the multi-turn function calling loop
+// are now owned by AgentService.runWithFunctionCalling(). The worker
+// delegates tool execution to that method.
 
 /**
  * AgentWorker
@@ -231,6 +120,12 @@ export class AgentWorker extends WorkerHost {
 
         case 'process-message':
           return await this.handleProcessMessage(job);
+
+        case 'process-user-message':
+          return await this.handleProcessUserMessage(job);
+
+        case 'auto-escalate-timeout':
+          return await this.handleAutoEscalateTimeout(job);
 
         case 'analyze-ticket':
           return await this.handleAnalyzeTicket(job);
@@ -355,10 +250,211 @@ export class AgentWorker extends WorkerHost {
   }
 
   /**
-   * Analyze ticket with AI - extract insights and classify
+   * Handle a user message queued directly (standalone worker flow).
+   *
+   * NOTE: The primary user-message flow goes through the API's
+   * AgentService.sendMessage() which processes in-process to retain access to
+   * the WebSocket gateway.  This handler is a fallback for jobs queued
+   * directly to the worker (e.g. from external integrations or retries).
+   *
+   * The user message is assumed to already exist in the DB (created by the API).
+   * This handler only generates the AI response and updates the session state.
+   */
+  private async handleProcessUserMessage(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, sessionId, context } = job.data;
+
+    if (!sessionId) {
+      throw new Error('sessionId is required for process-user-message');
+    }
+
+    const message = context?.message;
+    if (!message) {
+      throw new Error('context.message is required for process-user-message');
+    }
+
+    this.logger.log(`Processing user message for session ${sessionId}`);
+    await job.updateProgress(10);
+
+    // Get session with ticket and existing messages (user message already saved by API)
+    const session = await this.prisma.agentSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        ticket: true,
+        messages: { orderBy: { createdAt: 'asc' } },
+      },
+    });
+
+    if (!session) {
+      throw new Error(`Session ${sessionId} not found`);
+    }
+
+    await job.updateProgress(20);
+
+    // Build conversation context from existing messages
+    const conversationContext = session.messages
+      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+      .join('\n');
+
+    // Generate AI response using the agent's function calling capabilities
+    const result = await this.agentService.runWithFunctionCalling({
+      systemPrompt: `You are a helpful support agent. Respond to the user's latest message based on the ticket context and conversation history.`,
+      userPrompt: `Ticket: ${session.ticket.title}\nDescription: ${session.ticket.description}\n\nConversation:\n${conversationContext}\n\nUser: ${message}\n\nAgent:`,
+      tenantId,
+      ticket: session.ticket,
+    });
+
+    await job.updateProgress(70);
+
+    // Save agent response
+    await this.prisma.agentMessage.create({
+      data: {
+        sessionId,
+        role: 'agent',
+        content: result.finalContent,
+        channel: 'web',
+      },
+    });
+
+    // Determine next state from response content
+    const lower = result.finalContent.toLowerCase();
+    let nextState = 'waiting';
+    if (
+      lower.includes('could you') ||
+      lower.includes('can you provide') ||
+      lower.includes('need more') ||
+      lower.includes('more details') ||
+      lower.includes('more information')
+    ) {
+      nextState = 'needs_info';
+    } else if (
+      lower.includes('solution') ||
+      lower.includes('to resolve') ||
+      lower.includes('you can fix')
+    ) {
+      nextState = 'proposing';
+    }
+
+    // Update session state
+    await this.prisma.agentSession.update({
+      where: { id: sessionId },
+      data: { status: nextState },
+    });
+
+    await job.updateProgress(100);
+
+    return {
+      success: true,
+      type: 'process-user-message',
+      ticketId,
+      response: `User message processed, session in state ${nextState}`,
+      metadata: {
+        sessionId,
+        state: nextState,
+      },
+    };
+  }
+
+  /**
+   * Auto-escalate a session that has been in NEEDS_INFO for 24 hours without a reply.
+   */
+  private async handleAutoEscalateTimeout(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, sessionId } = job.data;
+
+    if (!sessionId) {
+      throw new Error('sessionId is required for auto-escalate-timeout');
+    }
+
+    this.logger.log(`Checking auto-escalate timeout for session ${sessionId}`);
+    await job.updateProgress(10);
+
+    // Only escalate if session is still in NEEDS_INFO
+    const session = await this.prisma.agentSession.findUnique({
+      where: { id: sessionId },
+      include: { ticket: true },
+    });
+
+    if (!session) {
+      this.logger.warn(`Session ${sessionId} not found for auto-escalate — skipping`);
+      return {
+        success: true,
+        type: 'auto-escalate-timeout',
+        ticketId,
+        response: 'Session not found — skipped',
+      };
+    }
+
+    if (session.status !== 'needs_info') {
+      this.logger.log(
+        `Session ${sessionId} is in state "${session.status}" — no escalation needed`,
+      );
+      return {
+        success: true,
+        type: 'auto-escalate-timeout',
+        ticketId,
+        response: `Session already in state "${session.status}" — skipped`,
+      };
+    }
+
+    await job.updateProgress(30);
+
+    // Find an available support agent for the tenant
+    const supportAgent = await this.prisma.user.findFirst({
+      where: {
+        tenantId,
+        role: { in: ['admin', 'support'] },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    // Update session to ESCALATED
+    await this.prisma.agentSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'escalated',
+        escalatedTo: supportAgent?.id,
+        escalationReason: 'No user response after 24 hours',
+      },
+    });
+
+    await job.updateProgress(60);
+
+    // Update ticket status
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'escalated',
+        assignedTo: supportAgent?.id,
+        assignedAt: supportAgent ? new Date() : undefined,
+      },
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(
+      `Session ${sessionId} auto-escalated after 24h timeout (ticket ${ticketId})`,
+    );
+
+    return {
+      success: true,
+      type: 'auto-escalate-timeout',
+      ticketId,
+      escalated: true,
+      response: 'Session auto-escalated after 24h without user response',
+      metadata: {
+        sessionId,
+      },
+    };
+  }
+
+  /**
+   * Analyze ticket with AI - extract insights and classify.
+   *
+   * When `sessionId` is present in job data (enqueued by the API's AgentService
+   * via startSession()), this handler also updates the AgentSession status so the
+   * session reflects the completed analysis rather than staying in ANALYZING.
    */
   private async handleAnalyzeTicket(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId } = job.data;
+    const { ticketId, tenantId, sessionId } = job.data;
 
     this.logger.log(`Analyzing ticket ${ticketId}`);
     await job.updateProgress(10);
@@ -385,36 +481,39 @@ export class AgentWorker extends WorkerHost {
     // Build analysis prompt
     const analysisPrompt = this.buildAnalysisPrompt(ticket);
 
-    // Run GPT-4o analysis with function calling
-    const response = await this.openaiService.chat({
-      messages: [
-        {
-          role: 'system',
-          content: `You are an expert technical support AI assistant. Analyze the following ticket and provide:
+    // Run GPT-4o with multi-turn function calling loop via AgentService
+    const loopResult = await this.agentService.runWithFunctionCalling({
+      systemPrompt: `You are an expert technical support AI assistant. Analyze the following ticket and provide:
 1. A clear classification of the issue type
 2. An assessment of the severity
 3. Key keywords for search
 4. A concise summary
 5. Extracted reproduction steps if available
 
-Be precise and structured in your analysis.`,
-        },
-        {
-          role: 'user',
-          content: analysisPrompt,
-        },
-      ],
-      tools: AGENT_TOOLS,
-      response_format: { type: 'json_object' },
+Use the available tools (search_similar_tickets, get_ticket_details) to gather context before producing your final JSON analysis.
+Your final response MUST be a valid JSON object with keys: classification, severity, keywords, summary, reproductionSteps.`,
+      userPrompt: analysisPrompt,
+      tenantId,
+      ticket,
+      maxTokens: 2048,
     });
+
+    this.logger.log(
+      `analyze-ticket loop: ${loopResult.iterations} iterations, ` +
+      `${loopResult.toolCallLog.length} tool calls executed`
+    );
 
     await job.updateProgress(60);
 
-    // Process function calls if any
-    const functionCalls = await this.processFunctionCalls(response.tool_calls || [], tenantId);
+    // Collect tool call results for the job result metadata
+    const functionCalls: FunctionCallResult[] = loopResult.toolCallLog.map(tc => ({
+      name: tc.name,
+      arguments: {},
+      result: tc.result,
+    }));
 
-    // Parse analysis result
-    const analysis = this.parseAnalysisResponse(response.content);
+    // Parse analysis result from the loop's final text response
+    const analysis = this.parseAnalysisResponse(loopResult.finalContent);
 
     await job.updateProgress(80);
 
@@ -439,6 +538,34 @@ Be precise and structured in your analysis.`,
       },
     });
 
+    await job.updateProgress(90);
+
+    // If this job was enqueued by the API's AgentService (startSession), update
+    // the AgentSession so the dashboard reflects the completed analysis.
+    if (sessionId) {
+      const nextStatus = analysis.severity.level === 'critical' ||
+        analysis.classification.confidence < 50
+        ? 'escalated'
+        : 'proposing';
+
+      await this.prisma.agentSession.update({
+        where: { id: sessionId },
+        data: {
+          status: nextStatus,
+          agentState: JSON.parse(JSON.stringify({
+            step: 'analysis_complete',
+            analysis,
+            confidence: analysis.classification.confidence,
+          })),
+        },
+      }).catch((err: unknown) => {
+        // Session may have been deleted; log and continue — ticket update already succeeded.
+        this.logger.warn(
+          `Could not update AgentSession ${sessionId}: ${getErrorMessage(err)}`,
+        );
+      });
+    }
+
     await job.updateProgress(100);
 
     this.logger.log(`Ticket ${ticketId} analyzed: ${analysis.classification.type}`);
@@ -449,6 +576,9 @@ Be precise and structured in your analysis.`,
       ticketId,
       analysis,
       functionCalls,
+      metadata: {
+        sessionId,
+      },
     };
   }
 
@@ -659,14 +789,33 @@ Keep responses concise but thorough.`,
 
     await job.updateProgress(50);
 
-    // Generate response with function calling
-    const response = await this.openaiService.chat({
-      messages,
-      tools: AGENT_TOOLS,
+    // Build system and user prompts from the constructed messages
+    const systemMsg = messages.find(m => m.role === 'system')?.content ?? '';
+    const userMsgs = messages.filter(m => m.role !== 'system');
+    const userPrompt = userMsgs.map(m => `${m.role}: ${m.content}`).join('\n\n');
+
+    // Run multi-turn function calling loop via AgentService
+    const loopResult = await this.agentService.runWithFunctionCalling({
+      systemPrompt: systemMsg,
+      userPrompt,
+      tenantId,
+      ticket,
+      maxTokens: 1024,
     });
 
-    // Process any function calls
-    const functionCalls = await this.processFunctionCalls(response.tool_calls || [], tenantId);
+    this.logger.log(
+      `auto-respond loop: ${loopResult.iterations} iterations, ` +
+      `${loopResult.toolCallLog.length} tool calls executed`
+    );
+
+    // Collect tool call results for the job result metadata
+    const functionCalls: FunctionCallResult[] = loopResult.toolCallLog.map(tc => ({
+      name: tc.name,
+      arguments: {},
+      result: tc.result,
+    }));
+
+    const response = { content: loopResult.finalContent };
 
     await job.updateProgress(80);
 
@@ -2380,127 +2529,6 @@ Rules:
         summary: content,
       };
     }
-  }
-
-  /**
-   * Process function calls from GPT response
-   */
-  private async processFunctionCalls(
-    toolCalls: any[],
-    tenantId: string
-  ): Promise<FunctionCallResult[]> {
-    const results: FunctionCallResult[] = [];
-
-    for (const call of toolCalls) {
-      if (call.type !== 'function') continue;
-
-      const { name, arguments: args } = call.function;
-      const parsedArgs = JSON.parse(args);
-
-      try {
-        let result: unknown;
-
-        switch (name) {
-          case 'search_similar_tickets':
-            result = await this.executeSearchSimilarTickets(
-              parsedArgs.query,
-              parsedArgs.limit,
-              tenantId
-            );
-            break;
-
-          case 'get_ticket_details':
-            result = await this.executeGetTicketDetails(parsedArgs.ticketId);
-            break;
-
-          case 'update_ticket_status':
-            result = await this.executeUpdateTicketStatus(parsedArgs.ticketId, parsedArgs.status);
-            break;
-
-          case 'escalate_to_human':
-            result = await this.executeEscalateToHuman(
-              parsedArgs.ticketId,
-              parsedArgs.reason,
-              parsedArgs.priority
-            );
-            break;
-
-          case 'suggest_solution':
-            result = await this.executeSuggestSolution(
-              parsedArgs.ticketId,
-              parsedArgs.similarTicketIds
-            );
-            break;
-
-          default:
-            result = { error: `Unknown function: ${name}` };
-        }
-
-        results.push({ name, arguments: parsedArgs, result });
-      } catch (error) {
-        results.push({
-          name,
-          arguments: parsedArgs,
-          result: { error: getErrorMessage(error) },
-        });
-      }
-    }
-
-    return results;
-  }
-
-  /**
-   * Function implementations
-   */
-  private async executeSearchSimilarTickets(
-    query: string,
-    limit: number,
-    tenantId: string
-  ): Promise<any> {
-    const results = await this.meilisearch.search('tickets', query, {
-      filter: `tenantId = "${tenantId}"`,
-      limit: limit || 5,
-    });
-    return results.hits;
-  }
-
-  private async executeGetTicketDetails(ticketId: string): Promise<any> {
-    return this.prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: { media: true, application: true },
-    });
-  }
-
-  private async executeUpdateTicketStatus(ticketId: string, status: string): Promise<any> {
-    return this.prisma.ticket.update({
-      where: { id: ticketId },
-      data: { status },
-    });
-  }
-
-  private async executeEscalateToHuman(
-    ticketId: string,
-    reason: string,
-    priority?: string
-  ): Promise<any> {
-    return this.prisma.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: 'escalated',
-        priority: priority === 'critical' ? 10 : priority === 'high' ? 7 : 5,
-        aiAnalysis: {
-          escalatedAt: new Date().toISOString(),
-          escalationReason: reason,
-        },
-      },
-    });
-  }
-
-  private async executeSuggestSolution(
-    ticketId: string,
-    similarTicketIds?: string[]
-  ): Promise<any> {
-    return { ticketId, similarTicketIds, status: 'suggestion_pending' };
   }
 
   /**

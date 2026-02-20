@@ -72,7 +72,7 @@ describe('AgentController', () => {
     it('should send message and return response', async () => {
       (agentService.sendMessage as jest.Mock).mockResolvedValue(mockMessage);
 
-      const result = await controller.sendMessage('tenant-123', 'user-123', 'session-123', { content: 'Hello' } as unknown);
+      const result = await controller.sendMessage('tenant-123', 'user-123', 'session-123', { content: 'Hello' });
 
       expect(agentService.sendMessage).toHaveBeenCalledWith('session-123', 'tenant-123', 'Hello', 'user-123');
       expect(result).toEqual(mockMessage);

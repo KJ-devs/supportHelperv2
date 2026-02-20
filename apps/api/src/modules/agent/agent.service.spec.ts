@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { AgentService, AgentState } from './agent.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
@@ -8,6 +9,7 @@ describe('AgentService', () => {
   let service: AgentService;
   let prisma: PrismaService;
   let aiService: AIService;
+  let agentQueue: { add: jest.Mock };
 
   const mockTenantId = 'tenant-123';
   const mockTicketId = 'ticket-123';
@@ -52,12 +54,19 @@ describe('AgentService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    user: {
+      findFirst: jest.fn(),
+    },
   };
 
   const mockAiService = {
     generateCompletion: jest.fn(),
     classifyTicket: jest.fn(),
     summarizeTicket: jest.fn(),
+  };
+
+  const mockAgentQueue = {
+    add: jest.fn().mockResolvedValue({ id: 'job-1' }),
   };
 
   beforeEach(async () => {
@@ -72,12 +81,17 @@ describe('AgentService', () => {
           provide: AIService,
           useValue: mockAiService,
         },
+        {
+          provide: getQueueToken('agent-orchestration'),
+          useValue: mockAgentQueue,
+        },
       ],
     }).compile();
 
     service = module.get<AgentService>(AgentService);
     prisma = module.get<PrismaService>(PrismaService);
     aiService = module.get<AIService>(AIService);
+    agentQueue = module.get(getQueueToken('agent-orchestration'));
 
     jest.clearAllMocks();
   });
@@ -87,17 +101,10 @@ describe('AgentService', () => {
   });
 
   describe('startSession', () => {
-    it('should create a new agent session for a ticket', async () => {
+    it('should create a new agent session and enqueue an analyze-ticket job', async () => {
       mockPrismaService.ticket.findFirst.mockResolvedValue(mockTicket);
       mockPrismaService.agentSession.create.mockResolvedValue(mockSession);
-      mockAiService.generateCompletion.mockResolvedValue(
-        JSON.stringify({
-          summary: 'Authentication issue',
-          severity: 'high',
-          confidence: 85,
-          needsEscalation: false,
-        })
-      );
+      mockAgentQueue.add.mockResolvedValue({ id: 'job-1' });
 
       const result = await service.startSession(mockTicketId, mockTenantId);
 
@@ -116,6 +123,17 @@ describe('AgentService', () => {
           },
         },
       });
+      // Analysis is now offloaded to the worker via BullMQ
+      expect(agentQueue.add).toHaveBeenCalledWith(
+        'analyze-ticket',
+        {
+          type: 'analyze-ticket',
+          ticketId: mockTicketId,
+          tenantId: mockTenantId,
+          sessionId: mockSessionId,
+        },
+        expect.objectContaining({ priority: 10, attempts: 5 }),
+      );
     });
 
     it('should throw NotFoundException when ticket not found', async () => {
@@ -124,6 +142,17 @@ describe('AgentService', () => {
       await expect(service.startSession(mockTicketId, mockTenantId)).rejects.toThrow(
         NotFoundException
       );
+    });
+
+    it('should not call generateCompletion synchronously (analysis is deferred to worker)', async () => {
+      mockPrismaService.ticket.findFirst.mockResolvedValue(mockTicket);
+      mockPrismaService.agentSession.create.mockResolvedValue(mockSession);
+      mockAgentQueue.add.mockResolvedValue({ id: 'job-1' });
+
+      await service.startSession(mockTicketId, mockTenantId);
+
+      // AI analysis is now handled by the worker, not in-process
+      expect(mockAiService.generateCompletion).not.toHaveBeenCalled();
     });
   });
 
@@ -135,90 +164,6 @@ describe('AgentService', () => {
       expect(AgentState.WAITING).toBe('waiting');
       expect(AgentState.RESOLVED).toBe('resolved');
       expect(AgentState.ESCALATED).toBe('escalated');
-    });
-  });
-
-  describe('AI Analysis', () => {
-    beforeEach(() => {
-      mockPrismaService.ticket.findFirst.mockResolvedValue(mockTicket);
-      mockPrismaService.agentSession.create.mockResolvedValue(mockSession);
-      mockPrismaService.agentSession.update.mockResolvedValue({});
-    });
-
-    it('should escalate when confidence is low', async () => {
-      mockAiService.generateCompletion.mockResolvedValue(
-        JSON.stringify({
-          summary: 'Unknown issue',
-          severity: 'medium',
-          confidence: 30,
-          needsEscalation: false,
-        })
-      );
-
-      await service.startSession(mockTicketId, mockTenantId);
-
-      // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      expect(mockPrismaService.agentSession.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: mockSessionId },
-          data: expect.objectContaining({
-            status: AgentState.ESCALATED,
-          }),
-        })
-      );
-    });
-
-    it('should escalate when needsEscalation is true', async () => {
-      mockAiService.generateCompletion.mockResolvedValue(
-        JSON.stringify({
-          summary: 'Complex issue',
-          severity: 'critical',
-          confidence: 90,
-          needsEscalation: true,
-        })
-      );
-
-      await service.startSession(mockTicketId, mockTenantId);
-
-      // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      expect(mockPrismaService.agentSession.update).toHaveBeenCalled();
-    });
-
-    it('should handle non-JSON AI response', async () => {
-      mockAiService.generateCompletion.mockResolvedValue(
-        'This is not JSON, just a plain text response about the issue.'
-      );
-
-      await service.startSession(mockTicketId, mockTenantId);
-
-      // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Should still process without throwing
-      expect(mockPrismaService.agentSession.update).toHaveBeenCalled();
-    });
-
-    it('should handle AI service error', async () => {
-      mockAiService.generateCompletion.mockRejectedValue(new Error('AI service unavailable'));
-
-      await service.startSession(mockTicketId, mockTenantId);
-
-      // Wait for async processing
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Should escalate on error
-      expect(mockPrismaService.agentSession.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            status: AgentState.ESCALATED,
-            escalationReason: expect.stringContaining('Analysis failed'),
-          }),
-        })
-      );
     });
   });
 });

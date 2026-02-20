@@ -12,7 +12,11 @@ import {
 import { Logger, UseGuards } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../agent/ws-jwt.guard';
-import { getWebSocketCorsConfig } from '../../config/websocket-cors.config';
+import {
+  getWebSocketCorsConfig,
+  WS_PING_INTERVAL,
+  WS_PING_TIMEOUT,
+} from '../../config/websocket-cors.config';
 
 interface WsUser {
   userId: string;
@@ -24,6 +28,8 @@ interface WsUser {
 @WebSocketGateway({
   namespace: '/tickets',
   cors: getWebSocketCorsConfig(),
+  pingInterval: WS_PING_INTERVAL,
+  pingTimeout: WS_PING_TIMEOUT,
 })
 @UseGuards(WsJwtGuard)
 export class TicketsGateway
@@ -139,6 +145,16 @@ export class TicketsGateway
         event: 'ticket:timeline-event',
         ticketId,
         timelineEvent: event,
+        timestamp: new Date(),
+      });
+  }
+
+  emitEscalation(tenantId: string, data: { ticketId: string; sessionId: string; reason: string; assignedTo?: string; summary?: string }) {
+    this.server
+      .to(this.tenantRoom(tenantId))
+      .emit('ticket:escalated', {
+        event: 'ticket:escalated',
+        ...data,
         timestamp: new Date(),
       });
   }

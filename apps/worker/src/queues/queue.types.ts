@@ -122,6 +122,8 @@ export interface GithubSyncResult {
 export type AgentJobType =
   | 'start-session' // Start new agent session with full state machine
   | 'process-message' // Process incoming user message
+  | 'process-user-message' // Async AI response for a user message (queued by API)
+  | 'auto-escalate-timeout' // Auto-escalate session after 24h with no response
   | 'analyze-ticket'
   | 'suggest-solution'
   | 'escalate-ticket'
