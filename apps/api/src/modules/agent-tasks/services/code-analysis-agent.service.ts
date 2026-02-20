@@ -38,7 +38,7 @@ export class CodeAnalysisAgentService {
           include: {
             application: {
               include: {
-                githubConfig: {
+                githubConfigs: {
                   include: {
                     installation: true,
                   },
@@ -56,7 +56,7 @@ export class CodeAnalysisAgentService {
 
     const { ticket } = agentTask;
     const { application } = ticket;
-    const githubConfig = application.githubConfig;
+    const githubConfig = application.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? application.githubConfigs?.[0];
 
     if (!githubConfig) {
       throw new BadRequestException(

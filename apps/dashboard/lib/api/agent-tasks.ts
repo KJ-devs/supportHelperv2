@@ -149,11 +149,11 @@ export const agentTasksApi = {
     });
   },
 
-  async rejectTask(id: string, phase: 'plan' | 'code', reason?: string): Promise<AgentTask> {
+  async rejectTask(id: string, phase: 'plan' | 'code', reason?: string, iterate?: boolean): Promise<AgentTask> {
     return apiRequest<AgentTask>(`/api/v1/agent-tasks/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phase, reason }),
+      body: JSON.stringify({ phase, reason, iterate }),
     });
   },
 

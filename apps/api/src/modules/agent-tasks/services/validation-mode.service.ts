@@ -4,14 +4,22 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AgentMode, ReviewPhase } from '../types/action-plan.types';
+
+const MAX_PLAN_ITERATIONS = 3;
 
 @Injectable()
 export class ValidationModeService {
   private readonly logger = new Logger(ValidationModeService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @InjectQueue('agent-orchestration')
+    private readonly agentQueue: Queue,
+  ) {}
 
   /**
    * Get the agent mode for a given application (project).
@@ -19,8 +27,8 @@ export class ValidationModeService {
    * Defaults to 'auto' if not set.
    */
   async getAgentMode(applicationId: string): Promise<AgentMode> {
-    const config = await this.prisma.projectGithubConfig.findUnique({
-      where: { applicationId },
+    const config = await this.prisma.projectGithubConfig.findFirst({
+      where: { applicationId, isPrimary: true },
     });
 
     if (!config) {
@@ -141,6 +149,8 @@ export class ValidationModeService {
 
   /**
    * Reject a task at the given phase.
+   * For plan phase: supports iteration (re-enqueue with feedback) up to MAX_PLAN_ITERATIONS.
+   * Set iterate=false to reject definitively without re-trying.
    */
   async rejectTask(
     taskId: string,
@@ -148,6 +158,7 @@ export class ValidationModeService {
     phase: ReviewPhase,
     reviewerId: string,
     reason?: string,
+    iterate = true,
   ) {
     const task = await this.prisma.agentTask.findFirst({
       where: { id: taskId, tenantId },
@@ -168,6 +179,44 @@ export class ValidationModeService {
       );
     }
 
+    // Plan iteration: re-enqueue for revision instead of failing
+    if (phase === 'plan' && iterate && task.retryCount < MAX_PLAN_ITERATIONS) {
+      const updated = await this.prisma.agentTask.update({
+        where: { id: taskId },
+        data: {
+          status: 'analyzing',
+          rejectionReason: reason || null,
+          reviewedAt: new Date(),
+          reviewedBy: reviewerId,
+          retryCount: task.retryCount + 1,
+        },
+      });
+
+      // Re-enqueue the plan generation job with the rejection feedback
+      await this.agentQueue.add(
+        'generate-action-plan',
+        {
+          type: 'generate-action-plan' as const,
+          ticketId: task.ticketId,
+          tenantId: task.tenantId,
+          applicationId: task.applicationId,
+          agentTaskId: taskId,
+        },
+        {
+          priority: 2,
+          attempts: 2,
+          backoff: { type: 'exponential', delay: 5000 },
+        },
+      );
+
+      this.logger.log(
+        `Task ${taskId} plan rejected by ${reviewerId} — iteration ${task.retryCount + 1}/${MAX_PLAN_ITERATIONS}: ${reason || 'no reason'}`,
+      );
+
+      return updated;
+    }
+
+    // Definitive rejection (code phase, iterate=false, or max iterations reached)
     const updated = await this.prisma.agentTask.update({
       where: { id: taskId },
       data: {

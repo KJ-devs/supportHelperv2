@@ -25,6 +25,7 @@ export class TicketsService {
     private readonly cacheService: CacheService,
     @InjectQueue('github') private readonly githubQueue: Queue,
     @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue,
+    @InjectQueue('triage') private readonly triageQueue: Queue,
   ) {}
 
   /**
@@ -92,10 +93,10 @@ export class TicketsService {
       });
     }
 
-    // Trigger deep analysis if application has a GitHub config (US-3.2)
+    // Trigger automatic triage (classification + routing to deep-analysis, auto-answer, or proposal)
     if (dto.applicationId) {
-      this.enqueueDeepAnalysis(ticket.id, tenantId, dto.applicationId).catch((err) => {
-        this.logger.warn(`Failed to enqueue deep analysis for ticket ${ticket.id}: ${err.message}`);
+      this.enqueueTriage(ticket.id, tenantId, dto.applicationId, 'dashboard').catch((err) => {
+        this.logger.warn(`Failed to enqueue triage for ticket ${ticket.id}: ${err.message}`);
       });
     }
 
@@ -740,10 +741,10 @@ export class TicketsService {
   ): Promise<void> {
     const githubConfig = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      select: { githubConfig: { select: { id: true } } },
+      select: { githubConfigs: { select: { id: true } } },
     });
 
-    if (!githubConfig?.githubConfig) {
+    if (!githubConfig?.githubConfigs?.length) {
       // No GitHub config linked, skip deep analysis
       return;
     }
@@ -764,6 +765,41 @@ export class TicketsService {
     );
 
     this.logger.debug(`Enqueued deep analysis for ticket ${ticketId}`);
+  }
+
+  /**
+   * Enqueue triage job for automatic classification and routing.
+   * The triage agent classifies the ticket and routes it to the appropriate handler
+   * (deep-analysis for bugs, auto-answer for questions, proposal for feature requests).
+   */
+  private async enqueueTriage(
+    ticketId: string,
+    tenantId: string,
+    applicationId: string,
+    source: 'dashboard' | 'sdk' | 'manual' = 'dashboard',
+  ): Promise<void> {
+    await this.triageQueue.add(
+      'triage',
+      {
+        ticketId,
+        tenantId,
+        applicationId,
+        source,
+      },
+      {
+        priority: 3,
+        delay: 3000, // Short delay to let the ticket settle
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    );
+
+    this.logger.debug(`Enqueued triage for ticket ${ticketId} (source: ${source})`);
   }
 
   /**

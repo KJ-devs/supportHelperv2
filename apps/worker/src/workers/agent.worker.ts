@@ -154,6 +154,12 @@ export class AgentWorker extends WorkerHost {
         case 'push-code':
           return await this.handlePushCode(job);
 
+        case 'auto-answer':
+          return await this.handleAutoAnswer(job);
+
+        case 'generate-proposal':
+          return await this.handleGenerateProposal(job);
+
         default:
           throw new Error(`Unknown agent job type: ${type}`);
       }
@@ -1141,7 +1147,7 @@ Keep responses concise but thorough.`,
           include: {
             application: {
               include: {
-                githubConfig: {
+                githubConfigs: {
                   include: {
                     installation: true,
                   },
@@ -1158,7 +1164,7 @@ Keep responses concise but thorough.`,
     }
 
     const { ticket } = agentTask;
-    const githubConfig = ticket.application?.githubConfig;
+    const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
 
     if (!githubConfig) {
       await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application. Link a repository first.');
@@ -1232,7 +1238,17 @@ Keep responses concise but thorough.`,
 
     // 7. Build prompts and call Claude
     const systemPrompt = this.buildActionPlanSystemPrompt();
-    const userPrompt = this.buildActionPlanUserPrompt(ticket, repoTree, relevantCode);
+    let userPrompt = this.buildActionPlanUserPrompt(ticket, repoTree, relevantCode);
+
+    // If this is a re-iteration after rejection, inject the feedback
+    if (agentTask.rejectionReason && agentTask.retryCount > 0) {
+      userPrompt += `\n\n---\n**IMPORTANT: PREVIOUS PLAN WAS REJECTED (iteration ${agentTask.retryCount}/${3})**\nReviewer feedback: "${agentTask.rejectionReason}"\n\nPlease revise the action plan to address the reviewer's concerns. Do NOT repeat the same plan.`;
+
+      await this.appendAgentTaskLog(agentTaskId, {
+        step: 'plan_iteration',
+        message: `Re-generating plan (iteration ${agentTask.retryCount}) based on reviewer feedback: ${agentTask.rejectionReason}`,
+      });
+    }
 
     const anthropic = new Anthropic({ apiKey: anthropicApiKey });
 
@@ -1380,7 +1396,7 @@ Keep responses concise but thorough.`,
             include: {
               application: {
                 include: {
-                  githubConfig: {
+                  githubConfigs: {
                     include: {
                       installation: true,
                     },
@@ -1397,7 +1413,7 @@ Keep responses concise but thorough.`,
       }
 
       const { ticket } = agentTask;
-      const githubConfig = ticket.application?.githubConfig;
+      const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
 
       if (!githubConfig) {
         await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application.');
@@ -1906,7 +1922,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
             include: {
               application: {
                 include: {
-                  githubConfig: {
+                  githubConfigs: {
                     include: { installation: true },
                   },
                 },
@@ -1921,7 +1937,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       }
 
       const { ticket } = agentTask;
-      const githubConfig = ticket.application?.githubConfig;
+      const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
 
       if (!githubConfig) {
         throw new Error('No GitHub configuration found');
@@ -2388,7 +2404,7 @@ Rules:
     phase: 'plan' | 'code',
   ): Promise<boolean> {
     try {
-      const config = await this.prisma.projectGithubConfig.findUnique({
+      const config = await this.prisma.projectGithubConfig.findFirst({
         where: { applicationId },
       });
 
@@ -2576,6 +2592,316 @@ Rules:
         },
       });
     }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Auto-Answer Handler (Question tickets — RAG-based response)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  private async handleAutoAnswer(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, applicationId } = job.data;
+
+    this.logger.log(`Auto-answering question ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    // Load ticket
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        aiSummary: true,
+        keywords: true,
+      },
+    });
+
+    if (!ticket) {
+      return { success: false, type: 'auto-answer', ticketId, error: 'Ticket not found' };
+    }
+
+    await job.updateProgress(20);
+
+    // Search for similar resolved tickets
+    const searchText = ticket.title || ticket.description || '';
+    const similarTickets = await this.prisma.ticket.findMany({
+      where: {
+        tenantId,
+        id: { not: ticketId },
+        status: { in: ['resolved', 'closed'] },
+        type: 'question',
+        OR: [
+          { title: { contains: searchText.slice(0, 50), mode: 'insensitive' } },
+        ],
+      },
+      select: { title: true, description: true, aiSummary: true },
+      take: 3,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    await job.updateProgress(40);
+
+    // Search codebase embeddings for relevant context (if indexed)
+    let codeContext = '';
+    if (applicationId) {
+      try {
+        const embeddings = await this.prisma.codebaseEmbedding.findMany({
+          where: { applicationId },
+          select: { filePath: true, content: true },
+          take: 5,
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (embeddings.length > 0) {
+          codeContext = '\n\n## Relevant Code Context\n' +
+            embeddings.map(e => `### ${e.filePath}\n${e.content.slice(0, 500)}`).join('\n\n');
+        }
+      } catch {
+        // Codebase not indexed, skip
+      }
+    }
+
+    await job.updateProgress(60);
+
+    // Build prompt and generate answer
+    const similarContext = similarTickets.length > 0
+      ? '\n\n## Similar Resolved Questions\n' +
+        similarTickets.map(t =>
+          `- Q: "${t.title}"\n  A: ${t.aiSummary || t.description?.slice(0, 200) || 'No summary'}`
+        ).join('\n')
+      : '';
+
+    const systemPrompt = `You are a helpful technical support agent. A user has asked a question about their application. Based on the codebase documentation and similar resolved tickets provided below, generate a clear, actionable answer.
+
+If you cannot confidently answer the question from the provided context, say so and suggest that the user provide more details or that the ticket will be reviewed by a human.
+
+Be concise but thorough. Include code snippets or file references when relevant.`;
+
+    const userPrompt = `## User's Question
+Title: ${ticket.title || 'No title'}
+Description: ${ticket.description || 'No description'}
+${ticket.aiSummary ? `\nAI Summary: ${ticket.aiSummary}` : ''}${similarContext}${codeContext}
+
+Please answer this question.`;
+
+    let answer: string;
+    try {
+      const chatResult = await this.openaiService.chat({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+      });
+      answer = chatResult.content || 'No response generated.';
+    } catch (error) {
+      this.logger.error(`Auto-answer AI call failed: ${getErrorMessage(error)}`);
+      answer = 'I was unable to generate an automatic answer. A human support agent will review your question.';
+    }
+
+    await job.updateProgress(80);
+
+    // Save answer as a TicketMessage
+    await this.prisma.ticketMessage.create({
+      data: {
+        ticketId,
+        type: 'agent',
+        content: answer,
+        sender: 'triage-agent',
+        metadata: {
+          handler: 'auto-answer',
+          similarTicketsUsed: similarTickets.length,
+          hasCodeContext: codeContext.length > 0,
+        },
+      },
+    });
+
+    // Update ticket status
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status: 'waiting_response' },
+    });
+
+    // Record timeline event
+    await this.prisma.ticketEvent.create({
+      data: {
+        ticketId,
+        tenantId,
+        eventType: 'auto_answer_generated',
+        data: {
+          responseLength: answer.length,
+          similarTicketsUsed: similarTickets.length,
+          hasCodeContext: codeContext.length > 0,
+        },
+      },
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(`Auto-answer generated for ticket ${ticketId} (${answer.length} chars)`);
+
+    return {
+      success: true,
+      type: 'auto-answer',
+      ticketId,
+      response: answer,
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // Generate Proposal Handler (Feature request tickets)
+  // ═══════════════════════════════════════════════════════════════════════
+
+  private async handleGenerateProposal(job: Job<AgentJobData>): Promise<AgentResult> {
+    const { ticketId, tenantId, applicationId } = job.data;
+
+    this.logger.log(`Generating technical proposal for feature request ticket ${ticketId}`);
+    await job.updateProgress(10);
+
+    // Load ticket
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        aiSummary: true,
+        keywords: true,
+      },
+    });
+
+    if (!ticket) {
+      return { success: false, type: 'generate-proposal', ticketId, error: 'Ticket not found' };
+    }
+
+    await job.updateProgress(20);
+
+    // Get codebase context if available
+    let codeContext = '';
+    if (applicationId) {
+      try {
+        const embeddings = await this.prisma.codebaseEmbedding.findMany({
+          where: { applicationId },
+          select: { filePath: true, content: true, language: true },
+          take: 10,
+          orderBy: { updatedAt: 'desc' },
+        });
+        if (embeddings.length > 0) {
+          codeContext = '\n\n## Current Codebase Structure\n' +
+            embeddings.map(e => `- ${e.filePath} (${e.language || 'unknown'})`).join('\n');
+        }
+      } catch {
+        // Codebase not indexed
+      }
+    }
+
+    await job.updateProgress(40);
+
+    const systemPrompt = `You are a senior software architect reviewing a feature request for a technical platform. Generate a structured technical proposal.
+
+Your proposal must be in JSON format matching this schema:
+{
+  "summary": "2-3 sentence overview of the feature",
+  "approach": "Detailed technical approach description",
+  "affectedAreas": ["list", "of", "code areas/modules"],
+  "estimatedComplexity": "small" | "medium" | "large",
+  "dependencies": ["external dependencies or prerequisites"],
+  "risks": ["potential risks or concerns"],
+  "alternatives": ["alternative approaches considered"]
+}
+
+Be specific and actionable. Reference actual code areas if codebase context is provided.`;
+
+    const userPrompt = `## Feature Request
+Title: ${ticket.title || 'No title'}
+Description: ${ticket.description || 'No description'}
+${ticket.aiSummary ? `\nAI Summary: ${ticket.aiSummary}` : ''}
+${ticket.keywords.length > 0 ? `\nKeywords: ${ticket.keywords.join(', ')}` : ''}${codeContext}
+
+Generate a technical proposal for this feature request.`;
+
+    interface TechnicalProposal {
+      summary?: string;
+      approach?: string;
+      affectedAreas?: string[];
+      estimatedComplexity?: string;
+      dependencies?: string[];
+      risks?: string[];
+      alternatives?: string[];
+    }
+
+    let proposalText: string;
+    let proposalData: TechnicalProposal | null = null;
+
+    try {
+      const chatResult = await this.openaiService.chat({
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 2048,
+        temperature: 0.3,
+        response_format: { type: 'json_object' },
+      });
+      proposalText = chatResult.content || 'No response generated.';
+
+      // Try to parse JSON from the response
+      try {
+        const jsonMatch = proposalText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          proposalData = JSON.parse(jsonMatch[0]) as TechnicalProposal;
+        }
+      } catch {
+        // Response wasn't valid JSON, use as plain text
+      }
+    } catch (error) {
+      this.logger.error(`Proposal generation AI call failed: ${getErrorMessage(error)}`);
+      proposalText = 'Unable to generate an automatic proposal. A human will review this feature request.';
+    }
+
+    await job.updateProgress(80);
+
+    // Save proposal as a TicketMessage
+    await this.prisma.ticketMessage.create({
+      data: {
+        ticketId,
+        type: 'agent',
+        content: proposalData
+          ? `## Technical Proposal\n\n**Summary:** ${proposalData.summary || ''}\n\n**Approach:** ${proposalData.approach || ''}\n\n**Complexity:** ${proposalData.estimatedComplexity || 'unknown'}\n\n**Affected Areas:** ${(proposalData.affectedAreas || []).join(', ')}\n\n**Risks:** ${(proposalData.risks || []).join(', ')}`
+          : proposalText,
+        sender: 'triage-agent',
+        metadata: JSON.parse(JSON.stringify({
+          handler: 'generate-proposal',
+          proposal: proposalData,
+          hasCodeContext: codeContext.length > 0,
+        })),
+      },
+    });
+
+    // Record timeline event
+    await this.prisma.ticketEvent.create({
+      data: {
+        ticketId,
+        tenantId,
+        eventType: 'proposal_generated',
+        data: {
+          complexity: proposalData?.estimatedComplexity || 'unknown',
+          affectedAreas: proposalData?.affectedAreas || [],
+          hasCodeContext: codeContext.length > 0,
+        },
+      },
+    });
+
+    await job.updateProgress(100);
+
+    this.logger.log(`Technical proposal generated for ticket ${ticketId}`);
+
+    return {
+      success: true,
+      type: 'generate-proposal',
+      ticketId,
+      response: proposalText,
+    };
   }
 
   // ═══════════════════════════════════════════════════════════════════════

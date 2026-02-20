@@ -220,6 +220,7 @@ export class AgentTasksController {
       dto.phase,
       userId,
       dto.reason,
+      dto.iterate,
     );
   }
 

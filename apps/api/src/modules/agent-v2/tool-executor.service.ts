@@ -47,6 +47,28 @@ export class ToolExecutorService {
     }
   }
 
+  /**
+   * Resolve the RepoContext for a tool call.
+   * If the input includes a `repo` param (e.g. "owner/repo"), resolve that specific repo.
+   * Otherwise, use the default (primary) context.
+   */
+  private async resolveRepoContext(
+    input: Record<string, unknown>,
+    context: ToolExecutionContext,
+  ): Promise<RepoContext | null> {
+    const repoParam = input.repo as string | undefined;
+    if (repoParam && repoParam.includes('/')) {
+      const [owner, repo] = repoParam.split('/');
+      const resolved = await this.codeInvestigation.getRepoContextByName(
+        context.applicationId,
+        owner,
+        repo,
+      );
+      return resolved;
+    }
+    return context.repoCtx;
+  }
+
   private async dispatchTool(
     toolName: ToolName,
     input: Record<string, unknown>,
@@ -54,9 +76,10 @@ export class ToolExecutorService {
   ): Promise<unknown> {
     switch (toolName) {
       case 'read_file': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.readFile(
-          context.repoCtx,
+          ctx,
           input.file_path as string,
           input.start_line as number | undefined,
           input.end_line as number | undefined,
@@ -64,18 +87,20 @@ export class ToolExecutorService {
       }
 
       case 'list_directory': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.listDirectory(
-          context.repoCtx,
+          ctx,
           input.path as string,
           (input.recursive as boolean | undefined) ?? false,
         );
       }
 
       case 'search_code': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.searchCode(
-          context.repoCtx,
+          ctx,
           input.query as string,
           input.file_pattern as string | undefined,
           (input.max_results as number | undefined) ?? 20,
@@ -91,31 +116,44 @@ export class ToolExecutorService {
       }
 
       case 'get_repo_structure': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.getRepoStructure(
-          context.repoCtx,
+          ctx,
           (input.max_depth as number | undefined) ?? 3,
           (input.exclude_patterns as string[] | undefined) ?? [],
         );
       }
 
       case 'get_file_history': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.getFileHistory(
-          context.repoCtx,
+          ctx,
           input.file_path as string,
           (input.limit as number | undefined) ?? 5,
         );
       }
 
       case 'get_file_blame': {
-        if (!context.repoCtx) return { error: NO_REPO_ERROR };
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.getFileBlame(
-          context.repoCtx,
+          ctx,
           input.file_path as string,
           input.start_line as number | undefined,
           input.end_line as number | undefined,
         );
+      }
+
+      case 'list_repos': {
+        const repos = await this.codeInvestigation.getAllRepoContexts(context.applicationId);
+        return repos.map((r) => ({
+          fullName: r.fullName,
+          role: r.role,
+          isPrimary: r.isPrimary,
+          defaultBranch: r.defaultBranch,
+        }));
       }
 
       case 'update_diagnosis': {

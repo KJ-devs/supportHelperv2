@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AiConfigModule } from '../ai-config/ai-config.module';
+import { AuthModule } from '../../auth/auth.module';
 import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 import { GithubModule } from '../github/github.module';
 import { TicketsModule } from '../tickets/tickets.module';
@@ -12,11 +13,13 @@ import { CodeGenerationAgentService } from './services/code-generation-agent.ser
 import { CIFeedbackService } from './services/ci-feedback.service';
 import { ValidationModeService } from './services/validation-mode.service';
 import { ReviewExpiryScheduler, ReviewExpiryProcessor } from './services/review-expiry.service';
+import { AgentTasksGateway } from './agent-tasks.gateway';
 
 @Module({
   imports: [
     PrismaModule,
     AiConfigModule,
+    AuthModule,
     BullModule.registerQueue(
       { name: 'agent-orchestration' },
       { name: 'review-expiry' },
@@ -34,6 +37,7 @@ import { ReviewExpiryScheduler, ReviewExpiryProcessor } from './services/review-
     ValidationModeService,
     ReviewExpiryScheduler,
     ReviewExpiryProcessor,
+    AgentTasksGateway,
   ],
   exports: [
     AgentTasksService,
@@ -41,6 +45,7 @@ import { ReviewExpiryScheduler, ReviewExpiryProcessor } from './services/review-
     CodeGenerationAgentService,
     CIFeedbackService,
     ValidationModeService,
+    AgentTasksGateway,
   ],
 })
 export class AgentTasksModule {}

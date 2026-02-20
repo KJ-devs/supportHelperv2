@@ -1,4 +1,4 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsOptional, IsString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ApproveTaskDto {
@@ -16,4 +16,12 @@ export class RejectTaskDto {
   @IsOptional()
   @IsString()
   reason?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether to iterate on the plan instead of failing. Defaults to true for plan phase.',
+    default: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  iterate?: boolean;
 }
