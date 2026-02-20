@@ -1,8 +1,8 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import type Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CodeInvestigationService } from './code-investigation.service';
 import { AgenticLoopService, AgenticLoopOptions } from './agentic-loop.service';
+import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface';
 import { DiagnosisService, Diagnosis } from './diagnosis.service';
 import { AGENT_TOOLS } from './agent-tools';
 
@@ -230,10 +230,8 @@ Start by identifying which parts of the codebase are likely involved, then read 
       systemPrompt += `\n\n## Current Diagnosis\n${JSON.stringify(existingDiagnosis, null, 2)}`;
     }
 
-    // Rebuild conversation history from persisted Anthropic messages
-    const storedMessages = session.anthropicMessages as
-      | Anthropic.MessageParam[]
-      | null;
+    // Rebuild conversation history from persisted messages
+    const storedMessages = session.anthropicMessages as AgentMessage[] | null;
     const existingMessages = storedMessages ?? [];
 
     const loopOptions: AgenticLoopOptions = {
@@ -397,10 +395,19 @@ ${repoStructure}
 6. Use get_file_blame to identify who last touched relevant code
 7. Call update_diagnosis when you have findings
 
+## Fix Strategy (only when confidence >= 0.7)
+8. create_branch — name it "fix/ticket-{ticketId}-<short-description>"
+9. write_file — write the COMPLETE fixed file content for each changed file
+10. create_pull_request — title format: "fix(<scope>): <description>", include root cause and changes in body
+
 ## Rules
 - Always investigate the code before making claims about root cause
 - Never guess about code structure — use your tools to verify
-- Keep tool calls efficient — don't read files you don't need`;
+- Keep tool calls efficient — don't read files you don't need
+- NEVER write to the default branch — always create a fix branch first
+- NEVER provide partial file content in write_file — always the full file
+- If confidence < 0.7 → call escalate_to_human instead of attempting a fix
+- If the fix spans more than 5 files → call escalate_to_human (too risky for automated fix)`;
 
     if (videoContext && videoContext.length > 0) {
       prompt += `\n\n## Video Analysis (OCR extracted text)\n${videoContext.join('\n')}\n\nUse these visual cues to search for related code in the repository.`;

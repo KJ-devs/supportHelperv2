@@ -343,6 +343,105 @@ export class CodeInvestigationService {
     }
   }
 
+  /**
+   * Create a new branch from a base branch (defaults to the repo's default branch).
+   */
+  async createBranch(
+    ctx: RepoContext,
+    branchName: string,
+    fromBranch?: string,
+  ): Promise<{ branchName: string; sha: string }> {
+    const base = fromBranch || ctx.defaultBranch;
+
+    const { data: refData } = await ctx.octokit.git.getRef({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      ref: `heads/${base}`,
+    });
+
+    const sha = refData.object.sha;
+
+    await ctx.octokit.git.createRef({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      ref: `refs/heads/${branchName}`,
+      sha,
+    });
+
+    this.logger.log(`Created branch ${branchName} from ${base} (${sha.substring(0, 7)}) in ${ctx.fullName}`);
+    return { branchName, sha };
+  }
+
+  /**
+   * Create or update a file on a branch.
+   * Automatically retrieves the existing file SHA if the file already exists.
+   */
+  async writeFile(
+    ctx: RepoContext,
+    branch: string,
+    filePath: string,
+    content: string,
+    commitMessage: string,
+  ): Promise<{ sha: string; url: string }> {
+    let existingSha: string | undefined;
+
+    try {
+      const { data } = await ctx.octokit.repos.getContent({
+        owner: ctx.owner,
+        repo: ctx.repo,
+        path: filePath,
+        ref: branch,
+      });
+
+      if ('sha' in data) {
+        existingSha = data.sha;
+      }
+    } catch {
+      // File does not exist yet — create it
+    }
+
+    const { data } = await ctx.octokit.repos.createOrUpdateFileContents({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      path: filePath,
+      message: commitMessage,
+      content: Buffer.from(content).toString('base64'),
+      branch,
+      ...(existingSha ? { sha: existingSha } : {}),
+    });
+
+    const commitSha = data.commit.sha!;
+    const fileUrl = data.content?.html_url ?? '';
+
+    this.logger.log(`Wrote ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`);
+    return { sha: commitSha, url: fileUrl };
+  }
+
+  /**
+   * Open a pull request.
+   */
+  async createPullRequest(
+    ctx: RepoContext,
+    title: string,
+    body: string,
+    headBranch: string,
+    baseBranch?: string,
+  ): Promise<{ number: number; url: string; title: string }> {
+    const base = baseBranch || ctx.defaultBranch;
+
+    const { data } = await ctx.octokit.pulls.create({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      title,
+      body,
+      head: headBranch,
+      base,
+    });
+
+    this.logger.log(`Created PR #${data.number} "${title}" in ${ctx.fullName}`);
+    return { number: data.number, url: data.html_url, title: data.title };
+  }
+
   private filterLines(content: string, startLine?: number, endLine?: number): string {
     if (!startLine && !endLine) return content;
     const lines = content.split('\n');

@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { AgentTool } from '../../ai/providers/tool-capable-provider.interface';
 
 export type ToolName =
   | 'read_file'
@@ -13,7 +13,10 @@ export type ToolName =
   | 'search_similar_tickets'
   | 'get_ticket_details'
   | 'update_ticket_status'
-  | 'escalate_to_human';
+  | 'escalate_to_human'
+  | 'create_branch'
+  | 'write_file'
+  | 'create_pull_request';
 
 export interface ToolCallResult {
   toolCallId: string;
@@ -24,13 +27,13 @@ export interface ToolCallResult {
   durationMs: number;
 }
 
-export const AGENT_TOOLS: Anthropic.Tool[] = [
+export const AGENT_TOOLS: AgentTool[] = [
   // ── CODE SOURCE ──────────────────────────────────────────
   {
     name: 'read_file',
     description:
       'Read the content of a file from a connected GitHub repository. Use this to examine source code, configuration files, or any file in the repo.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         file_path: {
@@ -57,7 +60,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'list_directory',
     description:
       'List files and subdirectories in a directory of the repo. Use to understand project structure.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         path: {
@@ -80,7 +83,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'search_code',
     description:
       'Search for a text pattern across a repository (like grep). Returns matching lines with file paths and line numbers.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         query: {
@@ -107,7 +110,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'search_codebase_semantic',
     description:
       'Semantic search through the indexed codebase using AI embeddings. Best for finding conceptually related code even if exact terms differ.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         query: {
@@ -126,7 +129,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'get_repo_structure',
     description:
       'Get a condensed tree view of the entire repository structure. Use as a first step to understand the project layout.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         max_depth: {
@@ -150,7 +153,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'get_file_history',
     description:
       'Get recent git commit history for a specific file. Shows who changed what and when.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         file_path: {
@@ -173,7 +176,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'get_file_blame',
     description:
       'Get git blame information for a file, showing the last author and commit for each line range.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         file_path: {
@@ -194,7 +197,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'list_repos',
     description:
       'List all connected repositories for this application. Returns each repo with its role (main, frontend, backend, etc.) and whether it is the primary repo.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {},
     },
@@ -204,7 +207,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'update_diagnosis',
     description:
       'Update the current bug diagnosis with findings from code investigation. Call this after examining relevant code.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         root_cause: {
@@ -240,11 +243,11 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
       required: ['root_cause', 'confidence'],
     },
   },
-  // ── TICKET MANAGEMENT (existing, kept) ─────────────────
+  // ── TICKET MANAGEMENT ─────────────────────────────────────
   {
     name: 'search_similar_tickets',
     description: 'Search for similar tickets using semantic similarity on past tickets.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         query: { type: 'string' },
@@ -256,7 +259,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'get_ticket_details',
     description: 'Get full details of a ticket including media and AI analysis.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         ticket_id: { type: 'string' },
@@ -267,7 +270,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'update_ticket_status',
     description: 'Update ticket status.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         ticket_id: { type: 'string' },
@@ -283,7 +286,7 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     name: 'escalate_to_human',
     description:
       'Escalate to a human support agent when the issue is too complex or the user requests it.',
-    input_schema: {
+    inputSchema: {
       type: 'object',
       properties: {
         ticket_id: { type: 'string' },
@@ -294,6 +297,92 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
         },
       },
       required: ['ticket_id', 'reason'],
+    },
+  },
+  // ── WRITE TOOLS ───────────────────────────────────────────
+  {
+    name: 'create_branch',
+    description:
+      'Create a new git branch in the connected repository. Always create a fix branch before writing any files.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branch_name: {
+          type: 'string',
+          description: 'Name for the new branch (e.g. "fix/ticket-abc123-null-pointer")',
+        },
+        from_branch: {
+          type: 'string',
+          description: 'Base branch to fork from. Defaults to the repository default branch.',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
+      },
+      required: ['branch_name'],
+    },
+  },
+  {
+    name: 'write_file',
+    description:
+      'Create or update a file on a branch. You MUST provide the COMPLETE file content — never partial content. Always call create_branch first.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branch: {
+          type: 'string',
+          description: 'Target branch name (must already exist)',
+        },
+        file_path: {
+          type: 'string',
+          description: 'Path relative to repo root (e.g. "src/services/auth.service.ts")',
+        },
+        content: {
+          type: 'string',
+          description: 'Complete file content to write (never partial)',
+        },
+        commit_message: {
+          type: 'string',
+          description: 'Git commit message (e.g. "fix: handle null user in auth guard")',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
+      },
+      required: ['branch', 'file_path', 'content', 'commit_message'],
+    },
+  },
+  {
+    name: 'create_pull_request',
+    description:
+      'Open a pull request on GitHub after writing all fix files to the branch. Include a clear title and a body that references the ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'PR title (e.g. "fix(auth): handle null user in JWT guard")',
+        },
+        body: {
+          type: 'string',
+          description: 'PR description with root cause, changes made, and testing notes',
+        },
+        head_branch: {
+          type: 'string',
+          description: 'Source branch with the fix commits',
+        },
+        base_branch: {
+          type: 'string',
+          description: 'Target branch to merge into. Defaults to the repo default branch.',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
+      },
+      required: ['title', 'body', 'head_branch'],
     },
   },
 ];

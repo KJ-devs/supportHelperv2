@@ -230,6 +230,40 @@ export class ToolExecutorService {
         };
       }
 
+      case 'create_branch': {
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
+        return this.codeInvestigation.createBranch(
+          ctx,
+          input.branch_name as string,
+          input.from_branch as string | undefined,
+        );
+      }
+
+      case 'write_file': {
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
+        return this.codeInvestigation.writeFile(
+          ctx,
+          input.branch as string,
+          input.file_path as string,
+          input.content as string,
+          input.commit_message as string,
+        );
+      }
+
+      case 'create_pull_request': {
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
+        return this.codeInvestigation.createPullRequest(
+          ctx,
+          input.title as string,
+          input.body as string,
+          input.head_branch as string,
+          input.base_branch as string | undefined,
+        );
+      }
+
       default: {
         const exhaustive: never = toolName;
         return { error: `Unknown tool: ${String(exhaustive)}` };
