@@ -150,6 +150,132 @@ const HUMAN_REQUEST_KEYWORDS = [
 // GPT-4o FUNCTION CALLING TOOLS
 // ═══════════════════════════════════════════════════════════════════════
 
+/** OpenAI tool definitions for the agent conversation loop */
+const AGENT_FUNCTION_TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_similar_tickets',
+      description: 'Search for similar tickets in the knowledge base using semantic similarity',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The search query to find similar tickets',
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of results to return (default: 5)',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ticket_details',
+      description: 'Get full details of a specific ticket including media and events',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to retrieve',
+          },
+        },
+        required: ['ticketId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_ticket_status',
+      description: 'Update the status of a ticket',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to update',
+          },
+          status: {
+            type: 'string',
+            enum: ['new', 'open', 'in_progress', 'resolved', 'closed'],
+            description: 'The new status for the ticket',
+          },
+        },
+        required: ['ticketId', 'status'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'escalate_to_human',
+      description: 'Escalate the ticket to a human support agent',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to escalate',
+          },
+          reason: {
+            type: 'string',
+            description: 'The reason for escalation',
+          },
+          priority: {
+            type: 'string',
+            enum: ['low', 'medium', 'high', 'critical'],
+            description: 'The priority level for escalation',
+          },
+        },
+        required: ['ticketId', 'reason'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suggest_solution',
+      description: 'Generate a solution suggestion based on similar resolved tickets',
+      parameters: {
+        type: 'object',
+        properties: {
+          ticketId: {
+            type: 'string',
+            description: 'The ID of the ticket to suggest a solution for',
+          },
+          similarTicketIds: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'IDs of similar resolved tickets to base the suggestion on',
+          },
+        },
+        required: ['ticketId'],
+      },
+    },
+  },
+];
+
+/** Result of a single tool invocation */
+export interface ToolCallResult {
+  toolCallId: string;
+  name: string;
+  result: unknown;
+  error?: string;
+}
+
+/** Result of the full function-calling loop */
+export interface FunctionCallingLoopResult {
+  finalContent: string;
+  toolCallLog: ToolCallResult[];
+  iterations: number;
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // AGENT SERVICE
@@ -459,6 +585,28 @@ export class AgentService implements OnModuleInit {
     const searchQuery = `${ticket.title} ${ticket.description || ''} ${analysis.keywords.join(' ')}`;
     const similarTickets = await this.searchSimilarTickets(searchQuery, session.tenantId, 5);
 
+    // Step 3b: Run the GPT-4o function calling loop to perform deeper analysis
+    // (only when OpenAI client is available; Anthropic path skips tool use)
+    if (this.openaiClient) {
+      const loopResult = await this.runWithFunctionCalling({
+        systemPrompt:
+          'You are an expert technical support AI. Use the available tools to analyze this ticket, ' +
+          'search for similar issues, and gather any needed details before providing your assessment.',
+        userPrompt:
+          `Analyze ticket "${ticket.title}".\n` +
+          `Description: ${ticket.description || 'No description'}\n` +
+          `AI Summary: ${ticket.aiSummary || 'Not available'}\n\n` +
+          `Use search_similar_tickets to find related issues, then provide a brief assessment.`,
+        tenantId: session.tenantId,
+        ticket,
+        maxTokens: 1024,
+      });
+      this.logger.log(
+        `Function calling loop completed: ${loopResult.iterations} iterations, ` +
+        `${loopResult.toolCallLog.length} tool calls`
+      );
+    }
+
     // Step 4: Search GitHub issues if app has repo configured
     let githubIssues: GithubIssueResult[] = [];
     if (ticket.application?.githubRepo) {
@@ -699,13 +847,398 @@ export class AgentService implements OnModuleInit {
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Run GPT-4o with function calling tools
+   * Run GPT-4o with function calling tools in a multi-turn loop.
+   *
+   * The loop:
+   *  1. Sends messages + tools to OpenAI
+   *  2. If the response contains tool_calls → executes each tool
+   *  3. Appends tool results as tool messages and repeats
+   *  4. Stops when the model returns a plain text response OR after MAX_TOOL_ITERATIONS
+   *
+   * Falls back to plain chatCompletion when OpenAI is not available.
    */
+  async runWithFunctionCalling(options: {
+    systemPrompt: string;
+    userPrompt: string;
+    tenantId: string;
+    ticket: any;
+    maxTokens?: number;
+  }): Promise<FunctionCallingLoopResult> {
+    const MAX_TOOL_ITERATIONS = 5;
+    const toolCallLog: ToolCallResult[] = [];
 
+    // If no OpenAI client, fall back to plain completion without tools
+    if (!this.openaiClient) {
+      const content = await this.chatCompletion({
+        systemPrompt: options.systemPrompt,
+        userPrompt: options.userPrompt,
+        maxTokens: options.maxTokens,
+      });
+      return { finalContent: content, toolCallLog: [], iterations: 0 };
+    }
+
+    // Build the initial message array for the OpenAI chat API
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: 'system', content: options.systemPrompt },
+      { role: 'user', content: options.userPrompt },
+    ];
+
+    let iterations = 0;
+    let finalContent = '';
+
+    while (iterations < MAX_TOOL_ITERATIONS) {
+      iterations++;
+
+      const response = await this.openaiClient.chat.completions.create({
+        model: 'gpt-4o',
+        messages,
+        tools: AGENT_FUNCTION_TOOLS,
+        tool_choice: 'auto',
+        temperature: 0.2,
+        max_tokens: options.maxTokens || 2048,
+      });
+
+      const choice = response.choices[0];
+      if (!choice) {
+        break;
+      }
+
+      const assistantMessage = choice.message;
+
+      // Append the assistant message to conversation history
+      messages.push(assistantMessage);
+
+      // If no tool calls, we have the final answer
+      if (!assistantMessage.tool_calls || assistantMessage.tool_calls.length === 0) {
+        finalContent = assistantMessage.content || '';
+        break;
+      }
+
+      // Execute each tool call and collect results
+      const toolResultMessages: OpenAI.Chat.ChatCompletionToolMessageParam[] = [];
+
+      for (const toolCall of assistantMessage.tool_calls) {
+        if (toolCall.type !== 'function') continue;
+
+        const toolName = toolCall.function.name;
+        const toolCallId = toolCall.id;
+        let parsedArgs: Record<string, unknown>;
+
+        try {
+          parsedArgs = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+        } catch {
+          parsedArgs = {};
+        }
+
+        this.logger.log(`[ToolCall] ${toolName}(${JSON.stringify(parsedArgs)}) [id=${toolCallId}]`);
+
+        let toolResult: unknown;
+        let toolError: string | undefined;
+
+        try {
+          toolResult = await this.executeAgentTool(
+            toolName,
+            parsedArgs,
+            options.tenantId,
+            options.ticket
+          );
+        } catch (error) {
+          toolError = getErrorMessage(error);
+          toolResult = { error: toolError };
+          this.logger.warn(`[ToolCall] ${toolName} failed: ${toolError}`);
+        }
+
+        toolCallLog.push({ toolCallId, name: toolName, result: toolResult, error: toolError });
+
+        toolResultMessages.push({
+          role: 'tool',
+          tool_call_id: toolCallId,
+          content: JSON.stringify(toolResult),
+        });
+      }
+
+      // Append all tool results back into the conversation
+      messages.push(...toolResultMessages);
+    }
+
+    // If we exhausted iterations without a final text response, use the last content
+    if (!finalContent) {
+      const lastAssistant = [...messages].reverse().find(m => m.role === 'assistant');
+      if (lastAssistant && 'content' in lastAssistant && typeof lastAssistant.content === 'string') {
+        finalContent = lastAssistant.content;
+      }
+    }
+
+    return { finalContent, toolCallLog, iterations };
+  }
+
+  /**
+   * Dispatch a tool call to the appropriate implementation.
+   */
+  private async executeAgentTool(
+    name: string,
+    args: Record<string, unknown>,
+    tenantId: string,
+    ticket: any
+  ): Promise<unknown> {
+    switch (name) {
+      case 'search_similar_tickets':
+        return this.toolSearchSimilarTickets(
+          args.query as string,
+          (args.limit as number | undefined) ?? 5,
+          tenantId
+        );
+
+      case 'get_ticket_details':
+        return this.toolGetTicketDetails(args.ticketId as string);
+
+      case 'update_ticket_status':
+        return this.toolUpdateTicketStatus(args.ticketId as string, args.status as string);
+
+      case 'escalate_to_human':
+        return this.toolEscalateToHuman(
+          args.ticketId as string,
+          args.reason as string,
+          (args.priority as string | undefined) ?? 'medium',
+          tenantId,
+          ticket
+        );
+
+      case 'suggest_solution':
+        return this.toolSuggestSolution(
+          args.ticketId as string,
+          args.similarTicketIds as string[] | undefined
+        );
+
+      default:
+        throw new Error(`Unknown tool: ${name}`);
+    }
+  }
 
   // ═══════════════════════════════════════════════════════════════════════
   // TOOL IMPLEMENTATIONS
   // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * search_similar_tickets — pgvector similarity search on resolved tickets
+   */
+  private async toolSearchSimilarTickets(
+    query: string,
+    limit: number,
+    tenantId: string
+  ): Promise<SimilarTicketResult[]> {
+    try {
+      const embeddingResult = await this.openaiService.generateEmbedding(query);
+      if (embeddingResult.embedding.length === 0) {
+        // Fallback: return empty when embeddings unavailable
+        return [];
+      }
+      const results = await this.openaiService.searchSimilarTickets(
+        embeddingResult.embedding,
+        limit,
+        tenantId
+      );
+      return results.map(r => ({
+        id: r.id,
+        title: r.title,
+        description: r.description,
+        similarity: r.similarity,
+        status: r.status,
+      }));
+    } catch (error) {
+      this.logger.warn(`search_similar_tickets failed: ${getErrorMessage(error)}`);
+      return [];
+    }
+  }
+
+  /**
+   * get_ticket_details — fetch full ticket with media and videoEvents
+   */
+  private async toolGetTicketDetails(ticketId: string): Promise<Record<string, unknown> | null> {
+    try {
+      const ticket = await this.prisma.ticket.findUnique({
+        where: { id: ticketId },
+        include: {
+          media: {
+            include: {
+              videoEvents: { take: 10 },
+            },
+          },
+          application: { select: { id: true, name: true } },
+          reporter: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      if (!ticket) {
+        return null;
+      }
+
+      // Return a safe subset (avoid leaking binary data)
+      return {
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        type: ticket.type,
+        severity: ticket.severity,
+        status: ticket.status,
+        priority: ticket.priority,
+        aiSummary: ticket.aiSummary,
+        keywords: ticket.keywords,
+        reproductionSteps: ticket.reproductionSteps,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+        mediaCount: ticket.media.length,
+        videoEvents: ticket.media.flatMap(m =>
+          m.videoEvents.map(e => ({ timestampMs: e.timestampMs, ocrText: e.ocrText }))
+        ),
+        application: ticket.application,
+        reporter: ticket.reporter,
+      };
+    } catch (error) {
+      this.logger.warn(`get_ticket_details failed: ${getErrorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  /**
+   * update_ticket_status — update ticket status via Prisma
+   */
+  private async toolUpdateTicketStatus(
+    ticketId: string,
+    status: string
+  ): Promise<{ ticketId: string; status: string; updatedAt: string }> {
+    const validStatuses = ['new', 'open', 'in_progress', 'resolved', 'closed'];
+    if (!validStatuses.includes(status)) {
+      throw new Error(`Invalid status "${status}". Must be one of: ${validStatuses.join(', ')}`);
+    }
+
+    const updated = await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: { status },
+      select: { id: true, status: true, updatedAt: true },
+    });
+
+    this.logger.log(`Ticket ${ticketId} status updated to "${status}"`);
+    return { ticketId: updated.id, status: updated.status ?? '', updatedAt: updated.updatedAt.toISOString() };
+  }
+
+  /**
+   * escalate_to_human — assign ticket to a support agent and notify
+   */
+  private async toolEscalateToHuman(
+    ticketId: string,
+    reason: string,
+    priority: string,
+    tenantId: string,
+    ticket: any
+  ): Promise<{ ticketId: string; escalated: boolean; assignedTo: string | null; reason: string }> {
+    const priorityScore =
+      priority === 'critical' ? 10 : priority === 'high' ? 7 : priority === 'medium' ? 5 : 3;
+
+    // Find an available support agent for this tenant
+    const assignee = await this.prisma.user.findFirst({
+      where: {
+        tenantId,
+        role: { in: ['admin', 'support'] },
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    await this.prisma.ticket.update({
+      where: { id: ticketId },
+      data: {
+        status: 'escalated',
+        assignedTo: assignee?.id ?? undefined,
+        assignedAt: assignee ? new Date() : undefined,
+        priority: priorityScore,
+      },
+    });
+
+    this.logger.log(`Ticket ${ticketId} escalated (priority=${priority}, reason="${reason}")`);
+
+    // Send notification email if we have an assignee
+    if (assignee?.email) {
+      const baseUrl = this.configService.get<string>('APP_URL') || 'http://localhost:3000';
+      try {
+        await this.emailService.sendEscalationNotification(
+          assignee.email,
+          ticketId,
+          ticket?.title ?? ticketId,
+          reason,
+          priority,
+          ticket?.reporter?.name,
+          ticket?.reporter?.email,
+          ticket?.aiSummary,
+          `${baseUrl}/tickets/${ticketId}`
+        );
+      } catch (emailError) {
+        this.logger.warn(`Escalation email failed: ${getErrorMessage(emailError)}`);
+      }
+    }
+
+    return {
+      ticketId,
+      escalated: true,
+      assignedTo: assignee?.id ?? null,
+      reason,
+    };
+  }
+
+  /**
+   * suggest_solution — generate a solution text using similar resolved tickets
+   */
+  private async toolSuggestSolution(
+    ticketId: string,
+    similarTicketIds?: string[]
+  ): Promise<{ ticketId: string; solution: string; basedOnTickets: number }> {
+    // Fetch current ticket
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { title: true, description: true, aiSummary: true },
+    });
+
+    if (!ticket) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    // Fetch referenced similar tickets (if provided)
+    let similarTickets: Array<{ title: string | null; aiSummary: string | null }> = [];
+    if (similarTicketIds && similarTicketIds.length > 0) {
+      similarTickets = await this.prisma.ticket.findMany({
+        where: {
+          id: { in: similarTicketIds },
+          status: { in: ['resolved', 'closed'] },
+        },
+        select: { title: true, aiSummary: true },
+      });
+    }
+
+    const similarContext = similarTickets
+      .map((t, i) => `${i + 1}. ${t.title}: ${t.aiSummary || 'No summary'}`)
+      .join('\n');
+
+    const prompt = `Generate an actionable solution for this support ticket:
+
+Title: ${ticket.title}
+Description: ${ticket.description || 'No description'}
+AI Summary: ${ticket.aiSummary || 'Not available'}
+
+${similarTickets.length > 0 ? `Based on these resolved tickets:\n${similarContext}` : 'No similar resolved tickets found.'}
+
+Provide a concise, step-by-step solution.`;
+
+    const solution = await this.chatCompletion({
+      systemPrompt: 'You are an expert support agent providing actionable solutions.',
+      userPrompt: prompt,
+      maxTokens: 1024,
+    });
+
+    return {
+      ticketId,
+      solution,
+      basedOnTickets: similarTickets.length,
+    };
+  }
 
 
 
@@ -795,7 +1328,16 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
 
       if (connection) {
         await this.githubService.initialize(connection as GithubConnection);
-        return this.searchGithubIssues(repo, query);
+        const scopedQuery = `repo:${repo} ${query}`;
+        const items = await this.githubService.searchIssues(scopedQuery, { per_page: 10 });
+        return items.map((item: any) => ({
+          number: item.number,
+          title: item.title,
+          body: item.body || '',
+          state: item.state,
+          url: item.html_url,
+          labels: (item.labels || []).map((l: any) => (typeof l === 'string' ? l : l.name)),
+        }));
       }
       return [];
     } catch (error) {

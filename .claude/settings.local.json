@@ -36,7 +36,9 @@
       "Task(devops)",
       "Task(ai-engineer)",
       "Task(security-auditor)",
-      "Task(doc-writer)"
+      "Task(doc-writer)",
+      "Bash(cat:*)",
+      "Bash(head:*)"
     ]
   }
 }

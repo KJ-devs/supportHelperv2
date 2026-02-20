@@ -48,13 +48,14 @@
 - ArgumentsHost: mock with switchToHttp().getRequest/getResponse for exception filters
 - NestJS Logger: spy on `Logger.prototype` methods in beforeEach, reuse spies across tests (don't recreate per test)
 
-## Known Gaps (as of 2026-02-08)
+## Known Gaps (as of 2026-02-18)
 - ai/ai.service.ts has ZERO tests
 - SDK widget element and state machine have ZERO tests
-- 8 of 9 worker services are untested (only openai.service tested)
+- Worker services mostly untested (openai.service is tested)
 - 5 GitHub controllers untested
 - No DTO validation tests
 - tenant-rate-limit.guard has no tests (ThrottlerGuard subclass)
+- VideoAnalysisWorker: FULLY TESTED (96.87% statements, 92.1% branches) - NOT a gap
 
 ## Tests Added (2026-02-08 remediation)
 - Auth guards: jwt-auth, sdk-key (common), tenant, roles -> `test/unit/guards/`
@@ -159,6 +160,34 @@
 - Patterns: Mock ExecutionContext with switchToHttp().getRequest/getResponse, CallHandler with handle().pipe(of(data)), ArgumentsHost for filters, Express Request/Response with `as unknown as Request`
 - Gotchas: NestJS Logger.prototype spies must be managed in beforeEach - create once and reuse. HttpException with string message doesn't set `error` field (stays default). Prisma $executeRaw with template literals is called with array + values as separate arguments (not object with strings/values). Express partial mocks need `as unknown as Type` to avoid TypeScript strict errors.
 - All 67 tests passing
+
+## Tests Added (2026-02-18 VideoAnalysis Worker - Issue #121)
+- VideoAnalysisWorker -> `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` (30 tests)
+- Coverage: 96.87% statements, 92.1% branches, 88.88% functions, 96.82% lines
+- Tests pass in ~6 seconds (well within 30s limit)
+- All pipeline steps tested: S3 download, FFmpeg extraction, OCR, YOLO, GPT-4 Vision, embeddings, DB update, Meilisearch index
+- All error cases: S3 failure, FFmpeg failure (corrupt video), OCR timeout, OpenAI API error, embedding failure
+- Options tested: skipOcr, skipYolo, skipVision, maxFrames
+- Cleanup verified (finally block runs on both success and error)
+- Retry logic: exponential backoff delays [1min, 5min, 15min, 1hr]
+- Worker events: onActive, onCompleted, onFailed (including dead-letter queue on max retries)
+- The file already existed with full coverage - no changes needed
+
+## Tests Added (2026-02-17 Integration Providers E2E)
+- Integration providers E2E -> `apps/api/test/integration/integrations-e2e.spec.ts` (35 tests)
+- Coverage: Jira, Slack, HubSpot, Discord providers with full CRUD lifecycle
+- Jira tests (6): connection, create/update issues, pull tickets, rate limiting
+- Slack tests (5): connection, post/update/delete messages, channel history
+- HubSpot tests (6): connection, create/update/delete tickets, pull with search API
+- Discord tests (5): webhook test, post/update/delete messages, error handling
+- Integration CRUD (5): create, update, delete with encryption, list filtering, connection testing
+- Error handling (4): network timeout, invalid JSON, validation (required/optional fields)
+- Config encryption (4): encrypt/decrypt with AES-256-GCM, re-encryption on update, invalid config
+- Patterns: Mock `global.fetch` for REST APIs, `jest.mock('@slack/web-api')` for Slack SDK
+- Gotcha: IntegrationsCryptoService uses `encrypt(plaintext)` returning `{ciphertext, iv}` and `decrypt(ciphertext, iv)`, NOT `encryptConfig/decryptConfig`
+- Gotcha: Integration model has NO `syncDirection` field - removed from all test fixtures
+- Gotcha: Must provide ConfigService mock in TestingModule for IntegrationsCryptoService to initialize
+- All 35 tests passing (skip gracefully without TEST_DATABASE_URL)
 
 ## Auth Test Duplication Issue
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`

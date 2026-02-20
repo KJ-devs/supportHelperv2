@@ -136,3 +136,18 @@ Location: `apps/api/src/modules/integrations/providers/`
 - `deleteTicket()` archives page via `pages.update` with `archived: true`
 
 Worker checks `'deleteTicket' in provider` before calling, so adding method is sufficient.
+
+### Agent Conversation (Issue #175)
+- API agent service: `apps/api/src/modules/agent/agent.service.ts`
+- API agent gateway: `apps/api/src/modules/agent/agent.gateway.ts`
+- Worker agent worker: `apps/worker/src/workers/agent.worker.ts`
+- `AgentState` enum values are lowercase: `analyzing`, `needs_info`, `proposing`, `waiting`, `resolved`, `escalated`
+- `sendMessage()` is synchronous: saves user message, transitions state, generates AI response, returns agent message
+- `processUserMessageAsync()` is exposed for worker-side AI processing (typing indicators + state update)
+- State transition on user reply: `NEEDS_INFO`/`WAITING` → `ANALYZING` (via `agentSession.update`)
+- Timeout scheduling: `scheduleTimeoutJob()` queues `auto-escalate-timeout` with `jobId: timeout:{sessionId}` (24h delay)
+- Timeout cancellation: `cancelTimeoutJob()` calls `agentQueue.getJob(jobId)` then `.remove()`
+- Gateway `handleSendMessage` must NOT emit typing/messages — that's the service's job (double-emission bug)
+- Worker job types `process-user-message` and `auto-escalate-timeout` are in `queue.types.ts`
+- `AgentModule` imports `TicketsModule` and `NotificationModule` (for escalation notifications)
+- `TicketsGateway` and `NotificationService` are `@Optional()` in `AgentService` constructor

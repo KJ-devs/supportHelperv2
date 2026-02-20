@@ -23,6 +23,7 @@ import {
   BarChart3,
   Settings,
   Bug,
+  Puzzle,
   X,
   Menu,
   ChevronLeft,
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { href: '/dashboard/integrations', label: 'Integrations', icon: Plug },
   { href: '/dashboard/github', label: 'GitHub', icon: Github },
   { href: '/dashboard/analytics', label: 'Analytiques', icon: BarChart3 },
+  { href: '/dashboard/sdk-demo', label: 'SDK Demo', icon: Puzzle },
   { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
 ];
 

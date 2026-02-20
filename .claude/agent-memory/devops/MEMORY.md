@@ -102,6 +102,29 @@
 - Output: `packages/sdk-web/dist/cdn/sdk.iife.js`
 - Documentation: `packages/sdk-web/CDN_SETUP.md`
 
+## Production Monitoring (2026-02-17)
+**Status**: IMPLEMENTED (PR #164)
+- **Prometheus metrics** endpoint at `/metrics` (enabled via `PROMETHEUS_ENABLED=true`)
+- **MetricsService** tracks:
+  - HTTP: requests/sec, p95 latency, error rate, in-flight
+  - Database: query duration, connection pool utilization
+  - Queue: backlog, job duration, failure rate
+  - Business: tickets created, video processing time, AI analysis time, integration syncs
+  - Cache: hit/miss rates
+- **MetricsInterceptor** automatically records all HTTP requests
+- **Alert rules** (`monitoring/prometheus/alerts.yml`):
+  - Critical: error rate >5%, p95 >5s, DB/Redis down, queue >5000
+  - Warning: p95 >2s, DB pool >80%, queue >1000, job failure >10%
+  - Info: cache hit rate <70%
+- **Alertmanager** configured for Slack notifications with severity-based routing
+- **Grafana dashboard** with 14 panels (performance, resources, queues, business metrics)
+- **docker-compose.monitoring.yml** deploys full stack: Prometheus, Alertmanager, Grafana, postgres_exporter, redis_exporter, node_exporter
+- **Runbooks** created:
+  - `docs/runbooks/high-error-rate.md` - debugging 5xx errors
+  - `docs/runbooks/queue-backlog.md` - resolving queue congestion
+- **Documentation**: `docs/monitoring/README.md` (comprehensive guide), `docs/monitoring/SETUP.md` (setup instructions)
+- Already installed: `prom-client@15.1.3` in API package.json
+
 ## Note
 - GitHub Actions workflows were removed (2026-02-14) to streamline development
 - Quality is now enforced locally via agent quality gates (build + test before delivering)

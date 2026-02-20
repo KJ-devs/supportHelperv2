@@ -10,12 +10,13 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
+import { agentApi } from '@/lib/api/agent';
 import type { Ticket } from '@/lib/types/ticket';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { TicketDetail } from '@/components/tickets/TicketDetail';
 import { TicketTimeline } from '@/components/tickets/TicketTimeline';
 import { PageLoader, Button } from '@/components/ui';
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bot, Trash2 } from 'lucide-react';
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -66,6 +67,36 @@ export default function TicketDetailPage() {
     }
   };
 
+  const [isAgentLoading, setIsAgentLoading] = useState(false);
+
+  const handleOpenAgent = useCallback(async () => {
+    if (!ticket) return;
+
+    // If a session already exists on the ticket, navigate directly
+    const existingSession =
+      ticket.agentSession ??
+      (ticket.agentSessions && ticket.agentSessions.length > 0
+        ? ticket.agentSessions[0]
+        : null);
+
+    if (existingSession) {
+      router.push(`/dashboard/tickets/${ticketId}/chat`);
+      return;
+    }
+
+    // Otherwise start a new session then navigate
+    try {
+      setIsAgentLoading(true);
+      await agentApi.startSession(ticketId);
+      router.push(`/dashboard/tickets/${ticketId}/chat`);
+    } catch (err) {
+      console.error('Error starting agent session:', err);
+      alert('Erreur lors du démarrage de la session IA');
+    } finally {
+      setIsAgentLoading(false);
+    }
+  }, [ticket, ticketId, router]);
+
   if (authLoading || isLoading) {
     return <PageLoader />;
   }
@@ -93,6 +124,17 @@ export default function TicketDetailPage() {
                   onClick={fetchTicket}
                 >
                   🔄 Actualiser
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleOpenAgent}
+                  isLoading={isAgentLoading}
+                  disabled={isAgentLoading || ticket.status === 'resolved' || ticket.status === 'closed'}
+                  className="flex items-center gap-1"
+                >
+                  <Bot className="w-4 h-4" aria-hidden="true" />
+                  Agent IA
                 </Button>
                 <Button
                   variant="danger"
@@ -127,29 +169,6 @@ export default function TicketDetailPage() {
           </div>
         )}
 
-        {/* Chat with AI Agent */}
-        {ticket && !error && (
-          <div className="mb-6 bg-white rounded-lg shadow p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">AI Agent</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {ticket.agentSession || (ticket.agentSessions && ticket.agentSessions.length > 0)
-                    ? 'An AI session exists for this ticket.'
-                    : 'Start an AI analysis to get insights and troubleshooting help.'}
-                </p>
-              </div>
-              <Link href={`/dashboard/tickets/${ticketId}/chat`}>
-                <Button variant="primary" size="sm">
-                  {ticket.agentSession || (ticket.agentSessions && ticket.agentSessions.length > 0)
-                    ? 'Open Chat'
-                    : 'Start AI Analysis'}
-                </Button>
-              </Link>
-            </div>
-          </div>
-        )}
-
         {/* Timeline */}
         {ticket && !error && (
           <div className="mb-6">
@@ -162,22 +181,6 @@ export default function TicketDetailPage() {
           <TicketDetail ticket={ticket} onUpdate={handleUpdate} />
         )}
 
-        {/* Floating chat button */}
-        {ticket && !error && (
-          <Link
-            href={`/dashboard/tickets/${ticketId}/chat`}
-            className="fixed bottom-6 right-6 z-50 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center transition-colors group"
-            title="Chat with AI Agent"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {/* Unread badge - visible when session exists */}
-            {(ticket.agentSession || (ticket.agentSessions && ticket.agentSessions.length > 0)) && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white" />
-            )}
-          </Link>
-        )}
       </div>
     </DashboardLayout>
   );

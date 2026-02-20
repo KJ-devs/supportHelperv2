@@ -13,7 +13,11 @@ import { Inject, Logger, UseGuards, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from './ws-jwt.guard';
 import { AgentService } from './agent.service';
-import { getWebSocketCorsConfig } from '../../config/websocket-cors.config';
+import {
+  getWebSocketCorsConfig,
+  WS_PING_INTERVAL,
+  WS_PING_TIMEOUT,
+} from '../../config/websocket-cors.config';
 
 interface WsUser {
   userId: string;
@@ -25,6 +29,8 @@ interface WsUser {
 @WebSocketGateway({
   namespace: '/agent',
   cors: getWebSocketCorsConfig(),
+  pingInterval: WS_PING_INTERVAL,
+  pingTimeout: WS_PING_TIMEOUT,
 })
 @UseGuards(WsJwtGuard)
 export class AgentGateway
@@ -107,23 +113,15 @@ export class AgentGateway
     }
 
     try {
-      // Emit typing indicator while the agent processes
-      this.emitAgentTyping(data.sessionId, true);
-
-      const agentMessage = await this.agentService.sendMessage(
+      const userMessage = await this.agentService.sendMessage(
         data.sessionId,
         user.tenantId,
         data.content,
         user.userId,
       );
 
-      // Stop typing and broadcast the new message
-      this.emitAgentTyping(data.sessionId, false);
-      this.emitNewMessage(data.sessionId, agentMessage);
-
-      return { event: 'message-sent', data: agentMessage };
+      return { event: 'message-sent', data: userMessage };
     } catch (error) {
-      this.emitAgentTyping(data.sessionId, false);
       throw new WsException(
         error instanceof Error ? error.message : 'Failed to send message',
       );
