@@ -39,4 +39,11 @@ export const aiConfigApi = {
       body: JSON.stringify({ apiKey }),
     });
   },
+
+  testConnection: async (payload: TestConnectionPayload): Promise<ValidateKeyResponse> => {
+    return apiRequest('/api/settings/ai/validate-key', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
 };

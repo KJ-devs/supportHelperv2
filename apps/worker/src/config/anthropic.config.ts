@@ -11,8 +11,8 @@ export default registerAs('anthropic', () => ({
 
   // Models
   models: {
-    vision: 'claude-sonnet-4-5-20250929',
-    chat: 'claude-sonnet-4-5-20250929',
+    vision: 'claude-sonnet-4-6',
+    chat: 'claude-sonnet-4-6',
     chatFast: 'claude-haiku-4-5-20251001',
   },
 
@@ -38,7 +38,7 @@ export default registerAs('anthropic', () => ({
 
   // Cost tracking (per 1M tokens, stored as per-1K for backward compat)
   costs: {
-    'claude-sonnet-4-5-20250929': { input: 0.003, output: 0.015 },
+    'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
     'claude-haiku-4-5-20251001': { input: 0.0008, output: 0.004 },
   },
 }));

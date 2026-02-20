@@ -20,7 +20,7 @@ const MODEL_OPTIONS = {
     { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Fast)' },
   ],
   anthropic: [
-    { value: 'claude-sonnet-4-5-20250929', label: 'Claude Sonnet 4.5 (Recommended)' },
+    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Recommended)' },
     { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Fast)' },
   ],
   ollama: [

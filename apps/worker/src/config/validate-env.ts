@@ -60,12 +60,12 @@ const REQUIRED_VARIABLES: Array<{
     setupHint: 'S3/MinIO endpoint (e.g., http://localhost:9000)',
   },
   {
-    name: 'S3_ACCESS_KEY',
-    setupHint: 'S3/MinIO access key (e.g., minioadmin for local MinIO)',
+    name: 'S3_ACCESS_KEY_ID',
+    setupHint: 'S3/MinIO access key ID (e.g., minioadmin for local MinIO)',
   },
   {
-    name: 'S3_SECRET_KEY',
-    setupHint: 'S3/MinIO secret key (e.g., minioadmin for local MinIO)',
+    name: 'S3_SECRET_ACCESS_KEY',
+    setupHint: 'S3/MinIO secret access key (e.g., minioadmin for local MinIO)',
   },
   {
     name: 'S3_BUCKET',

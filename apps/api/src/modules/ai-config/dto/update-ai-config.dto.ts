@@ -12,7 +12,7 @@ export class UpdateAiConfigDto {
 
   @ApiPropertyOptional({
     description: 'Model identifier',
-    example: 'claude-sonnet-4-20250514',
+    example: 'claude-sonnet-4-6',
   })
   @IsOptional()
   @IsString()

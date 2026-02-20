@@ -151,6 +151,18 @@ export class VideoAnalysisWorker extends WorkerHost {
       });
       await job.updateProgress(95);
 
+      // Step 7b: Store embedding vector in PostgreSQL (pgvector)
+      if (embeddings.embedding?.length > 0) {
+        try {
+          await this.prisma.$executeRaw`
+            UPDATE tickets SET embedding = ${JSON.stringify(embeddings.embedding)}::vector
+            WHERE id = ${ticketId}
+          `;
+        } catch (embeddingError) {
+          this.logger.warn(`Failed to store embedding for ticket ${ticketId}: ${getErrorMessage(embeddingError)}`);
+        }
+      }
+
       // Step 8: Index in Meilisearch
       this.logger.log('Step 8: Indexing in Meilisearch');
       await this.indexTicket(ticketId, tenantId, {

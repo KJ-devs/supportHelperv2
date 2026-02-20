@@ -27,10 +27,15 @@
 
 ## AI Provider Strategy
 
-- `OpenAIService` (openai.service.ts): Anthropic for vision/completion, OpenAI (optional) for embeddings
+- `OpenAIService` (openai.service.ts): dual-provider for vision/classification; OpenAI always for embeddings
+- `analyzeVideo()` and `classifyTicket()` branch on `resolveTenantConfig()`: provider='openai' → OpenAI path, otherwise Anthropic
+- OpenAI video: `gpt-4o` with `image_url` base64 blocks (`detail: 'low'`); Anthropic: base64 `source` blocks
+- OpenAI classification: `gpt-4o-mini` (cheaper); Anthropic: `claude-haiku-4-5-20251001`
+- Env-var fallback: if no tenant config AND no `ANTHROPIC_API_KEY` AND `openaiClient` exists → use OpenAI
 - `AgentService` (agent.service.ts): Anthropic preferred, OpenAI fallback; OpenAI used for function calling loop
 - Function calling only works with OpenAI client — Anthropic path falls back to plain chatCompletion
 - `chatCompletion()` in AgentService uses whichever provider is configured (Anthropic preferred)
+- MODEL_COSTS map includes `gpt-4o` and `gpt-4o-mini` entries for cost tracking
 
 ## Common Pitfalls
 
@@ -38,6 +43,19 @@
 - Actual function calling requires the `openaiClient` (OpenAI SDK) with `tool_choice: 'auto'`
 - Prisma `agentState` JSON field requires `JSON.parse(JSON.stringify(...))` to avoid TS type errors with complex objects
 - `VideoEvent.timestamp` does not exist — use `timestampMs` (the actual field name in the schema)
+
+## Per-Tenant AI Config (BYOK)
+
+- `AiConfig` table (schema: `ai_configs`) stores per-tenant API keys, model, provider
+- `encryptedApiKey` is stored AES-256-GCM encrypted: `iv:authTag:ciphertext` (all base64, colon-separated)
+- Encryption key: `ENCRYPTION_KEY` env var (64 hex chars = 32 bytes)
+- Worker `PrismaService` has NO encryption middleware — must decrypt manually (unlike API)
+- `OpenAIService.resolveTenantConfig(tenantId)` queries DB, decrypts key, returns `TenantAiConfig`
+- In-memory cache: `Map<tenantId, TenantAiConfig>` with 5-minute TTL (`resolvedAt` timestamp)
+- `getAnthropicClientForTenant(tenantId)` returns per-tenant `Anthropic` client or falls back to shared
+- Fallback chain: tenant DB config → `ANTHROPIC_API_KEY` env var
+- `chat()` method accepts optional `tenantId` param to use per-tenant config
+- `isEncryptedPayload()` helper detects the `iv:authTag:ciphertext` format to avoid double-decryption on plain-text dev keys
 
 ## Notes
 

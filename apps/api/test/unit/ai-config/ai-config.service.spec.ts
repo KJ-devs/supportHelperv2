@@ -104,8 +104,9 @@ describe('AiConfigService', () => {
       expect(prisma.aiConfig.create).toHaveBeenCalledWith({
         data: {
           tenantId,
-          encryptedApiKey: 'encrypted:data:here',
-          model: 'claude-sonnet-4-20250514',
+          provider: 'anthropic',
+          encryptedApiKey: 'sk-ant-api03-new-key',
+          model: 'claude-sonnet-4-6',
           settings: {},
         },
       });

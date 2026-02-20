@@ -104,6 +104,19 @@ export class AiConfigService {
     };
   }
 
+  private getDefaultModel(provider: AIProviderType): string {
+    switch (provider) {
+      case AIProviderType.OPENAI:
+        return 'gpt-4o';
+      case AIProviderType.ANTHROPIC:
+        return 'claude-sonnet-4-6';
+      case AIProviderType.OLLAMA:
+        return 'llama3.1';
+      default:
+        return 'claude-sonnet-4-6';
+    }
+  }
+
   async validateKey(
     apiKey: string,
   ): Promise<{ valid: boolean; error?: string }> {

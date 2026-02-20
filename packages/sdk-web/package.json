@@ -35,7 +35,7 @@
   ],
   "scripts": {
     "build": "vite build",
-    "build:cdn": "vite build --config vite.config.cdn.ts",
+    "build:cdn": "vite build --config vite.config.cdn.ts && node -e \"require('fs').copyFileSync('dist/cdn/sdk.iife.js','../../apps/dashboard/public/sdk.iife.js')\" && echo 'SDK synced to dashboard/public/'",
     "build:all": "pnpm build && pnpm build:cdn",
     "dev": "vite",
     "preview": "vite preview",
