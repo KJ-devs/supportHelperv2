@@ -105,6 +105,20 @@ export interface SimilarTicket {
   resolvedAt?: string;
 }
 
+export interface FixProposedEventData {
+  prUrl: string;
+  prNumber: number;
+  branch: string;
+  title?: string;
+}
+
+export interface TicketEvent {
+  id: string;
+  type: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface ActivityEvent {
   id: string;
   type:
@@ -117,7 +131,8 @@ export interface ActivityEvent {
     | 'tag_removed'
     | 'linked_github'
     | 'ai_analysis'
-    | 'resolved';
+    | 'resolved'
+    | 'fix_proposed';
   user: User;
   message: string;
   metadata?: Record<string, unknown>;
@@ -166,6 +181,7 @@ export interface TicketDetail {
   // History
   activityHistory: ActivityEvent[];
   agentConversation: AgentMessage[];
+  events?: TicketEvent[];
 
   // Metadata
   browserInfo?: {
