@@ -31,8 +31,8 @@ flowchart TB
     end
 
     subgraph Frontend["🖥️ Frontend Layer"]
-        Dashboard["Next.js 15 Dashboard<br/>React 19 + TailwindCSS"]
-        Web["Marketing Website"]
+        Dashboard["Next.js 14 Dashboard<br/>App Router + TailwindCSS"]
+        Web["Next.js 15 Web App<br/>App Router + Turbopack"]
     end
 
     subgraph Backend["⚙️ Backend Services"]
@@ -117,7 +117,7 @@ Edit `.env.local` with your configuration (defaults work for local development).
 pnpm docker:up
 ```
 
-This starts PostgreSQL, Redis, MinIO, and Meilisearch.
+This starts PostgreSQL, Redis, MinIO, Meilisearch, and MailHog.
 
 ### 4. Setup Database
 
@@ -135,8 +135,11 @@ pnpm dev
 Access the applications:
 - **Dashboard**: http://localhost:3000
 - **API**: http://localhost:3001
+- **Web App**: http://localhost:3002
 - **API Docs**: http://localhost:3001/api/docs
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
+- **MeiliSearch**: http://localhost:7700
+- **MailHog**: http://localhost:8025
 
 **Test credentials:**
 - Email: `admin@example.com`
@@ -149,13 +152,13 @@ support-helper/
 ├── apps/
 │   ├── api/                 # NestJS backend API
 │   │   ├── src/
-│   │   │   ├── modules/     # Feature modules (tickets, media, auth...)
+│   │   │   ├── modules/     # Feature modules (tickets, media, agent, github...)
 │   │   │   ├── common/      # Shared decorators, guards, filters
 │   │   │   └── config/      # Configuration files
 │   │   └── prisma/          # Database schema & migrations
-│   ├── dashboard/           # Next.js 15 admin dashboard
+│   ├── dashboard/           # Next.js 14 internal dashboard (port 3000)
 │   │   └── app/             # App Router pages
-│   ├── web/                 # Marketing website + docs
+│   ├── web/                 # Next.js 15 public-facing web app (port 3002)
 │   └── worker/              # Background job processor (BullMQ)
 ├── packages/
 │   ├── sdk-web/             # Client SDK for web apps
@@ -249,13 +252,15 @@ See [SDK Documentation](packages/sdk-web/README.md) for complete integration gui
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | Next.js 15, React 19, TailwindCSS 4, TanStack Query/Table/Form, Zustand 5 |
-| **Backend** | NestJS 10, Prisma 5, PostgreSQL 16, Redis 7, BullMQ |
+| **Dashboard** | Next.js 14, TailwindCSS, TanStack Query, Zustand, socket.io-client, next-auth |
+| **Web App** | Next.js 15 (Turbopack), TailwindCSS, Radix UI, TanStack Query/Table/Form, TipTap, Recharts |
+| **Backend** | NestJS, Prisma ORM, PostgreSQL, Redis 7, BullMQ, Socket.io |
 | **AI/ML** | OpenAI GPT-4 Vision, Embeddings, pgvector |
-| **Storage** | MinIO (S3-compatible), PostgreSQL |
+| **Storage** | MinIO (S3-compatible) |
 | **Search** | Meilisearch |
-| **Auth** | JWT, Passport.js, bcrypt |
-| **Monitoring** | Sentry, OpenTelemetry (optional) |
+| **Auth** | JWT, Passport.js, bcrypt, SDK key (`x-sdk-key`) |
+| **Monitoring** | Sentry, PostHog, BetterStack |
+| **Email** | Resend, MailHog (dev) |
 | **Infrastructure** | Docker, Turborepo, pnpm workspaces |
 
 ## 📚 Documentation
@@ -298,9 +303,12 @@ Get-NetTCPConnection -LocalPort 3000,3001,5432,6379,9000 -ErrorAction SilentlyCo
 |---------|-------------|
 | Dashboard | 3000 |
 | API | 3001 |
+| Web App | 3002 |
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 | MinIO | 9000 / 9001 (console) |
+| MeiliSearch | 7700 |
+| MailHog | 8025 (UI) / 1025 (SMTP) |
 
 </details>
 
@@ -364,6 +372,19 @@ pnpm build
 1. Access MinIO Console: http://localhost:9001 (minioadmin/minioadmin)
 2. Verify bucket exists: `support-helper`
 3. Check S3 credentials in `.env.local`
+
+</details>
+
+<details>
+<summary><strong>🔴 SDK widget not rendering</strong></summary>
+
+The CDN bundle must be built separately:
+
+```bash
+pnpm --filter @support-helper/sdk-web build:cdn
+```
+
+Verify `packages/sdk-web/dist/cdn/sdk.iife.js` exists after the build. See `packages/sdk-web/CDN_SETUP.md` for details.
 
 </details>
 
