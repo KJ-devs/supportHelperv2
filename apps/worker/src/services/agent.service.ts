@@ -343,7 +343,7 @@ export class AgentService implements OnModuleInit {
   }): Promise<string> {
     if (this.activeProvider === 'anthropic' && this.anthropicClient) {
       const response = await this.anthropicClient.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: options.maxTokens || 1024,
         system: options.systemPrompt + '\nRespond ONLY with valid JSON.',
         messages: [{ role: 'user', content: options.userPrompt }],

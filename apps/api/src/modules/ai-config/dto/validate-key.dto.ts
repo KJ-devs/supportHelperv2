@@ -29,7 +29,7 @@ export class ValidateKeyDto {
 
   @ApiPropertyOptional({
     description: 'Model to test',
-    example: 'claude-sonnet-4-5-20250929',
+    example: 'claude-sonnet-4-6',
   })
   @IsOptional()
   @IsString()

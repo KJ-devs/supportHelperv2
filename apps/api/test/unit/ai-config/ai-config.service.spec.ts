@@ -95,7 +95,7 @@ describe('AiConfigService', () => {
           tenantId,
           provider: 'anthropic',
           encryptedApiKey: 'sk-ant-api03-new-key',
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-6',
           settings: {},
         },
       });
