@@ -30,7 +30,7 @@ export const aiConfigApi = {
   },
 
   testConnection: async (payload: TestConnectionPayload): Promise<ValidateKeyResponse> => {
-    return apiRequest('/api/system/ai/test', {
+    return apiRequest('/api/settings/ai/validate-key', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

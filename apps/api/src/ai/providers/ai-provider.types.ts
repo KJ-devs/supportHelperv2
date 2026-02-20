@@ -10,7 +10,7 @@ export interface AIProviderConfig {
 
 export const DEFAULT_MODELS: Record<AIProviderType, string> = {
   openai: 'gpt-4o',
-  anthropic: 'claude-sonnet-4-5-20250929',
+  anthropic: 'claude-sonnet-4-6',
   ollama: 'llama3.1',
 };
 

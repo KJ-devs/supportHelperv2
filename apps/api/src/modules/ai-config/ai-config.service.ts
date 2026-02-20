@@ -130,11 +130,11 @@ export class AiConfigService {
       case AIProviderType.OPENAI:
         return 'gpt-4o';
       case AIProviderType.ANTHROPIC:
-        return 'claude-sonnet-4-5-20250929';
+        return 'claude-sonnet-4-6';
       case AIProviderType.OLLAMA:
         return 'llama3.1';
       default:
-        return 'claude-sonnet-4-5-20250929';
+        return 'claude-sonnet-4-6';
     }
   }
 

@@ -22,7 +22,7 @@ export class AnthropicProvider implements AIProvider {
   ): Promise<string> {
     try {
       const response = await this.client.messages.create({
-        model: options?.model || this.config.model || 'claude-sonnet-4-5-20250929',
+        model: options?.model || this.config.model || 'claude-sonnet-4-6',
         max_tokens: options?.maxTokens ?? 1500,
         temperature: options?.temperature ?? 0.7,
         system: options?.systemPrompt,
@@ -54,7 +54,7 @@ export class AnthropicProvider implements AIProvider {
         'You are a helpful assistant that responds with valid JSON only.';
 
       const response = await this.client.messages.create({
-        model: options?.model || this.config.model || 'claude-sonnet-4-5-20250929',
+        model: options?.model || this.config.model || 'claude-sonnet-4-6',
         max_tokens: options?.maxTokens ?? 1500,
         temperature: options?.temperature ?? 0.3,
         system: systemPrompt,
@@ -97,19 +97,12 @@ export class AnthropicProvider implements AIProvider {
   }
 
   async validateConfig(): Promise<boolean> {
-    try {
-      // Test with minimal request
-      await this.client.messages.create({
-        model: this.config.model || 'claude-sonnet-4-5-20250929',
-        max_tokens: 10,
-        messages: [{ role: 'user', content: 'Say "ok"' }],
-      });
-      return true;
-    } catch (error) {
-      this.logger.warn(
-        `Anthropic config validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      );
-      return false;
-    }
+    // Use Haiku for validation — cheapest, always available, throw to expose real error
+    await this.client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'Say "ok"' }],
+    });
+    return true;
   }
 }

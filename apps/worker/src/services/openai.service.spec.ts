@@ -45,8 +45,8 @@ describe('OpenAIService', () => {
   const mockAnthropicConfig = {
     apiKey: 'test-anthropic-key',
     models: {
-      vision: 'claude-sonnet-4-5-20250929',
-      chat: 'claude-sonnet-4-5-20250929',
+      vision: 'claude-sonnet-4-6',
+      chat: 'claude-sonnet-4-6',
       chatFast: 'claude-haiku-4-5-20251001',
     },
     vision: {
@@ -155,7 +155,7 @@ describe('OpenAIService', () => {
 
       expect(mockAnthropicCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-sonnet-4-5-20250929',
+          model: 'claude-sonnet-4-6',
         })
       );
     });

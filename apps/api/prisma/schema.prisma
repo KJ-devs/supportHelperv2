@@ -129,6 +129,9 @@ model Ticket {
   updatedAt          DateTime  @updatedAt @map("updated_at")
   resolvedAt         DateTime? @map("resolved_at")
 
+  // Vector Embedding (pgvector)
+  embedding          Unsupported("vector(3072)")?
+
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   application   Application    @relation(fields: [applicationId], references: [id])
   reporter      User?          @relation("ReportedTickets", fields: [reporterId], references: [id])

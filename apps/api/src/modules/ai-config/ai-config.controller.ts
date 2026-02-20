@@ -35,7 +35,7 @@ export class AiConfigController {
       return {
         configured: false,
         provider: 'anthropic',
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         maskedApiKey: null,
         endpoint: null,
         settings: {},

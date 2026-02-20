@@ -4,8 +4,55 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import Redis from 'ioredis';
 import * as crypto from 'crypto';
+import { createDecipheriv } from 'crypto';
 import { PrismaService } from './prisma.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+
+// ═══════════════════════════════════════════════════════════════════════
+// TENANT AI CONFIG CACHE
+// ═══════════════════════════════════════════════════════════════════════
+
+interface TenantAiConfig {
+  provider: string;
+  apiKey: string;
+  model: string;
+  resolvedAt: number; // timestamp for TTL
+}
+
+const TENANT_CONFIG_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Decrypt a value stored in AES-256-GCM format: iv:authTag:ciphertext (base64-encoded).
+ * Matches the logic in apps/api/src/common/services/encryption.service.ts.
+ * Key source: ENCRYPTION_KEY env var (64 hex chars = 32 bytes).
+ */
+function decryptAiKey(encryptedPayload: string, keyHex: string): string {
+  const parts = encryptedPayload.split(':');
+  if (parts.length !== 3) {
+    throw new Error('Invalid encrypted payload format. Expected iv:authTag:ciphertext');
+  }
+  const [ivB64, authTagB64, ciphertextB64] = parts as [string, string, string];
+  const key = Buffer.from(keyHex, 'hex');
+  const iv = Buffer.from(ivB64, 'base64');
+  const authTag = Buffer.from(authTagB64, 'base64');
+  const ciphertext = Buffer.from(ciphertextB64, 'base64');
+
+  const decipher = createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+}
+
+/**
+ * Check if a value is in the encrypted iv:authTag:ciphertext format.
+ * Plain-text (unencrypted) keys are used as-is.
+ */
+function isEncryptedPayload(value: string): boolean {
+  const parts = value.split(':');
+  if (parts.length !== 3) return false;
+  const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+  return parts.every(part => part.length > 0 && base64Regex.test(part));
+}
 
 // ═══════════════════════════════════════════════════════════════════════
 // INTERFACES & TYPES
@@ -98,15 +145,20 @@ export class OpenAIService implements OnModuleInit {
   private readonly RATE_WINDOW = 60000; // 1 minute in ms
   private rateLimitState: Map<string, RateLimitState> = new Map();
 
+  // Per-tenant AI config cache (5-minute TTL)
+  private readonly tenantConfigCache: Map<string, TenantAiConfig> = new Map();
+
   // Cache settings
   private readonly EMBEDDING_CACHE_TTL = 86400; // 24 hours in seconds
   private readonly EMBEDDING_CACHE_PREFIX = 'openai:embedding:';
 
   // Cost per 1K tokens (approximate)
   private readonly MODEL_COSTS: Record<string, { input: number; output: number }> = {
-    'claude-sonnet-4-5-20250929': { input: 0.003, output: 0.015 },
+    'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
     'claude-haiku-4-5-20251001': { input: 0.0008, output: 0.004 },
     'text-embedding-3-large': { input: 0.00013, output: 0 },
+    'gpt-4o': { input: 0.0025, output: 0.01 },
+    'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   };
 
   constructor(
@@ -150,11 +202,29 @@ export class OpenAIService implements OnModuleInit {
     tenantId: string,
     context?: { ocrText?: string; uiDetections?: any[] }
   ): Promise<VideoAnalysis> {
-    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
-    this.logger.log(`Analyzing ${frames.length} frames with ${model}`);
-
     // Check rate limit
     await this.checkRateLimit(tenantId);
+
+    // Determine which provider to use for this tenant
+    const tenantConfig = await this.resolveTenantConfig(tenantId);
+    const useOpenAI =
+      tenantConfig?.provider === 'openai' ||
+      (!tenantConfig && !process.env.ANTHROPIC_API_KEY && !!this.openaiClient);
+
+    if (useOpenAI) {
+      return this.analyzeVideoWithOpenAI(frames, tenantId, tenantConfig, context);
+    }
+    return this.analyzeVideoWithAnthropic(frames, tenantId, context);
+  }
+
+  private async analyzeVideoWithAnthropic(
+    frames: Buffer[],
+    tenantId: string,
+    context?: { ocrText?: string; uiDetections?: any[] }
+  ): Promise<VideoAnalysis> {
+    // Resolve tenant-specific client and model
+    const { client, visionModel: model } = await this.getAnthropicClientForTenant(tenantId);
+    this.logger.log(`Analyzing ${frames.length} frames with Anthropic ${model}`);
 
     try {
       // Convert frames to base64 (max 10 frames for efficiency)
@@ -170,7 +240,7 @@ export class OpenAIService implements OnModuleInit {
 
       const systemPrompt = this.buildVideoAnalysisPrompt(context);
 
-      const response = await this.anthropicClient.messages.create({
+      const response = await client.messages.create({
         model,
         max_tokens: 4096,
         system: systemPrompt,
@@ -200,9 +270,78 @@ export class OpenAIService implements OnModuleInit {
       const parsed = JSON.parse(this.extractJson(content));
       return this.normalizeVideoAnalysis(parsed);
     } catch (error) {
-      this.logger.error(`Video analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
+      this.logger.error(`Video analysis failed (Anthropic): ${getErrorMessage(error)}`, getErrorStack(error));
+      return this.getFallbackVideoAnalysis();
+    }
+  }
 
-      // Return fallback analysis
+  private async analyzeVideoWithOpenAI(
+    frames: Buffer[],
+    tenantId: string,
+    tenantConfig: TenantAiConfig | null,
+    context?: { ocrText?: string; uiDetections?: any[] }
+  ): Promise<VideoAnalysis> {
+    // Resolve the OpenAI client to use — tenant key if provided, otherwise shared client
+    let openaiClient: OpenAI;
+    if (tenantConfig?.provider === 'openai' && tenantConfig.apiKey) {
+      openaiClient = new OpenAI({ apiKey: tenantConfig.apiKey });
+    } else if (this.openaiClient) {
+      openaiClient = this.openaiClient;
+    } else {
+      this.logger.warn('OpenAI client not available for video analysis — falling back to Anthropic');
+      return this.analyzeVideoWithAnthropic(frames, tenantId, context);
+    }
+
+    const model = tenantConfig?.provider === 'openai' && tenantConfig.model
+      ? tenantConfig.model
+      : 'gpt-4o';
+
+    this.logger.log(`Analyzing ${frames.length} frames with OpenAI ${model}`);
+
+    try {
+      const selectedFrames = this.selectKeyFrames(frames, 10);
+      const systemPrompt = this.buildVideoAnalysisPrompt(context);
+
+      // Build image_url content blocks for OpenAI vision
+      const imageBlocks: OpenAI.Chat.ChatCompletionContentPartImage[] = selectedFrames.map(buffer => ({
+        type: 'image_url' as const,
+        image_url: {
+          url: `data:image/png;base64,${buffer.toString('base64')}`,
+          detail: 'low' as const,
+        },
+      }));
+
+      const response = await openaiClient.chat.completions.create({
+        model,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Analyze these video frames from a bug report:' },
+              ...imageBlocks,
+            ],
+          },
+        ],
+      });
+
+      // Track costs
+      await this.trackCost(tenantId, model, {
+        prompt_tokens: response.usage?.prompt_tokens,
+        completion_tokens: response.usage?.completion_tokens,
+        total_tokens: response.usage?.total_tokens,
+      });
+
+      const content = response.choices[0]?.message?.content ?? '';
+      if (!content) {
+        throw new Error('No response from OpenAI Vision');
+      }
+
+      const parsed = JSON.parse(this.extractJson(content));
+      return this.normalizeVideoAnalysis(parsed);
+    } catch (error) {
+      this.logger.error(`Video analysis failed (OpenAI): ${getErrorMessage(error)}`, getErrorStack(error));
       return this.getFallbackVideoAnalysis();
     }
   }
@@ -296,7 +435,9 @@ Provide confidence scores (0-1) for your classifications.`;
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
-   * Fast ticket classification with Claude Haiku 4.5
+   * Fast ticket classification.
+   * Uses gpt-4o-mini when the tenant's configured provider is 'openai',
+   * otherwise uses Claude Haiku (Anthropic).
    */
   async classifyTicket(text: string, tenantId: string): Promise<Classification> {
     this.logger.debug(`Classifying ticket (${text.length} chars)`);
@@ -304,13 +445,19 @@ Provide confidence scores (0-1) for your classifications.`;
     // Check rate limit
     await this.checkRateLimit(tenantId);
 
-    const model = this.anthropicConfig?.models?.chatFast || 'claude-haiku-4-5-20251001';
+    // Determine provider for this tenant
+    const tenantConfig = await this.resolveTenantConfig(tenantId);
+    const useOpenAI =
+      tenantConfig?.provider === 'openai' ||
+      (!tenantConfig && !process.env.ANTHROPIC_API_KEY && !!this.openaiClient);
 
-    try {
-      const response = await this.anthropicClient.messages.create({
-        model,
-        max_tokens: 500,
-        system: `You are a bug triage expert. Classify the following support ticket/bug report.
+    if (useOpenAI) {
+      return this.classifyTicketWithOpenAI(text, tenantId, tenantConfig);
+    }
+    return this.classifyTicketWithAnthropic(text, tenantId);
+  }
+
+  private readonly CLASSIFICATION_SYSTEM_PROMPT = `You are a bug triage expert. Classify the following support ticket/bug report.
 
 Classify into:
 - Type: bug (error/crash), feature (missing functionality), ui (visual issue), performance (slow/laggy), security (vulnerability)
@@ -323,11 +470,20 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
   "severity": "critical|high|medium|low",
   "keywords": ["keyword1", "keyword2", ...],
   "confidence": { "type": 0.0-1.0, "severity": 0.0-1.0 }
-}`,
+}`;
+
+  private async classifyTicketWithAnthropic(text: string, tenantId: string): Promise<Classification> {
+    const { client, chatFastModel: model } = await this.getAnthropicClientForTenant(tenantId);
+
+    try {
+      const response = await client.messages.create({
+        model,
+        max_tokens: 500,
+        system: this.CLASSIFICATION_SYSTEM_PROMPT,
         messages: [
           {
             role: 'user',
-            content: text.substring(0, 4000), // Limit input length
+            content: text.substring(0, 4000),
           },
         ],
       });
@@ -347,7 +503,57 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       const parsed = JSON.parse(this.extractJson(content));
       return this.normalizeClassification(parsed);
     } catch (error) {
-      this.logger.error(`Classification failed: ${getErrorMessage(error)}`);
+      this.logger.error(`Classification failed (Anthropic): ${getErrorMessage(error)}`);
+      return this.getFallbackClassification();
+    }
+  }
+
+  private async classifyTicketWithOpenAI(
+    text: string,
+    tenantId: string,
+    tenantConfig: TenantAiConfig | null
+  ): Promise<Classification> {
+    // Resolve the OpenAI client — tenant key if available, otherwise shared
+    let openaiClient: OpenAI;
+    if (tenantConfig?.provider === 'openai' && tenantConfig.apiKey) {
+      openaiClient = new OpenAI({ apiKey: tenantConfig.apiKey });
+    } else if (this.openaiClient) {
+      openaiClient = this.openaiClient;
+    } else {
+      this.logger.warn('OpenAI client not available for classification — falling back to Anthropic');
+      return this.classifyTicketWithAnthropic(text, tenantId);
+    }
+
+    // Use gpt-4o-mini for cost-efficient classification
+    const model = 'gpt-4o-mini';
+    this.logger.debug(`Classifying ticket with OpenAI ${model}`);
+
+    try {
+      const response = await openaiClient.chat.completions.create({
+        model,
+        max_tokens: 500,
+        messages: [
+          { role: 'system', content: this.CLASSIFICATION_SYSTEM_PROMPT },
+          { role: 'user', content: text.substring(0, 4000) },
+        ],
+      });
+
+      // Track costs
+      await this.trackCost(tenantId, model, {
+        prompt_tokens: response.usage?.prompt_tokens,
+        completion_tokens: response.usage?.completion_tokens,
+        total_tokens: response.usage?.total_tokens,
+      });
+
+      const content = response.choices[0]?.message?.content ?? '';
+      if (!content) {
+        throw new Error('No response from OpenAI');
+      }
+
+      const parsed = JSON.parse(this.extractJson(content));
+      return this.normalizeClassification(parsed);
+    } catch (error) {
+      this.logger.error(`Classification failed (OpenAI): ${getErrorMessage(error)}`);
       return this.getFallbackClassification();
     }
   }
@@ -604,6 +810,114 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
   }
 
   // ═══════════════════════════════════════════════════════════════════════
+  // TENANT AI CONFIG RESOLUTION
+  // ═══════════════════════════════════════════════════════════════════════
+
+  /**
+   * Resolve the AI configuration for a tenant.
+   *
+   * Resolution order:
+   * 1. In-memory cache (5-minute TTL)
+   * 2. Database AiConfig row for the tenant (decrypted with ENCRYPTION_KEY)
+   * 3. Environment variable fallback (ANTHROPIC_API_KEY / OPENAI_API_KEY)
+   *
+   * The worker's PrismaService does not include the encryption middleware that
+   * the API uses, so we decrypt the encryptedApiKey manually here using the
+   * same AES-256-GCM algorithm as apps/api/src/common/services/encryption.service.ts.
+   */
+  private async resolveTenantConfig(tenantId: string): Promise<TenantAiConfig | null> {
+    // 1. Check in-memory cache
+    const cached = this.tenantConfigCache.get(tenantId);
+    if (cached && Date.now() - cached.resolvedAt < TENANT_CONFIG_TTL_MS) {
+      return cached;
+    }
+
+    // 2. Query the database
+    try {
+      const dbConfig = await this.prisma.aiConfig.findUnique({
+        where: { tenantId },
+        select: { provider: true, encryptedApiKey: true, model: true },
+      });
+
+      if (dbConfig && dbConfig.encryptedApiKey) {
+        let apiKey: string;
+
+        // Decrypt only if the stored value is in the encrypted format.
+        // A plain-text key (e.g. stored without encryption in dev) is used as-is.
+        if (isEncryptedPayload(dbConfig.encryptedApiKey)) {
+          const encryptionKeyHex = process.env.ENCRYPTION_KEY;
+          if (!encryptionKeyHex) {
+            this.logger.warn(
+              `ENCRYPTION_KEY not set — cannot decrypt tenant ${tenantId} AI key. Falling back to env vars.`
+            );
+            return null;
+          }
+          try {
+            apiKey = decryptAiKey(dbConfig.encryptedApiKey, encryptionKeyHex);
+          } catch (decryptError) {
+            this.logger.warn(
+              `Failed to decrypt AI key for tenant ${tenantId}: ${getErrorMessage(decryptError)}. Falling back to env vars.`
+            );
+            return null;
+          }
+        } else {
+          apiKey = dbConfig.encryptedApiKey;
+        }
+
+        const resolved: TenantAiConfig = {
+          provider: dbConfig.provider,
+          apiKey,
+          model: dbConfig.model,
+          resolvedAt: Date.now(),
+        };
+
+        this.tenantConfigCache.set(tenantId, resolved);
+        this.logger.debug(
+          `Resolved tenant ${tenantId} AI config: provider=${resolved.provider} model=${resolved.model}`
+        );
+        return resolved;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to query AI config for tenant ${tenantId}: ${getErrorMessage(error)}. Falling back to env vars.`
+      );
+    }
+
+    // 3. No tenant config found — caller will use env var fallback
+    return null;
+  }
+
+  /**
+   * Build an Anthropic client for a tenant, falling back to the shared instance
+   * when no per-tenant config exists.
+   */
+  private async getAnthropicClientForTenant(tenantId: string): Promise<{
+    client: Anthropic;
+    visionModel: string;
+    chatModel: string;
+    chatFastModel: string;
+  }> {
+    const tenantConfig = await this.resolveTenantConfig(tenantId);
+
+    if (tenantConfig && tenantConfig.provider === 'anthropic' && tenantConfig.apiKey) {
+      return {
+        client: new Anthropic({ apiKey: tenantConfig.apiKey }),
+        visionModel: tenantConfig.model,
+        chatModel: tenantConfig.model,
+        chatFastModel: tenantConfig.model,
+      };
+    }
+
+    // Fallback to shared client + env-based model config
+    return {
+      client: this.anthropicClient,
+      visionModel: this.anthropicConfig?.models?.vision || 'claude-sonnet-4-6',
+      chatModel: this.anthropicConfig?.models?.chat || 'claude-sonnet-4-6',
+      chatFastModel: this.anthropicConfig?.models?.chatFast || 'claude-haiku-4-5-20251001',
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
   // RATE LIMITING
   // ═══════════════════════════════════════════════════════════════════════
 
@@ -748,7 +1062,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
    * @deprecated Use analyzeVideo instead
    */
   async analyzeFrames(framePaths: string[], ocrText: string, uiDetections: any[]): Promise<any> {
-    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
+    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-6';
     this.logger.log(`Analyzing ${framePaths.length} frames with ${model}`);
     const fs = await import('fs/promises');
 
@@ -824,7 +1138,7 @@ Analyze these frames and provide:
 
 Format your response as JSON with keys: summary, uiElements, actions, errorMessages, recommendations`;
 
-    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-5-20250929';
+    const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-6';
 
     try {
       const response = await this.anthropicClient.messages.create({
@@ -892,6 +1206,7 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
    */
   async chat(options: {
     messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    tenantId?: string;
     tools?: any[];
     response_format?: { type: 'json_object' | 'text' };
     temperature?: number;
@@ -902,7 +1217,15 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
   }> {
     this.logger.debug('Requesting chat completion');
 
-    const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-5-20250929';
+    // Resolve tenant-specific client and model when tenantId is provided
+    let client = this.anthropicClient;
+    let model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-6';
+
+    if (options.tenantId) {
+      const resolved = await this.getAnthropicClientForTenant(options.tenantId);
+      client = resolved.client;
+      model = resolved.chatModel;
+    }
 
     try {
       // Separate system message from user/assistant messages
@@ -926,7 +1249,7 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
         conversationMessages.unshift({ role: 'user', content: 'Please respond.' });
       }
 
-      const response = await this.anthropicClient.messages.create({
+      const response = await client.messages.create({
         model,
         max_tokens: options.max_tokens || 4096,
         ...(systemPrompt && { system: systemPrompt }),
@@ -963,7 +1286,7 @@ Text: ${options.text}
 
 Return JSON with each category as a key containing { value, confidence }`;
 
-    const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-5-20250929';
+    const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-6';
 
     try {
       const response = await this.anthropicClient.messages.create({
