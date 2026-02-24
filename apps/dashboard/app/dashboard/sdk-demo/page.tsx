@@ -33,7 +33,7 @@ const THEMES = ['auto', 'light', 'dark'] as const;
 export default function SdkDemoPage() {
   const { isLoading: authLoading } = useRequireAuth();
 
-  const [sdkKey, setSdkKey] = useState('sdk_test_default_key_12345');
+  const [sdkKey, setSdkKey] = useState('sk_Ha6tATjtUPzgMiSS45VZEVAqFVEh9B8N');
   const [apiUrl, setApiUrl] = useState('http://localhost:3001');
   const [position, setPosition] = useState<string>('bottom-right');
   const [primaryColor, setPrimaryColor] = useState('#6366f1');
@@ -47,8 +47,11 @@ export default function SdkDemoPage() {
 
   const addEvent = useCallback((eventName: string, detail?: unknown) => {
     const now = new Date();
-    const time = now.toLocaleTimeString('fr-FR', { hour12: false }) + '.' + String(now.getMilliseconds()).padStart(3, '0');
-    setEvents((prev) => [
+    const time =
+      now.toLocaleTimeString('fr-FR', { hour12: false }) +
+      '.' +
+      String(now.getMilliseconds()).padStart(3, '0');
+    setEvents(prev => [
       {
         id: ++eventIdRef.current,
         time,
@@ -68,7 +71,9 @@ export default function SdkDemoPage() {
       widgetRef.current = null;
     }
 
-    const win = window as Window & { SupportHelper?: { init: (opts: Record<string, unknown>) => HTMLElement } };
+    const win = window as Window & {
+      SupportHelper?: { init: (opts: Record<string, unknown>) => HTMLElement };
+    };
     if (!win.SupportHelper) {
       addEvent('error', { message: 'SupportHelper not loaded' });
       return;
@@ -83,7 +88,7 @@ export default function SdkDemoPage() {
     });
 
     // Attach event listeners
-    SDK_EVENTS.forEach((eventName) => {
+    SDK_EVENTS.forEach(eventName => {
       element.addEventListener(eventName, ((e: CustomEvent) => {
         addEvent(eventName, e.detail);
       }) as EventListener);
@@ -140,19 +145,24 @@ export default function SdkDemoPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Configuration Panel */}
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Configuration</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            Configuration
+          </h2>
 
           <div className="space-y-4">
             {/* SDK Key */}
             <div>
-              <label htmlFor="sdk-key" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="sdk-key"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 SDK Key
               </label>
               <input
                 id="sdk-key"
                 type="text"
                 value={sdkKey}
-                onChange={(e) => setSdkKey(e.target.value)}
+                onChange={e => setSdkKey(e.target.value)}
                 disabled={isWidgetActive}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
               />
@@ -160,14 +170,17 @@ export default function SdkDemoPage() {
 
             {/* API URL */}
             <div>
-              <label htmlFor="api-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="api-url"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 API URL
               </label>
               <input
                 id="api-url"
                 type="text"
                 value={apiUrl}
-                onChange={(e) => setApiUrl(e.target.value)}
+                onChange={e => setApiUrl(e.target.value)}
                 disabled={isWidgetActive}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
               />
@@ -175,25 +188,33 @@ export default function SdkDemoPage() {
 
             {/* Position */}
             <div>
-              <label htmlFor="position" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="position"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Position
               </label>
               <select
                 id="position"
                 value={position}
-                onChange={(e) => setPosition(e.target.value)}
+                onChange={e => setPosition(e.target.value)}
                 disabled={isWidgetActive}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
               >
-                {POSITIONS.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                {POSITIONS.map(p => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
                 ))}
               </select>
             </div>
 
             {/* Primary Color */}
             <div>
-              <label htmlFor="primary-color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="primary-color"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Couleur primaire
               </label>
               <div className="flex items-center gap-3">
@@ -201,14 +222,14 @@ export default function SdkDemoPage() {
                   id="primary-color"
                   type="color"
                   value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  onChange={e => setPrimaryColor(e.target.value)}
                   disabled={isWidgetActive}
                   className="h-10 w-14 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer disabled:opacity-50"
                 />
                 <input
                   type="text"
                   value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
+                  onChange={e => setPrimaryColor(e.target.value)}
                   disabled={isWidgetActive}
                   className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm font-mono focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
                 />
@@ -217,18 +238,23 @@ export default function SdkDemoPage() {
 
             {/* Theme */}
             <div>
-              <label htmlFor="theme" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              <label
+                htmlFor="theme"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
                 Theme
               </label>
               <select
                 id="theme"
                 value={theme}
-                onChange={(e) => setTheme(e.target.value)}
+                onChange={e => setTheme(e.target.value)}
                 disabled={isWidgetActive}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
               >
-                {THEMES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
+                {THEMES.map(t => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
                 ))}
               </select>
             </div>
@@ -292,15 +318,16 @@ export default function SdkDemoPage() {
               </div>
             ) : (
               <div className="divide-y divide-gray-200 dark:divide-gray-700">
-                {events.map((log) => (
-                  <div key={log.id} className="px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700/50">
+                {events.map(log => (
+                  <div
+                    key={log.id}
+                    className="px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700/50"
+                  >
                     <div className="flex items-center gap-2">
                       <span className="text-gray-400 dark:text-gray-500 font-mono text-xs shrink-0">
                         {log.time}
                       </span>
-                      <span className={`font-medium ${getEventColor(log.event)}`}>
-                        {log.event}
-                      </span>
+                      <span className={`font-medium ${getEventColor(log.event)}`}>{log.event}</span>
                     </div>
                     {log.detail && (
                       <pre className="mt-1 text-xs text-gray-500 dark:text-gray-400 font-mono whitespace-pre-wrap break-all">

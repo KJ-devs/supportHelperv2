@@ -1,5 +1,5 @@
 -- DropIndex
-DROP INDEX "idx_codebase_embeddings_vector";
+DROP INDEX IF EXISTS "idx_codebase_embeddings_vector";
 
 -- AlterTable
 ALTER TABLE "sso_config" ALTER COLUMN "config" DROP DEFAULT;

@@ -6,6 +6,7 @@ import {
   ConflictException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Octokit } from '@octokit/rest';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubAppService } from './github-app.service';
 
@@ -39,8 +40,9 @@ export class GithubInstallationService {
     installationId: number,
     tenantId: string,
   ) {
-    // Verify the installation exists on GitHub
-    const octokit = await this.appService.getInstallationOctokit(installationId);
+    // Verify the installation exists on GitHub using App JWT (not installation token)
+    const appJwt = this.appService.generateAppJwt();
+    const octokit = new Octokit({ auth: appJwt });
 
     let accountLogin: string;
     let accountType: string;

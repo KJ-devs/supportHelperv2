@@ -294,7 +294,13 @@ export const githubApi = {
    * Get GitHub config for an application
    */
   async getGithubConfig(appId: string): Promise<GitHubAppConfig> {
-    return apiRequest(`/api/applications/${appId}/github/config`);
+    const response = await apiRequest<{ connected: boolean; config?: GitHubAppConfig }>(
+      `/api/applications/${appId}/github/config`,
+    );
+    if (response.connected && response.config) {
+      return response.config;
+    }
+    return {};
   },
 
   /**
