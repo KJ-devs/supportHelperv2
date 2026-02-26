@@ -1,17 +1,19 @@
 'use client';
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react';
+import { X } from 'lucide-react';
 import { useAgentChatV2 } from '@/hooks/useAgentChatV2';
 import { ChatMessage } from './ChatMessage';
 import { ToolCallBadge } from './ToolCallBadge';
 
 interface AgentChatV2Props {
   ticketId: string;
-  sessionStatus?: string;
+  onClose?: () => void;
+  onDiagnosisUpdate?: () => void;
 }
 
-export function AgentChatV2({ ticketId, sessionStatus }: AgentChatV2Props) {
-  const { messages, isLoading, isAgentThinking, sendMessage, toolActivity, error } =
+export function AgentChatV2({ ticketId, onClose, onDiagnosisUpdate }: AgentChatV2Props) {
+  const { messages, sessionId, isLoading, isAgentThinking, sendMessage, toolActivity, error } =
     useAgentChatV2(ticketId);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -26,6 +28,7 @@ export function AgentChatV2({ ticketId, sessionStatus }: AgentChatV2Props) {
     if (!content || isAgentThinking) return;
     setInputValue('');
     await sendMessage(content);
+    onDiagnosisUpdate?.();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -55,16 +58,40 @@ export function AgentChatV2({ ticketId, sessionStatus }: AgentChatV2Props) {
         <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
           🤖 Agent Chat
         </span>
+        {sessionId ? (
+          <span className="flex items-center gap-1.5" title={`Session: ${sessionId}`}>
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span className="text-xs text-gray-400 font-mono">{sessionId.slice(0, 8)}</span>
+          </span>
+        ) : (
+          <span className="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 shrink-0" />
+        )}
         <span className="ml-auto text-xs text-gray-400">
           {messages.length} message{messages.length !== 1 ? 's' : ''}
         </span>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="ml-2 p-1 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 min-h-64 max-h-[480px]">
+      <div className="flex-1 overflow-y-auto p-4 min-h-64 max-h-[600px]">
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-400">
             {error}
+          </div>
+        )}
+
+        {messages.length === 0 && isAgentThinking && (
+          <div className="flex items-center justify-center h-32 gap-2 text-gray-500 dark:text-gray-400 text-sm">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600" />
+            <span>Analyzing ticket...</span>
           </div>
         )}
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { Bot } from 'lucide-react';
 import { Card } from '@/components/ui';
 
 export interface AffectedFile {
@@ -26,16 +27,17 @@ interface DiagnosisPanelProps {
 }
 
 function ConfidenceBadge({ confidence }: { confidence: number }) {
-  const percent = Math.round(confidence * 100);
+  const normalized = confidence > 1 ? confidence / 100 : confidence;
+  const percent = Math.round(normalized * 100);
 
-  if (confidence > 0.8) {
+  if (normalized >= 0.8) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
         {percent}% confidence
       </span>
     );
   }
-  if (confidence >= 0.5) {
+  if (normalized >= 0.5) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
         {percent}% confidence
@@ -89,16 +91,22 @@ export function DiagnosisPanel({ ticketId: _ticketId, diagnosis, isLoading, onAs
     return (
       <Card>
         <div className="text-center py-8">
-          <p className="text-gray-500 dark:text-gray-400 text-sm font-medium mb-1">No diagnosis yet.</p>
-          <p className="text-gray-400 dark:text-gray-500 text-xs mb-4">
-            Start an agent session to investigate this ticket.
+          <div className="flex justify-center mb-3">
+            <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+              <Bot className="w-6 h-6 text-blue-500 dark:text-blue-400" />
+            </div>
+          </div>
+          <p className="text-gray-700 dark:text-gray-300 text-sm font-medium mb-1">No diagnosis yet</p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs mb-4 max-w-xs mx-auto">
+            The AI agent will automatically analyze this ticket when you open the chat.
           </p>
           {onAskAgent && (
             <button
               onClick={onAskAgent}
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
             >
-              💬 Ask Agent
+              <Bot className="w-4 h-4" />
+              Start Analysis
             </button>
           )}
         </div>

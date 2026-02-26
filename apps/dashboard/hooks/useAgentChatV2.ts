@@ -5,6 +5,7 @@ import { io, Socket } from 'socket.io-client';
 import { getAuthToken } from '@/lib/api/client';
 import {
   createAgentSession,
+  getTicketSession,
   sendAgentMessage,
   getAgentMessages,
   type AgentMessageRecord,
@@ -17,6 +18,7 @@ interface UseAgentChatV2Return {
   sessionId: string | null;
   isLoading: boolean;
   isAgentThinking: boolean;
+  isNewSession: boolean;
   sendMessage: (content: string) => Promise<void>;
   toolActivity: string[];
   error: string | null;
@@ -27,10 +29,13 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAgentThinking, setIsAgentThinking] = useState(false);
+  const [isNewSession, setIsNewSession] = useState(false);
   const [toolActivity, setToolActivity] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const autoAnalysisTriggered = useRef(false);
+  const sendMessageRef = useRef<((content: string) => Promise<void>) | null>(null);
 
   // Initialize session and load messages
   useEffect(() => {
@@ -39,13 +44,26 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     async function init() {
       try {
         setIsLoading(true);
-        const session = await createAgentSession(ticketId);
+
+        // Try to reuse existing session first
+        let resolvedSessionId: string;
+        const existingSession = await getTicketSession(ticketId);
         if (cancelled) return;
 
-        setSessionId(session.sessionId);
-        sessionIdRef.current = session.sessionId;
+        if (existingSession) {
+          resolvedSessionId = existingSession.sessionId;
+          setIsNewSession(false);
+        } else {
+          const newSession = await createAgentSession(ticketId);
+          if (cancelled) return;
+          resolvedSessionId = newSession.sessionId;
+          setIsNewSession(true);
+        }
 
-        const existingMessages = await getAgentMessages(session.sessionId);
+        setSessionId(resolvedSessionId);
+        sessionIdRef.current = resolvedSessionId;
+
+        const existingMessages = await getAgentMessages(resolvedSessionId);
         if (cancelled) return;
 
         setMessages(existingMessages);
@@ -144,11 +162,32 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     [],
   );
 
+  // Keep sendMessageRef in sync so the auto-analysis effect can call it without a stale closure
+  sendMessageRef.current = sendMessage;
+
+  // Auto-analysis on first launch for new sessions with no messages
+  useEffect(() => {
+    if (
+      !isLoading &&
+      isNewSession &&
+      sessionId &&
+      messages.length === 0 &&
+      !autoAnalysisTriggered.current &&
+      sendMessageRef.current
+    ) {
+      autoAnalysisTriggered.current = true;
+      sendMessageRef.current(
+        'Please analyze this ticket thoroughly and provide your diagnosis, including root cause, affected files, confidence level, and suggested fix.',
+      );
+    }
+  }, [sessionId, isLoading, isNewSession, messages.length]);
+
   return {
     messages,
     sessionId,
     isLoading,
     isAgentThinking,
+    isNewSession,
     sendMessage,
     toolActivity,
     error,

@@ -206,22 +206,24 @@ export default function TicketDetailPage() {
           <TicketDetail ticket={ticket} onUpdate={handleUpdate} />
         )}
 
-        {/* Diagnosis Panel */}
+        {/* Diagnosis Panel + Agent Chat (grouped when chat is open) */}
         {ticket && !error && (
-          <div className="mt-6">
-            <DiagnosisPanel
-              ticketId={ticketId}
-              diagnosis={diagnosis}
-              isLoading={isDiagnosisLoading}
-              onAskAgent={handleAskAgent}
-            />
-          </div>
-        )}
-
-        {/* Agent Chat V2 */}
-        {ticket && !error && showAgentChat && (
-          <div className="mt-6">
-            <AgentChatV2 ticketId={ticketId} />
+          <div className={`mt-6 ${showAgentChat ? 'border dark:border-gray-700 rounded-xl overflow-hidden' : ''}`}>
+            <div className={showAgentChat ? 'p-4' : ''}>
+              <DiagnosisPanel
+                ticketId={ticketId}
+                diagnosis={diagnosis}
+                isLoading={isDiagnosisLoading}
+                onAskAgent={handleAskAgent}
+              />
+            </div>
+            {showAgentChat && (
+              <AgentChatV2
+                ticketId={ticketId}
+                onClose={() => setShowAgentChat(false)}
+                onDiagnosisUpdate={fetchDiagnosis}
+              />
+            )}
           </div>
         )}
 

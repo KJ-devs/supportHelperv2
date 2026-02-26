@@ -267,6 +267,37 @@ Start by identifying which parts of the codebase are likely involved, then read 
 
     const result = await this.agenticLoop.run(loopOptions);
 
+    // If the agent ended with only tool calls and no text response, synthesize a summary
+    const updatedDiagnosisEarly = this.diagnosisService.extractDiagnosisFromToolCalls(result.toolCallLog);
+    let effectiveFinalContent = result.finalContent;
+    if (!effectiveFinalContent.trim()) {
+      if (updatedDiagnosisEarly) {
+        const confidencePct = Math.round(
+          (updatedDiagnosisEarly.confidence > 1
+            ? updatedDiagnosisEarly.confidence / 100
+            : updatedDiagnosisEarly.confidence) * 100,
+        );
+        const parts = [
+          '## Analysis Complete',
+          '',
+          `**Root Cause:** ${updatedDiagnosisEarly.rootCause}`,
+        ];
+        if (updatedDiagnosisEarly.affectedFiles?.length) {
+          parts.push('', '**Affected Files:**');
+          for (const f of updatedDiagnosisEarly.affectedFiles) {
+            parts.push(`- \`${f.filePath}\``);
+          }
+        }
+        if (updatedDiagnosisEarly.suggestedFix) {
+          parts.push('', `**Suggested Fix:** ${updatedDiagnosisEarly.suggestedFix}`);
+        }
+        parts.push('', `**Confidence:** ${confidencePct}%`);
+        effectiveFinalContent = parts.join('\n');
+      } else if (result.toolCallLog.length > 0) {
+        effectiveFinalContent = `Investigation complete. Used ${result.toolCallLog.length} tool${result.toolCallLog.length !== 1 ? 's' : ''}. See the diagnosis panel for results.`;
+      }
+    }
+
     // Save user message
     await this.prisma.agentMessage.create({
       data: {
@@ -282,7 +313,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
       data: {
         sessionId,
         role: 'assistant',
-        content: result.finalContent,
+        content: effectiveFinalContent,
         metadata: {
           toolsUsed: result.toolCallLog.map((t) => t.name),
           iterations: result.iterations,
@@ -301,9 +332,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
     });
 
     // Update diagnosis if update_diagnosis was called
-    const updatedDiagnosis = this.diagnosisService.extractDiagnosisFromToolCalls(
-      result.toolCallLog,
-    );
+    const updatedDiagnosis = updatedDiagnosisEarly;
     if (updatedDiagnosis) {
       await this.diagnosisService.saveDiagnosis(
         ticket.id,
@@ -316,7 +345,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
     this.emitFixProposedIfPresent(result.toolCallLog, ticket.id, tenantId, sessionId);
 
     return {
-      content: result.finalContent,
+      content: effectiveFinalContent,
       toolsUsed: result.toolCallLog.map((t) => t.name),
       diagnosis: updatedDiagnosis || existingDiagnosis,
     };
