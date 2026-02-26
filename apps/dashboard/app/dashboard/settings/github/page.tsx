@@ -140,6 +140,95 @@ function GitHubSettingsContent() {
     }
   };
 
+  // Sync installations from GitHub
+  const handleSyncInstallations = async () => {
+    try {
+      setInstallationsLoading(true);
+      const result = await githubApi.syncInstallations();
+      if (result.synced > 0) {
+        setInstallations(result.installations);
+        showToast('success', `${result.synced} installation(s) synced from GitHub`);
+      } else {
+        showToast('success', 'Already up to date');
+      }
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to sync installations');
+    } finally {
+      setInstallationsLoading(false);
+      fetchInstallations();
+    }
+  };
+
+  // Fetch config for selected settings app
+  const fetchAppConfig = useCallback(async () => {
+    if (!selectedSettingsAppId) {
+      setAppConfig(null);
+      return;
+    }
+    try {
+      setConfigLoading(true);
+      const config = await githubApi.getGithubConfig(selectedSettingsAppId);
+      setAppConfig(config);
+
+      // Load current settings into form state
+      const settings = config?.settings || {};
+      setAgentMode(settings.agentMode || 'auto');
+      setMaxRetries(settings.maxRetries || 3);
+      setTimeoutMinutes(settings.timeoutMinutes || 5);
+      setAutoMergeEnabled(settings.autoMergeEnabled || false);
+      setMergeStrategy(settings.mergeStrategy || 'squash');
+      setRequiredReviews(settings.requiredReviews || 1);
+    } catch (err: any) {
+      console.error('Failed to fetch app config:', err);
+      setAppConfig(null);
+    } finally {
+      setConfigLoading(false);
+    }
+  }, [selectedSettingsAppId]);
+
+  // Load config when selected app changes
+  useEffect(() => {
+    fetchAppConfig();
+  }, [fetchAppConfig]);
+
+  // Save agent settings
+  const handleSaveAgentSettings = async () => {
+    if (!selectedSettingsAppId) return;
+    try {
+      setSavingAgent(true);
+      await githubApi.updateGithubSettings(selectedSettingsAppId, {
+        agentMode,
+        maxRetries,
+        timeoutMinutes,
+      });
+      showToast('success', 'Agent settings saved');
+      fetchAppConfig();
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to save agent settings');
+    } finally {
+      setSavingAgent(false);
+    }
+  };
+
+  // Save merge settings
+  const handleSaveMergeSettings = async () => {
+    if (!selectedSettingsAppId) return;
+    try {
+      setSavingMerge(true);
+      await githubApi.updateGithubSettings(selectedSettingsAppId, {
+        autoMergeEnabled,
+        mergeStrategy,
+        requiredReviews,
+      });
+      showToast('success', 'Merge settings saved');
+      fetchAppConfig();
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to save merge settings');
+    } finally {
+      setSavingMerge(false);
+    }
+  };
+
   if (authLoading) {
     return <PageLoader />;
   }
@@ -265,9 +354,20 @@ function GitHubSettingsContent() {
                     </p>
                   </div>
                 </div>
-                <Button onClick={handleInstall}>
-                  {hasInstallations ? 'Add Installation' : 'Install GitHub App'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSyncInstallations}
+                    isLoading={installationsLoading}
+                    title="Import existing GitHub App installations into the dashboard"
+                  >
+                    Sync from GitHub
+                  </Button>
+                  <Button onClick={handleInstall}>
+                    {hasInstallations ? 'Add Installation' : 'Install GitHub App'}
+                  </Button>
+                </div>
               </div>
             </Card>
           )}

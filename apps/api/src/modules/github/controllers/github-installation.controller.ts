@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Delete,
   Param,
   Query,
@@ -107,6 +108,25 @@ export class GithubInstallationController {
         `${this.frontendUrl}/dashboard/settings/github?error=${encodeURIComponent(error.message || 'Installation failed')}`,
       );
     }
+  }
+
+  /**
+   * POST /github/install/sync
+   * Fetch all installations for this GitHub App from the GitHub API and import
+   * any that are not yet in the database.  Useful when the DB was reset or the
+   * user is on a new machine and the callback was never triggered.
+   */
+  @Post('sync')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Sync GitHub App installations from GitHub API into DB' })
+  async syncInstallations(@CurrentTenant() tenantId: string) {
+    if (!this.appService.isEnabled()) {
+      throw new BadRequestException(
+        'GitHub App is not configured. Set GITHUB_APP_ID and GITHUB_PRIVATE_KEY.',
+      );
+    }
+    return this.installationService.syncInstallationsFromGithub(tenantId);
   }
 
   /**
