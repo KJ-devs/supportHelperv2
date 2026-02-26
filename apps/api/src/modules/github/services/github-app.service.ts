@@ -3,7 +3,6 @@ import {
   Logger,
   BadRequestException,
   InternalServerErrorException,
-  ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
@@ -30,7 +29,8 @@ export class GithubAppService {
     private readonly cacheService: CacheService,
   ) {
     this.appId = this.config.get('github.appId') || '';
-    this.privateKey = this.config.get('github.privateKey') || '';
+    // Normalize line endings: handle both escaped \n and Windows CRLF
+    this.privateKey = (this.config.get<string>('github.privateKey') || '').replace(/\r\n/g, '\n');
     this.appName = this.config.get('github.appName') || '';
     this.appEnabled = this.config.get('github.appEnabled') || false;
   }
@@ -122,15 +122,14 @@ export class GithubAppService {
    * Get the GitHub App's public info via the API.
    */
   async getAppInfo(): Promise<GithubAppInfo> {
-    const appJwt = this.generateAppJwt();
-    const octokit = new Octokit({ auth: appJwt });
-
     try {
+      const appJwt = this.generateAppJwt();
+      const octokit = new Octokit({ auth: appJwt });
       const response = await octokit.apps.getAuthenticated();
       const data = response.data;
 
       if (!data) {
-        throw new ServiceUnavailableException('Empty response from GitHub API');
+        throw new Error('Empty response from GitHub API');
       }
 
       const slug = data.slug ?? this.appName;
@@ -142,7 +141,21 @@ export class GithubAppService {
         installUrl: `https://github.com/apps/${slug}/installations/new`,
       };
     } catch (error) {
-      this.logger.error('Failed to get GitHub App info', error);
+      this.logger.warn(
+        'Failed to get GitHub App info from API, falling back to local config',
+        error,
+      );
+
+      // Fall back to local configuration if GitHub API is unreachable or JWT fails
+      if (this.appName) {
+        return {
+          id: parseInt(this.appId, 10) || 0,
+          name: this.appName,
+          slug: this.appName,
+          installUrl: `https://github.com/apps/${this.appName}/installations/new`,
+        };
+      }
+
       throw new InternalServerErrorException(
         'Failed to retrieve GitHub App info from GitHub API.',
       );

@@ -147,10 +147,28 @@ export class GithubInstallationService {
       throw new NotFoundException('Installation not found');
     }
 
-    // Invalidate cached token
-    await this.appService.invalidateInstallationToken(
-      Number(installation.installationId),
-    );
+    // Invalidate cached token (best-effort, don't fail if Redis is down)
+    try {
+      await this.appService.invalidateInstallationToken(
+        Number(installation.installationId),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to invalidate token cache for installation ${installation.installationId}`,
+        err,
+      );
+    }
+
+    // Delete related ProjectGithubConfig records first (no onDelete cascade in schema)
+    const deleted = await this.prisma.projectGithubConfig.deleteMany({
+      where: { installationId: installation.installationId },
+    });
+
+    if (deleted.count > 0) {
+      this.logger.log(
+        `Removed ${deleted.count} repo config(s) linked to installation ${installation.installationId}`,
+      );
+    }
 
     await this.prisma.githubInstallation.delete({
       where: { id: installation.id },
