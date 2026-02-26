@@ -53,7 +53,17 @@
       "Bash(do)",
       "Bash(done)",
       "Bash(node_modules/.bin/jest:*)",
-      "Bash(node_modules/.bin/tsc:*)"
+      "Bash(node_modules/.bin/tsc:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(rm:*)",
+      "Bash(xargs -I{} taskkill //PID {} //F)",
+      "Bash(cp:*)",
+      "Bash(python3:*)",
+      "Bash(do tasklist:*)",
+      "Bash(jobs:*)",
+      "Bash(wmic process:*)",
+      "Bash(wait:*)",
+      "Bash(xargs grep:*)"
     ]
   }
 }

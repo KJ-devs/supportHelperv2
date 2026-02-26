@@ -103,7 +103,7 @@ export class DiagnosisService {
     return {
       rootCause: input.root_cause as string,
       affectedFiles,
-      confidence: input.confidence as number,
+      confidence: parseFloat(String(input.confidence)),
       suggestedFix: input.suggested_fix as string | undefined,
       remainingQuestions: input.remaining_questions as string[] | undefined,
     };

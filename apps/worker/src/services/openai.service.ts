@@ -140,9 +140,9 @@ export class OpenAIService implements OnModuleInit {
   private readonly openaiConfig: any;
   private redis!: Redis;
 
-  // Rate limiting
-  private readonly RATE_LIMIT = 50; // requests per minute
-  private readonly RATE_WINDOW = 60000; // 1 minute in ms
+  // Rate limiting (disabled for development — limits raised to 10000)
+  private readonly RATE_LIMIT = 10000;
+  private readonly RATE_WINDOW = 60000;
   private rateLimitState: Map<string, RateLimitState> = new Map();
 
   // Per-tenant AI config cache (5-minute TTL)

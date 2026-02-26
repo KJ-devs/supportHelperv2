@@ -135,10 +135,47 @@ export class AgentV2Controller {
       throw new NotFoundException('Session not found');
     }
 
-    return this.prisma.agentMessage.findMany({
+    const messages = await this.prisma.agentMessage.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'asc' },
     });
+
+    return messages.map((msg) => {
+      const meta = msg.metadata as Record<string, unknown> | null;
+      return {
+        ...msg,
+        toolsUsed: (meta?.['toolsUsed'] as string[] | undefined) ?? [],
+      };
+    });
+  }
+
+  @Get('tickets/:ticketId/session')
+  @ApiOperation({ summary: 'Get the most recent agent V2 session for a ticket' })
+  @ApiParam({ name: 'ticketId', type: String })
+  @ApiResponse({ status: 200, description: 'Session found' })
+  @ApiResponse({ status: 404, description: 'No session found for this ticket' })
+  async getTicketSession(
+    @CurrentTenant() tenantId: string,
+    @Param('ticketId') ticketId: string,
+  ) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    const session = await this.prisma.agentSession.findFirst({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      throw new NotFoundException('No session found for this ticket');
+    }
+
+    return { sessionId: session.id, status: session.status };
   }
 
   @Get('tickets/:ticketId/diagnosis')

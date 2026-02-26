@@ -107,7 +107,7 @@ export class AiConfigService {
   private getDefaultModel(provider: AIProviderType): string {
     switch (provider) {
       case AIProviderType.OPENAI:
-        return 'gpt-4o';
+        return 'gpt-4o-mini';
       case AIProviderType.ANTHROPIC:
         return 'claude-sonnet-4-6';
       case AIProviderType.OLLAMA:

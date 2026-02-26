@@ -136,18 +136,18 @@ import { TriageModule } from './modules/triage/triage.module';
           throttlers: [
             {
               name: 'public',
-              ttl: 60000, // 1 minute
-              limit: 10,
+              ttl: 60000,
+              limit: 10000,
             },
             {
               name: 'authenticated',
-              ttl: 60000, // 1 minute
-              limit: 100,
+              ttl: 60000,
+              limit: 10000,
             },
             {
               name: 'sdk',
-              ttl: 60000, // 1 minute
-              limit: 50,
+              ttl: 60000,
+              limit: 10000,
             },
           ],
           storage: new ThrottlerStorageRedisService(redisClient),

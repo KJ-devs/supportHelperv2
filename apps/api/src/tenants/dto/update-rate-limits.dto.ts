@@ -48,19 +48,19 @@ export interface RateLimitConfig {
  */
 export const RATE_LIMIT_PRESETS: Record<string, RateLimitConfig> = {
   free: {
-    requestsPerMinute: 30,
-    requestsPerHour: 1000,
+    requestsPerMinute: 10000,
+    requestsPerHour: 500000,
   },
   pro: {
-    requestsPerMinute: 200,
-    requestsPerHour: 10000,
+    requestsPerMinute: 10000,
+    requestsPerHour: 500000,
   },
   enterprise: {
-    requestsPerMinute: 1000,
-    requestsPerHour: 50000,
+    requestsPerMinute: 10000,
+    requestsPerHour: 500000,
   },
   default: {
-    requestsPerMinute: 100,
-    requestsPerHour: 5000,
+    requestsPerMinute: 10000,
+    requestsPerHour: 500000,
   },
 };

@@ -990,7 +990,7 @@ export class AgentService implements OnModuleInit {
         );
 
       case 'get_ticket_details':
-        return this.toolGetTicketDetails(args.ticketId as string);
+        return this.toolGetTicketDetails(args.ticketId as string, tenantId);
 
       case 'update_ticket_status':
         return this.toolUpdateTicketStatus(args.ticketId as string, args.status as string);
@@ -1052,12 +1052,16 @@ export class AgentService implements OnModuleInit {
   }
 
   /**
-   * get_ticket_details — fetch full ticket with media and videoEvents
+   * get_ticket_details — fetch full ticket with media and videoEvents.
+   * Scoped to tenantId to prevent cross-tenant data leakage.
    */
-  private async toolGetTicketDetails(ticketId: string): Promise<Record<string, unknown> | null> {
+  private async toolGetTicketDetails(
+    ticketId: string,
+    tenantId: string,
+  ): Promise<Record<string, unknown> | { error: string }> {
     try {
-      const ticket = await this.prisma.ticket.findUnique({
-        where: { id: ticketId },
+      const ticket = await this.prisma.ticket.findFirst({
+        where: { id: ticketId, tenantId },
         include: {
           media: {
             include: {
@@ -1070,7 +1074,7 @@ export class AgentService implements OnModuleInit {
       });
 
       if (!ticket) {
-        return null;
+        return { error: `Ticket ${ticketId} not found` };
       }
 
       // Return a safe subset (avoid leaking binary data)

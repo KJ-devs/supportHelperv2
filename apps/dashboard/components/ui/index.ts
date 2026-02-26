@@ -11,3 +11,4 @@ export { Select } from './Select';
 export { Loader, PageLoader } from './Loader';
 export { Modal } from './Modal';
 export { Sheet } from './Sheet';
+export { MarkdownRenderer } from './MarkdownRenderer';

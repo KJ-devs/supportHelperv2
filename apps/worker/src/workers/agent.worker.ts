@@ -2484,6 +2484,7 @@ Rules:
     const parts: string[] = [];
 
     parts.push(`## Ticket Information`);
+    parts.push(`Ticket ID: ${ticket.id}`);
     parts.push(`Title: ${ticket.title || 'No title'}`);
     parts.push(`Description: ${ticket.description || 'No description'}`);
 

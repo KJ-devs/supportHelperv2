@@ -7,9 +7,10 @@ import { ToolCallBadge } from './ToolCallBadge';
 
 interface AgentChatV2Props {
   ticketId: string;
+  sessionStatus?: string;
 }
 
-export function AgentChatV2({ ticketId }: AgentChatV2Props) {
+export function AgentChatV2({ ticketId, sessionStatus }: AgentChatV2Props) {
   const { messages, isLoading, isAgentThinking, sendMessage, toolActivity, error } =
     useAgentChatV2(ticketId);
   const [inputValue, setInputValue] = useState('');

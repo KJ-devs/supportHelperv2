@@ -1,6 +1,7 @@
 'use client';
 
 import type { AgentMessageRecord } from '@/lib/api/agent-v2';
+import { MarkdownRenderer } from '@/components/ui';
 import { ToolCallBadge } from './ToolCallBadge';
 
 interface ChatMessageProps {
@@ -61,13 +62,17 @@ export function ChatMessage({ message }: ChatMessageProps) {
         {/* Bubble + tools */}
         <div className={isUser ? 'items-end' : 'items-start'} style={{ display: 'flex', flexDirection: 'column' }}>
           <div
-            className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words ${
+            className={`px-4 py-3 rounded-2xl text-sm leading-relaxed break-words ${
               isUser
-                ? 'bg-blue-600 text-white rounded-tr-sm'
+                ? 'bg-blue-600 text-white rounded-tr-sm whitespace-pre-wrap'
                 : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-tl-sm'
             }`}
           >
-            {message.content}
+            {isUser ? (
+              message.content
+            ) : (
+              <MarkdownRenderer content={message.content} />
+            )}
           </div>
 
           {/* Tool call badges (assistant only) */}

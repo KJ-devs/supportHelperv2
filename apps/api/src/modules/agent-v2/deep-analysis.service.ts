@@ -141,6 +141,11 @@ Start by identifying which parts of the codebase are likely involved, then read 
         await this.diagnosisService.saveDiagnosis(ticketId, tenantId, finalDiagnosis, result);
       }
 
+      // Save initial analysis summary as an AgentMessage for display in the session
+      if (finalDiagnosis) {
+        await this.saveInitialAnalysisMessage(ticketId, finalDiagnosis);
+      }
+
       // Mark ticket as analyzed
       await this.prisma.ticket.update({
         where: { id: ticketId },
@@ -365,6 +370,64 @@ Start by identifying which parts of the codebase are likely involved, then read 
     };
   }
 
+  private async saveInitialAnalysisMessage(
+    ticketId: string,
+    diagnosis: Diagnosis,
+  ): Promise<void> {
+    // Find the agent session associated with this ticket (most recent one)
+    const session = await this.prisma.agentSession.findFirst({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      this.logger.warn(
+        `No AgentSession found for ticket ${ticketId} — skipping initial analysis message`,
+      );
+      return;
+    }
+
+    const confidencePct = Math.round(diagnosis.confidence * 100);
+
+    const lines: string[] = ['## Initial Analysis'];
+    lines.push('');
+    lines.push(`**Root Cause:** ${diagnosis.rootCause}`);
+
+    if (diagnosis.affectedFiles && diagnosis.affectedFiles.length > 0) {
+      lines.push('');
+      lines.push('**Affected Files:**');
+      for (const file of diagnosis.affectedFiles) {
+        lines.push(`- \`${file.filePath}\``);
+      }
+    }
+
+    if (diagnosis.suggestedFix) {
+      lines.push('');
+      lines.push(`**Suggested Fix:** ${diagnosis.suggestedFix}`);
+    }
+
+    lines.push('');
+    lines.push(`**Confidence:** ${confidencePct}%`);
+
+    const content = lines.join('\n');
+
+    await this.prisma.agentMessage.create({
+      data: {
+        sessionId: session.id,
+        role: 'assistant',
+        content,
+        metadata: {
+          type: 'initial_analysis',
+          confidence: diagnosis.confidence,
+        },
+      },
+    });
+
+    this.logger.log(
+      `Saved initial_analysis message to session ${session.id} for ticket ${ticketId}`,
+    );
+  }
+
   private emitFixProposedIfPresent(
     toolCallLog: AgenticLoopResult['toolCallLog'],
     ticketId: string,
@@ -414,27 +477,35 @@ When a bug report or support ticket arrives, your job is to:
 ## Repository Structure (condensed)
 ${repoStructure}
 
-## Investigation Strategy
+## Full Workflow — Execute ALL steps in order
+
+**Phase 1 — Investigate:**
 1. Start with get_repo_structure if you need to understand the project layout
 2. Use search_codebase_semantic to find code related to the bug description
 3. Use search_code for exact text/pattern matching
 4. Use read_file to examine specific files in detail
 5. Use get_file_history to check recent changes that might have caused the bug
 6. Use get_file_blame to identify who last touched relevant code
-7. Call update_diagnosis when you have findings
+7. Call update_diagnosis with your findings and a confidence score
 
-## Fix Strategy (only when confidence >= 0.7)
-8. create_branch — name it "fix/ticket-{ticketId}-<short-description>"
-9. write_file — write the COMPLETE fixed file content for each changed file
-10. create_pull_request — title format: "fix(<scope>): <description>", include root cause and changes in body
+**Phase 2 — Act (immediately after update_diagnosis, based on confidence):**
+- If confidence < 0.7 → call escalate_to_human, then STOP
+- If confidence >= 0.7 → you MUST continue with Phase 3. Do NOT stop after update_diagnosis.
+
+**Phase 3 — Fix (REQUIRED when confidence >= 0.7):**
+8. create_branch — name it "fix/ticket-${ticket.id.slice(0, 8)}-<short-description>"
+9. write_file — write the COMPLETE file content (never partial) for every affected file
+10. create_pull_request — title: "fix(<scope>): <description>", body must include root cause and changes
+
+You have NOT finished your task until create_pull_request is called (when confidence >= 0.7).
+update_diagnosis alone is not the end — it is the decision point that leads to Phase 3.
 
 ## Rules
 - Always investigate the code before making claims about root cause
 - Never guess about code structure — use your tools to verify
 - Keep tool calls efficient — don't read files you don't need
 - NEVER write to the default branch — always create a fix branch first
-- NEVER provide partial file content in write_file — always the full file
-- If confidence < 0.7 → call escalate_to_human instead of attempting a fix
+- NEVER provide partial file content in write_file — always the complete file
 - If the fix spans more than 5 files → call escalate_to_human (too risky for automated fix)`;
 
     if (videoContext && videoContext.length > 0) {

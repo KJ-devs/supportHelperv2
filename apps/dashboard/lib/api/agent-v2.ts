@@ -1,4 +1,4 @@
-import { apiRequest } from './client';
+import { apiRequest, ApiError } from './client';
 
 export interface AffectedFile {
   filePath: string;
@@ -53,6 +53,21 @@ export async function getAgentMessages(sessionId: string): Promise<AgentMessageR
   return apiRequest<AgentMessageRecord[]>(
     `/api/agent/v2/sessions/${sessionId}/messages`,
   );
+}
+
+export async function getTicketSession(
+  ticketId: string,
+): Promise<{ sessionId: string; status: string } | null> {
+  try {
+    return await apiRequest<{ sessionId: string; status: string }>(
+      `/api/agent/v2/tickets/${ticketId}/session`,
+    );
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
 
 export async function getTicketDiagnosis(ticketId: string): Promise<Diagnosis | null> {
