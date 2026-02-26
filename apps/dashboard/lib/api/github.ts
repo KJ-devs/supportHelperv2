@@ -267,6 +267,21 @@ export const githubApi = {
   },
 
   /**
+   * Sync GitHub App installations from GitHub API into the database.
+   * Use this when an installation exists on GitHub but is missing from the DB
+   * (e.g. after a DB reset or switching machines).
+   */
+  async syncInstallations(): Promise<{
+    synced: number;
+    skipped: number;
+    installations: GitHubInstallation[];
+  }> {
+    return apiRequest('/api/github/install/sync', {
+      method: 'POST',
+    });
+  },
+
+  /**
    * List repos accessible from a GitHub App installation
    */
   async getInstallationRepos(

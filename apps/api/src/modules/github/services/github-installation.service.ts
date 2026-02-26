@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  InternalServerErrorException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Octokit } from '@octokit/rest';
@@ -132,6 +133,84 @@ export class GithubInstallationService {
     }
 
     return installation;
+  }
+
+  /**
+   * Sync GitHub App installations from GitHub API into the database.
+   * Useful when a DB record is missing but the installation exists on GitHub
+   * (e.g. after switching machines or resetting the database).
+   */
+  async syncInstallationsFromGithub(tenantId: string): Promise<{
+    synced: number;
+    skipped: number;
+    installations: any[];
+  }> {
+    const appJwt = this.appService.generateAppJwt();
+    const octokit = new Octokit({ auth: appJwt });
+
+    let githubInstallations: any[];
+    try {
+      const { data } = await octokit.apps.listInstallations({ per_page: 100 });
+      githubInstallations = data;
+    } catch (error) {
+      this.logger.error('Failed to list installations from GitHub API', error);
+      throw new InternalServerErrorException(
+        'Failed to fetch installations from GitHub. Check that GITHUB_APP_ID and GITHUB_PRIVATE_KEY are correct.',
+      );
+    }
+
+    let synced = 0;
+    let skipped = 0;
+    const syncedInstallations: any[] = [];
+
+    for (const inst of githubInstallations) {
+      const existing = await this.prisma.githubInstallation.findUnique({
+        where: { installationId: BigInt(inst.id) },
+      });
+
+      if (existing) {
+        // Already in DB — skip regardless of which tenant owns it
+        skipped++;
+        continue;
+      }
+
+      const account = inst.account as Record<string, any> | null;
+      const accountLogin = account?.login ?? account?.name ?? 'unknown';
+      const accountType = account?.type ?? 'Organization';
+      const permissions = (inst.permissions as Record<string, string>) ?? {};
+      const suspendedAt = inst.suspended_at ? new Date(inst.suspended_at) : null;
+
+      const record = await this.prisma.githubInstallation.create({
+        data: {
+          tenantId,
+          installationId: BigInt(inst.id),
+          accountLogin,
+          accountType,
+          permissions,
+          ...(suspendedAt ? { suspendedAt } : {}),
+        },
+      });
+
+      this.logger.log(
+        `Synced installation ${inst.id} (${accountLogin}) for tenant ${tenantId}`,
+      );
+
+      synced++;
+      syncedInstallations.push({
+        id: record.id,
+        installationId: Number(record.installationId),
+        accountLogin: record.accountLogin,
+        accountType: record.accountType,
+        suspended: !!record.suspendedAt,
+        createdAt: record.createdAt,
+      });
+    }
+
+    this.logger.log(
+      `Sync complete for tenant ${tenantId}: ${synced} synced, ${skipped} skipped`,
+    );
+
+    return { synced, skipped, installations: syncedInstallations };
   }
 
   /**

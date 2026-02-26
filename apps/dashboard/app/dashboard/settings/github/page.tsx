@@ -174,6 +174,25 @@ function GitHubSettingsContent() {
     }
   };
 
+  // Sync installations from GitHub
+  const handleSyncInstallations = async () => {
+    try {
+      setInstallationsLoading(true);
+      const result = await githubApi.syncInstallations();
+      if (result.synced > 0) {
+        setInstallations(result.installations);
+        showToast('success', `${result.synced} installation(s) synced from GitHub`);
+      } else {
+        showToast('success', 'Already up to date');
+      }
+    } catch (err: any) {
+      showToast('error', err.message || 'Failed to sync installations');
+    } finally {
+      setInstallationsLoading(false);
+      fetchInstallations();
+    }
+  };
+
   // Fetch config for selected settings app
   const fetchAppConfig = useCallback(async () => {
     if (!selectedSettingsAppId) {
@@ -369,9 +388,20 @@ function GitHubSettingsContent() {
                     </p>
                   </div>
                 </div>
-                <Button onClick={handleInstall}>
-                  {hasInstallations ? 'Add Installation' : 'Install GitHub App'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSyncInstallations}
+                    isLoading={installationsLoading}
+                    title="Import existing GitHub App installations into the dashboard"
+                  >
+                    Sync from GitHub
+                  </Button>
+                  <Button onClick={handleInstall}>
+                    {hasInstallations ? 'Add Installation' : 'Install GitHub App'}
+                  </Button>
+                </div>
               </div>
             </Card>
           )}
