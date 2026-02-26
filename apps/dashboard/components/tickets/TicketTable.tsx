@@ -24,7 +24,7 @@ interface TicketTableProps {
 
 export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTickets = [], onSelectTicket, onSelectAll }: TicketTableProps) {
   const [isMobile, setIsMobile] = useState(false);
-
+  
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 640);
@@ -34,6 +34,9 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  // Sort tickets in descending order by createdAt date by default
+  const sortedTickets = [...tickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const handleSort = (field: string) => {
     if (onSort) {
@@ -71,7 +74,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
             />
           </div>
         )}
-        {tickets.map((ticket) => {
+        {sortedTickets.map((ticket) => {
           const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
             day: 'numeric',
             month: 'short',
@@ -193,7 +196,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-          {tickets.map((ticket) => {
+          {sortedTickets.map((ticket) => {
             const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
               day: 'numeric',
               month: 'short',
