@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  HttpException,
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubAppService } from './github-app.service';
@@ -56,7 +57,12 @@ export class ProjectGithubConfigService {
     try {
       const octokit = await this.appService.getInstallationOctokit(installationId);
       await octokit.repos.get({ owner, repo });
-    } catch {
+    } catch (error) {
+      // Re-throw NestJS HTTP exceptions as-is (e.g. token acquisition failures)
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      // Otherwise it's a GitHub API error (likely 404 = no repo access)
       throw new BadRequestException(
         `The GitHub App installation does not have access to ${owner}/${repo}. ` +
         'Please ensure the repository is included in the installation permissions.',
