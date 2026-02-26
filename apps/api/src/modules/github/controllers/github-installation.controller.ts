@@ -70,20 +70,20 @@ export class GithubInstallationController {
   ) {
     if (!installationIdStr) {
       return res.redirect(
-        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent('Missing installation_id')}`,
+        `${this.frontendUrl}/dashboard/settings/github?error=${encodeURIComponent('Missing installation_id')}`,
       );
     }
 
     if (!tenantId) {
       return res.redirect(
-        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent('Missing tenant context. Please retry installation from the dashboard.')}`,
+        `${this.frontendUrl}/dashboard/settings/github?error=${encodeURIComponent('Missing tenant context. Please retry installation from the dashboard.')}`,
       );
     }
 
     const installationId = parseInt(installationIdStr, 10);
     if (isNaN(installationId)) {
       return res.redirect(
-        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent('Invalid installation_id')}`,
+        `${this.frontendUrl}/dashboard/settings/github?error=${encodeURIComponent('Invalid installation_id')}`,
       );
     }
 
@@ -98,13 +98,13 @@ export class GithubInstallationController {
       );
 
       return res.redirect(
-        `${this.frontendUrl}/dashboard/github?github_app=installed&installation_id=${installationId}`,
+        `${this.frontendUrl}/dashboard/settings/github?github_app=installed&installation_id=${installationId}`,
       );
     } catch (error) {
       this.logger.error('Installation callback error:', error);
 
       return res.redirect(
-        `${this.frontendUrl}/dashboard/github?error=${encodeURIComponent(error.message || 'Installation failed')}`,
+        `${this.frontendUrl}/dashboard/settings/github?error=${encodeURIComponent(error.message || 'Installation failed')}`,
       );
     }
   }
