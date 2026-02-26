@@ -115,15 +115,12 @@ function GitHubSettingsContent() {
     }
   }, [authLoading, fetchAppInfo, fetchInstallations, fetchApplications]);
 
-  // Install GitHub App
+  // Install GitHub App — always use getInstallUrl() so the backend
+  // adds the ?state={tenantId} parameter required for the callback mapping.
   const handleInstall = async () => {
     try {
-      if (appInfo?.installUrl) {
-        window.location.href = appInfo.installUrl;
-      } else {
-        const data = await githubApi.getInstallUrl();
-        window.location.href = data.url;
-      }
+      const data = await githubApi.getInstallUrl();
+      window.location.href = data.url;
     } catch (err: any) {
       showToast('error', err.message || 'Failed to get install URL');
     }
