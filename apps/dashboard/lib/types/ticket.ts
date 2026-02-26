@@ -3,7 +3,7 @@
  * Définitions TypeScript pour les tickets et entités liées
  */
 
-export type TicketStatus = 'new' | 'open' | 'in_progress' | 'resolved' | 'closed';
+export type TicketStatus = 'new' | 'open' | 'in_progress' | 'resolved' | 'closed' | 'analyzing' | 'analyzed' | 'analysis_failed';
 export type TicketType = 'bug' | 'crash' | 'performance' | 'ui' | 'feature_request' | 'other';
 export type TicketSeverity = 'critical' | 'high' | 'medium' | 'low';
 

@@ -43,10 +43,13 @@ const statusConfig: Record<TicketStatus, { label: string; variant: BadgeVariant 
   in_progress: { label: 'En cours', variant: 'info' },
   resolved: { label: 'Résolu', variant: 'success' },
   closed: { label: 'Fermé', variant: 'default' },
+  analyzing: { label: 'Analyse...', variant: 'warning' },
+  analyzed: { label: 'Analysé', variant: 'success' },
+  analysis_failed: { label: 'Échec analyse', variant: 'danger' },
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? { label: status, variant: 'default' as BadgeVariant };
   return <Badge variant={config.variant}>{config.label}</Badge>;
 }
 
