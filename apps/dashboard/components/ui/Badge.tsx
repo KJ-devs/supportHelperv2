@@ -63,7 +63,7 @@ const severityConfig: Record<TicketSeverity, { label: string; variant: BadgeVari
   critical: { label: 'Critique', variant: 'danger', icon: '🔴' },
   high: { label: 'Élevée', variant: 'warning', icon: '🟠' },
   medium: { label: 'Moyenne', variant: 'info', icon: '🟡' },
-  low: { label: 'Faible', variant: 'success', icon: '🟢' },
+  low: { label: 'Faible', variant: 'default', icon: '🟢' },
 };
 
 export function SeverityBadge({ severity, showIcon = true }: SeverityBadgeProps) {
