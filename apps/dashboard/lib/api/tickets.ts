@@ -45,6 +45,9 @@ function buildQueryString(filters: TicketFilters): string {
       } else if (key === 'page' && typeof value === 'number') {
         // Frontend uses 1-based pages, backend expects 0-based
         params.append(key, Math.max(0, value - 1).toString());
+      } else if (key === 'sortOrder' && typeof value === 'string') {
+        // Invert sort order when sending to API
+        params.append(key, value === 'asc' ? 'desc' : 'asc');
       } else {
         params.append(key, value.toString());
       }
