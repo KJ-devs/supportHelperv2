@@ -1,6 +1,6 @@
 /**
  * Ticket Detail Page
- * Page de détail d'un ticket spécifique
+ * "Immersive Split" — white left pane + always-dark AI right pane (460px)
  */
 
 'use client';
@@ -10,17 +10,43 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
-import { agentApi } from '@/lib/api/agent';
 import { getTicketDiagnosis } from '@/lib/api/agent-v2';
 import type { Ticket } from '@/lib/types/ticket';
-import type { Diagnosis } from '@/components/diagnosis';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { TicketDetail } from '@/components/tickets/TicketDetail';
-import { TicketTimeline } from '@/components/tickets/TicketTimeline';
-import { DiagnosisPanel } from '@/components/diagnosis';
-import { AgentChatV2 } from '@/components/agent-chat';
-import { PageLoader, Button } from '@/components/ui';
-import { AlertTriangle, Bot, Trash2 } from 'lucide-react';
+import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
+import { DiagnosisPanelV3A } from '@/components/diagnosis/DiagnosisPanelV3A';
+import { AgentSection } from '@/components/agent-chat/AgentSection';
+import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button } from '@/components/ui';
+import { VideoPlayer } from '@/components/media/VideoPlayer';
+import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+
+// --- Collapsible section header ---
+
+function SectionHeader({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      onClick={onToggle}
+      className="flex items-center gap-2 w-full text-left group mb-3"
+    >
+      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        {label}
+      </span>
+      <span className="flex-1 h-px bg-gray-100 dark:bg-gray-700" />
+      <span className="text-gray-400 text-xs select-none group-hover:text-gray-600 dark:group-hover:text-gray-300">
+        {open ? '▴' : '▾'}
+      </span>
+    </button>
+  );
+}
+
+// --- Main page ---
 
 export default function TicketDetailPage() {
   const params = useParams();
@@ -35,7 +61,15 @@ export default function TicketDetailPage() {
 
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [isDiagnosisLoading, setIsDiagnosisLoading] = useState(false);
-  const [showAgentChat, setShowAgentChat] = useState(false);
+
+  // Media pre-signed URLs
+  const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
+  const [loadingUrls, setLoadingUrls] = useState<Record<string, boolean>>({});
+
+  // Collapsible sections
+  const [descOpen, setDescOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(true);
+  const [recordingOpen, setRecordingOpen] = useState(true);
 
   const fetchTicket = useCallback(async () => {
     try {
@@ -44,7 +78,7 @@ export default function TicketDetailPage() {
       const data = await ticketsApi.getTicket(ticketId);
       setTicket(data);
     } catch (err: any) {
-      setError(err.message || 'Erreur lors du chargement du ticket');
+      setError(err.message || 'Failed to load ticket');
       console.error('Error fetching ticket:', err);
     } finally {
       setIsLoading(false);
@@ -70,164 +104,273 @@ export default function TicketDetailPage() {
     }
   }, [ticketId, authLoading, fetchTicket, fetchDiagnosis]);
 
-  const handleUpdate = (updatedTicket: Ticket) => {
-    setTicket(updatedTicket);
+  const fetchMediaUrl = async (mediaId: string) => {
+    if (mediaUrls[mediaId] || loadingUrls[mediaId]) return;
+    setLoadingUrls((prev) => ({ ...prev, [mediaId]: true }));
+    try {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+      const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+      const response = await fetch(`${API_URL}/api/media/${mediaId}/url`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) throw new Error(`Failed to fetch media URL: ${response.statusText}`);
+      const data = await response.json();
+      setMediaUrls((prev) => ({ ...prev, [mediaId]: data.url }));
+    } catch (err) {
+      console.error('Error fetching media URL:', err);
+    } finally {
+      setLoadingUrls((prev) => ({ ...prev, [mediaId]: false }));
+    }
   };
 
   const handleDelete = async () => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce ticket ?')) {
-      return;
-    }
-
+    if (!confirm('Are you sure you want to delete this ticket?')) return;
     try {
       await ticketsApi.deleteTicket(ticketId);
       router.push('/dashboard/tickets');
-    } catch (error) {
-      alert('Erreur lors de la suppression du ticket');
-      console.error('Error deleting ticket:', error);
+    } catch (err) {
+      alert('Error deleting ticket');
+      console.error('Error deleting ticket:', err);
     }
   };
 
-  const [isAgentLoading, setIsAgentLoading] = useState(false);
-
-  const handleOpenAgent = useCallback(async () => {
-    if (!ticket) return;
-
-    // If a session already exists on the ticket, navigate directly
-    const existingSession =
-      ticket.agentSession ??
-      (ticket.agentSessions && ticket.agentSessions.length > 0
-        ? ticket.agentSessions[0]
-        : null);
-
-    if (existingSession) {
-      router.push(`/dashboard/tickets/${ticketId}/chat`);
-      return;
-    }
-
-    // Otherwise start a new session then navigate
-    try {
-      setIsAgentLoading(true);
-      await agentApi.startSession(ticketId);
-      router.push(`/dashboard/tickets/${ticketId}/chat`);
-    } catch (err) {
-      console.error('Error starting agent session:', err);
-      alert('Erreur lors du démarrage de la session IA');
-    } finally {
-      setIsAgentLoading(false);
-    }
-  }, [ticket, ticketId, router]);
-
-  const handleAskAgent = useCallback(() => {
-    setShowAgentChat(true);
-  }, []);
+  const handleRefresh = useCallback(() => {
+    fetchTicket();
+    fetchDiagnosis();
+  }, [fetchTicket, fetchDiagnosis]);
 
   if (authLoading || isLoading) {
     return <PageLoader />;
   }
 
   return (
-    <DashboardLayout>
-      <div className="max-w-5xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
+    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-950 overflow-hidden">
+      {/* ── TOP BAR ── */}
+      <header className="sticky top-0 z-10 flex items-center h-14 px-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex-shrink-0">
+        {/* Left: breadcrumb + title */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <Link
             href="/dashboard/tickets"
-            className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800 mb-4"
+            className="text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex-shrink-0"
           >
-            ← Retour aux tickets
+            ←
           </Link>
-
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">Détails du ticket</h1>
-
-            {ticket && (
-              <div className="flex space-x-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchTicket}
-                >
-                  🔄 Actualiser
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={handleOpenAgent}
-                  isLoading={isAgentLoading}
-                  disabled={isAgentLoading || ticket.status === 'resolved' || ticket.status === 'closed'}
-                  className="flex items-center gap-1"
-                >
-                  <Bot className="w-4 h-4" aria-hidden="true" />
-                  Agent IA
-                </Button>
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={handleDelete}
-                  className="flex items-center gap-1"
-                >
-                  <Trash2 className="w-4 h-4" aria-hidden="true" />
-                  Supprimer
-                </Button>
-              </div>
-            )}
-          </div>
+          <span className="text-gray-300 dark:text-gray-600 flex-shrink-0">/</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate max-w-[260px]">
+            {ticket?.title ?? 'Ticket'}
+          </span>
         </div>
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-            <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-600 dark:text-red-400" aria-hidden="true" />
-            <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">Erreur</h3>
-            <p className="text-red-700 dark:text-red-400 mb-4">{error}</p>
-            <div className="flex justify-center space-x-2">
+        {/* Right: actions */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <Button variant="ghost" size="sm" onClick={handleRefresh} className="flex items-center gap-1.5">
+            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+          </Button>
+          <Button variant="danger" size="sm" onClick={handleDelete} className="flex items-center gap-1.5">
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+          </Button>
+        </div>
+      </header>
+
+      {/* ── BODY ── */}
+      <div className="flex flex-1 min-h-0" style={{ height: 'calc(100vh - 56px)' }}>
+
+        {/* ── LEFT PANE ── */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+
+          {/* Error state */}
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center mb-6">
+              <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-red-500" aria-hidden="true" />
+              <p className="text-sm text-red-700 dark:text-red-400 mb-3">{error}</p>
               <Button variant="secondary" size="sm" onClick={fetchTicket}>
-                Réessayer
+                Retry
               </Button>
-              <Link href="/dashboard/tickets">
-                <Button variant="ghost" size="sm">
-                  Retour aux tickets
-                </Button>
-              </Link>
             </div>
+          )}
+
+          {ticket && !error && (
+            <>
+              {/* ── TICKET HEADER ── */}
+              <div className="mb-6">
+                <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  {ticket.title}
+                </h1>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  <StatusBadge status={ticket.status} />
+                  <TypeBadge type={ticket.type} />
+                  <SeverityBadge severity={ticket.severity} />
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  {ticket.reporter && (
+                    <span className="text-xs text-gray-400">
+                      Reported by{' '}
+                      <span className="font-medium text-gray-500">
+                        {ticket.reporter.name || ticket.reporter.email}
+                      </span>
+                    </span>
+                  )}
+                  <span className="text-xs text-gray-400">
+                    {new Date(ticket.createdAt).toLocaleString()}
+                  </span>
+                  {ticket.application && (
+                    <span className="text-xs text-gray-400">
+                      App:{' '}
+                      <span className="font-medium text-gray-500">{ticket.application.name}</span>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
+
+              {/* ── DESCRIPTION ── */}
+              <div className="mb-6">
+                <SectionHeader
+                  label="Description"
+                  open={descOpen}
+                  onToggle={() => setDescOpen((v) => !v)}
+                />
+                {descOpen && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                    {ticket.description}
+                  </p>
+                )}
+              </div>
+
+              {/* ── USER CONTEXT ── */}
+              {ticket.userContext && Object.keys(ticket.userContext).length > 0 && (
+                <div className="mb-6">
+                  <SectionHeader
+                    label="User Context"
+                    open={contextOpen}
+                    onToggle={() => setContextOpen((v) => !v)}
+                  />
+                  {contextOpen && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {Object.entries(ticket.userContext).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="bg-gray-100 dark:bg-gray-800 rounded px-2 py-1"
+                        >
+                          <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
+                            {key.replace(/([A-Z])/g, ' $1').trim()}:{' '}
+                          </span>
+                          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 break-all">
+                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── RECORDING ── */}
+              {ticket.media && ticket.media.length > 0 && (
+                <div className="mb-6">
+                  <SectionHeader
+                    label="Recording"
+                    open={recordingOpen}
+                    onToggle={() => setRecordingOpen((v) => !v)}
+                  />
+                  {recordingOpen && (
+                    <div className="space-y-4">
+                      {ticket.media.map((media) => {
+                        const filename =
+                          media.metadata?.originalFilename ||
+                          media.storageKey.split('/').pop() ||
+                          'video';
+                        const isVideo =
+                          media.type === 'video' || media.mimeType?.startsWith('video/');
+                        const fileSize =
+                          typeof media.fileSize === 'bigint'
+                            ? Number(media.fileSize)
+                            : media.fileSize || 0;
+
+                        if (media.processingStatus === 'completed' && isVideo) {
+                          return (
+                            <div key={media.id}>
+                              {mediaUrls[media.id] ? (
+                                <VideoPlayer
+                                  src={mediaUrls[media.id]!}
+                                  title={filename}
+                                  mimeType={media.mimeType ?? undefined}
+                                  onError={(err) => console.error('Video error:', err)}
+                                />
+                              ) : (
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center bg-gray-50 dark:bg-gray-800">
+                                  {loadingUrls[media.id] ? (
+                                    <div className="space-y-2">
+                                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                                      <p className="text-sm text-gray-500">Loading video...</p>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => fetchMediaUrl(media.id)}
+                                    >
+                                      Load Video
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={media.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center justify-between"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {filename}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {media.type} · {(fileSize / 1024 / 1024).toFixed(2)} MB ·{' '}
+                                {media.processingStatus}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </>
+          )}
+        </div>
+
+        {/* ── RIGHT PANE (always dark, 460px wide) ── */}
+        <div
+          className="w-[460px] flex-shrink-0 flex flex-col overflow-hidden"
+          style={{ background: '#111827' }}
+        >
+          {/* DIAGNOSIS SECTION */}
+          <div className="px-4 pt-4 pb-3 border-b border-gray-800 flex-shrink-0">
+            <DiagnosisPanelV3A
+              diagnosis={diagnosis}
+              isLoading={isDiagnosisLoading}
+            />
           </div>
-        )}
 
-        {/* Timeline */}
-        {ticket && !error && (
-          <div className="mb-6">
-            <TicketTimeline ticketId={ticketId} />
-          </div>
-        )}
+          {/* AGENT SECTION */}
+          <AgentSection
+            ticketId={ticketId}
+            onDiagnosisUpdate={fetchDiagnosis}
+            diagnosis={diagnosis}
+          />
 
-        {/* Content */}
-        {ticket && !error && (
-          <TicketDetail ticket={ticket} onUpdate={handleUpdate} />
-        )}
-
-        {/* Diagnosis Panel + Agent Chat (grouped when chat is open) */}
-        {ticket && !error && (
-          <div className={`mt-6 ${showAgentChat ? 'border dark:border-gray-700 rounded-xl overflow-hidden' : ''}`}>
-            <div className={showAgentChat ? 'p-4' : ''}>
-              <DiagnosisPanel
-                ticketId={ticketId}
-                diagnosis={diagnosis}
-                isLoading={isDiagnosisLoading}
-                onAskAgent={handleAskAgent}
-              />
-            </div>
-            {showAgentChat && (
-              <AgentChatV2
-                ticketId={ticketId}
-                onClose={() => setShowAgentChat(false)}
-                onDiagnosisUpdate={fetchDiagnosis}
-              />
-            )}
-          </div>
-        )}
-
+        </div>
       </div>
-    </DashboardLayout>
+    </div>
   );
 }
