@@ -35,6 +35,13 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Default sort by createdAt in descending order
+  useEffect(() => {
+    if (!sortField && !sortOrder && tickets.length > 0) {
+      onSort && onSort('createdAt');
+    }
+  }, [onSort, sortField, sortOrder, tickets.length]);
+
   const handleSort = (field: string) => {
     if (onSort) {
       onSort(field);
