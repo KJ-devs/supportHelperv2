@@ -32,7 +32,6 @@ flowchart TB
 
     subgraph Frontend["🖥️ Frontend Layer"]
         Dashboard["Next.js 14 Dashboard<br/>App Router + TailwindCSS"]
-        Web["Next.js 15 Web App<br/>App Router + Turbopack"]
     end
 
     subgraph Backend["⚙️ Backend Services"]
@@ -60,7 +59,6 @@ flowchart TB
     SDK --> API
     Widget --> SDK
     Dashboard --> API
-    Web --> API
     API --> Worker
     Worker --> Vision
     Worker --> Embeddings
@@ -135,7 +133,6 @@ pnpm dev
 Access the applications:
 - **Dashboard**: http://localhost:3000
 - **API**: http://localhost:3001
-- **Web App**: http://localhost:3002
 - **API Docs**: http://localhost:3001/api/docs
 - **MinIO Console**: http://localhost:9001 (minioadmin/minioadmin)
 - **MeiliSearch**: http://localhost:7700
@@ -158,7 +155,6 @@ support-helper/
 │   │   └── prisma/          # Database schema & migrations
 │   ├── dashboard/           # Next.js 14 internal dashboard (port 3000)
 │   │   └── app/             # App Router pages
-│   ├── web/                 # Next.js 15 public-facing web app (port 3002)
 │   └── worker/              # Background job processor (BullMQ)
 ├── packages/
 │   ├── sdk-web/             # Client SDK for web apps
@@ -253,7 +249,6 @@ See [SDK Documentation](packages/sdk-web/README.md) for complete integration gui
 | Layer | Technology |
 |-------|------------|
 | **Dashboard** | Next.js 14, TailwindCSS, TanStack Query, Zustand, socket.io-client, next-auth |
-| **Web App** | Next.js 15 (Turbopack), TailwindCSS, Radix UI, TanStack Query/Table/Form, TipTap, Recharts |
 | **Backend** | NestJS, Prisma ORM, PostgreSQL, Redis 7, BullMQ, Socket.io |
 | **AI/ML** | OpenAI GPT-4 Vision, Embeddings, pgvector |
 | **Storage** | MinIO (S3-compatible) |
@@ -281,7 +276,6 @@ See [SDK Documentation](packages/sdk-web/README.md) for complete integration gui
 | Package | Description |
 |---------|-------------|
 | [apps/api](apps/api/README.md) | Backend API architecture & module guide |
-| [apps/web](apps/web/README.md) | Frontend patterns & TanStack best practices |
 | [apps/worker](apps/worker/README.md) | Background job processing with BullMQ |
 | [packages/sdk-web](packages/sdk-web/README.md) | SDK installation & framework examples |
 
@@ -303,7 +297,6 @@ Get-NetTCPConnection -LocalPort 3000,3001,5432,6379,9000 -ErrorAction SilentlyCo
 |---------|-------------|
 | Dashboard | 3000 |
 | API | 3001 |
-| Web App | 3002 |
 | PostgreSQL | 5432 |
 | Redis | 6379 |
 | MinIO | 9000 / 9001 (console) |

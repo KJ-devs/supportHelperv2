@@ -28,7 +28,7 @@ Cree un rapport de bug structure pour Support Helper Platform.
 
 ### Environnement
 
-- **Package(s)** : [apps/api, apps/dashboard, apps/web, packages/sdk-web]
+- **Package(s)** : [apps/api, apps/dashboard, packages/sdk-web]
 - **Navigateur** : [si applicable]
 - **OS** : [si applicable]
 

@@ -26,7 +26,7 @@ Ce qui se passe reellement.
 
 ## Environnement
 
-- **Package(s)** : apps/api, apps/dashboard, apps/web, packages/sdk-web
+- **Package(s)** : apps/api, apps/dashboard, packages/sdk-web
 - **Navigateur** :
 - **OS** :
 

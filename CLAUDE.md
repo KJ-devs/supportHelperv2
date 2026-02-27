@@ -38,7 +38,6 @@ pnpm db:seed                    # Seed database with test data
 ```bash
 pnpm --filter @support-helper/api [command]
 pnpm --filter @support-helper/dashboard [command]
-pnpm --filter @repo/web [command]
 pnpm --filter @support-helper/sdk-web [command]
 pnpm --filter @support-helper/worker [command]
 
@@ -52,21 +51,17 @@ pnpm test                       # Run all tests
 pnpm --filter @support-helper/api test              # Jest
 pnpm --filter @support-helper/api test:e2e          # Jest E2E
 pnpm --filter @support-helper/dashboard test        # Vitest
-pnpm --filter @repo/web test                        # Vitest
-pnpm --filter @repo/web test:e2e                    # Playwright
 ```
 
 **Test frameworks by package:**
 - API + Worker: **Jest** (`*.spec.ts`)
-- Dashboard + Web: **Vitest** (`*.test.ts`)
-- Web E2E: **Playwright**
+- Dashboard: **Vitest** (`*.test.ts`)
 
 ## Architecture
 
 ### Monorepo Structure
 - **apps/api/** - NestJS backend with Prisma ORM (`@support-helper/api`)
 - **apps/dashboard/** - Next.js 14 internal dashboard, App Router (`@support-helper/dashboard`)
-- **apps/web/** - Next.js 15 public-facing web app, App Router (`@repo/web`, port 3002)
 - **apps/worker/** - BullMQ job processor: video analysis, GitHub sync, search indexing (`@support-helper/worker`)
 - **packages/sdk-web/** - Web SDK for client integration (`@support-helper/sdk-web`)
 - **packages/shared/** - Shared TypeScript types and utilities
@@ -133,15 +128,6 @@ Schema at `apps/api/prisma/schema.prisma`. Worker shares the same schema via `..
 - `next-auth` for session management
 - `socket.io-client` for real-time updates
 - Sentry + PostHog for monitoring/analytics
-
-### Frontend - apps/web/
-
-- Next.js **15** with App Router + Turbopack (`--turbopack`)
-- TanStack Query + Table + Form, Zustand for state
-- TailwindCSS, Radix UI primitives, Lucide icons
-- TipTap rich text editor
-- Recharts for analytics charts
-- Runs on port **3002**
 
 ### SDK (packages/sdk-web/)
 
@@ -270,7 +256,6 @@ Before pushing to `main`, you **MUST**:
 - `apps/api/src/app.module.ts` - Root module, imports all feature modules
 - `apps/api/prisma/schema.prisma` - Database schema (shared with Worker)
 - `apps/api/prisma/seed.ts` - Test data seeding
-- `apps/web/src/app/layout.tsx` - Web app root layout
 - `apps/dashboard/app/layout.tsx` - Dashboard root layout
 - `packages/sdk-web/src/` - SDK source with Web Component
 - `turbo.json` - Turborepo pipeline configuration

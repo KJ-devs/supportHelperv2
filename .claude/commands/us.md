@@ -20,8 +20,8 @@ Cree une User Story structuree pour Support Helper Platform.
 
 ### Details techniques
 
-- **Package(s) concerne(s)** : [apps/api, apps/dashboard, apps/web, packages/sdk-web, etc.]
-- **Agent(s) Forge** : [backend-dev, frontend-dev, web-dev, sdk-dev, dba, etc.]
+- **Package(s) concerne(s)** : [apps/api, apps/dashboard, packages/sdk-web, etc.]
+- **Agent(s) Forge** : [backend-dev, frontend-dev, sdk-dev, dba, etc.]
 - **Complexite estimee** : [S / M / L / XL]
 - **Dependances** : [Autres US/taches requises avant]
 

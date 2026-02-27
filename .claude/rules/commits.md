@@ -18,7 +18,6 @@ paths:
 - Le **scope** identifie le package ou domaine concerne :
   - `(api)` — apps/api
   - `(dashboard)` — apps/dashboard
-  - `(web)` — apps/web
   - `(worker)` — apps/worker
   - `(sdk)` — packages/sdk-web
   - `(shared)` — packages/shared

@@ -20,8 +20,8 @@ assignees: ""
 
 ## Details techniques
 
-- **Package(s)** : apps/api, apps/dashboard, apps/web, packages/sdk-web
-- **Agent(s) Forge** : backend-dev, frontend-dev, web-dev, sdk-dev, dba
+- **Package(s)** : apps/api, apps/dashboard, packages/sdk-web
+- **Agent(s) Forge** : backend-dev, frontend-dev, sdk-dev, dba
 - **Complexite** : S / M / L / XL
 - **Priorite** : haute / moyenne / basse
 

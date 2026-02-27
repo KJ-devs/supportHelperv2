@@ -23,7 +23,6 @@ Chaque subagent a son **propre context window isole** et une **memoire persistan
 |-----|-------------|----------|
 | `backend-dev` | NestJS, API REST, auth, workers | `apps/api/`, `apps/worker/` |
 | `frontend-dev` | Next.js 14 Dashboard, React, Tailwind | `apps/dashboard/` |
-| `web-dev` | Next.js 15 Web App, Radix UI, TipTap, Recharts | `apps/web/` |
 | `sdk-dev` | SDK TypeScript, Web Components | `packages/sdk-web/` |
 | `dba` | PostgreSQL, Prisma, migrations | `apps/api/prisma/` |
 | `qa-engineer` | Tests unitaires, integration, e2e | `**/*.spec.ts`, `test/` |

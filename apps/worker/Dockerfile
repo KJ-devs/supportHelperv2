@@ -13,7 +13,6 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 # Copy ALL workspace package.json files (pnpm --frozen-lockfile requires full workspace)
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
-COPY apps/web/package.json apps/web/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json
@@ -89,7 +88,6 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 # Copy ALL workspace package.json files (pnpm --frozen-lockfile requires full workspace)
 COPY apps/api/package.json apps/api/package.json
 COPY apps/worker/package.json apps/worker/package.json
-COPY apps/web/package.json apps/web/package.json
 COPY apps/dashboard/package.json apps/dashboard/package.json
 COPY packages/shared/package.json packages/shared/package.json
 COPY packages/database/package.json packages/database/package.json

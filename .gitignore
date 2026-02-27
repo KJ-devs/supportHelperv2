@@ -29,9 +29,6 @@ Thumbs.db
 npm-debug.log*
 pnpm-debug.log*
 
-# Temporary debug/test scripts
-apps/web/tmp-*.js
-
 # Local analysis assets (screenshots, JSON snapshots)
 docs/analyze/*.png
 docs/analyze/*.json

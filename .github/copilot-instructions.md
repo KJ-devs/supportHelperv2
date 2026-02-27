@@ -35,7 +35,6 @@ Dev servers: `pnpm dev` → API on :3001, Dashboard on :3000
 | `apps/dashboard/app/`           | Next.js 14 App Router | Dashboard pages and layouts           |
 | `apps/dashboard/components/`    | React, Tailwind       | UI components                         |
 | `apps/worker/src/`              | NestJS                | Video processing, AI pipeline         |
-| `apps/web/src/`                 | Next.js               | Public website                        |
 | `packages/sdk-web/src/`         | TypeScript, Vite      | Web SDK `<support-helper>` component  |
 | `packages/shared/src/`          | TypeScript            | Shared types                          |
 | `packages/database/src/`        | TypeScript            | DB utilities                          |

@@ -8,7 +8,6 @@ Lance tous les tests du monorepo et presente un rapport detaille.
    - `pnpm --filter @support-helper/sdk-web test`
    - `pnpm --filter @support-helper/api test`
    - `pnpm --filter @support-helper/dashboard test`
-   - `pnpm --filter @repo/web test`
 
 2. Pour chaque package, rapporte :
    - Nombre de tests pass/fail/skip
@@ -28,7 +27,6 @@ Lance tous les tests du monorepo et presente un rapport detaille.
 📦 @support-helper/sdk-web    ✅ 24/24 pass (6.5s)
 📦 @support-helper/api        ⚠️ 51 pass, 6 suites fail (12s)
 📦 @support-helper/dashboard  ✅ 21/21 pass (4s)
-📦 @repo/web                  ✅ 48/48 pass (5s)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Total: [N] pass | [M] fail | [K] skip
