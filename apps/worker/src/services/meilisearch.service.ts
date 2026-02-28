@@ -20,7 +20,7 @@ export class MeilisearchService implements OnModuleInit {
 
   async onModuleInit() {
     const host = this.configService.get<string>('MEILISEARCH_HOST', 'http://localhost:7700');
-    const apiKey = this.configService.get<string>('MEILISEARCH_API_KEY');
+    const apiKey = this.configService.get<string>('MEILISEARCH_MASTER_KEY');
 
     this.client = new MeiliSearch({
       host,

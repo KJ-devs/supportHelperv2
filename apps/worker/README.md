@@ -108,7 +108,7 @@ S3_BUCKET=support-helper
 
 # Meilisearch
 MEILISEARCH_HOST=http://localhost:7700
-MEILISEARCH_API_KEY=masterKey
+MEILISEARCH_MASTER_KEY=masterKey
 
 # OpenAI
 OPENAI_API_KEY=sk-...
