@@ -74,6 +74,17 @@ export function useTicketSocket(
       setError('Unable to connect to real-time ticket updates');
     });
 
+    // The 'reconnect' event fires on the manager after a successful reconnection.
+    // socket.on('connect') also fires afterward, but this handler makes the
+    // error-clearing intent explicit for the reconnection path.
+    socket.io.on('reconnect', () => {
+      setError(null);
+    });
+
+    socket.io.on('reconnect_failed', () => {
+      setError('Real-time connection lost. Please refresh the page.');
+    });
+
     const handleEvent = (data: TicketEvent) => {
       setLastEvent(data);
       onEventRef.current?.(data);
