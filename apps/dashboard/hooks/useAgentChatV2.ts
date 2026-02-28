@@ -22,6 +22,8 @@ interface UseAgentChatV2Return {
   sendMessage: (content: string) => Promise<void>;
   toolActivity: string[];
   error: string | null;
+  setError: (error: string | null) => void;
+  reinitialize: () => void;
 }
 
 export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
@@ -32,10 +34,20 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
   const [isNewSession, setIsNewSession] = useState(false);
   const [toolActivity, setToolActivity] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [initCounter, setInitCounter] = useState(0);
   const socketRef = useRef<Socket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const autoAnalysisTriggered = useRef(false);
   const sendMessageRef = useRef<((content: string) => Promise<void>) | null>(null);
+
+  const reinitialize = useCallback(() => {
+    setError(null);
+    setMessages([]);
+    setSessionId(null);
+    sessionIdRef.current = null;
+    autoAnalysisTriggered.current = false;
+    setInitCounter((c) => c + 1);
+  }, []);
 
   // Initialize session and load messages
   useEffect(() => {
@@ -84,7 +96,7 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     return () => {
       cancelled = true;
     };
-  }, [ticketId]);
+  }, [ticketId, initCounter]);
 
   // Set up WebSocket connection
   useEffect(() => {
@@ -191,5 +203,7 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     sendMessage,
     toolActivity,
     error,
+    setError,
+    reinitialize,
   };
 }

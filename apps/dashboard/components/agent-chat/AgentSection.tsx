@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import { Send, RefreshCw } from 'lucide-react';
 import { useAgentChatV2 } from '@/hooks/useAgentChatV2';
 import { MarkdownRenderer } from '@/components/ui';
+import { useToast } from '@/components/ui/Toast';
 import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
 
 type ActiveTab = 'chat' | 'logs';
@@ -87,8 +88,18 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, sessionId, isLoading, isAgentThinking, sendMessage, error } =
+  const { messages, sessionId, isLoading, isAgentThinking, sendMessage, error, setError, reinitialize } =
     useAgentChatV2(ticketId);
+
+  const lastUserMessageRef = useRef<string | null>(null);
+  const toast = useToast();
+
+  // Show a toast whenever a new error appears
+  useEffect(() => {
+    if (error) {
+      toast.error('Agent error', error);
+    }
+  }, [error]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const investigationLog = diagnosis?.investigationLog ?? [];
 
@@ -131,12 +142,31 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
   const handleSend = async () => {
     const content = inputValue.trim();
     if (!content || isAgentThinking) return;
+    lastUserMessageRef.current = content;
     setInputValue('');
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
     await sendMessage(content);
     onDiagnosisUpdate();
+  };
+
+  const handleRetry = async () => {
+    // If there was no session when error occurred, reinitialize from scratch
+    if (!sessionId) {
+      reinitialize();
+      return;
+    }
+    // Otherwise re-send the last user message
+    const lastMessage = lastUserMessageRef.current;
+    if (lastMessage) {
+      setError(null);
+      await sendMessage(lastMessage);
+      onDiagnosisUpdate();
+    } else {
+      // No message to retry — just clear the error
+      setError(null);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -201,7 +231,25 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             {/* Error */}
             {error && (
               <div className="mb-3 px-3 py-2 bg-red-900/30 border border-red-800 rounded-lg text-xs text-red-400">
-                {error}
+                <p className="leading-relaxed">{error}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={handleRetry}
+                    disabled={isAgentThinking || isLoading}
+                    className="flex items-center gap-1 px-2 py-1 bg-red-800/50 hover:bg-red-700/60 disabled:opacity-40 disabled:cursor-not-allowed rounded text-red-300 transition-colors"
+                    aria-label="Retry"
+                  >
+                    <RefreshCw className="w-3 h-3" aria-hidden="true" />
+                    <span>Retry</span>
+                  </button>
+                  <button
+                    onClick={() => setError(null)}
+                    className="px-2 py-1 hover:bg-red-800/30 rounded text-red-500 hover:text-red-400 transition-colors"
+                    aria-label="Dismiss error"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             )}
 
