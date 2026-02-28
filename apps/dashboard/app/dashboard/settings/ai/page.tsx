@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageLoader, Card, Button, Input, Select } from '@/components/ui';
+import { PageLoader, Card, Button, Input, Select, useToast } from '@/components/ui';
 import { aiConfigApi, type AiConfigResponse } from '@/lib/api/ai-config';
 
 const MODEL_OPTIONS = [
@@ -73,19 +73,11 @@ export default function AiSettingsPage() {
   const [keyStatus, setKeyStatus] = useState<KeyStatus>('idle');
   const [keyError, setKeyError] = useState<string | null>(null);
 
-  // Toast
-  const [toast, setToast] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
+  // Validation errors
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const showToast = useCallback(
-    (type: 'success' | 'error', message: string) => {
-      setToast({ type, message });
-      setTimeout(() => setToast(null), 5000);
-    },
-    []
-  );
+  // Toast
+  const toast = useToast();
 
   // Load config
   useEffect(() => {
@@ -95,22 +87,89 @@ export default function AiSettingsPage() {
       try {
         const data = await aiConfigApi.getConfig();
         setConfig(data);
-        setModel(data.model || 'claude-sonnet-4-20250514');
-      } catch {
-        showToast('error', 'Failed to load AI configuration');
+
+        // Set form values from config
+        const currentProvider = (data.provider || 'anthropic') as AIProviderType;
+        setProvider(currentProvider);
+        const defaultModel = MODEL_OPTIONS[currentProvider]?.[0]?.value || '';
+        setModel(data.model || defaultModel);
+
+        // Set endpoint for Ollama
+        if (currentProvider === 'ollama' && data.settings?.endpoint) {
+          setEndpoint(data.settings.endpoint);
+        } else if (currentProvider === 'ollama') {
+          setEndpoint(PROVIDER_INFO.ollama.defaultEndpoint);
+        }
+
+        // Set organization ID for OpenAI
+        if (currentProvider === 'openai' && data.settings?.organizationId) {
+          setOrganizationId(data.settings.organizationId);
+        }
+      } catch (err) {
+        toast.error('AI Configuration', 'Failed to load AI configuration');
       } finally {
         setLoading(false);
       }
     };
     loadConfig();
-  }, [authLoading, showToast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading]);
 
-  // Validate key
-  const handleValidateKey = async () => {
-    if (!apiKey.trim()) return;
+  // Update defaults when provider changes
+  const handleProviderChange = (newProvider: AIProviderType) => {
+    setProvider(newProvider);
+    const defaultModel = MODEL_OPTIONS[newProvider]?.[0]?.value || '';
+    setModel(defaultModel);
+    setApiKey('');
+    setShowApiKey(false);
+    setTestStatus('idle');
+    setTestMessage(null);
+    setFieldErrors({});
 
-    setKeyStatus('testing');
-    setKeyError(null);
+    // Set default endpoint for Ollama
+    if (newProvider === 'ollama') {
+      setEndpoint(PROVIDER_INFO.ollama.defaultEndpoint);
+    } else {
+      setEndpoint('');
+    }
+
+    // Clear organization ID when not OpenAI
+    if (newProvider !== 'openai') {
+      setOrganizationId('');
+    }
+  };
+
+  // Validate a single field and update errors state
+  const validateEndpoint = (value: string): string => {
+    if (!value.trim()) return 'L\'URL de l\'endpoint est requise';
+    try {
+      new URL(value);
+      return '';
+    } catch {
+      return 'URL invalide (ex: http://localhost:11434)';
+    }
+  };
+
+  const getFormErrors = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    if (provider === 'ollama') {
+      const endpointErr = validateEndpoint(endpoint);
+      if (endpointErr) errors.endpoint = endpointErr;
+    }
+    const providerRequiresKey = PROVIDER_INFO[provider]?.requiresApiKey;
+    const configured = config?.configured && config?.provider === provider;
+    if (providerRequiresKey && !configured && !apiKey.trim()) {
+      errors.apiKey = 'La clé API est requise';
+    }
+    return errors;
+  };
+
+  const isFormValid = Object.keys(getFormErrors()).length === 0;
+
+  // Test connection
+  const handleTestConnection = async () => {
+    setTestStatus('testing');
+    setTestMessage(null);
 
     try {
       const result = await aiConfigApi.validateKey(apiKey);
@@ -129,6 +188,14 @@ export default function AiSettingsPage() {
   // Save config
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Run full validation before submit
+    const formErrors = getFormErrors();
+    if (Object.keys(formErrors).length > 0) {
+      setFieldErrors(formErrors);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -140,14 +207,13 @@ export default function AiSettingsPage() {
       const updated = await aiConfigApi.updateConfig(payload);
       setConfig(updated);
       setApiKey('');
-      setKeyStatus('idle');
-      setKeyError(null);
-      showToast('success', 'AI configuration saved successfully');
+      setShowApiKey(false);
+      setTestStatus('idle');
+      setTestMessage(null);
+      setFieldErrors({});
+      toast.success('AI Configuration', 'AI configuration saved successfully');
     } catch (err: any) {
-      showToast(
-        'error',
-        err.message || 'Failed to save AI configuration'
-      );
+      toast.error('AI Configuration', err.message || 'Failed to save AI configuration');
     } finally {
       setSaving(false);
     }
@@ -159,29 +225,7 @@ export default function AiSettingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto">
-        {/* Toast */}
-        {toast && (
-          <div
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all ${
-              toast.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <span>{toast.type === 'success' ? 'OK' : '!'}</span>
-              <span className="text-sm font-medium">{toast.message}</span>
-              <button
-                onClick={() => setToast(null)}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
-                x
-              </button>
-            </div>
-          </div>
-        )}
-
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
@@ -291,6 +335,130 @@ export default function AiSettingsPage() {
               )}
             </div>
 
+            {/* API Key (if required) */}
+            {currentProviderInfo.requiresApiKey && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  API Key
+                  {!isConfigured && <span className="text-red-500 ml-1" aria-label="requis">*</span>}
+                </label>
+                <div className="flex gap-3">
+                  <div className="flex-1 relative">
+                    <Input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={(e) => {
+                        setApiKey(e.target.value);
+                        setTestStatus('idle');
+                        setTestMessage(null);
+                        if (fieldErrors.apiKey) {
+                          setFieldErrors((prev) => ({ ...prev, apiKey: '' }));
+                        }
+                      }}
+                      onBlur={() => {
+                        if (!isConfigured && !apiKey.trim()) {
+                          setFieldErrors((prev) => ({ ...prev, apiKey: 'La clé API est requise' }));
+                        } else {
+                          setFieldErrors((prev) => ({ ...prev, apiKey: '' }));
+                        }
+                      }}
+                      error={fieldErrors.apiKey}
+                      placeholder={
+                        isConfigured
+                          ? 'Enter new key to replace existing one'
+                          : provider === 'openai'
+                          ? 'sk-proj-...'
+                          : 'sk-ant-api03-...'
+                      }
+                      disabled={saving}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey(!showApiKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                      tabIndex={-1}
+                    >
+                      {showApiKey ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {provider === 'openai' && (
+                    <>
+                      Get your API key from{' '}
+                      <a
+                        href="https://platform.openai.com/api-keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        platform.openai.com
+                      </a>
+                    </>
+                  )}
+                  {provider === 'anthropic' && (
+                    <>
+                      Get your API key from{' '}
+                      <a
+                        href="https://console.anthropic.com/settings/keys"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        console.anthropic.com
+                      </a>
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+
+            {/* Endpoint (for Ollama) */}
+            {provider === 'ollama' && (
+              <Input
+                label="Endpoint URL"
+                type="url"
+                value={endpoint}
+                onChange={(e) => {
+                  setEndpoint(e.target.value);
+                  if (fieldErrors.endpoint) {
+                    setFieldErrors((prev) => ({ ...prev, endpoint: '' }));
+                  }
+                }}
+                onBlur={(e) => {
+                  const err = validateEndpoint(e.target.value);
+                  setFieldErrors((prev) => ({ ...prev, endpoint: err }));
+                }}
+                error={fieldErrors.endpoint}
+                placeholder="http://localhost:11434"
+                helperText={fieldErrors.endpoint ? undefined : 'URL of your Ollama server'}
+                disabled={saving}
+                required
+              />
+            )}
+
+            {/* Organization ID (for OpenAI) */}
+            {provider === 'openai' && (
+              <Input
+                label="Organization ID (Optional)"
+                type="text"
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
+                placeholder="org-..."
+                helperText="Required only if you belong to multiple organizations"
+                disabled={saving}
+              />
+            )}
+
             {/* Model Selector */}
             <Select
               label="Model"
@@ -333,10 +501,25 @@ export default function AiSettingsPage() {
             )}
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t">
-              <Button type="submit" isLoading={saving}>
-                {config?.configured ? 'Update Configuration' : 'Save Configuration'}
+            <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <Button type="submit" isLoading={saving} disabled={saving || !isFormValid}>
+                {isConfigured ? 'Update Configuration' : 'Save Configuration'}
               </Button>
+              {!isConfigured && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setApiKey('');
+                    setShowApiKey(false);
+                    setTestStatus('idle');
+                    setTestMessage(null);
+                    setFieldErrors({});
+                  }}
+                >
+                  Reset
+                </Button>
+              )}
             </div>
           </form>
         </Card>

@@ -77,6 +77,16 @@ export function ApplicationModal({
     return Object.keys(newErrors).length === 0;
   };
 
+  const validateField = (field: string, value: any): string => {
+    if (field === 'name' && !String(value).trim()) {
+      return 'Le nom est requis';
+    }
+    if (field === 'platform' && !value) {
+      return 'La plateforme est requise';
+    }
+    return '';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -92,11 +102,18 @@ export function ApplicationModal({
 
   const handleChange = (field: keyof CreateApplicationData, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field
+    // Clear error for this field on change
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: '' }));
     }
   };
+
+  const handleBlur = (field: string, value: any) => {
+    const errorMsg = validateField(field, value);
+    setErrors((prev) => ({ ...prev, [field]: errorMsg }));
+  };
+
+  const hasErrors = Object.values(errors).some((e) => e !== '');
 
   const handleSettingChange = (key: string, value: any) => {
     setFormData((prev) => ({
@@ -119,7 +136,7 @@ export function ApplicationModal({
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
             Annuler
           </Button>
-          <Button onClick={handleSubmit} isLoading={isLoading}>
+          <Button onClick={handleSubmit} isLoading={isLoading} disabled={isLoading || hasErrors}>
             {application ? 'Enregistrer' : 'Créer'}
           </Button>
         </>
@@ -132,6 +149,7 @@ export function ApplicationModal({
           placeholder="Mon Application"
           value={formData.name}
           onChange={(e) => handleChange('name', e.target.value)}
+          onBlur={(e) => handleBlur('name', e.target.value)}
           error={errors.name}
           required
           disabled={isLoading}
@@ -142,6 +160,7 @@ export function ApplicationModal({
           label="Plateforme"
           value={formData.platform}
           onChange={(e) => handleChange('platform', e.target.value)}
+          onBlur={(e) => handleBlur('platform', e.target.value)}
           error={errors.platform}
           required
           disabled={isLoading}

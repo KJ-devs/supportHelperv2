@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageLoader, Card, Button, Badge } from '@/components/ui';
+import { PageLoader, Card, Button, Badge, Input, Select, useToast } from '@/components/ui';
 import { GitHubAppInstallations } from '@/components/github/GitHubAppInstallations';
 import { RepoSelector } from '@/components/github/RepoSelector';
 import {
@@ -41,18 +41,23 @@ function GitHubSettingsContent() {
   const [applications, setApplications] = useState<Application[]>([]);
 
   // Toast
-  const [toast, setToast] = useState<{
-    type: 'success' | 'error';
-    message: string;
-  } | null>(null);
+  const toast = useToast();
 
   const showToast = useCallback(
     (type: 'success' | 'error', message: string) => {
-      setToast({ type, message });
-      setTimeout(() => setToast(null), 5000);
+      if (type === 'success') {
+        toast.success(message);
+      } else {
+        toast.error(message);
+      }
     },
-    []
+    [toast]
   );
+
+  // Validation errors for agent settings fields
+  const [agentFieldErrors, setAgentFieldErrors] = useState<Record<string, string>>({});
+  // Validation errors for merge settings fields
+  const [mergeFieldErrors, setMergeFieldErrors] = useState<Record<string, string>>({});
 
   // Handle callback params from GitHub App installation
   useEffect(() => {
@@ -178,6 +183,8 @@ function GitHubSettingsContent() {
       setAutoMergeEnabled(settings.autoMergeEnabled || false);
       setMergeStrategy(settings.mergeStrategy || 'squash');
       setRequiredReviews(settings.requiredReviews || 1);
+      setAgentFieldErrors({});
+      setMergeFieldErrors({});
     } catch (err: any) {
       console.error('Failed to fetch app config:', err);
       setAppConfig(null);
@@ -191,9 +198,41 @@ function GitHubSettingsContent() {
     fetchAppConfig();
   }, [fetchAppConfig]);
 
+  // Validate a numeric field within a range
+  const validateNumberField = (value: number, min: number, max: number, label: string): string => {
+    if (!Number.isInteger(value) || value < min || value > max) {
+      return `${label} doit être entre ${min} et ${max}`;
+    }
+    return '';
+  };
+
+  const getAgentFieldErrors = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    const retriesErr = validateNumberField(maxRetries, 1, 10, 'Max Retries');
+    if (retriesErr) errors.maxRetries = retriesErr;
+    const timeoutErr = validateNumberField(timeoutMinutes, 1, 30, 'Timeout');
+    if (timeoutErr) errors.timeoutMinutes = timeoutErr;
+    return errors;
+  };
+
+  const getMergeFieldErrors = (): Record<string, string> => {
+    const errors: Record<string, string> = {};
+    const reviewsErr = validateNumberField(requiredReviews, 0, 5, 'Required Reviews');
+    if (reviewsErr) errors.requiredReviews = reviewsErr;
+    return errors;
+  };
+
+  const isAgentFormValid = Object.keys(getAgentFieldErrors()).length === 0;
+  const isMergeFormValid = Object.keys(getMergeFieldErrors()).length === 0;
+
   // Save agent settings
   const handleSaveAgentSettings = async () => {
     if (!selectedSettingsAppId) return;
+    const errors = getAgentFieldErrors();
+    if (Object.keys(errors).length > 0) {
+      setAgentFieldErrors(errors);
+      return;
+    }
     try {
       setSavingAgent(true);
       await githubApi.updateGithubSettings(selectedSettingsAppId, {
@@ -202,6 +241,7 @@ function GitHubSettingsContent() {
         timeoutMinutes,
       });
       showToast('success', 'Agent settings saved');
+      setAgentFieldErrors({});
       fetchAppConfig();
     } catch (err: any) {
       showToast('error', err.message || 'Failed to save agent settings');
@@ -213,6 +253,11 @@ function GitHubSettingsContent() {
   // Save merge settings
   const handleSaveMergeSettings = async () => {
     if (!selectedSettingsAppId) return;
+    const errors = getMergeFieldErrors();
+    if (Object.keys(errors).length > 0) {
+      setMergeFieldErrors(errors);
+      return;
+    }
     try {
       setSavingMerge(true);
       await githubApi.updateGithubSettings(selectedSettingsAppId, {
@@ -221,6 +266,7 @@ function GitHubSettingsContent() {
         requiredReviews,
       });
       showToast('success', 'Merge settings saved');
+      setMergeFieldErrors({});
       fetchAppConfig();
     } catch (err: any) {
       showToast('error', err.message || 'Failed to save merge settings');
@@ -238,28 +284,6 @@ function GitHubSettingsContent() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
-        {/* Toast */}
-        {toast && (
-          <div
-            className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transition-all ${
-              toast.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
-          >
-            <div className="flex items-center space-x-2">
-              <span>{toast.type === 'success' ? 'OK' : '!'}</span>
-              <span className="text-sm font-medium">{toast.message}</span>
-              <button
-                onClick={() => setToast(null)}
-                className="ml-2 text-gray-400 hover:text-gray-600"
-              >
-                x
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-3 mb-2">
@@ -428,6 +452,290 @@ function GitHubSettingsContent() {
               }}
               onToast={showToast}
             />
+          </div>
+        )}
+
+        {/* Section 4: Agent Settings */}
+        {hasInstallations && applications.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Agent Settings
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Configure AI agent behavior for automated GitHub workflows.
+            </p>
+
+            <Card>
+              {/* Application selector */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Select Application
+                </label>
+                <select
+                  value={selectedSettingsAppId}
+                  onChange={(e) => setSelectedSettingsAppId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Select an application...</option>
+                  {applications.map((app) => (
+                    <option key={app.id} value={app.id}>
+                      {app.name} ({app.platform})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {configLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full" />
+                  <span className="ml-3 text-sm text-gray-500">Loading settings...</span>
+                </div>
+              ) : !selectedSettingsAppId ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  Select an application to configure agent settings
+                </div>
+              ) : !appConfig?.repo ? (
+                <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                  This application has no linked GitHub repository
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Agent Mode */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Agent Mode
+                    </label>
+                    <div className="space-y-2">
+                      <label className="flex items-center space-x-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="radio"
+                          name="agentMode"
+                          value="auto"
+                          checked={agentMode === 'auto'}
+                          onChange={(e) => setAgentMode(e.target.value as any)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            Fully Autonomous
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Agent generates and pushes code automatically
+                          </div>
+                        </div>
+                      </label>
+                      <label className="flex items-center space-x-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="radio"
+                          name="agentMode"
+                          value="review_plan"
+                          checked={agentMode === 'review_plan'}
+                          onChange={(e) => setAgentMode(e.target.value as any)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            Review Plan Before Code Generation
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Human approves the action plan before code generation
+                          </div>
+                        </div>
+                      </label>
+                      <label className="flex items-center space-x-3 p-3 border border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                        <input
+                          type="radio"
+                          name="agentMode"
+                          value="review_all"
+                          checked={agentMode === 'review_all'}
+                          onChange={(e) => setAgentMode(e.target.value as any)}
+                          className="w-4 h-4 text-blue-600"
+                        />
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                            Review Plan and Code Before Push
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            Human reviews both plan and generated code
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Max Retries */}
+                  <Input
+                    type="number"
+                    label="Max Retries"
+                    value={maxRetries}
+                    onChange={(e) => {
+                      setMaxRetries(Number(e.target.value));
+                      if (agentFieldErrors.maxRetries) {
+                        setAgentFieldErrors((prev) => ({ ...prev, maxRetries: '' }));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const err = validateNumberField(Number(e.target.value), 1, 10, 'Max Retries');
+                      setAgentFieldErrors((prev) => ({ ...prev, maxRetries: err }));
+                    }}
+                    error={agentFieldErrors.maxRetries}
+                    min={1}
+                    max={10}
+                    helperText={agentFieldErrors.maxRetries ? undefined : 'Number of retry attempts if agent task fails (1-10)'}
+                  />
+
+                  {/* Timeout */}
+                  <Input
+                    type="number"
+                    label="Timeout (minutes)"
+                    value={timeoutMinutes}
+                    onChange={(e) => {
+                      setTimeoutMinutes(Number(e.target.value));
+                      if (agentFieldErrors.timeoutMinutes) {
+                        setAgentFieldErrors((prev) => ({ ...prev, timeoutMinutes: '' }));
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const err = validateNumberField(Number(e.target.value), 1, 30, 'Timeout');
+                      setAgentFieldErrors((prev) => ({ ...prev, timeoutMinutes: err }));
+                    }}
+                    error={agentFieldErrors.timeoutMinutes}
+                    min={1}
+                    max={30}
+                    helperText={agentFieldErrors.timeoutMinutes ? undefined : 'Maximum time for agent task execution (1-30 minutes)'}
+                  />
+
+                  {/* Save button */}
+                  <div className="flex justify-end pt-4">
+                    <Button
+                      onClick={handleSaveAgentSettings}
+                      isLoading={savingAgent}
+                      disabled={savingAgent || !isAgentFormValid}
+                    >
+                      Save Agent Settings
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
+        {/* Section 5: Merge Settings */}
+        {hasInstallations && applications.length > 0 && selectedSettingsAppId && appConfig?.repo && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Merge Settings
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Configure pull request merge behavior for automated workflows.
+            </p>
+
+            <Card>
+              <div className="space-y-4">
+                {/* Auto-merge toggle */}
+                <div className="flex items-center justify-between p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      Auto-merge
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Automatically merge pull requests when all checks pass
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAutoMergeEnabled(!autoMergeEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      autoMergeEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        autoMergeEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Merge Strategy */}
+                <Select
+                  label="Merge Strategy"
+                  options={[
+                    { value: 'squash', label: 'Squash and merge' },
+                    { value: 'merge', label: 'Create a merge commit' },
+                    { value: 'rebase', label: 'Rebase and merge' },
+                  ]}
+                  value={mergeStrategy}
+                  onChange={(e) => setMergeStrategy(e.target.value as any)}
+                />
+
+                {/* Required Reviews */}
+                <Input
+                  type="number"
+                  label="Required Reviews"
+                  value={requiredReviews}
+                  onChange={(e) => {
+                    setRequiredReviews(Number(e.target.value));
+                    if (mergeFieldErrors.requiredReviews) {
+                      setMergeFieldErrors((prev) => ({ ...prev, requiredReviews: '' }));
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const err = validateNumberField(Number(e.target.value), 0, 5, 'Required Reviews');
+                    setMergeFieldErrors((prev) => ({ ...prev, requiredReviews: err }));
+                  }}
+                  error={mergeFieldErrors.requiredReviews}
+                  min={0}
+                  max={5}
+                  helperText={mergeFieldErrors.requiredReviews ? undefined : 'Number of required approving reviews (0-5)'}
+                />
+
+                {/* Save button */}
+                <div className="flex justify-end pt-4">
+                  <Button
+                    onClick={handleSaveMergeSettings}
+                    isLoading={savingMerge}
+                    disabled={savingMerge || !isMergeFormValid}
+                  >
+                    Save Merge Settings
+                  </Button>
+                </div>
+              </div>
+            </Card>
+          </div>
+        )}
+
+        {/* Section 6: Template Link */}
+        {hasInstallations && applications.length > 0 && selectedSettingsAppId && appConfig?.repo && (
+          <div className="mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+              Issue Template
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              Customize the GitHub issue template for automated issue creation.
+            </p>
+
+            <Card>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    Configure Issue Template
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Customize how tickets are formatted when creating GitHub issues
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    window.location.href = '/dashboard/settings/github/template';
+                  }}
+                >
+                  Configure Template
+                </Button>
+              </div>
+            </Card>
           </div>
         )}
       </div>
