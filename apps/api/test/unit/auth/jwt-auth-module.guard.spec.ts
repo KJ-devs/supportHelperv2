@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtAuthGuard } from '../../../src/modules/auth/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../../../src/common/guards/jwt-auth.guard';
 
 describe('JwtAuthGuard (modules/auth)', () => {
   let guard: JwtAuthGuard;
@@ -10,7 +10,7 @@ describe('JwtAuthGuard (modules/auth)', () => {
   beforeEach(async () => {
     reflector = {
       getAllAndOverride: jest.fn(),
-    } as unknown;
+    } as unknown as jest.Mocked<Reflector>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
