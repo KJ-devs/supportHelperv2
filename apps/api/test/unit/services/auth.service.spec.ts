@@ -57,6 +57,7 @@ describe('AuthService', () => {
           useValue: {
             user: {
               findFirst: jest.fn(),
+              findUnique: jest.fn(),
               create: jest.fn(),
             },
           },
@@ -65,6 +66,7 @@ describe('AuthService', () => {
           provide: JwtService,
           useValue: {
             sign: jest.fn(),
+            verify: jest.fn(),
           },
         },
         {
@@ -182,6 +184,106 @@ describe('AuthService', () => {
       });
 
       await expect(service.login(loginDto)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException with SSO message when tenant disables password login', async () => {
+      const ssoUser = {
+        ...mockUser,
+        tenant: {
+          id: 'tenant-123',
+          slug: 'test-tenant',
+          ssoConfig: {
+            enabled: true,
+            disablePassword: true,
+            providerType: 'google',
+          },
+        },
+      };
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(ssoUser);
+
+      const error = await service.login(loginDto).catch((e) => e);
+
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      expect(error.message).toContain('Password login is disabled');
+      expect(error.message).toContain('SSO');
+    });
+  });
+
+  describe('refresh', () => {
+    const validRefreshPayload = {
+      sub: 'user-123',
+      tenantId: 'tenant-123',
+      type: 'refresh' as const,
+    };
+
+    it('should return a new token pair for a valid refresh token', async () => {
+      (jwtService.verify as jest.Mock).mockReturnValue(validRefreshPayload);
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(mockUser);
+      (jwtService.sign as jest.Mock).mockReturnValue('new-jwt-token');
+
+      const result = await service.refresh('valid-refresh-token');
+
+      expect(result).toHaveProperty('accessToken', 'new-jwt-token');
+      expect(result).toHaveProperty('refreshToken', 'new-jwt-token');
+      expect(result.user.id).toBe('user-123');
+      expect(jwtService.verify).toHaveBeenCalledWith('valid-refresh-token', {
+        secret: 'test-refresh-secret',
+      });
+    });
+
+    it('should throw UnauthorizedException for an expired refresh token', async () => {
+      (jwtService.verify as jest.Mock).mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+
+      await expect(service.refresh('expired-token')).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should throw UnauthorizedException when access token is used as refresh token', async () => {
+      // An access token payload lacks type: 'refresh'
+      const accessPayload = {
+        sub: 'user-123',
+        email: 'test@example.com',
+        tenantId: 'tenant-123',
+        role: 'member',
+        // No `type` field — not a refresh token
+      };
+      (jwtService.verify as jest.Mock).mockReturnValue(accessPayload);
+
+      await expect(service.refresh('access-token-used-as-refresh')).rejects.toThrow(
+        UnauthorizedException,
+      );
+    });
+
+    it('should throw UnauthorizedException when the user no longer exists', async () => {
+      (jwtService.verify as jest.Mock).mockReturnValue(validRefreshPayload);
+      (prismaService.user.findUnique as jest.Mock).mockResolvedValue(null);
+
+      const error = await service.refresh('valid-refresh-token').catch((e) => e);
+
+      expect(error).toBeInstanceOf(UnauthorizedException);
+      // The catch block wraps the inner UnauthorizedException with a generic message
+      expect(error.message).toBe('Invalid or expired refresh token');
+    });
+  });
+
+  describe('generateTokens (via login) — JWT payload', () => {
+    it('should sign access token with sub, email, tenantId, role in payload', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(mockUser);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      (jwtService.sign as jest.Mock).mockReturnValue('jwt-token');
+
+      await service.login({ email: 'test@example.com', password: 'password123' });
+
+      // First call to sign() is the access token
+      const [accessPayload] = (jwtService.sign as jest.Mock).mock.calls[0];
+
+      expect(accessPayload).toMatchObject({
+        sub: mockUser.id,
+        email: mockUser.email,
+        tenantId: mockUser.tenantId,
+        role: mockUser.role,
+      });
     });
   });
 });
