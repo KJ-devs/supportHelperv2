@@ -1,4 +1,5 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import { Response } from 'express';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { QUEUE_NAMES } from '../queues';
@@ -76,11 +77,19 @@ export class HealthController {
   }
 
   @Get('ready')
-  async getReadiness(): Promise<{ status: string; ready: boolean }> {
+  async getReadiness(
+    @Res({ passthrough: true }) res: Response
+  ): Promise<{ status: string; ready: boolean }> {
     const health = await this.getHealth();
+    const ready = health.status === 'healthy';
+
+    if (!ready) {
+      res.status(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     return {
-      status: health.status === 'healthy' ? 'ok' : 'not ready',
-      ready: health.status === 'healthy',
+      status: ready ? 'ok' : 'not ready',
+      ready,
     };
   }
 
