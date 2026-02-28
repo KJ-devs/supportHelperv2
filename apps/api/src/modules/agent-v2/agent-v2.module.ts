@@ -7,6 +7,7 @@ import { AiConfigModule } from '../ai-config/ai-config.module';
 import { GithubModule } from '../github/github.module';
 import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 import { AuthModule } from '../../auth/auth.module';
+import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
 
 import { CodeInvestigationService } from './code-investigation.service';
 import { ToolExecutorService } from './tool-executor.service';
@@ -40,6 +41,7 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
   ],
   controllers: [AgentV2Controller],
   providers: [
+    InternalAuthGuard,
     CodeInvestigationService,
     ToolExecutorService,
     AgenticLoopService,

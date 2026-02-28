@@ -10,6 +10,21 @@ describe('Environment Variable Validation', () => {
   // Save original environment
   const originalEnv = { ...process.env };
 
+  /** Helper: set all required env vars to valid values */
+  function setAllRequired() {
+    process.env.DATABASE_URL = 'postgresql://user:pass@localhost:5432/db';
+    process.env.REDIS_URL = 'redis://localhost:6379';
+    process.env.JWT_SECRET = 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6';
+    process.env.JWT_REFRESH_SECRET = 'z6y5x4w3v2u1t0s9r8q7p6o5n4m3l2k1j0i9h8g7f6e5d4c3b2a1';
+    process.env.S3_ENDPOINT = 'http://localhost:9000';
+    process.env.S3_ACCESS_KEY = 'minioadmin';
+    process.env.S3_SECRET_KEY = 'minioadmin';
+    process.env.S3_BUCKET = 'videos';
+    process.env.INTEGRATION_ENCRYPTION_KEY = 'b3a51b69a871c64e1af7aacbf1a0e80c89c886ca0b55de75095f49e6c94a95e0';
+    process.env.ENCRYPTION_KEY = 'c4b62c7ab982d75f2be8bbdce2b1f91d9ac997db1c66ef86196e5af7da5ba6f1';
+    process.env.INTERNAL_API_SECRET = 'internal-secret-key-for-worker-to-api-calls-min-32';
+  }
+
   beforeEach(() => {
     // Reset environment before each test
     process.env = { ...originalEnv };
@@ -50,6 +65,51 @@ describe('Environment Variable Validation', () => {
       delete process.env.INTEGRATION_ENCRYPTION_KEY;
 
       expect(() => validateEnvironmentVariables()).toThrow(/INTEGRATION_ENCRYPTION_KEY/);
+    });
+
+    it('should throw error when ENCRYPTION_KEY is missing', () => {
+      setAllRequired();
+      delete process.env.ENCRYPTION_KEY;
+
+      expect(() => validateEnvironmentVariables()).toThrow(/ENCRYPTION_KEY/);
+    });
+
+    it('should throw error when INTERNAL_API_SECRET is missing', () => {
+      setAllRequired();
+      delete process.env.INTERNAL_API_SECRET;
+
+      expect(() => validateEnvironmentVariables()).toThrow(/INTERNAL_API_SECRET/);
+    });
+
+    it('should throw error when INTERNAL_API_SECRET is too short (< 32 chars)', () => {
+      setAllRequired();
+      process.env.INTERNAL_API_SECRET = 'tooshort';
+
+      expect(() => validateEnvironmentVariables()).toThrow(/INTERNAL_API_SECRET/);
+    });
+  });
+
+  describe('Optional AI Provider Keys', () => {
+    it('should pass validation without ANTHROPIC_API_KEY', () => {
+      setAllRequired();
+      delete process.env.ANTHROPIC_API_KEY;
+
+      expect(() => validateEnvironmentVariables()).not.toThrow();
+    });
+
+    it('should pass validation without OPENAI_API_KEY', () => {
+      setAllRequired();
+      delete process.env.OPENAI_API_KEY;
+
+      expect(() => validateEnvironmentVariables()).not.toThrow();
+    });
+
+    it('should pass validation without either AI key', () => {
+      setAllRequired();
+      delete process.env.ANTHROPIC_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      expect(() => validateEnvironmentVariables()).not.toThrow();
     });
   });
 

@@ -1,7 +1,8 @@
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtAuthGuard } from '../../../src/auth/guards/jwt-auth.guard';
-import { IS_PUBLIC_KEY } from '../../../src/auth/decorators/public.decorator';
+import { JwtAuthGuard } from '../../../src/common/guards/jwt-auth.guard';
+import { IS_PUBLIC_KEY } from '../../../src/common/decorators/public.decorator';
+import { IS_INTERNAL_ROUTE_KEY } from '../../../src/common/decorators/internal-route.decorator';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
@@ -87,6 +88,19 @@ describe('JwtAuthGuard', () => {
 
       expect(superCanActivate).toHaveBeenCalledWith(context);
       superCanActivate.mockRestore();
+    });
+
+    it('should return true for routes marked as @InternalRoute()', () => {
+      const context = createMockContext();
+      jest.spyOn(reflector, 'getAllAndOverride').mockImplementation((key) => {
+        if (key === IS_PUBLIC_KEY) return false;
+        if (key === IS_INTERNAL_ROUTE_KEY) return true;
+        return false;
+      });
+
+      const result = guard.canActivate(context);
+
+      expect(result).toBe(true);
     });
   });
 });

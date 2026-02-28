@@ -92,6 +92,13 @@ const REQUIRED_VARIABLES: Array<{
       return /^[a-f0-9]{64}$/i.test(value);
     },
   },
+  {
+    name: 'INTERNAL_API_SECRET',
+    setupHint: 'Generate with: openssl rand -hex 32 (min 32 characters)',
+    validator: (value: string) => {
+      return value.length >= 32;
+    },
+  },
 ];
 
 /**

@@ -2,6 +2,7 @@ import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
+import * as crypto from 'crypto';
 import { QUEUE_NAMES } from '../queues';
 import { DeepAnalysisJobData, DeepAnalysisResult } from '../queues/queue.types';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
@@ -24,6 +25,33 @@ export class DeepAnalysisWorker extends WorkerHost {
     super();
   }
 
+  /**
+   * Build a minimal HS256 JWT for worker→API internal calls.
+   * Uses the JWT_SECRET so the API can verify it with JwtService.verify().
+   * The token identifies this process as the "worker-service" system account.
+   */
+  private buildServiceJwt(jwtSecret: string): string {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: 'worker-service',
+        role: 'system',
+        tenantId: 'system',
+        iat: now,
+        exp: now + 300, // valid for 5 minutes
+      }),
+    ).toString('base64url');
+
+    const data = `${header}.${payload}`;
+    const signature = crypto
+      .createHmac('sha256', jwtSecret)
+      .update(data)
+      .digest('base64url');
+
+    return `${data}.${signature}`;
+  }
+
   async process(job: Job<DeepAnalysisJobData>): Promise<DeepAnalysisResult> {
     const { ticketId, tenantId } = job.data;
     const startTime = Date.now();
@@ -33,6 +61,7 @@ export class DeepAnalysisWorker extends WorkerHost {
 
     const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
     const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
     if (!internalSecret) {
       this.logger.error('INTERNAL_API_SECRET is not configured — cannot call internal API');
@@ -45,6 +74,18 @@ export class DeepAnalysisWorker extends WorkerHost {
       };
     }
 
+    if (!jwtSecret) {
+      this.logger.error('JWT_SECRET is not configured — cannot sign service account token');
+      return {
+        success: false,
+        ticketId,
+        diagnosisFound: false,
+        duration: Date.now() - startTime,
+        error: 'JWT_SECRET not configured',
+      };
+    }
+
+    const serviceJwt = this.buildServiceJwt(jwtSecret);
     const endpoint = `${apiUrl}/api/agent/v2/internal/analyze`;
 
     this.logger.log(`Delegating deep analysis for ticket ${ticketId} to API: ${endpoint}`);
@@ -56,6 +97,7 @@ export class DeepAnalysisWorker extends WorkerHost {
         headers: {
           'Content-Type': 'application/json',
           'x-internal-secret': internalSecret,
+          Authorization: `Bearer ${serviceJwt}`,
         },
         body: JSON.stringify({ ticketId, tenantId }),
       });

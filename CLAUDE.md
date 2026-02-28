@@ -226,6 +226,41 @@ Key variables (see `.env.example` for full list):
 | `API_PORT` | API port (default 3001) |
 | `DASHBOARD_URL` | CORS origin for dashboard |
 
+## User Story Workflow (MANDATORY)
+
+When working on User Stories (US) from GitHub issues, follow this cycle strictly:
+
+### 1. Before starting a US
+- Read the summary file `.claude/us-summaries.md` to get context from previously completed US
+- Read the GitHub issue to understand acceptance criteria
+- Announce which US you are starting
+
+### 2. While working on a US
+- Focus exclusively on that US — do not mix changes from other US
+- Check each acceptance criterion as you complete it
+
+### 3. After completing a US
+- Run `pnpm build` to verify no regressions
+- Update the GitHub issue checkboxes (`- [x]`)
+- Append a summary to `.claude/us-summaries.md` with:
+  - US number and title
+  - What was done (files created/modified)
+  - Key decisions made
+  - Any remaining issues or partial items
+- **Commit and push** all changes
+- **Clear context** (`/clear`) — start fresh for the next US
+- The next conversation picks up by reading `.claude/us-summaries.md`
+
+### 4. Summary file format
+```markdown
+## [US-XXX-##] Title — DONE ✅
+- **Files**: list of created/modified files
+- **Changes**: what was implemented
+- **Decisions**: any architectural choices made
+- **Remaining**: anything left incomplete (with reason)
+- **Date**: completion date
+```
+
 ## Pre-Commit Checklist (MANDATORY)
 
 Before pushing to `main`, you **MUST**:

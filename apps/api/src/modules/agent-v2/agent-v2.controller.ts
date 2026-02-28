@@ -6,8 +6,6 @@ import {
   Param,
   UseGuards,
   NotFoundException,
-  UnauthorizedException,
-  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -18,11 +16,11 @@ import {
   ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { IsString, IsNotEmpty } from 'class-validator';
-import { ConfigService } from '@nestjs/config';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { Public } from '../../common/decorators/public.decorator';
+import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { InternalRoute } from '../../common/decorators/internal-route.decorator';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DeepAnalysisService } from './deep-analysis.service';
 import { DiagnosisService } from './diagnosis.service';
@@ -58,7 +56,6 @@ export class AgentV2Controller {
     private readonly deepAnalysis: DeepAnalysisService,
     private readonly diagnosisService: DiagnosisService,
     private readonly prisma: PrismaService,
-    private readonly configService: ConfigService,
   ) {}
 
   @Post('sessions')
@@ -203,20 +200,15 @@ export class AgentV2Controller {
 
   /**
    * Internal endpoint called by the worker process to trigger deep analysis.
-   * Protected by a shared secret header (INTERNAL_API_SECRET) — not exposed in Swagger.
+   * Protected by InternalAuthGuard: requires both a valid x-internal-secret header
+   * and a valid service-account JWT in the Authorization header.
+   * Not exposed in Swagger.
    */
   @Post('internal/analyze')
-  @Public()
+  @InternalRoute()
+  @UseGuards(InternalAuthGuard)
   @ApiExcludeEndpoint()
-  async internalAnalyze(
-    @Headers('x-internal-secret') secret: string | undefined,
-    @Body() dto: InternalAnalyzeDto,
-  ) {
-    const expectedSecret = this.configService.get<string>('INTERNAL_API_SECRET');
-    if (!expectedSecret || secret !== expectedSecret) {
-      throw new UnauthorizedException('Invalid internal secret');
-    }
-
+  async internalAnalyze(@Body() dto: InternalAnalyzeDto) {
     const diagnosis = await this.deepAnalysis.analyze(dto.ticketId, dto.tenantId);
     return {
       ticketId: dto.ticketId,

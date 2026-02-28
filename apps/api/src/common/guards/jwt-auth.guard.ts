@@ -7,10 +7,11 @@ import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '@nestjs/passport';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { IS_SDK_ROUTE_KEY } from '../decorators/sdk-auth.decorator';
+import { IS_INTERNAL_ROUTE_KEY } from '../decorators/internal-route.decorator';
 
 /**
  * Global JWT authentication guard
- * Skips authentication for routes marked with @Public() or @SdkAuth()
+ * Skips authentication for routes marked with @Public(), @SdkAuth(), or @InternalRoute()
  */
 @Injectable()
 export class JwtAuthGuard extends AuthGuard('jwt') {
@@ -34,6 +35,16 @@ export class JwtAuthGuard extends AuthGuard('jwt') {
       [context.getHandler(), context.getClass()],
     );
     if (isSdkRoute) {
+      return true;
+    }
+
+    // Check if route uses internal service-to-service authentication
+    // (handled by InternalAuthGuard instead)
+    const isInternalRoute = this.reflector.getAllAndOverride<boolean>(
+      IS_INTERNAL_ROUTE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (isInternalRoute) {
       return true;
     }
 
