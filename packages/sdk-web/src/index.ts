@@ -2,6 +2,7 @@ import { VideoRecorder } from './recorder/video-recorder';
 import { ContextCapture } from './context/context-capture';
 import type { UserContext } from './context/context-capture';
 import { APIClient } from './api/api-client';
+import { submitReport } from './widget/widget-api';
 
 export type { UserContext };
 
@@ -16,6 +17,12 @@ export interface ReportOptions {
   description: string;
   includeVideo?: boolean;
   videoBlob?: Blob;
+}
+
+export interface ReportWithVideoOptions {
+  title: string;
+  description: string;
+  videoBlob: Blob;
 }
 
 export class SupportHelper {
@@ -118,6 +125,49 @@ export class SupportHelper {
       console.error('Failed to create ticket:', error);
       throw error;
     }
+  }
+
+  /**
+   * Report an issue with a video blob in a single API call.
+   *
+   * Captures user context automatically and posts to `/api/sdk/tickets/report`
+   * (multipart FormData). Falls back to the offline queue when the network is
+   * unavailable or the request fails with a network error.
+   *
+   * @param options - Title, description, and the pre-recorded video blob.
+   * @returns The ticket ID, or `null` when the report was queued offline.
+   *
+   * @example
+   * ```ts
+   * const videoBlob = await sdk.stopRecording();
+   * const ticketId = await sdk.reportWithVideo({
+   *   title: 'Login button broken',
+   *   description: 'Clicking the login button does nothing',
+   *   videoBlob,
+   * });
+   * ```
+   */
+  async reportWithVideo(options: ReportWithVideoOptions): Promise<string | null> {
+    const context = ContextCapture.captureContext(this.customContext);
+
+    const response = await submitReport(
+      this.apiUrl,
+      this.sdkKey,
+      {
+        title: options.title,
+        description: options.description,
+        videoBlob: options.videoBlob,
+        userContext: context,
+      },
+    );
+
+    if (response === null) {
+      // Report has been queued for later delivery (network unavailable).
+      return null;
+    }
+
+    this.currentTicketId = response.ticket.id;
+    return response.ticket.id;
   }
 
   /**

@@ -184,6 +184,47 @@ const ticketId = await supportHelper.report({
 
 **Returns:** Ticket ID (string)
 
+##### `reportWithVideo(options: ReportWithVideoOptions): Promise<string | null>`
+
+Submit a bug report with a pre-recorded video in a single API call, without
+using the widget. User context (OS, browser, viewport, URL) is captured
+automatically.
+
+When the browser is offline or the network request fails, the report is
+automatically saved to IndexedDB and retried with exponential backoff when
+connectivity returns. In that case, the method returns `null` instead of a
+ticket ID.
+
+```typescript
+// 1. Record with the built-in recorder
+await supportHelper.startRecording();
+// ... user reproduces the bug ...
+const videoBlob = await supportHelper.stopRecording();
+
+// 2. Submit everything in one call
+const ticketId = await supportHelper.reportWithVideo({
+  title: 'Login button broken',
+  description: 'Clicking login does nothing on Chrome 124',
+  videoBlob,
+});
+
+if (ticketId) {
+  console.log('Submitted — ticket ID:', ticketId);
+} else {
+  console.log('Offline — report queued for later submission');
+}
+```
+
+**Options:**
+
+| Option | Type | Required | Description |
+|--------|------|----------|-------------|
+| `title` | `string` | Yes | Report title |
+| `description` | `string` | Yes | Detailed description |
+| `videoBlob` | `Blob` | Yes | Pre-recorded video blob |
+
+**Returns:** Ticket ID (string) when submitted, `null` when queued offline.
+
 ##### `uploadVideo(ticketId: string, videoBlob: Blob): Promise<void>`
 
 Upload video to a ticket.
@@ -291,6 +332,41 @@ await api.confirmUpload(upload.mediaId);
 ```
 
 ## 🔧 Framework Examples
+
+### Programmatic API (no widget)
+
+Use `reportWithVideo()` when you want full control over the recording UX
+without embedding the `<support-helper>` widget.
+
+```typescript
+import { SupportHelper } from '@support-helper/sdk-web';
+
+const sdk = new SupportHelper({
+  sdkKey: 'sk_live_your_sdk_key',
+  apiUrl: 'https://api.support-helper.com',
+  // Optional: attach custom fields to every report
+  customContext: { userId: 'usr_123', plan: 'pro' },
+});
+
+async function recordAndReport(title: string, description: string): Promise<void> {
+  // Start screen capture
+  await sdk.startRecording();
+
+  // ... user reproduces the bug, then clicks "Stop" ...
+  const videoBlob = await sdk.stopRecording();
+
+  // Submit in one call — context captured automatically
+  const ticketId = await sdk.reportWithVideo({ title, description, videoBlob });
+
+  if (ticketId) {
+    console.log('Report submitted, ticket:', ticketId);
+  } else {
+    // Network was unavailable — the report is saved locally and will be
+    // retried automatically when connectivity returns.
+    console.log('Report queued — will retry when online');
+  }
+}
+```
 
 ### React
 
@@ -482,6 +558,13 @@ export interface ReportOptions {
   title: string;
   description: string;
   includeVideo?: boolean;
+}
+
+export interface ReportWithVideoOptions {
+  title: string;
+  description: string;
+  /** Pre-recorded video blob. Use stopRecording() or MediaRecorder directly. */
+  videoBlob: Blob;
 }
 
 export interface VideoRecorderOptions {
