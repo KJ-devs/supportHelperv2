@@ -1,4 +1,4 @@
-import type { ReportPayload, ReportResponse } from './widget-types';
+import type { ReportPayload, ReportResponse, TicketStatusResponse } from './widget-types';
 import { OfflineQueue } from '../offline-queue';
 
 // Lazily-created shared queue instance (one per page load).
@@ -103,6 +103,103 @@ export async function submitReport(
 
     throw error;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Polling — GET /api/sdk/tickets/:id
+// ---------------------------------------------------------------------------
+
+/** Interval between poll attempts (ms). */
+export const POLL_INTERVAL_MS = 5000;
+
+/** Maximum time to wait for AI results before giving up (ms). */
+export const POLL_TIMEOUT_MS = 120_000;
+
+/**
+ * Callback invoked on each successful poll.
+ * Return `true` from `onResult` to stop polling early (results received).
+ */
+export interface PollCallbacks {
+  /** Called when a successful response is received. Return true to stop. */
+  onResult: (ticket: TicketStatusResponse) => boolean;
+  /** Called when the 2-minute timeout is reached without receiving results. */
+  onTimeout: () => void;
+}
+
+/**
+ * Start polling `GET /api/sdk/tickets/:id` every {@link POLL_INTERVAL_MS} ms
+ * for a maximum of {@link POLL_TIMEOUT_MS} ms.
+ *
+ * Returns a `stop()` function that cancels ongoing polling immediately.
+ * Polling stops automatically when:
+ *   - `onResult` returns `true` (AI summary received)
+ *   - The timeout is reached
+ *   - `stop()` is called
+ *
+ * Network errors are silently swallowed — polling continues until timeout.
+ */
+export function pollTicketStatus(
+  apiUrl: string,
+  sdkKey: string,
+  ticketId: string,
+  callbacks: PollCallbacks,
+  intervalMs = POLL_INTERVAL_MS,
+  timeoutMs = POLL_TIMEOUT_MS,
+): { stop: () => void } {
+  let stopped = false;
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  function cleanup(): void {
+    stopped = true;
+    if (intervalId !== null) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    if (timeoutId !== null) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  }
+
+  async function doPoll(): Promise<void> {
+    if (stopped) return;
+    try {
+      const response = await fetch(`${apiUrl}/api/sdk/tickets/${ticketId}`, {
+        method: 'GET',
+        headers: { 'x-sdk-key': sdkKey },
+      });
+
+      if (stopped) return;
+
+      if (response.ok) {
+        const ticket = (await response.json()) as TicketStatusResponse;
+        if (stopped) return;
+        const done = callbacks.onResult(ticket);
+        if (done) {
+          cleanup();
+        }
+      }
+      // Non-2xx responses are silently ignored — polling continues.
+    } catch {
+      // Network errors are silently swallowed — polling continues.
+    }
+  }
+
+  // Schedule timeout first.
+  timeoutId = setTimeout(() => {
+    if (stopped) return;
+    cleanup();
+    callbacks.onTimeout();
+  }, timeoutMs);
+
+  // Poll immediately on start, then on each interval.
+  void doPoll();
+  intervalId = setInterval(() => {
+    void doPoll();
+  }, intervalMs);
+
+  return { stop: cleanup };
 }
 
 // ---------------------------------------------------------------------------

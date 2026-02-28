@@ -9,6 +9,7 @@ export type WidgetState =
   | 'preview'
   | 'editing'
   | 'submitting'
+  | 'analyzing'
   | 'success'
   | 'error';
 
@@ -23,6 +24,9 @@ export type WidgetAction =
   | 'RE_RECORD'
   | 'SUBMIT'
   | 'SUCCESS'
+  | 'ANALYZE'
+  | 'ANALYSIS_DONE'
+  | 'ANALYSIS_TIMEOUT'
   | 'ERROR'
   | 'RESET';
 
@@ -60,6 +64,36 @@ export interface ReportResponse {
     typeConfidence: number;
     keywords: string[];
     enrichedDescription?: string;
+  };
+}
+
+/**
+ * Response shape from GET /api/sdk/tickets/:id
+ */
+export interface TicketStatusResponse {
+  id: string;
+  title: string;
+  status: string;
+  aiSummary: string | null;
+  aiAnalysis: string | null;
+  severity: string | null;
+  type: string | null;
+}
+
+/**
+ * Context passed to the analyzing view template.
+ */
+export interface AnalyzingContext {
+  ticketId: string;
+  /** Elapsed seconds since polling started (used for progress display). */
+  elapsedSeconds: number;
+  /** Whether the polling timed out without receiving results. */
+  timedOut: boolean;
+  /** AI results once received. */
+  aiResult?: {
+    summary: string;
+    severity: string | null;
+    type: string | null;
   };
 }
 

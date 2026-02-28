@@ -2,7 +2,7 @@
  * Widget Templates - Pure functions returning HTML for each view
  */
 
-import type { WidgetState, ReportResponse } from './widget-types';
+import type { WidgetState, ReportResponse, AnalyzingContext } from './widget-types';
 
 /**
  * SVG Icons
@@ -389,6 +389,108 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
 }
 
 /**
+ * Analyzing view — shown while polling for AI results.
+ * Covers three sub-states within the same template:
+ *   1. Waiting (spinner + progress text)
+ *   2. Results received (summary + severity + type)
+ *   3. Timed out (fallback message)
+ */
+export function renderAnalyzingView(ctx: AnalyzingContext): string {
+  // --- timed out ---
+  if (ctx.timedOut) {
+    return `
+      <div class="sh-view sh-view-center" role="status" aria-live="polite">
+        <div class="sh-success-icon" aria-hidden="true">
+          ${ICONS.check}
+        </div>
+        <div class="sh-title">Report Sent!</div>
+        <p class="sh-message">
+          Analysis is in progress. Check your dashboard for results.
+        </p>
+        <button
+          class="sh-btn sh-btn-secondary sh-btn-block"
+          data-action="close"
+          style="margin-top: 8px;"
+          aria-label="Close dialog"
+          tabindex="0"
+        >
+          Close
+        </button>
+      </div>
+    `;
+  }
+
+  // --- results received ---
+  if (ctx.aiResult) {
+    const severityClass =
+      ctx.aiResult.severity === 'high' ? 'sh-badge-high' :
+      ctx.aiResult.severity === 'medium' ? 'sh-badge-medium' : 'sh-badge-low';
+
+    const typeHtml = ctx.aiResult.type
+      ? `<span class="sh-badge sh-badge-type" style="margin-left:6px;">${escapeHtml(ctx.aiResult.type)}</span>`
+      : '';
+
+    return `
+      <div class="sh-view sh-view-center" role="status" aria-live="polite">
+        <div class="sh-success-icon" aria-hidden="true">
+          ${ICONS.check}
+        </div>
+        <div class="sh-title">Report Sent!</div>
+        <div class="sh-analysis" role="region" aria-label="AI Analysis Results">
+          <div class="sh-analysis-label">AI Analysis</div>
+          <p class="sh-analysis-text">${escapeHtml(ctx.aiResult.summary)}</p>
+          <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
+            ${ctx.aiResult.severity
+              ? `<span class="sh-badge ${severityClass}" role="status">${escapeHtml(ctx.aiResult.severity)} severity</span>`
+              : ''}
+            ${typeHtml}
+          </div>
+        </div>
+        <button
+          class="sh-btn sh-btn-secondary sh-btn-block"
+          data-action="close"
+          style="margin-top: 12px;"
+          aria-label="Close dialog"
+          tabindex="0"
+        >
+          Close
+        </button>
+      </div>
+    `;
+  }
+
+  // --- waiting / polling ---
+  const elapsed = ctx.elapsedSeconds;
+  const remaining = Math.max(0, 120 - elapsed);
+  const progressPct = Math.min(100, Math.round((elapsed / 120) * 100));
+
+  return `
+    <div class="sh-view sh-view-center" role="status" aria-live="polite" aria-label="Analyzing your report">
+      <div class="sh-spinner" aria-hidden="true"></div>
+      <div class="sh-title">Analyzing...</div>
+      <p class="sh-message">
+        Our AI is reviewing your report. This usually takes less than a minute.
+      </p>
+      <div class="sh-progress-bar" aria-hidden="true">
+        <div class="sh-progress-fill" style="width: ${progressPct}%"></div>
+      </div>
+      <p class="sh-message sh-analyzing-timer" aria-live="off">
+        ${remaining > 0 ? `Up to ${remaining}s remaining` : 'Almost done...'}
+      </p>
+      <button
+        class="sh-btn sh-btn-secondary"
+        data-action="close"
+        style="margin-top: 8px;"
+        aria-label="Close dialog (analysis will continue in background)"
+        tabindex="0"
+      >
+        Close
+      </button>
+    </div>
+  `;
+}
+
+/**
  * Error view
  */
 export function renderErrorView(message: string): string {
@@ -436,6 +538,7 @@ export function getViewForState(
     aiAnalysis?: ReportResponse['aiAnalysis'];
     dashboardUrl?: string;
     errorMessage?: string;
+    analyzingContext?: AnalyzingContext;
   }
 ): string {
   switch (state) {
@@ -449,6 +552,12 @@ export function getViewForState(
       return renderEditingView(context.videoUrl || '', context.duration || 0);
     case 'submitting':
       return renderSubmittingView();
+    case 'analyzing':
+      return renderAnalyzingView(context.analyzingContext || {
+        ticketId: context.ticketId || '',
+        elapsedSeconds: 0,
+        timedOut: false,
+      });
     case 'success':
       return renderSuccessView(context.ticketId || '', context.aiAnalysis, context.dashboardUrl);
     case 'error':

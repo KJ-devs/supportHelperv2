@@ -26,7 +26,13 @@ const TRANSITIONS: Record<WidgetState, TransitionMap> = {
   },
   submitting: {
     SUCCESS: 'success',
+    ANALYZE: 'analyzing',
     ERROR: 'error',
+  },
+  analyzing: {
+    ANALYSIS_DONE: 'success',
+    ANALYSIS_TIMEOUT: 'success',
+    CLOSE: 'idle',
   },
   success: {
     CLOSE: 'idle',

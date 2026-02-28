@@ -3,12 +3,12 @@
  * <support-helper sdk-key="..." api-url="..."></support-helper>
  */
 
-import type { WidgetConfig, WidgetState, WidgetEventMap, ReportResponse } from './widget-types';
+import type { WidgetConfig, WidgetState, WidgetEventMap, ReportResponse, AnalyzingContext } from './widget-types';
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
 import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
-import { submitReport, getOfflineQueue } from './widget-api';
+import { submitReport, getOfflineQueue, pollTicketStatus } from './widget-api';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
 import { KeyboardManager } from './keyboard-manager';
@@ -59,6 +59,15 @@ export class SupportHelperElement extends HTMLElement {
   // Attention pulse timer
   private attentionPulseTimer: number | null = null;
   private attentionPulseDelay = 5000; // 5 seconds
+
+  // AI polling state
+  private pollStop: (() => void) | null = null;
+  private pollingStartTime = 0;
+  private pollingElapsed = 0;
+  private pollingTimedOut = false;
+  private pollingResult: AnalyzingContext['aiResult'] | null = null;
+  private pollingTicketId = '';
+  private pollingTickTimer: number | null = null;
 
   static get observedAttributes(): string[] {
     return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
@@ -130,6 +139,7 @@ export class SupportHelperElement extends HTMLElement {
     // Cleanup
     this.stopRecordingTimer();
     this.stopAttentionPulseTimer();
+    this.stopPolling();
     this.cleanupVideoUrl();
     if (this.videoRecorder?.isActive()) {
       this.videoRecorder.stop().catch(() => {});
@@ -233,10 +243,16 @@ export class SupportHelperElement extends HTMLElement {
         duration: this.videoDuration,
         size: this.videoSize,
         isPaused: this.isRecordingPaused,
-        ticketId: this.lastReportResponse?.ticket.id,
+        ticketId: this.lastReportResponse?.ticket.id ?? this.pollingTicketId,
         aiAnalysis: this.lastReportResponse?.aiAnalysis,
         dashboardUrl: undefined, // Could be constructed from config
         errorMessage: this.errorMessage,
+        analyzingContext: state === 'analyzing' ? {
+          ticketId: this.pollingTicketId,
+          elapsedSeconds: this.pollingElapsed,
+          timedOut: this.pollingTimedOut,
+          aiResult: this.pollingResult ?? undefined,
+        } : undefined,
       });
       html += renderModal('Report an Issue', viewContent);
     }
@@ -330,6 +346,11 @@ export class SupportHelperElement extends HTMLElement {
    */
   private handleClose(): void {
     const currentState = this.stateMachine.getState();
+
+    // Stop ongoing AI polling when user closes the widget.
+    if (currentState === 'analyzing') {
+      this.stopPolling();
+    }
 
     // If recording, stop it first
     if (currentState === 'recording' && this.videoRecorder?.isActive()) {
@@ -606,6 +627,21 @@ export class SupportHelperElement extends HTMLElement {
 
       this.lastReportResponse = response;
 
+      // If we have a ticket ID, start polling for AI results instead of
+      // going directly to success state.
+      if (response.ticket.id && this.stateMachine.canTransition('ANALYZE')) {
+        this.stateMachine.dispatch('ANALYZE');
+        this.startPolling(response.ticket.id);
+
+        this.announcer.announce('Report sent. Analyzing your issue...', 'polite');
+
+        this.emit('sh:submit', {
+          ticketId: response.ticket.id,
+          aiAnalysis: response.aiAnalysis,
+        });
+        return;
+      }
+
       if (this.stateMachine.canTransition('SUCCESS')) {
         this.stateMachine.dispatch('SUCCESS');
       }
@@ -649,6 +685,7 @@ export class SupportHelperElement extends HTMLElement {
 
       // Cleanup on close
       this.cleanupRecording();
+      this.stopPolling();
       this.formData = { title: '', description: '' };
       // Restart attention pulse timer when returning to idle
       this.startAttentionPulseTimer();
@@ -740,6 +777,95 @@ export class SupportHelperElement extends HTMLElement {
         }, 6000);
       }
     }, this.attentionPulseDelay);
+  }
+
+  // ---------------------------------------------------------------------------
+  // AI polling
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Start polling GET /api/sdk/tickets/:id every 5 seconds.
+   * Transitions to success (ANALYSIS_DONE) when aiSummary is non-null,
+   * or to success (ANALYSIS_TIMEOUT) after 2 minutes.
+   */
+  private startPolling(ticketId: string): void {
+    this.stopPolling(); // guard against duplicate start
+
+    this.pollingTicketId = ticketId;
+    this.pollingStartTime = Date.now();
+    this.pollingElapsed = 0;
+    this.pollingTimedOut = false;
+    this.pollingResult = null;
+
+    // Elapsed-seconds counter — updates the progress bar every second.
+    this.pollingTickTimer = window.setInterval(() => {
+      this.pollingElapsed = Math.floor((Date.now() - this.pollingStartTime) / 1000);
+      // Live-update the progress bar / timer text without a full re-render.
+      const fill = this.shadow.querySelector('.sh-progress-fill') as HTMLElement | null;
+      const timerEl = this.shadow.querySelector('.sh-analyzing-timer');
+      if (fill) {
+        const pct = Math.min(100, Math.round((this.pollingElapsed / 120) * 100));
+        fill.style.width = `${pct}%`;
+      }
+      if (timerEl) {
+        const remaining = Math.max(0, 120 - this.pollingElapsed);
+        timerEl.textContent = remaining > 0 ? `Up to ${remaining}s remaining` : 'Almost done...';
+      }
+    }, 1000);
+
+    const handle = pollTicketStatus(
+      this.config.apiUrl,
+      this.config.sdkKey,
+      ticketId,
+      {
+        onResult: (ticket) => {
+          // Stop polling as soon as aiSummary is non-null.
+          if (ticket.aiSummary) {
+            this.pollingResult = {
+              summary: ticket.aiSummary,
+              severity: ticket.severity,
+              type: ticket.type,
+            };
+            this.stopPollingTick();
+
+            if (this.stateMachine.canTransition('ANALYSIS_DONE')) {
+              this.stateMachine.dispatch('ANALYSIS_DONE');
+            }
+            this.announcer.announce('AI analysis complete!', 'polite');
+            return true; // stop polling
+          }
+          return false; // keep polling
+        },
+        onTimeout: () => {
+          this.pollingTimedOut = true;
+          this.stopPollingTick();
+
+          if (this.stateMachine.canTransition('ANALYSIS_TIMEOUT')) {
+            this.stateMachine.dispatch('ANALYSIS_TIMEOUT');
+          }
+          this.announcer.announce('Analysis is taking longer than expected. Check the dashboard for results.', 'polite');
+        },
+      },
+    );
+
+    this.pollStop = handle.stop;
+  }
+
+  /** Cancel ongoing network polling (but leave tick timer running if needed). */
+  private stopPolling(): void {
+    if (this.pollStop) {
+      this.pollStop();
+      this.pollStop = null;
+    }
+    this.stopPollingTick();
+  }
+
+  /** Cancel the elapsed-seconds interval only. */
+  private stopPollingTick(): void {
+    if (this.pollingTickTimer !== null) {
+      clearInterval(this.pollingTickTimer);
+      this.pollingTickTimer = null;
+    }
   }
 
   /**

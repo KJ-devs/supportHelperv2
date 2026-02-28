@@ -1,6 +1,8 @@
 import {
   Controller,
   Post,
+  Get,
+  Param,
   Body,
   Req,
   UseGuards,
@@ -8,6 +10,7 @@ import {
   UploadedFile,
   Logger,
   InternalServerErrorException,
+  NotFoundException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiSecurity, ApiConsumes } from '@nestjs/swagger';
@@ -80,6 +83,40 @@ export class SdkTicketsController {
       },
       forcePathStyle: true, // Required for MinIO
     });
+  }
+
+  @Get(':id')
+  @SdkAuth()
+  @UseGuards(SdkKeyGuard)
+  @ApiOperation({ summary: 'Get ticket details including AI analysis results' })
+  @ApiResponse({ status: 200, description: 'Ticket found' })
+  @ApiResponse({ status: 401, description: 'Invalid SDK key' })
+  @ApiResponse({ status: 404, description: 'Ticket not found' })
+  async findOne(
+    @Param('id') id: string,
+    @CurrentTenant() tenantId: string,
+  ) {
+    const ticket = await this.prisma.ticket.findFirst({
+      where: {
+        id,
+        tenantId,
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        aiSummary: true,
+        aiAnalysis: true,
+        severity: true,
+        type: true,
+      },
+    });
+
+    if (!ticket) {
+      throw new NotFoundException(`Ticket ${id} not found`);
+    }
+
+    return ticket;
   }
 
   @Post()

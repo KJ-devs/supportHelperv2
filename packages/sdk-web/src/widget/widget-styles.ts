@@ -781,6 +781,35 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       }
     }
 
+    /* Analyzing progress bar */
+    .sh-progress-bar {
+      width: 100%;
+      height: 4px;
+      background: var(--sh-border);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin-top: 4px;
+    }
+
+    .sh-progress-fill {
+      height: 100%;
+      background: var(--sh-primary);
+      border-radius: 9999px;
+      transition: width 1s linear;
+    }
+
+    .sh-analyzing-timer {
+      font-size: 12px;
+      margin-top: 0;
+    }
+
+    /* Badge for issue type */
+    .sh-badge-type {
+      background: var(--sh-bg-secondary);
+      color: var(--sh-text-secondary);
+      border: 1px solid var(--sh-border);
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       .sh-modal {
