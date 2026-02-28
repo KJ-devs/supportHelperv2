@@ -528,6 +528,30 @@ describe('MediaService', () => {
         service.getDownloadUrlByStorageKey('missing-key', 'tenant-123'),
       ).rejects.toThrow(NotFoundException);
     });
+
+    it('should throw NotFoundException when storage key belongs to a different tenant', async () => {
+      // The Prisma query filters by BOTH storageKey AND ticket.tenantId.
+      // When the storage key exists but belongs to tenant-B, the query returns
+      // null from tenant-A's perspective — simulating cross-tenant access denial.
+      (prisma.media.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.getDownloadUrlByStorageKey(
+          'tenant-B/ticket-456/file.mp4', // key owned by a different tenant
+          'tenant-A',                      // requesting tenant
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      // Verify the query was called with the correct tenant isolation filter
+      expect(prisma.media.findFirst).toHaveBeenCalledWith({
+        where: {
+          storageKey: 'tenant-B/ticket-456/file.mp4',
+          ticket: {
+            tenantId: 'tenant-A',
+          },
+        },
+      });
+    });
   });
 
   describe('getMediaDownloadUrl', () => {
