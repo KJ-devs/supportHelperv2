@@ -12,11 +12,12 @@ import type { Application, CreateApplicationData } from '@/lib/types/application
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
-import { PageLoader, Button, Card } from '@/components/ui';
-import { AlertTriangle, AppWindow, Plus } from 'lucide-react';
+import { PageLoader, Button, EmptyState, ConfirmModal, useToast } from '@/components/ui';
+import { AlertTriangle } from 'lucide-react';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const toast = useToast();
 
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,6 +26,17 @@ export default function ApplicationsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<Application | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Confirm modals state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; app: Application | null }>({
+    isOpen: false,
+    app: null,
+  });
+  const [regenConfirm, setRegenConfirm] = useState<{ isOpen: boolean; app: Application | null }>({
+    isOpen: false,
+    app: null,
+  });
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   // Fetch applications
   const fetchApplications = async () => {
@@ -71,45 +83,47 @@ export default function ApplicationsPage() {
       setIsModalOpen(false);
       setEditingApp(null);
     } catch (error: any) {
-      alert(`Erreur: ${error.message}`);
+      toast.error('Erreur lors de la sauvegarde', error.message);
       throw error;
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (app: Application) => {
-    if (
-      !confirm(
-        `Êtes-vous sûr de vouloir supprimer "${app.name}" ?\n\nCette action est irréversible et supprimera tous les tickets associés.`
-      )
-    ) {
-      return;
-    }
+  const handleDelete = (app: Application) => {
+    setDeleteConfirm({ isOpen: true, app });
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deleteConfirm.app) return;
     try {
-      await applicationsApi.deleteApplication(app.id);
+      setIsActionLoading(true);
+      await applicationsApi.deleteApplication(deleteConfirm.app.id);
       await fetchApplications();
+      setDeleteConfirm({ isOpen: false, app: null });
     } catch (error: any) {
-      alert(`Erreur lors de la suppression: ${error.message}`);
+      toast.error('Erreur lors de la suppression', error.message);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const handleRegenerateKey = async (app: Application) => {
-    if (
-      !confirm(
-        `Régénérer la clé SDK pour "${app.name}" ?\n\nL'ancienne clé ne fonctionnera plus. Vous devrez mettre à jour votre application.`
-      )
-    ) {
-      return;
-    }
+  const handleRegenerateKey = (app: Application) => {
+    setRegenConfirm({ isOpen: true, app });
+  };
 
+  const handleRegenerateKeyConfirm = async () => {
+    if (!regenConfirm.app) return;
     try {
-      await applicationsApi.regenerateKey(app.id);
+      setIsActionLoading(true);
+      await applicationsApi.regenerateKey(regenConfirm.app.id);
       await fetchApplications();
-      alert('Clé SDK régénérée avec succès !');
+      setRegenConfirm({ isOpen: false, app: null });
+      toast.success('Clé SDK régénérée avec succès');
     } catch (error: any) {
-      alert(`Erreur: ${error.message}`);
+      toast.error('Erreur lors de la régénération', error.message);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
@@ -219,6 +233,32 @@ export default function ApplicationsPage() {
           onSubmit={handleSubmit}
           application={editingApp}
           isLoading={isSubmitting}
+        />
+
+        {/* Delete confirmation */}
+        <ConfirmModal
+          isOpen={deleteConfirm.isOpen}
+          onClose={() => setDeleteConfirm({ isOpen: false, app: null })}
+          onConfirm={handleDeleteConfirm}
+          title="Supprimer l'application"
+          message={`Êtes-vous sûr de vouloir supprimer "${deleteConfirm.app?.name}" ?\n\nCette action est irréversible et supprimera tous les tickets associés.`}
+          confirmLabel="Supprimer"
+          cancelLabel="Annuler"
+          variant="danger"
+          isLoading={isActionLoading}
+        />
+
+        {/* Regenerate SDK key confirmation */}
+        <ConfirmModal
+          isOpen={regenConfirm.isOpen}
+          onClose={() => setRegenConfirm({ isOpen: false, app: null })}
+          onConfirm={handleRegenerateKeyConfirm}
+          title="Régénérer la clé SDK"
+          message={`Régénérer la clé SDK pour "${regenConfirm.app?.name}" ?\n\nL'ancienne clé ne fonctionnera plus. Vous devrez mettre à jour votre application.`}
+          confirmLabel="Régénérer"
+          cancelLabel="Annuler"
+          variant="danger"
+          isLoading={isActionLoading}
         />
       </div>
     </DashboardLayout>

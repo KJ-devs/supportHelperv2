@@ -4,6 +4,7 @@ import { Metadata } from 'next';
 import { PostHogProvider } from '@/lib/monitoring/posthog';
 import { AuthProvider } from '@/lib/auth';
 import { ThemeProvider } from '@/providers/theme-provider';
+import { ToastProvider } from '@/components/ui/Toast';
 
 export const metadata: Metadata = {
   title: 'Support Helper Dashboard',
@@ -14,9 +15,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="fr">
       <body className="bg-gray-50 dark:bg-gray-950">
-        <PostHogProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </PostHogProvider>
+        <ThemeProvider>
+          <PostHogProvider>
+            <AuthProvider>
+              <ToastProvider>{children}</ToastProvider>
+            </AuthProvider>
+          </PostHogProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

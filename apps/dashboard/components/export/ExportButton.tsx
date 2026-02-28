@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Button } from '@/components/ui';
+import { Button, useToast } from '@/components/ui';
 import type { Ticket, TicketFilters } from '@/lib/types/ticket';
 import { FileSpreadsheet, FileJson } from 'lucide-react';
 
@@ -20,6 +20,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const toast = useToast();
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -85,7 +86,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       }
     } catch (error) {
       console.error('Error exporting to CSV:', error);
-      alert('Erreur lors de l\'export CSV');
+      toast.error("Erreur lors de l'export CSV");
     } finally {
       setIsExporting(false);
       setIsOpen(false);
@@ -134,7 +135,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       }
     } catch (error) {
       console.error('Error exporting to JSON:', error);
-      alert('Erreur lors de l\'export JSON');
+      toast.error("Erreur lors de l'export JSON");
     } finally {
       setIsExporting(false);
       setIsOpen(false);

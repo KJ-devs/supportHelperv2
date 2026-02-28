@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import type { Ticket, TicketStatus } from '@/lib/types/ticket';
 import { ticketsApi } from '@/lib/api/tickets';
-import { StatusBadge, SeverityBadge, TypeBadge, Button, Select, Card } from '@/components/ui';
+import { StatusBadge, SeverityBadge, TypeBadge, Button, Select, Card, useToast } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { Bot, Monitor } from 'lucide-react';
 
@@ -21,6 +21,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
   const [isUpdating, setIsUpdating] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState<Record<string, boolean>>({});
+  const toast = useToast();
 
   // Fetch pre-signed URL for a media item
   const fetchMediaUrl = async (mediaId: string) => {
@@ -64,7 +65,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       onUpdate(updated);
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Erreur lors de la mise à jour du statut');
+      toast.error('Erreur lors de la mise à jour du statut');
     } finally {
       setIsUpdating(false);
     }

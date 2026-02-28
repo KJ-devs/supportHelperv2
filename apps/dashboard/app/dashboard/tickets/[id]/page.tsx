@@ -15,7 +15,7 @@ import type { Ticket } from '@/lib/types/ticket';
 import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { DiagnosisPanelV3A } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { AgentSection } from '@/components/agent-chat/AgentSection';
-import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button } from '@/components/ui';
+import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button, ConfirmModal, useToast } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
 
@@ -52,12 +52,15 @@ export default function TicketDetailPage() {
   const params = useParams();
   const router = useRouter();
   const { isLoading: authLoading } = useRequireAuth();
+  const toast = useToast();
 
   const ticketId = params.id as string;
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [isDiagnosisLoading, setIsDiagnosisLoading] = useState(false);
@@ -126,14 +129,16 @@ export default function TicketDetailPage() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete this ticket?')) return;
+  const handleDeleteConfirm = async () => {
     try {
+      setIsDeleting(true);
       await ticketsApi.deleteTicket(ticketId);
       router.push('/dashboard/tickets');
     } catch (err) {
-      alert('Error deleting ticket');
+      toast.error('Erreur lors de la suppression du ticket');
       console.error('Error deleting ticket:', err);
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
     }
   };
 
@@ -169,7 +174,7 @@ export default function TicketDetailPage() {
           <Button variant="ghost" size="sm" onClick={handleRefresh} className="flex items-center gap-1.5">
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
-          <Button variant="danger" size="sm" onClick={handleDelete} className="flex items-center gap-1.5">
+          <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)} className="flex items-center gap-1.5">
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
         </div>
@@ -371,6 +376,18 @@ export default function TicketDetailPage() {
 
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Supprimer le ticket"
+        message="Êtes-vous sûr de vouloir supprimer ce ticket ?\n\nCette action est irréversible."
+        confirmLabel="Supprimer"
+        cancelLabel="Annuler"
+        variant="danger"
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
