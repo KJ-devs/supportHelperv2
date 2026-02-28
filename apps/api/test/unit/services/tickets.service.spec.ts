@@ -107,6 +107,18 @@ describe('TicketsService', () => {
             add: jest.fn().mockResolvedValue({}),
           },
         },
+        {
+          provide: getQueueToken('deep-analysis'),
+          useValue: {
+            add: jest.fn().mockResolvedValue({}),
+          },
+        },
+        {
+          provide: getQueueToken('triage'),
+          useValue: {
+            add: jest.fn().mockResolvedValue({}),
+          },
+        },
       ],
     }).compile();
 
@@ -315,6 +327,35 @@ describe('TicketsService', () => {
       });
     });
 
+    it('should return empty results when querying with wrong tenant', async () => {
+      // tenant-B has no tickets; querying with tenant-B returns empty arrays
+      (prisma.ticket.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.ticket.count as jest.Mock).mockResolvedValue(0);
+
+      const result = await service.findAll('tenant-B', {
+        page: 0,
+        limit: 20,
+        sortBy: 'createdAt' as const,
+        sortOrder: 'desc' as const,
+      });
+
+      expect(result.data).toHaveLength(0);
+      expect(result.pagination.total).toBe(0);
+      expect(result.pagination.totalPages).toBe(0);
+
+      // Confirm the WHERE clause is scoped to tenant-B only
+      expect(prisma.ticket.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-B' }),
+        }),
+      );
+      expect(prisma.ticket.count).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ tenantId: 'tenant-B' }),
+        }),
+      );
+    });
+
     it('should convert Decimal confidence values to numbers', async () => {
       const ticketWithConfidence = {
         ...mockTicket,
@@ -376,6 +417,23 @@ describe('TicketsService', () => {
       );
       await expect(service.findOne('missing', 'tenant-123')).rejects.toThrow(
         'Ticket missing not found',
+      );
+    });
+
+    it('should throw NotFoundException when ticket belongs to a different tenant', async () => {
+      // ticket-123 belongs to tenant-A; querying with tenant-B returns null
+      // because Prisma filters by both id AND tenantId in the WHERE clause
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.findOne('ticket-123', 'tenant-B')).rejects.toThrow(
+        NotFoundException,
+      );
+
+      // Confirm the query was scoped to tenant-B, not tenant-A
+      expect(prisma.ticket.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ticket-123', tenantId: 'tenant-B' },
+        }),
       );
     });
 
@@ -501,6 +559,26 @@ describe('TicketsService', () => {
       await expect(
         service.update('missing', 'tenant-123', { title: 'New Title' }),
       ).rejects.toThrow(NotFoundException);
+    });
+
+    it('should throw NotFoundException when updating ticket from different tenant', async () => {
+      // ticket-123 belongs to tenant-A; tenant-B's findFirst call returns null
+      // because update() calls findOne() internally, which scopes by tenantId
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.update('ticket-123', 'tenant-B', { title: 'Hijacked Title' }),
+      ).rejects.toThrow(NotFoundException);
+
+      // The internal findOne call must use tenant-B — not tenant-A
+      expect(prisma.ticket.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'ticket-123', tenantId: 'tenant-B' },
+        }),
+      );
+
+      // The update itself must NOT have been called
+      expect(prisma.ticket.update).not.toHaveBeenCalled();
     });
 
     it('should update AI analysis fields', async () => {
@@ -769,6 +847,66 @@ describe('TicketsService', () => {
 
       expect(result.bySeverity).toEqual({ unknown: 5 });
       expect(result.byType).toEqual({ unknown: 3 });
+    });
+  });
+
+  describe('Multi-tenant Prisma query inspection', () => {
+    const TENANT_X = 'tenant-X';
+
+    it('should include tenantId in findOne WHERE clause', async () => {
+      const detailedTicket = {
+        ...mockTicket,
+        tenantId: TENANT_X,
+        media: [],
+        githubIssues: [],
+        agentSessions: [],
+      };
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(detailedTicket);
+
+      await service.findOne('ticket-123', TENANT_X);
+
+      const [callArgs] = (prisma.ticket.findFirst as jest.Mock).mock.calls;
+      expect(callArgs[0].where).toMatchObject({ tenantId: TENANT_X });
+    });
+
+    it('should include tenantId in findAll WHERE clause for both findMany and count', async () => {
+      (prisma.ticket.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.ticket.count as jest.Mock).mockResolvedValue(0);
+
+      await service.findAll(TENANT_X, {
+        page: 0,
+        limit: 10,
+        sortBy: 'createdAt' as const,
+        sortOrder: 'desc' as const,
+      });
+
+      const findManyArgs = (prisma.ticket.findMany as jest.Mock).mock.calls[0][0];
+      expect(findManyArgs.where).toMatchObject({ tenantId: TENANT_X });
+
+      const countArgs = (prisma.ticket.count as jest.Mock).mock.calls[0][0];
+      expect(countArgs.where).toMatchObject({ tenantId: TENANT_X });
+    });
+
+    it('should include tenantId in update — via internal findOne call', async () => {
+      // update() delegates ownership check to findOne(), which uses tenantId in WHERE
+      const existingTicket = {
+        ...mockTicket,
+        tenantId: TENANT_X,
+        media: [],
+        githubIssues: [],
+        agentSessions: [],
+      };
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(existingTicket);
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({
+        ...mockTicket,
+        tenantId: TENANT_X,
+        title: 'Updated',
+      });
+
+      await service.update('ticket-123', TENANT_X, { title: 'Updated' });
+
+      const findFirstArgs = (prisma.ticket.findFirst as jest.Mock).mock.calls[0][0];
+      expect(findFirstArgs.where).toMatchObject({ tenantId: TENANT_X });
     });
   });
 });

@@ -311,6 +311,24 @@ describe('MediaService', () => {
       ).rejects.toThrow(NotFoundException);
     });
 
+    it('should throw NotFoundException when ticket belongs to different tenant', async () => {
+      // ticket-123 belongs to tenant-A; querying with tenant-B returns null
+      // because findByTicket filters by both ticketId AND tenantId
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.findByTicket('ticket-123', 'tenant-B'),
+      ).rejects.toThrow(NotFoundException);
+
+      // Confirm the Prisma call was scoped to tenant-B
+      expect(prisma.ticket.findFirst).toHaveBeenCalledWith({
+        where: { id: 'ticket-123', tenantId: 'tenant-B' },
+      });
+
+      // No media should be fetched at all
+      expect(prisma.media.findMany).not.toHaveBeenCalled();
+    });
+
     it('should handle download URL generation errors gracefully', async () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
       (prisma.media.findMany as jest.Mock).mockResolvedValue([
