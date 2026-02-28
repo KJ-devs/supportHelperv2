@@ -37,7 +37,7 @@ describe('Rate Limiting Integration', () => {
       exec: jest.fn(),
       pexpire: jest.fn(),
       quit: jest.fn(),
-    } as unknown;
+    } as unknown as jest.Mocked<Redis>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
