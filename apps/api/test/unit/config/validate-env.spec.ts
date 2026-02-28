@@ -297,4 +297,54 @@ describe('Environment Variable Validation', () => {
       expect(() => validateEnvironmentVariables()).not.toThrow();
     });
   });
+
+  describe('Production Encryption Key Enforcement', () => {
+    it('should throw when ENCRYPTION_KEY is empty (production)', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.ENCRYPTION_KEY = '';
+
+      expect(() => validateEnvironmentVariables()).toThrow(/ENCRYPTION_KEY/);
+    });
+
+    it('should throw when ENCRYPTION_KEY is too short (not 64 hex chars)', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.ENCRYPTION_KEY = 'tooshort';
+
+      expect(() => validateEnvironmentVariables()).toThrow(/ENCRYPTION_KEY/);
+    });
+
+    it('should throw when INTEGRATION_ENCRYPTION_KEY is empty (production)', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.INTEGRATION_ENCRYPTION_KEY = '';
+
+      expect(() => validateEnvironmentVariables()).toThrow(/INTEGRATION_ENCRYPTION_KEY/);
+    });
+
+    it('should throw when INTEGRATION_ENCRYPTION_KEY is too short (not 64 hex chars)', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.INTEGRATION_ENCRYPTION_KEY = 'abc123';
+
+      expect(() => validateEnvironmentVariables()).toThrow(/INTEGRATION_ENCRYPTION_KEY/);
+    });
+
+    it('should accept valid 64-char hex ENCRYPTION_KEY in production', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.ENCRYPTION_KEY = 'c4b62c7ab982d75f2be8bbdce2b1f91d9ac997db1c66ef86196e5af7da5ba6f1';
+
+      expect(() => validateEnvironmentVariables()).not.toThrow();
+    });
+
+    it('should accept valid 64-char hex INTEGRATION_ENCRYPTION_KEY in production', () => {
+      setAllRequired();
+      process.env.NODE_ENV = 'production';
+      process.env.INTEGRATION_ENCRYPTION_KEY = 'b3a51b69a871c64e1af7aacbf1a0e80c89c886ca0b55de75095f49e6c94a95e0';
+
+      expect(() => validateEnvironmentVariables()).not.toThrow();
+    });
+  });
 });
