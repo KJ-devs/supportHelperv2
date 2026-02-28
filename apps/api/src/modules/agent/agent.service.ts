@@ -1,4 +1,4 @@
-import { Injectable, Inject, Logger, NotFoundException, forwardRef, Optional } from '@nestjs/common';
+import { Injectable, Inject, Logger, NotFoundException, BadRequestException, forwardRef, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -404,8 +404,36 @@ Respond in JSON format.
    * Emits WebSocket events directly (typing indicators and new messages) so
    * the gateway handler only needs to validate input and call this method.
    */
+  /**
+   * Resolve an agent session, marking it as RESOLVED.
+   * A resolved session cannot receive further messages.
+   */
+  async resolveSession(sessionId: string, tenantId: string) {
+    const session = await this.getSession(sessionId, tenantId);
+
+    if (session.status === AgentState.RESOLVED) {
+      throw new BadRequestException('Session is already resolved');
+    }
+
+    const updated = await this.prisma.agentSession.update({
+      where: { id: sessionId },
+      data: { status: AgentState.RESOLVED },
+    });
+
+    this.agentGateway.emitSessionUpdate(sessionId, { status: AgentState.RESOLVED });
+
+    this.logger.log(`Resolved agent session ${sessionId}`);
+
+    return updated;
+  }
+
   async sendMessage(sessionId: string, tenantId: string, content: string, userId?: string) {
     const session = await this.getSession(sessionId, tenantId);
+
+    // Reject messages sent to closed (resolved or escalated) sessions
+    if (session.status === AgentState.RESOLVED || session.status === AgentState.ESCALATED) {
+      throw new BadRequestException('Cannot send messages to a closed session');
+    }
 
     // Create user message
     const userMessage = await this.prisma.agentMessage.create({

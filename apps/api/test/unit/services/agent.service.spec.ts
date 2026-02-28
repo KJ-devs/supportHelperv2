@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
+import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { AgentService, AgentState } from '../../../src/modules/agent/agent.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
@@ -484,6 +484,133 @@ describe('AgentService', () => {
 
       expect(agentGateway.emitAgentTyping).toHaveBeenCalledWith('session-123', true);
       expect(agentGateway.emitAgentTyping).toHaveBeenCalledWith('session-123', false);
+    });
+
+    // AC1: addMessage(sessionId, 'assistant', content) → creates AgentMessage role 'agent'
+    it('should create agent message with role "agent" (assistant role)', async () => {
+      (prisma.agentSession.findFirst as jest.Mock).mockResolvedValue(mockSessionWithMessages);
+      (aiService.generateCompletion as jest.Mock).mockResolvedValue(
+        'Here is a solution to your problem.',
+      );
+      const mockAgentMsg = {
+        id: 'agent-msg-assistant',
+        sessionId: 'session-123',
+        role: 'agent',
+        content: 'Here is a solution to your problem.',
+        channel: 'web',
+        createdAt: new Date(),
+      };
+      (prisma.agentMessage.create as jest.Mock).mockResolvedValue(mockAgentMsg);
+
+      await service.processUserMessageAsync('session-123', 'tenant-123', 'How do I fix it?');
+
+      // Verify the created message has role 'agent' (the service's assistant role)
+      expect(prisma.agentMessage.create).toHaveBeenCalledWith({
+        data: {
+          sessionId: 'session-123',
+          role: 'agent',
+          content: 'Here is a solution to your problem.',
+          channel: 'web',
+        },
+      });
+    });
+  });
+
+  // AC2: getMessages(sessionId) → messages ordered by createdAt
+  describe('getMessages ordering (via getSession)', () => {
+    it('should return messages ordered by createdAt ascending', async () => {
+      const t1 = new Date('2026-01-01T10:00:00Z');
+      const t2 = new Date('2026-01-01T10:01:00Z');
+      const t3 = new Date('2026-01-01T10:02:00Z');
+
+      const orderedMessages = [
+        { id: 'msg-1', role: 'agent', content: 'Hello', createdAt: t1 },
+        { id: 'msg-2', role: 'user', content: 'I need help', createdAt: t2 },
+        { id: 'msg-3', role: 'agent', content: 'Sure!', createdAt: t3 },
+      ];
+
+      const sessionWithOrderedMessages = {
+        ...mockSession,
+        messages: orderedMessages,
+        ticket: mockTicket,
+      };
+
+      (prisma.agentSession.findFirst as jest.Mock).mockResolvedValue(
+        sessionWithOrderedMessages,
+      );
+
+      const result = await service.getSession('session-123', 'tenant-123');
+
+      // Verify the query requests ascending createdAt order
+      expect(prisma.agentSession.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          include: expect.objectContaining({
+            messages: {
+              orderBy: { createdAt: 'asc' },
+            },
+          }),
+        }),
+      );
+
+      // Verify messages are in ascending chronological order
+      const messages = result.messages;
+      expect(messages).toHaveLength(3);
+      expect(messages[0].createdAt.getTime()).toBeLessThan(messages[1].createdAt.getTime());
+      expect(messages[1].createdAt.getTime()).toBeLessThan(messages[2].createdAt.getTime());
+    });
+  });
+
+  // AC3 & AC4: state transition tests
+  describe('resolveSession', () => {
+    const mockSessionWithMessages = {
+      ...mockSession,
+      status: AgentState.ANALYZING,
+      messages: [],
+      ticket: mockTicket,
+    };
+
+    // AC3: Transition ANALYZING → RESOLVED → valid
+    it('should transition session from ANALYZING to RESOLVED (valid transition)', async () => {
+      (prisma.agentSession.findFirst as jest.Mock).mockResolvedValue(
+        mockSessionWithMessages,
+      );
+      const resolvedSession = { ...mockSession, status: AgentState.RESOLVED };
+      (prisma.agentSession.update as jest.Mock).mockResolvedValue(resolvedSession);
+
+      const result = await service.resolveSession('session-123', 'tenant-123');
+
+      expect(prisma.agentSession.update).toHaveBeenCalledWith({
+        where: { id: 'session-123' },
+        data: { status: AgentState.RESOLVED },
+      });
+
+      expect(agentGateway.emitSessionUpdate).toHaveBeenCalledWith(
+        'session-123',
+        { status: AgentState.RESOLVED },
+      );
+
+      expect(result.status).toBe(AgentState.RESOLVED);
+    });
+
+    // AC4: Transition RESOLVED → ANALYZING → invalid (session closed)
+    it('should reject sendMessage when session is RESOLVED (session closed)', async () => {
+      const resolvedSession = {
+        ...mockSessionWithMessages,
+        status: AgentState.RESOLVED,
+      };
+      (prisma.agentSession.findFirst as jest.Mock).mockResolvedValue(resolvedSession);
+
+      await expect(
+        service.sendMessage('session-123', 'tenant-123', 'Can you help me again?'),
+      ).rejects.toThrow(BadRequestException);
+
+      await expect(
+        service.sendMessage('session-123', 'tenant-123', 'Can you help me again?'),
+      ).rejects.toThrow('Cannot send messages to a closed session');
+
+      // Verify no message was created and no state transition attempted
+      expect(prisma.agentMessage.create).not.toHaveBeenCalled();
+      expect(prisma.agentSession.update).not.toHaveBeenCalled();
     });
   });
 });
