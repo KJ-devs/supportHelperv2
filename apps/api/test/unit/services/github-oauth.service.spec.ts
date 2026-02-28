@@ -147,6 +147,57 @@ describe('GithubOAuthService', () => {
         data: expect.objectContaining({ accessToken: 'encrypted:new_token' }),
       });
     });
+
+    it('should associate connection with tenantId from OAuth state token', async () => {
+      // Simulate the full OAuth flow: state token is generated for a tenant,
+      // then after callback the tenantId extracted from the state is used to save the connection.
+      const stateToken = service.generateStateToken('tenant-456', '/settings');
+      const statePayload = service.verifyStateToken(stateToken);
+
+      (prisma.githubConnection.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubConnection.create as jest.Mock).mockResolvedValue({
+        ...mockConnection,
+        tenantId: statePayload.tenantId,
+      });
+
+      await service.saveConnection(statePayload.tenantId, 'gho_token', BigInt(0));
+
+      // The tenantId stored in Prisma must match the tenant from the state token
+      const createCall = (prisma.githubConnection.create as jest.Mock).mock.calls[0][0];
+      expect(createCall.data.tenantId).toBe('tenant-456');
+      expect(createCall.data.tenantId).toBe(statePayload.tenantId);
+    });
+
+    it('should pass plaintext tokens to Prisma (encryption delegated to Prisma middleware)', async () => {
+      // Security note: GithubOAuthService does NOT encrypt tokens directly.
+      // Token encryption is handled transparently by the Prisma encryption middleware
+      // (configured in PrismaService) which intercepts write operations and encrypts
+      // the accessToken and refreshToken fields before they reach the database.
+      // This is confirmed by the comments in saveConnection():
+      //   "Prisma encryption middleware auto-encrypts accessToken and refreshToken on write"
+      // Consequence: unit tests that mock PrismaService bypass encryption — integration
+      // tests or E2E tests are required to verify that tokens are actually stored encrypted.
+      (prisma.githubConnection.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubConnection.create as jest.Mock).mockResolvedValue(mockConnection);
+
+      const rawToken = 'gho_plaintext_token_from_github';
+      await service.saveConnection('tenant-123', rawToken, BigInt(0));
+
+      // The service passes the raw token as-is to Prisma (middleware encrypts it)
+      const createCall = (prisma.githubConnection.create as jest.Mock).mock.calls[0][0];
+      expect(createCall.data.accessToken).toBe(rawToken);
+    });
+
+    it('should pass plaintext refresh token to Prisma when provided', async () => {
+      (prisma.githubConnection.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.githubConnection.create as jest.Mock).mockResolvedValue(mockConnection);
+
+      const rawRefreshToken = 'ghr_plaintext_refresh_token';
+      await service.saveConnection('tenant-123', 'gho_token', BigInt(0), rawRefreshToken, 28800);
+
+      const createCall = (prisma.githubConnection.create as jest.Mock).mock.calls[0][0];
+      expect(createCall.data.refreshToken).toBe(rawRefreshToken);
+    });
   });
 
   describe('getConnection', () => {

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
+import { OAuthCallbackQueryDto } from '../../../src/modules/github/dto/github-oauth.dto';
 
 jest.mock('@octokit/rest', () => ({
   Octokit: jest.fn().mockImplementation(() => ({})),
@@ -96,7 +97,7 @@ describe('GithubOAuthController', () => {
 
   describe('callback', () => {
     it('should redirect to success page on successful OAuth', async () => {
-      const query = { code: 'oauth-code', state: 'state-token' } as unknown;
+      const query = { code: 'oauth-code', state: 'state-token' } as OAuthCallbackQueryDto;
       (oauthService.verifyStateToken as jest.Mock).mockReturnValue({ tenantId: 'tenant-123', redirectUri: null });
       (oauthService.exchangeCodeForToken as jest.Mock).mockResolvedValue({ access_token: 'gho_token', refresh_token: 'rt', expires_in: 28800 });
       (oauthService.getAuthenticatedUser as jest.Mock).mockResolvedValue({ id: 12345, login: 'testuser' });
@@ -112,7 +113,7 @@ describe('GithubOAuthController', () => {
     });
 
     it('should use custom redirectUri when provided', async () => {
-      const query = { code: 'code', state: 'state' } as unknown;
+      const query = { code: 'code', state: 'state' } as OAuthCallbackQueryDto;
       (oauthService.verifyStateToken as jest.Mock).mockReturnValue({ tenantId: 'tenant-123', redirectUri: 'http://localhost:3000/custom' });
       (oauthService.exchangeCodeForToken as jest.Mock).mockResolvedValue({ access_token: 'tok', expires_in: 28800 });
       (oauthService.getAuthenticatedUser as jest.Mock).mockResolvedValue({ id: 1, login: 'user' });
@@ -123,7 +124,7 @@ describe('GithubOAuthController', () => {
     });
 
     it('should redirect with error when GitHub returns error', async () => {
-      const query = { error: 'access_denied', error_description: 'User denied', state: 'state' } as unknown;
+      const query = { error: 'access_denied', error_description: 'User denied', state: 'state' } as OAuthCallbackQueryDto;
 
       await controller.callback(query, mockResponse as Response);
 
@@ -134,7 +135,7 @@ describe('GithubOAuthController', () => {
     });
 
     it('should redirect with error when token exchange fails', async () => {
-      const query = { code: 'code', state: 'state' } as unknown;
+      const query = { code: 'code', state: 'state' } as OAuthCallbackQueryDto;
       (oauthService.verifyStateToken as jest.Mock).mockReturnValue({ tenantId: 'tenant-123' });
       (oauthService.exchangeCodeForToken as jest.Mock).mockRejectedValue(new Error('Token exchange failed'));
 
