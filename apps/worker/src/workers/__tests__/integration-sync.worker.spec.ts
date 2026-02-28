@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { IntegrationSyncWorker } from '../integration-sync.worker';
 import { PrismaService } from '../../services/prisma.service';
 import { IntegrationSyncJobData } from '../../queues/queue.types';
+import { QUEUE_NAMES } from '../../queues';
 import { encryptAES256GCM, parseEncryptionKey } from '@support-helper/shared';
 
 // Mock INTEGRATION_PROVIDERS at module level
@@ -66,11 +67,16 @@ describe('IntegrationSyncWorker', () => {
     media: [],
   };
 
-  const mockJob = (data: IntegrationSyncJobData, attemptsMade = 0): Job<IntegrationSyncJobData> => ({
+  const mockJob = (
+    data: IntegrationSyncJobData,
+    attemptsMade = 0,
+    opts: { attempts?: number } = { attempts: 4 },
+  ): Job<IntegrationSyncJobData> => ({
     id: 'job-123',
     data,
     attemptsMade,
-  } as unknown);
+    opts,
+  } as unknown as Job<IntegrationSyncJobData>);
 
   beforeEach(async () => {
     // Set up encryption key for tests
@@ -105,9 +111,11 @@ describe('IntegrationSyncWorker', () => {
       },
       ticket: {
         findFirst: jest.fn(),
+        create: jest.fn(),
       },
       integrationSyncLog: {
         create: jest.fn(),
+        findMany: jest.fn(),
       },
     };
 
@@ -578,7 +586,7 @@ describe('IntegrationSyncWorker', () => {
     it('should throw error when INTEGRATION_ENCRYPTION_KEY not set', () => {
       delete process.env.INTEGRATION_ENCRYPTION_KEY;
 
-      const mockDeadLetterQueue = {} as unknown;
+      const mockDeadLetterQueue = {} as unknown as import('bullmq').Queue;
       expect(() => new IntegrationSyncWorker(prisma, mockDeadLetterQueue)).toThrow('INTEGRATION_ENCRYPTION_KEY not configured');
 
       // Restore for other tests
@@ -609,6 +617,304 @@ describe('IntegrationSyncWorker', () => {
           webhookUrl: 'https://hooks.slack.com/test',
         }),
         expect.any(Object),
+      );
+    });
+
+    it('should throw when config was encrypted with a different key (AC5 - invalid key)', async () => {
+      // Encrypt with key A
+      const keyA = parseEncryptionKey('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbb');
+      const { ciphertext, iv } = encryptAES256GCM(JSON.stringify({ token: 'secret' }), keyA);
+
+      // Worker is initialised with keyB (0123...), so decryption will fail
+      const integrationWithWrongKey = {
+        ...mockIntegration(),
+        config: ciphertext,
+        configIv: iv,
+      };
+
+      (prisma.integration.findFirst as jest.Mock).mockResolvedValue(integrationWithWrongKey);
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
+      (prisma.integrationSyncLog.create as jest.Mock).mockResolvedValue({});
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      }, 0);
+
+      await expect(worker.process(job)).rejects.toThrow();
+      // Provider should never be called when config cannot be decrypted
+      expect(mockProvider.syncTicket).not.toHaveBeenCalled();
+    });
+
+    it('should throw when configIv is corrupted (tampered ciphertext)', async () => {
+      const integrationWithCorruptedIv = {
+        ...mockIntegration(),
+        configIv: 'deadbeefdeadbeef', // invalid iv
+      };
+
+      (prisma.integration.findFirst as jest.Mock).mockResolvedValue(integrationWithCorruptedIv);
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
+      (prisma.integrationSyncLog.create as jest.Mock).mockResolvedValue({});
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      }, 0);
+
+      await expect(worker.process(job)).rejects.toThrow();
+      expect(mockProvider.syncTicket).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pull-tickets job', () => {
+    it('should import new tickets from provider and create sync logs with status success', async () => {
+      const pulledTickets = [
+        {
+          externalId: 'ext-001',
+          externalUrl: 'https://jira.example.com/browse/BUG-1',
+          title: 'Login crash',
+          description: 'Crash on submit',
+          status: 'open',
+          severity: 'high',
+          type: 'bug',
+        },
+      ];
+
+      const mockPullProvider = {
+        pullTickets: jest.fn().mockResolvedValue({
+          success: true,
+          tickets: pulledTickets,
+        }),
+      };
+
+      const { INTEGRATION_PROVIDERS } = require('../../../../api/src/modules/integrations/providers');
+      INTEGRATION_PROVIDERS.slack.mockImplementation(() => mockPullProvider);
+
+      (prisma.integration.findFirst as jest.Mock).mockResolvedValue(mockIntegration());
+      (prisma.integrationSyncLog.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.ticket.create as jest.Mock).mockResolvedValue({ id: 'new-ticket-1' });
+      (prisma.integrationSyncLog.create as jest.Mock).mockResolvedValue({});
+      (prisma.integration.update as jest.Mock).mockResolvedValue({});
+
+      const job = {
+        id: 'job-pull-1',
+        name: 'pull-tickets',
+        data: {
+          integrationId: 'integration-1',
+          tenantId: 'tenant-1',
+          applicationId: 'app-1',
+          metadata: { triggeredBy: 'manual' as const },
+        },
+        attemptsMade: 0,
+      } as unknown as any;
+
+      const result = await worker.process(job);
+
+      expect(result).toMatchObject({
+        success: true,
+        integrationId: 'integration-1',
+        imported: 1,
+        skipped: 0,
+        failed: 0,
+        total: 1,
+      });
+
+      expect(prisma.ticket.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          title: 'Login crash',
+          tenantId: 'tenant-1',
+          applicationId: 'app-1',
+        }),
+      });
+
+      expect(prisma.integrationSyncLog.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          externalId: 'ext-001',
+          action: 'pull',
+          status: 'success',
+          provider: 'slack',
+        }),
+      });
+    });
+
+    it('should skip already-imported tickets (deduplicate by externalId)', async () => {
+      const { INTEGRATION_PROVIDERS } = require('../../../../api/src/modules/integrations/providers');
+      const mockPullProvider = {
+        pullTickets: jest.fn().mockResolvedValue({
+          success: true,
+          tickets: [
+            { externalId: 'ext-already-imported', title: 'Old ticket', description: '' },
+          ],
+        }),
+      };
+      INTEGRATION_PROVIDERS.slack.mockImplementation(() => mockPullProvider);
+
+      (prisma.integration.findFirst as jest.Mock).mockResolvedValue(mockIntegration());
+      // Pretend ext-already-imported was imported previously
+      (prisma.integrationSyncLog.findMany as jest.Mock).mockResolvedValue([
+        { externalId: 'ext-already-imported' },
+      ]);
+      (prisma.integration.update as jest.Mock).mockResolvedValue({});
+
+      const job = {
+        id: 'job-pull-2',
+        name: 'pull-tickets',
+        data: {
+          integrationId: 'integration-1',
+          tenantId: 'tenant-1',
+          applicationId: 'app-1',
+        },
+        attemptsMade: 0,
+      } as unknown as any;
+
+      const result = await worker.process(job);
+
+      expect(result).toMatchObject({
+        success: true,
+        imported: 0,
+        skipped: 1,
+        failed: 0,
+        total: 1,
+      });
+
+      expect(prisma.ticket.create).not.toHaveBeenCalled();
+    });
+
+    it('should skip pull and throw when integration is disabled', async () => {
+      (prisma.integration.findFirst as jest.Mock).mockResolvedValue({
+        ...mockIntegration(),
+        enabled: false,
+      });
+
+      const job = {
+        id: 'job-pull-3',
+        name: 'pull-tickets',
+        data: {
+          integrationId: 'integration-1',
+          tenantId: 'tenant-1',
+          applicationId: 'app-1',
+        },
+        attemptsMade: 0,
+      } as unknown as any;
+
+      await expect(worker.process(job)).rejects.toThrow('Integration Slack Integration is disabled');
+    });
+  });
+
+  describe('worker events', () => {
+    it('onActive logs job start with attempt info', () => {
+      const logSpy = jest.spyOn(worker['logger'], 'log').mockImplementation(() => undefined);
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      }, 0, { attempts: 4 } as any);
+
+      worker.onActive(job);
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('job-123'),
+      );
+    });
+
+    it('onCompleted logs success with timing', () => {
+      const logSpy = jest.spyOn(worker['logger'], 'log').mockImplementation(() => undefined);
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      });
+
+      const result = {
+        success: true,
+        integrationId: 'integration-1',
+        ticketId: 'ticket-1',
+        provider: 'slack',
+        attemptNumber: 1,
+        processingTimeMs: 250,
+      };
+
+      worker.onCompleted(job, result);
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('250ms'),
+      );
+    });
+
+    it('onFailed with non-final attempt logs retry warning (no DLQ)', async () => {
+      const warnSpy = jest.spyOn(worker['logger'], 'warn').mockImplementation(() => undefined);
+      jest.spyOn(worker['logger'], 'error').mockImplementation(() => undefined);
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      }, 1, { attempts: 4 } as any);
+
+      // Access the deadLetterQueue via the module
+      const deadLetterQueue = (worker as any).deadLetterQueue;
+
+      await worker.onFailed(job, new Error('Network timeout'));
+
+      expect(deadLetterQueue.add).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('retry'),
+      );
+    });
+
+    it('onFailed at max attempts moves to dead letter queue', async () => {
+      jest.spyOn(worker['logger'], 'error').mockImplementation(() => undefined);
+
+      const job = mockJob({
+        ticketId: 'ticket-1',
+        integrationId: 'integration-1',
+        tenantId: 'tenant-1',
+        action: 'create',
+        metadata: { triggeredBy: 'auto' },
+      }, 4, { attempts: 4 } as any);
+
+      const deadLetterQueue = (worker as any).deadLetterQueue;
+      const error = new Error('Max attempts exceeded');
+
+      await worker.onFailed(job, error);
+
+      expect(deadLetterQueue.add).toHaveBeenCalledWith(
+        'failed-integration-sync',
+        expect.objectContaining({
+          originalJobId: 'job-123',
+          queueName: QUEUE_NAMES.INTEGRATION_SYNC,
+          jobData: job.data,
+          failedReason: 'Max attempts exceeded',
+          attemptsMade: 4,
+          timestamp: expect.any(String),
+        }),
+        expect.objectContaining({
+          removeOnComplete: { age: 90 * 24 * 60 * 60 },
+        }),
+      );
+    });
+
+    it('onFailed without job context logs error without crashing', async () => {
+      const errorSpy = jest.spyOn(worker['logger'], 'error').mockImplementation(() => undefined);
+
+      await worker.onFailed(undefined, new Error('Missing job context'));
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Missing job context'),
       );
     });
   });
