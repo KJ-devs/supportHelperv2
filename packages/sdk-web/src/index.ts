@@ -209,6 +209,14 @@ export { ContextCapture } from './context/context-capture';
 export { APIClient } from './api/api-client';
 export { CodecDetector } from './utils/codec-detector';
 export type { CodecInfo } from './utils/codec-detector';
+export { OfflineQueue } from './offline-queue';
+export type {
+  QueuedReport,
+  QueueStats,
+  QueueEventType,
+  QueueFlushedDetail,
+  QueueErrorDetail,
+} from './offline-queue';
 
 // Widget exports
 export { SupportHelperElement, init as initWidget } from './widget/index';

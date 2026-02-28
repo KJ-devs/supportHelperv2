@@ -70,4 +70,10 @@ export interface WidgetEventMap {
   'sh:recording-stop': CustomEvent<{ duration: number; size: number }>;
   'sh:submit': CustomEvent<{ ticketId: string; aiAnalysis?: ReportResponse['aiAnalysis'] }>;
   'sh:error': CustomEvent<{ message: string }>;
+  /** Emitted when queued reports are successfully flushed to the server. */
+  'sh:queue-flushed': CustomEvent<{ submitted: number; failed: number }>;
+  /** Emitted when a queued report fails to submit (with retry info). */
+  'sh:queue-error': CustomEvent<{ entryId: number; message: string; attempts: number }>;
+  /** Emitted when a report is queued offline instead of sent immediately. */
+  'sh:queued': CustomEvent<{ reason: string }>;
 }

@@ -8,11 +8,12 @@ import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
 import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
-import { submitReport } from './widget-api';
+import { submitReport, getOfflineQueue } from './widget-api';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
 import { KeyboardManager } from './keyboard-manager';
 import { ScreenReaderAnnouncer } from './screen-reader-announcer';
+import type { QueueFlushedDetail, QueueErrorDetail } from '../offline-queue';
 
 /**
  * Support Helper Web Component
@@ -39,6 +40,21 @@ export class SupportHelperElement extends HTMLElement {
 
   // Flag to prevent duplicate event listeners
   private clickHandlerAttached = false;
+
+  // Theme detection
+  private prefersDarkMediaQuery: MediaQueryList | null = null;
+  private hostMutationObserver: MutationObserver | null = null;
+  private resolvedTheme: 'light' | 'dark' = 'light';
+
+  // Keyboard and accessibility
+  private keyboardManager!: KeyboardManager;
+  private announcer!: ScreenReaderAnnouncer;
+
+  // Offline-queue listeners (stored so they can be removed on disconnect).
+  // Typed as the specific detail types so the `on()` overload resolves correctly;
+  // cast to the union type when calling `off()`.
+  private queueFlushedListener: ((detail: QueueFlushedDetail) => void) | null = null;
+  private queueErrorListener: ((detail: QueueErrorDetail) => void) | null = null;
 
   // Attention pulse timer
   private attentionPulseTimer: number | null = null;
@@ -105,6 +121,9 @@ export class SupportHelperElement extends HTMLElement {
 
     // Start attention pulse timer for FAB
     this.startAttentionPulseTimer();
+
+    // Wire offline-queue events (lazy init — does not block rendering)
+    this.initializeOfflineQueue();
   }
 
   disconnectedCallback(): void {
@@ -123,6 +142,9 @@ export class SupportHelperElement extends HTMLElement {
     // Cleanup keyboard manager and announcer
     this.keyboardManager.detach();
     this.announcer.destroy();
+
+    // Detach offline-queue listeners
+    this.teardownOfflineQueue();
   }
 
   attributeChangedCallback(name: string, oldValue: string | null, newValue: string | null): void {
@@ -545,18 +567,42 @@ export class SupportHelperElement extends HTMLElement {
   }
 
   /**
-   * Submit the report
+   * Submit the report.
+   * When offline or on network failure, the report is queued in IndexedDB and
+   * the widget transitions to success (with a "queued" indication so the user
+   * knows their report was saved).
    */
   private async doSubmit(): Promise<void> {
     try {
       const userContext = ContextCapture.captureContext();
 
-      const response = await submitReport(this.config.apiUrl, this.config.sdkKey, {
-        title: this.formData.title,
-        description: this.formData.description,
-        videoBlob: this.videoBlob,
-        userContext,
-      });
+      const response = await submitReport(
+        this.config.apiUrl,
+        this.config.sdkKey,
+        {
+          title: this.formData.title,
+          description: this.formData.description,
+          videoBlob: this.videoBlob,
+          userContext,
+        },
+        60000,
+        (reason) => {
+          // Report was queued because the network is unavailable.
+          this.emit('sh:queued', { reason });
+        },
+      );
+
+      if (response === null) {
+        // Report was queued for later delivery.
+        this.lastReportResponse = null;
+
+        if (this.stateMachine.canTransition('SUCCESS')) {
+          this.stateMachine.dispatch('SUCCESS');
+        }
+
+        this.announcer.announce('Report saved — will be sent when online.', 'polite');
+        return;
+      }
 
       this.lastReportResponse = response;
 
@@ -697,6 +743,50 @@ export class SupportHelperElement extends HTMLElement {
   }
 
   /**
+   * Initialize the offline queue and forward its events as custom DOM events
+   * on this element so host pages can listen via addEventListener.
+   */
+  private initializeOfflineQueue(): void {
+    getOfflineQueue()
+      .then((queue) => {
+        this.queueFlushedListener = (detail: QueueFlushedDetail) => {
+          this.emit('sh:queue-flushed', detail);
+        };
+        this.queueErrorListener = (detail: QueueErrorDetail) => {
+          this.emit('sh:queue-error', detail);
+        };
+        queue.on('queue:flushed', this.queueFlushedListener);
+        queue.on('queue:error', this.queueErrorListener);
+      })
+      .catch((err) => {
+        console.warn('[SupportHelper] Could not initialize offline queue:', err);
+      });
+  }
+
+  /**
+   * Remove offline-queue event listeners.
+   */
+  private teardownOfflineQueue(): void {
+    if (!this.queueFlushedListener && !this.queueErrorListener) return;
+
+    getOfflineQueue()
+      .then((queue) => {
+        if (this.queueFlushedListener) {
+          // Cast required because TypeScript overload resolution is strict here.
+          queue.off('queue:flushed', this.queueFlushedListener as (d: QueueFlushedDetail) => void);
+          this.queueFlushedListener = null;
+        }
+        if (this.queueErrorListener) {
+          queue.off('queue:error', this.queueErrorListener as (d: QueueErrorDetail) => void);
+          this.queueErrorListener = null;
+        }
+      })
+      .catch(() => {
+        // ignore — element is being removed anyway
+      });
+  }
+
+  /**
    * Stop attention pulse timer
    */
   private stopAttentionPulseTimer(): void {
@@ -727,6 +817,7 @@ export class SupportHelperElement extends HTMLElement {
     );
   }
 }
+
 
 // Type augmentation for HTMLElementTagNameMap
 declare global {
