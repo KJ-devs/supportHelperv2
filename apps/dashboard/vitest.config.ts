@@ -22,8 +22,11 @@ export default defineConfig({
         '**/*.{test,spec}.{ts,tsx}',
         '**/__tests__/**',
         '**/index.ts',
-        'app/**',
       ],
+      thresholds: {
+        lines: 70,
+        functions: 70,
+      },
     },
     testTimeout: 10000,
   },

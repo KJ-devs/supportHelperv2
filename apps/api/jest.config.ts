@@ -31,6 +31,26 @@ const config: Config = {
   ],
   coverageDirectory: './coverage',
   coverageReporters: ['text', 'html', 'lcov'],
+  coverageThreshold: {
+    global: {
+      branches: 60,
+      functions: 70,
+      lines: 75,
+      statements: 75,
+    },
+    './src/auth/': {
+      branches: 85,
+      functions: 90,
+      lines: 95,
+      statements: 95,
+    },
+    './src/common/guards/': {
+      branches: 85,
+      functions: 90,
+      lines: 95,
+      statements: 95,
+    },
+  },
 
   // Transformations
   transform: {
