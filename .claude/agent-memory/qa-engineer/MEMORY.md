@@ -55,7 +55,16 @@
 - 5 GitHub controllers untested
 - No DTO validation tests
 - tenant-rate-limit.guard has no tests (ThrottlerGuard subclass)
-- VideoAnalysisWorker: FULLY TESTED (96.87% statements, 92.1% branches) - NOT a gap
+- VideoAnalysisWorker: FULLY TESTED (50 tests, 30 pre-existing + 20 US-215 additions) - NOT a gap
+
+## Tests Added (2026-02-28 US-215 VideoAnalysis Retry/DLQ)
+- VideoAnalysisWorker -> `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` (20 new tests, 50 total)
+- Fixed pre-existing bugs: `as unknown` cast → `as unknown as Job<T>` (TS2322), missing `media.findUnique` mock, wrong `media.update` call count (2→3, saveVisualCues adds extra call)
+- New tests: AC1 FFmpeg retry no DLQ, AC2 DLQ payload on attempt 4/4, AC3 OCR timeout media status, AC4 GPT-4 rate limit retryability, AC5 partial analysis no DB write, AC6 full DLQ payload structure
+- Retry boundary: parameterized test covering attempts 1-4 with `it.each`
+- Pattern for DLQ payload: use `(deadLetterQueue.add as jest.Mock).mock.calls[0]![1]` to destructure and assert all fields
+- Gotcha: `saveVisualCues` calls `prisma.media.findUnique` (needs mock) AND `prisma.media.update` (3rd update call in happy path after processing+visualCues+completed)
+- Gotcha: worker test suites `integration-sync.worker.spec.ts`, `backup.worker.spec.ts`, `openai.service.spec.ts`, `dlq-cleanup.worker.spec.ts`, `dlq-cleanup.service.spec.ts` have pre-existing TS2322 errors unrelated to video-analysis work
 
 ## Tests Added (2026-02-08 remediation)
 - Auth guards: jwt-auth, sdk-key (common), tenant, roles -> `test/unit/guards/`
@@ -132,18 +141,17 @@
 
 ## Tests Added (2026-02-14 Logger, Auth Strategies & Guards)
 - LoggerService -> `apps/api/test/unit/services/logger.service.spec.ts` (31 tests)
-- JwtStrategy (modules/auth) -> `apps/api/test/unit/auth/jwt.strategy.spec.ts` (7 tests)
+- JwtStrategy (modules/auth) -> `apps/api/test/unit/auth/jwt.strategy.spec.ts` (9 tests, +2 constructor tests 2026-02-28)
 - ApiKeyStrategy -> `apps/api/test/unit/auth/api-key.strategy.spec.ts` (7 tests)
 - ApiKeyGuard -> `apps/api/test/unit/auth/api-key.guard.spec.ts` (5 tests)
-- JwtAuthGuard (modules/auth) -> `apps/api/test/unit/auth/jwt-auth-module.guard.spec.ts` (6 tests)
+- JwtAuthGuard (common) -> `apps/api/test/unit/guards/jwt-auth.guard.spec.ts` (15 tests, +8 added 2026-02-28: @SdkAuth bypass + handleRequest cases)
+- JwtAuthGuard (modules/auth) -> `apps/api/test/unit/auth/jwt-auth-module.guard.spec.ts` (6 tests, fixed broken import 2026-02-28)
 - TenantGuard -> `apps/api/test/unit/auth/tenant.guard.spec.ts` (10 tests)
-- Coverage: 66 tests total covering logging with correlation IDs, passport strategies, auth guards, tenant isolation
-- Logger tests: log levels (info/error/warn/debug/verbose), correlation ID utilities, structured logging helpers (HTTP, DB, external services, security events), BetterStack/Logtail integration, message formatting (string/Error/object)
-- Strategy tests: JWT validation with access/refresh token types, API key validation from x-api-key and x-sdk-key headers (backwards compat), user/application lookup
-- Guard tests: @Public decorator handling, super.canActivate delegation, ExecutionContext mocking, tenant isolation enforcement
-- Patterns: Mock winston with `jest.mock('winston')`, mock Express Request with `as any as Request` for partial objects, use `any` type for request objects that get mutated (e.g., `request.tenantId` assignment)
-- Gotchas: Guards must check both handler and class for @Public metadata. TenantGuard stores `tenantId` in request object for downstream services. ApiKeyStrategy supports both x-api-key and x-sdk-key headers.
-- All 66 tests passing
+- Patterns: Mock winston with `jest.mock('winston')`, use `as unknown as jest.Mocked<T>` for partial mocks (NOT just `as unknown`)
+- Gotchas: Guards must check both handler and class for @Public metadata. `jwt-auth-module.guard.spec.ts` was importing non-existent `src/modules/auth/guards/jwt-auth.guard` — fixed to `src/common/guards/jwt-auth.guard`
+- handleRequest testing: test with (null, false, info) for expired/invalid/missing token scenarios; passport-jwt never calls validate() for these — they are handled before JwtStrategy.validate()
+- @SdkAuth() decorator uses key `IS_SDK_ROUTE_KEY = 'isSdkRoute'` (in `src/common/decorators/sdk-auth.decorator.ts`)
+- All tests passing, jwt-auth.guard.ts coverage: 100% statements/branches/functions/lines
 
 ## Tests Added (2026-02-14 Interceptors, Filters, Middleware)
 - GithubWebhookProcessor -> `apps/api/test/unit/services/github-webhook.processor.spec.ts` (11 tests)
@@ -188,6 +196,35 @@
 - Gotcha: Integration model has NO `syncDirection` field - removed from all test fixtures
 - Gotcha: Must provide ConfigService mock in TestingModule for IntegrationsCryptoService to initialize
 - All 35 tests passing (skip gracefully without TEST_DATABASE_URL)
+
+## Tests Added (2026-02-28 Multi-Tenant Isolation US-QA-05)
+- tickets.service.spec.ts: fixed missing `deep-analysis` and `triage` queue providers (all 25 pre-existing tests were failing)
+- tickets.service.spec.ts: added 5 cross-tenant negative tests (findOne/findAll/update isolation + 3-test Prisma query inspection block)
+- media.service.spec.ts: added 1 cross-tenant negative test for findByTicket
+- Total: 6 new tests, all passing
+- Pattern for Prisma query inspection: call `.mock.calls[0][0]` on the mocked fn, then `toMatchObject({ tenantId: X })` on the `.where` field
+- Gotcha: TicketsService now injects 3 queues (github, deep-analysis, triage) — all 3 must be provided in TestingModule or ALL tests in the suite fail with DI error
+
+## Tests Added (2026-02-28 US-217 GitHub Sync Full Flow)
+- GithubSyncWorker -> `apps/worker/src/workers/__tests__/github-sync.worker.spec.ts` (28 new tests)
+- Extended IntegrationSyncWorker -> `apps/worker/src/workers/__tests__/integration-sync.worker.spec.ts` (+8 tests, 27 total)
+- See `github-sync-tests.md` for patterns and gotchas
+
+## Tests Added (2026-02-28 US-218 SDK Rate Limiting)
+- Fixed `test/unit/guards/tenant-rate-limit.guard.spec.ts`: added missing DI providers (THROTTLER_OPTIONS, ThrottlerStorage, Reflector), fixed prisma mock type cast, added 5 more tests (12 total)
+- Fixed `test/integration/rate-limiting.spec.ts`: `as unknown as jest.Mocked<Redis>` (not just `as unknown`)
+- New `test/unit/rate-limiting/sdk-rate-limiting.spec.ts` (35 tests): covers all 5 ACs
+- Key gotchas:
+  - @nestjs/throttler v5 stores metadata as `THROTTLER:LIMIT{name}` and `THROTTLER:TTL{name}` keys, NOT a single `THROTTLE_METADATA` key
+  - Method-level `@Throttle()` overrides module-level limit (guard reads `routeOrClassLimit || namedThrottler.limit`)
+  - AC3 tests must use `limit=10` in the module to match the `@Throttle({ public: { limit: 10 } })` on auth controller methods
+  - InMemoryThrottlerStorage with `flush()` method enables AC4 TTL-reset tests without real Redis
+  - TenantRateLimitGuard requires THROTTLER_OPTIONS, ThrottlerStorage, Reflector, PrismaService in TestingModule
+  - `super.generateKey` in ThrottlerGuard requires `context.getClass().name` and `context.getHandler().name` — mock these for fallback tests
+  - SDK rate-limit tests need `application.findUnique` in the PrismaService mock (SdkKeyGuard uses it) OR the ThrottlerGuard fires first as APP_GUARD before SdkKeyGuard
+
+## Known Gaps (updated 2026-02-28)
+- tenant-rate-limit.guard.spec.ts: NOW TESTED (12 tests)
 
 ## Auth Test Duplication Issue
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`

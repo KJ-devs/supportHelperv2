@@ -92,7 +92,7 @@
 - `tsconfig.build.json` does NOT exist -- nest build falls back to tsconfig.json
 - `nest-cli.json` has standard config: sourceRoot=src, entryFile=main, deleteOutDir=true
 - Prisma client must be generated (`prisma generate`) before build -- `.prisma/client` not auto-generated on install
-- Required env vars (non-optional): DATABASE_URL, JWT_SECRET, S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET
+- Required env vars (non-optional): DATABASE_URL, JWT_SECRET, S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET (AWS SDK standard naming, unified across API and Worker)
 - Optional env vars: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_WEBHOOK_SECRET, OPENAI_API_KEY
 - dist/ directory exists from previous builds
 - Shared package (`@support-helper/shared`) is built and available
