@@ -11,6 +11,10 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { ConnectionStatus } from '@/components/layout/ConnectionStatus';
+import { SkipLink } from '@/components/ui/SkipLink';
+import { useTicketSocket } from '@/hooks/useTicketSocket';
+import { Sheet } from '@/components/ui/Sheet';
 import {
   LayoutDashboard,
   Ticket,
@@ -56,6 +60,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+
+  // Global real-time connection — drives the ConnectionStatus indicator in the header.
+  // Tickets page calls useTicketSocket independently for its own event handling.
+  const { isConnected, error: socketError } = useTicketSocket();
 
   // Detect mobile viewport
   useEffect(() => {
@@ -178,6 +186,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
 
             <div className="flex items-center space-x-2 sm:space-x-4">
+              <ConnectionStatus isConnected={isConnected} error={socketError} />
               <ThemeToggle />
               <span className="hidden sm:inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full">
                 {user.role}
