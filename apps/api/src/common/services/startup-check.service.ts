@@ -128,8 +128,8 @@ export class StartupCheckService implements OnModuleInit {
 
   private async checkS3Config(): Promise<CheckResult> {
     const endpoint = this.configService.get<string>('S3_ENDPOINT');
-    const accessKey = this.configService.get<string>('S3_ACCESS_KEY');
-    const secretKey = this.configService.get<string>('S3_SECRET_KEY');
+    const accessKey = this.configService.get<string>('S3_ACCESS_KEY_ID');
+    const secretKey = this.configService.get<string>('S3_SECRET_ACCESS_KEY');
     const bucket = this.configService.get<string>('S3_BUCKET');
 
     if (!endpoint || !accessKey || !secretKey) {

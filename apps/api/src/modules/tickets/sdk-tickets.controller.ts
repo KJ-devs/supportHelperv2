@@ -66,8 +66,8 @@ export class SdkTicketsController {
   ) {
     // Initialize S3 client
     const endpoint = this.configService.get('s3.endpoint') || this.configService.get('S3_ENDPOINT');
-    const accessKeyId = this.configService.get('s3.accessKeyId') || this.configService.get('S3_ACCESS_KEY');
-    const secretAccessKey = this.configService.get('s3.secretAccessKey') || this.configService.get('S3_SECRET_KEY');
+    const accessKeyId = this.configService.get('s3.accessKeyId') || this.configService.get('S3_ACCESS_KEY_ID');
+    const secretAccessKey = this.configService.get('s3.secretAccessKey') || this.configService.get('S3_SECRET_ACCESS_KEY');
     this.s3Bucket = this.configService.get('s3.bucket') || this.configService.get('S3_BUCKET') || 'videos';
     const region = this.configService.get('s3.region') || this.configService.get('S3_REGION') || 'us-east-1';
 

@@ -48,10 +48,10 @@ class EnvironmentVariables {
   S3_ENDPOINT: string;
 
   @IsString()
-  S3_ACCESS_KEY: string;
+  S3_ACCESS_KEY_ID: string;
 
   @IsString()
-  S3_SECRET_KEY: string;
+  S3_SECRET_ACCESS_KEY: string;
 
   @IsString()
   S3_BUCKET: string;

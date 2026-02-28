@@ -62,8 +62,8 @@ describe('SdkTicketsController', () => {
         's3.bucket': 'test-bucket',
         's3.region': 'us-east-1',
         'S3_ENDPOINT': undefined,
-        'S3_ACCESS_KEY': undefined,
-        'S3_SECRET_KEY': undefined,
+        'S3_ACCESS_KEY_ID': undefined,
+        'S3_SECRET_ACCESS_KEY': undefined,
         'S3_BUCKET': undefined,
         'S3_REGION': undefined,
       };
