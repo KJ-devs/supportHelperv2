@@ -609,4 +609,289 @@ describe('MediaService', () => {
       ).rejects.toThrow(BadRequestException);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  // AC: Concurrent Upload Handling
+  // Tests that document and verify the service's behaviour under race conditions:
+  // simultaneous requests, duplicate completeUpload calls, duplicate checksums,
+  // and completeUpload invoked when the media record is already in a terminal
+  // or in-progress processing state.
+  // ---------------------------------------------------------------------------
+  describe('Concurrent Upload Handling', () => {
+    // Shared DTO for completeUpload tests
+    const completeDto = {
+      mediaId: 'media-123',
+      storageKey: 'tenant-123/ticket-123/file.mp4',
+      // No checksum so we bypass integrity checking and focus on status logic.
+    };
+
+    // Helper: configure all S3 + Prisma mocks needed by a successful
+    // completeUpload flow for a non-video (image) media record so that
+    // status-related assertions are isolated from video-analysis side effects.
+    function setupSuccessfulCompleteUploadMocks(mediaRecord: typeof mockMedia) {
+      (prisma.media.findFirst as jest.Mock).mockResolvedValue(mediaRecord);
+      (s3Service.objectExists as jest.Mock).mockResolvedValue(true);
+      (s3Service.getObjectMetadata as jest.Mock).mockResolvedValue({
+        contentLength: 500000,
+        etag: 'abc123etag',
+      });
+      (s3Service.getPublicUrl as jest.Mock).mockReturnValue(
+        'https://s3.example.com/public',
+      );
+      (prisma.media.update as jest.Mock).mockResolvedValue({
+        ...mediaRecord,
+        processingStatus: 'uploaded',
+      });
+    }
+
+    // -------------------------------------------------------------------------
+    // AC1: Two simultaneous requestUploadUrl calls on the same ticket
+    //      → two distinct media records must be created (no shared state).
+    // -------------------------------------------------------------------------
+    it('AC1: two simultaneous requestUploadUrl calls create two distinct media records', async () => {
+      const dto = {
+        ticketId: 'ticket-123',
+        type: 'video' as const,
+        filename: 'recording.mp4',
+        size: 10_000_000,
+        contentType: 'video/mp4' as const,
+      };
+
+      const mediaA = { ...mockMedia, id: 'media-A', storageKey: 'key/uuid-A.mp4' };
+      const mediaB = { ...mockMedia, id: 'media-B', storageKey: 'key/uuid-B.mp4' };
+
+      // Both calls see the same valid ticket.
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicket);
+
+      // generateStorageKey returns a different key on each invocation.
+      (s3Service.generateStorageKey as jest.Mock)
+        .mockReturnValueOnce('key/uuid-A.mp4')
+        .mockReturnValueOnce('key/uuid-B.mp4');
+
+      (s3Service.getPresignedUploadUrl as jest.Mock).mockResolvedValue({
+        uploadUrl: 'https://s3.example.com/upload',
+        expiresIn: 3600,
+      });
+
+      // prisma.media.create returns a different record for each concurrent call.
+      (prisma.media.create as jest.Mock)
+        .mockResolvedValueOnce(mediaA)
+        .mockResolvedValueOnce(mediaB);
+
+      // Fire both calls in parallel — simulating concurrent clients.
+      const [resultA, resultB] = await Promise.all([
+        service.requestUploadUrl('tenant-123', dto),
+        service.requestUploadUrl('tenant-123', dto),
+      ]);
+
+      // Each call should have created its own media record.
+      expect(prisma.media.create).toHaveBeenCalledTimes(2);
+
+      // The returned mediaIds must be distinct.
+      expect(resultA.mediaId).toBe('media-A');
+      expect(resultB.mediaId).toBe('media-B');
+      expect(resultA.mediaId).not.toBe(resultB.mediaId);
+
+      // The storage keys must differ.
+      expect(resultA.storageKey).toBe('key/uuid-A.mp4');
+      expect(resultB.storageKey).toBe('key/uuid-B.mp4');
+      expect(resultA.storageKey).not.toBe(resultB.storageKey);
+    });
+
+    // -------------------------------------------------------------------------
+    // AC2: completeUpload called twice on the same media record.
+    //      Current service behaviour: no idempotency guard — both calls succeed
+    //      and the second call re-sets the status to 'uploaded' and re-enqueues
+    //      a video-analysis job. This is documented as the known behaviour.
+    // -------------------------------------------------------------------------
+    it('AC2: completeUpload called twice on same media — both calls succeed (re-processing behaviour)', async () => {
+      // Use a video media record so that the queue interaction is visible.
+      (prisma.media.findFirst as jest.Mock).mockResolvedValue(mockMedia);
+      (s3Service.objectExists as jest.Mock).mockResolvedValue(true);
+      (s3Service.getObjectMetadata as jest.Mock).mockResolvedValue({
+        contentLength: 1_000_000,
+        etag: 'abc123etag',
+      });
+      (s3Service.getPresignedDownloadUrl as jest.Mock).mockResolvedValue(
+        'https://s3.example.com/download',
+      );
+      (ffprobeService.extractMetadata as jest.Mock).mockResolvedValue({
+        duration: 60,
+        width: 1280,
+        height: 720,
+        codec: 'h264',
+      });
+      (s3Service.getPublicUrl as jest.Mock).mockReturnValue(
+        'https://s3.example.com/public',
+      );
+      (prisma.media.update as jest.Mock).mockResolvedValue({
+        ...mockMedia,
+        processingStatus: 'uploaded',
+      });
+      (analysisQueue.add as jest.Mock).mockResolvedValue({ id: 'job-1' });
+
+      // First call
+      const result1 = await service.completeUpload('tenant-123', completeDto);
+      expect(result1.success).toBe(true);
+
+      // Reset call counters between the two calls for clarity.
+      jest.clearAllMocks();
+
+      // Restore mocks for the second call.
+      (prisma.media.findFirst as jest.Mock).mockResolvedValue(mockMedia);
+      (s3Service.objectExists as jest.Mock).mockResolvedValue(true);
+      (s3Service.getObjectMetadata as jest.Mock).mockResolvedValue({
+        contentLength: 1_000_000,
+        etag: 'abc123etag',
+      });
+      (s3Service.getPresignedDownloadUrl as jest.Mock).mockResolvedValue(
+        'https://s3.example.com/download',
+      );
+      (ffprobeService.extractMetadata as jest.Mock).mockResolvedValue({
+        duration: 60,
+        width: 1280,
+        height: 720,
+        codec: 'h264',
+      });
+      (s3Service.getPublicUrl as jest.Mock).mockReturnValue(
+        'https://s3.example.com/public',
+      );
+      (prisma.media.update as jest.Mock).mockResolvedValue({
+        ...mockMedia,
+        processingStatus: 'uploaded',
+      });
+      (analysisQueue.add as jest.Mock).mockResolvedValue({ id: 'job-2' });
+
+      // Second call — identical arguments.
+      const result2 = await service.completeUpload('tenant-123', completeDto);
+      expect(result2.success).toBe(true);
+
+      // The second call re-queued a new analysis job — service is NOT idempotent.
+      expect(analysisQueue.add).toHaveBeenCalledTimes(1);
+      expect(analysisQueue.add).toHaveBeenCalledWith(
+        'analyze-video',
+        expect.objectContaining({ mediaId: 'media-123' }),
+        expect.any(Object),
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // AC3: completeUpload with a duplicate checksum (same MD5 as an existing
+    //      media record in S3). The service validates the checksum only against
+    //      the current file's S3 ETag — it does NOT scan other media records for
+    //      a matching checksum. A duplicate-file upload succeeds silently.
+    // -------------------------------------------------------------------------
+    it('AC3: duplicate checksum (same file content re-uploaded) — service does not detect duplication', async () => {
+      const sharedChecksum = 'aabbccddeeff00112233445566778899'; // 32-char MD5
+
+      // Simulate a second media record for the same file content.
+      const duplicateMedia = {
+        ...mockMedia,
+        id: 'media-duplicate',
+        type: 'image', // use image to avoid video-analysis noise
+        storageKey: 'tenant-123/ticket-123/duplicate.png',
+        mimeType: 'image/png',
+      };
+
+      const duplicateDto = {
+        mediaId: 'media-duplicate',
+        storageKey: 'tenant-123/ticket-123/duplicate.png',
+        checksum: sharedChecksum,
+      };
+
+      (prisma.media.findFirst as jest.Mock).mockResolvedValue(duplicateMedia);
+      (s3Service.objectExists as jest.Mock).mockResolvedValue(true);
+      // S3 ETag matches the checksum — the service considers the file valid.
+      (s3Service.getObjectMetadata as jest.Mock).mockResolvedValue({
+        contentLength: 200_000,
+        etag: sharedChecksum,
+      });
+      (s3Service.getPublicUrl as jest.Mock).mockReturnValue(
+        'https://s3.example.com/public',
+      );
+      (prisma.media.update as jest.Mock).mockResolvedValue({
+        ...duplicateMedia,
+        processingStatus: 'uploaded',
+      });
+
+      // The service does NOT query for other media records with the same checksum.
+      const result = await service.completeUpload('tenant-123', duplicateDto);
+
+      // Upload succeeds — duplicate detection is not implemented.
+      expect(result.success).toBe(true);
+
+      // No deduplication query was made (prisma.media.findFirst called only once
+      // for the initial lookup, not a second time for checksum scanning).
+      expect(prisma.media.findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    // -------------------------------------------------------------------------
+    // AC4: completeUpload when media status is already 'completed'.
+    //      The service has NO status guard: it overwrites the status back to
+    //      'uploaded' and may re-enqueue the video-analysis job.
+    //      This is documented as the current (unguarded) behaviour.
+    // -------------------------------------------------------------------------
+    it('AC4: completeUpload on already-completed media — re-processes without error (no status guard)', async () => {
+      const completedMedia = {
+        ...mockMedia,
+        type: 'image', // avoid video queue side effects
+        processingStatus: 'completed',
+        mimeType: 'image/png',
+      };
+
+      setupSuccessfulCompleteUploadMocks(completedMedia);
+
+      const result = await service.completeUpload('tenant-123', {
+        mediaId: 'media-123',
+        storageKey: 'tenant-123/ticket-123/file.mp4',
+      });
+
+      // Service completes without throwing — no status guard exists.
+      expect(result.success).toBe(true);
+
+      // Status is overwritten back to 'uploaded' (regression from completed).
+      expect(prisma.media.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'media-123' },
+          data: expect.objectContaining({ processingStatus: 'uploaded' }),
+        }),
+      );
+    });
+
+    // -------------------------------------------------------------------------
+    // AC5: completeUpload when media status is 'processing' (video analysis
+    //      already in progress). The service has NO lock or status guard:
+    //      it overwrites the status to 'uploaded' mid-flight.
+    //      This is documented as the current (unguarded) behaviour.
+    // -------------------------------------------------------------------------
+    it('AC5: completeUpload on processing media — overwrites status without error (no status guard)', async () => {
+      const processingMedia = {
+        ...mockMedia,
+        type: 'image', // avoid video queue side effects
+        processingStatus: 'processing',
+        mimeType: 'image/png',
+      };
+
+      setupSuccessfulCompleteUploadMocks(processingMedia);
+
+      const result = await service.completeUpload('tenant-123', {
+        mediaId: 'media-123',
+        storageKey: 'tenant-123/ticket-123/file.mp4',
+      });
+
+      // Service completes without throwing — no optimistic-lock guard exists.
+      expect(result.success).toBe(true);
+
+      // The in-progress status is silently overwritten to 'uploaded'.
+      expect(prisma.media.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'media-123' },
+          data: expect.objectContaining({ processingStatus: 'uploaded' }),
+        }),
+      );
+
+      // No new queue job was added for an image type.
+      expect(analysisQueue.add).not.toHaveBeenCalled();
+    });
+  });
 });
