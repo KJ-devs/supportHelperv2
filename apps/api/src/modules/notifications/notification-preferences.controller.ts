@@ -10,6 +10,7 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import {
   ApiTags,
   ApiOperation,
@@ -69,7 +70,7 @@ export class NotificationPreferencesController {
         tenantId,
         channel: dto.channel,
         events: dto.events ?? [],
-        config: dto.config ?? {},
+        config: (dto.config ?? {}) as Prisma.InputJsonValue,
         enabled: dto.enabled ?? true,
       },
     });
@@ -104,7 +105,7 @@ export class NotificationPreferencesController {
       data: {
         ...(dto.channel !== undefined && { channel: dto.channel }),
         ...(dto.events !== undefined && { events: dto.events }),
-        ...(dto.config !== undefined && { config: dto.config }),
+        ...(dto.config !== undefined && { config: dto.config as Prisma.InputJsonValue }),
         ...(dto.enabled !== undefined && { enabled: dto.enabled }),
       },
     });

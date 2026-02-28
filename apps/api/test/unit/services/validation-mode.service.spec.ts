@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { ValidationModeService } from '../../../src/modules/agent-tasks/services/validation-mode.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
@@ -7,7 +8,7 @@ describe('ValidationModeService', () => {
   let service: ValidationModeService;
   let prisma: {
     projectGithubConfig: {
-      findUnique: jest.Mock;
+      findFirst: jest.Mock;
     };
     agentTask: {
       findUnique: jest.Mock;
@@ -17,11 +18,12 @@ describe('ValidationModeService', () => {
       updateMany: jest.Mock;
     };
   };
+  let mockAgentQueue: { add: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
       projectGithubConfig: {
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
       agentTask: {
         findUnique: jest.fn(),
@@ -32,10 +34,13 @@ describe('ValidationModeService', () => {
       },
     };
 
+    mockAgentQueue = { add: jest.fn().mockResolvedValue({ id: 'job-1' }) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ValidationModeService,
         { provide: PrismaService, useValue: prisma },
+        { provide: getQueueToken('agent-orchestration'), useValue: mockAgentQueue },
       ],
     }).compile();
 
@@ -44,13 +49,13 @@ describe('ValidationModeService', () => {
 
   describe('getAgentMode', () => {
     it('should return "auto" when no config exists', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue(null);
+      prisma.projectGithubConfig.findFirst.mockResolvedValue(null);
       const mode = await service.getAgentMode('app-1');
       expect(mode).toBe('auto');
     });
 
     it('should return "auto" when settings.agentMode is not set', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: {},
       });
       const mode = await service.getAgentMode('app-1');
@@ -58,7 +63,7 @@ describe('ValidationModeService', () => {
     });
 
     it('should return "review_plan" when configured', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'review_plan' },
       });
       const mode = await service.getAgentMode('app-1');
@@ -66,7 +71,7 @@ describe('ValidationModeService', () => {
     });
 
     it('should return "review_all" when configured', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'review_all' },
       });
       const mode = await service.getAgentMode('app-1');
@@ -74,7 +79,7 @@ describe('ValidationModeService', () => {
     });
 
     it('should return "auto" for unknown mode values', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'invalid' },
       });
       const mode = await service.getAgentMode('app-1');
@@ -84,27 +89,27 @@ describe('ValidationModeService', () => {
 
   describe('shouldWaitForReview', () => {
     it('should return false in auto mode', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue(null);
+      prisma.projectGithubConfig.findFirst.mockResolvedValue(null);
       expect(await service.shouldWaitForReview('app-1', 'plan')).toBe(false);
       expect(await service.shouldWaitForReview('app-1', 'code')).toBe(false);
     });
 
     it('should return true for plan phase in review_plan mode', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'review_plan' },
       });
       expect(await service.shouldWaitForReview('app-1', 'plan')).toBe(true);
     });
 
     it('should return false for code phase in review_plan mode', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'review_plan' },
       });
       expect(await service.shouldWaitForReview('app-1', 'code')).toBe(false);
     });
 
     it('should return true for both phases in review_all mode', async () => {
-      prisma.projectGithubConfig.findUnique.mockResolvedValue({
+      prisma.projectGithubConfig.findFirst.mockResolvedValue({
         settings: { agentMode: 'review_all' },
       });
       expect(await service.shouldWaitForReview('app-1', 'plan')).toBe(true);
@@ -241,18 +246,22 @@ describe('ValidationModeService', () => {
   describe('rejectTask', () => {
     const tenantId = 'tenant-1';
 
-    it('should reject with reason', async () => {
+    it('should reject with reason (definitive: iterate=false)', async () => {
       prisma.agentTask.findFirst.mockResolvedValue({
         id: 'task-1',
         tenantId,
         status: 'plan_pending_review',
+        retryCount: 0,
+        ticketId: 'ticket-1',
+        applicationId: 'app-1',
       });
       prisma.agentTask.update.mockResolvedValue({
         id: 'task-1',
         status: 'failed',
       });
 
-      await service.rejectTask('task-1', tenantId, 'plan', 'user-1', 'Needs changes');
+      // Use iterate=false to force definitive rejection without queue
+      await service.rejectTask('task-1', tenantId, 'plan', 'user-1', 'Needs changes', false);
 
       expect(prisma.agentTask.update).toHaveBeenCalledWith({
         where: { id: 'task-1' },
@@ -267,17 +276,21 @@ describe('ValidationModeService', () => {
       });
     });
 
-    it('should reject without reason', async () => {
+    it('should reject without reason (code phase forces definitive rejection)', async () => {
       prisma.agentTask.findFirst.mockResolvedValue({
         id: 'task-1',
         tenantId,
         status: 'code_pending_review',
+        retryCount: 0,
+        ticketId: 'ticket-1',
+        applicationId: 'app-1',
       });
       prisma.agentTask.update.mockResolvedValue({
         id: 'task-1',
         status: 'failed',
       });
 
+      // Code phase always results in definitive rejection
       await service.rejectTask('task-1', tenantId, 'code', 'user-1');
 
       expect(prisma.agentTask.update).toHaveBeenCalledWith({
@@ -287,6 +300,30 @@ describe('ValidationModeService', () => {
           error: 'code rejected by reviewer',
         }),
       });
+    });
+
+    it('should re-enqueue plan for iteration when iterate=true and retryCount < max', async () => {
+      prisma.agentTask.findFirst.mockResolvedValue({
+        id: 'task-1',
+        tenantId,
+        status: 'plan_pending_review',
+        retryCount: 0,
+        ticketId: 'ticket-1',
+        applicationId: 'app-1',
+      });
+      prisma.agentTask.update.mockResolvedValue({
+        id: 'task-1',
+        status: 'analyzing',
+        retryCount: 1,
+      });
+
+      await service.rejectTask('task-1', tenantId, 'plan', 'user-1', 'Incorrect approach', true);
+
+      expect(mockAgentQueue.add).toHaveBeenCalledWith(
+        'generate-action-plan',
+        expect.objectContaining({ agentTaskId: 'task-1' }),
+        expect.any(Object),
+      );
     });
   });
 

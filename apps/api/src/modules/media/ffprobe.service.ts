@@ -81,7 +81,7 @@ export class FFprobeService {
   /**
    * Calculate FPS from video stream
    */
-  private calculateFPS(stream: any): number | undefined {
+  private calculateFPS(stream: { avg_frame_rate?: string; r_frame_rate?: string }): number | undefined {
     if (stream.avg_frame_rate) {
       const [num, den] = stream.avg_frame_rate.split('/').map(Number);
       if (den && den !== 0) {

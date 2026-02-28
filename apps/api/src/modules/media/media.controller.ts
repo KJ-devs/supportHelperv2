@@ -7,9 +7,7 @@ import {
   Query,
   Delete,
   UseGuards,
-  UsePipes,
   Res,
-  NotFoundException,
 } from '@nestjs/common';
 import { Response } from 'express';
 import {

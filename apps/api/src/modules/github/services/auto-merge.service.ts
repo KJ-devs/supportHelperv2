@@ -1,4 +1,5 @@
 import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubAppService } from './github-app.service';
 import { TicketTimelineService } from '../../tickets/services/ticket-timeline.service';
@@ -8,6 +9,10 @@ export interface MergeResult {
   merged: boolean;
   reason?: string;
 }
+
+type ProjectGithubConfigWithInstallation = Prisma.ProjectGithubConfigGetPayload<{
+  include: { installation: true };
+}>;
 
 @Injectable()
 export class AutoMergeService {
@@ -53,7 +58,7 @@ export class AutoMergeService {
     );
 
     // 4. Fetch PR details
-    let pr: any;
+    let pr: Awaited<ReturnType<typeof octokit.pulls.get>>['data'];
     try {
       const { data } = await octokit.pulls.get({
         owner,
@@ -92,7 +97,7 @@ export class AutoMergeService {
       });
 
       const approvals = reviews.filter(
-        (r: any) => r.state === 'APPROVED',
+        (r) => r.state === 'APPROVED',
       ).length;
 
       if (approvals < requiredApprovals) {
@@ -272,7 +277,7 @@ export class AutoMergeService {
     repo: string,
     prNumber: number,
     branchName: string,
-    config: any,
+    config: ProjectGithubConfigWithInstallation,
   ): Promise<void> {
     const tenantId = config.installation.tenantId;
 
@@ -347,7 +352,7 @@ export class AutoMergeService {
     owner: string,
     repo: string,
     prNumber: number,
-    config: any,
+    config: ProjectGithubConfigWithInstallation,
   ): Promise<void> {
     const tenantId = config.installation.tenantId;
 

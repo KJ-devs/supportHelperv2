@@ -52,7 +52,7 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
 
   async generateStructuredOutput<T>(
     prompt: string,
-    schema: any,
+    schema: Record<string, unknown>,
     options?: CompletionOptions,
   ): Promise<T> {
     try {

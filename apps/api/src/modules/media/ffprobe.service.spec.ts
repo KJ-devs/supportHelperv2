@@ -235,14 +235,14 @@ describe('FFprobeService', () => {
   describe('extractThumbnail', () => {
     it('should extract thumbnail successfully', async () => {
       const mockScreenshots = jest.fn().mockReturnThis();
-      const mockOn: jest.Mock<any, any> = jest.fn((event, callback) => {
+      const mockOn: jest.Mock = jest.fn((event, callback) => {
         if (event === 'end') {
           callback();
         }
         return mockFfmpeg;
       });
 
-      const mockFfmpeg: any = {
+      const mockFfmpeg: Record<string, jest.Mock> = {
         screenshots: mockScreenshots,
         on: mockOn,
       };
@@ -265,14 +265,14 @@ describe('FFprobeService', () => {
 
     it('should use default timestamp if not provided', async () => {
       const mockScreenshots = jest.fn().mockReturnThis();
-      const mockOn: jest.Mock<any, any> = jest.fn((event, callback) => {
+      const mockOn: jest.Mock = jest.fn((event, callback) => {
         if (event === 'end') {
           callback();
         }
         return mockFfmpeg;
       });
 
-      const mockFfmpeg: any = {
+      const mockFfmpeg: Record<string, jest.Mock> = {
         screenshots: mockScreenshots,
         on: mockOn,
       };
@@ -290,14 +290,14 @@ describe('FFprobeService', () => {
 
     it('should reject on extraction error', async () => {
       const mockScreenshots = jest.fn().mockReturnThis();
-      const mockOn: jest.Mock<any, any> = jest.fn((event, callback) => {
+      const mockOn: jest.Mock = jest.fn((event, callback) => {
         if (event === 'error') {
           callback(new Error('Extraction failed'));
         }
         return mockFfmpeg;
       });
 
-      const mockFfmpeg: any = {
+      const mockFfmpeg: Record<string, jest.Mock> = {
         screenshots: mockScreenshots,
         on: mockOn,
       };

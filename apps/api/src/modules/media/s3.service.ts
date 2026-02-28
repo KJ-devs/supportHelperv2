@@ -119,8 +119,8 @@ export class S3Service {
         }),
       );
       return true;
-    } catch (error: any) {
-      if (error.name === 'NotFound') {
+    } catch (error: unknown) {
+      if ((error as { name?: string }).name === 'NotFound') {
         return false;
       }
       throw error;

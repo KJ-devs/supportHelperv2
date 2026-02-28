@@ -22,7 +22,7 @@ export class RateLimitLoggingInterceptor implements NestInterceptor {
   private readonly logger = new Logger(RateLimitLoggingInterceptor.name);
   private readonly warningThreshold = 10;
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const ctx = context.switchToHttp();
     const request = ctx.getRequest();
     const response = ctx.getResponse<Response>();

@@ -39,8 +39,8 @@ export class GithubWebhooksController {
     @Headers('x-github-event') event: string,
     @Headers('x-hub-signature-256') signature: string,
     @Headers('x-github-delivery') deliveryId: string,
-    @Body() payload: any,
-    @Req() req: RawBodyRequest<Request>,
+    @Body() payload: Record<string, unknown>,
+    @Req() _req: RawBodyRequest<Request>,
   ) {
     if (!event) {
       throw new UnauthorizedException('Missing x-github-event header');

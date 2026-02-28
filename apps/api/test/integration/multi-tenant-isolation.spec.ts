@@ -190,6 +190,8 @@ describe('Multi-Tenant Isolation Integration', () => {
         { provide: TicketsGateway, useValue: mockGateway },
         { provide: CacheService, useValue: mockCacheService },
         { provide: getQueueToken('github'), useValue: mockGithubQueue },
+        { provide: getQueueToken('deep-analysis'), useValue: { add: jest.fn().mockResolvedValue({ id: 'job-da' }) } },
+        { provide: getQueueToken('triage'), useValue: { add: jest.fn().mockResolvedValue({ id: 'job-triage' }) } },
       ],
     }).compile();
 

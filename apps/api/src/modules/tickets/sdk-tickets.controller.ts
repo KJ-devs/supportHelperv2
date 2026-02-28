@@ -186,7 +186,7 @@ export class SdkTicketsController {
     }
 
     // Parse userContext (sent as JSON string from FormData)
-    let userContext: Record<string, any> | undefined;
+    let userContext: Record<string, unknown> | undefined;
     if (body.userContext) {
       try {
         userContext =

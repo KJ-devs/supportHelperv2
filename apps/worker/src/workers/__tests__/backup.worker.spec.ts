@@ -589,7 +589,7 @@ describe('BackupWorker', () => {
 
       // Verify tar extraction was called
       const tarCall = execFilePromisified.mock.calls.find(
-        (call: unknown[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
+        (call: unknown[]) => call[0] === 'tar' && (call[1] as string)?.includes('-xzf'),
       );
 
       // Verify psql restore was called
@@ -633,7 +633,7 @@ describe('BackupWorker', () => {
       });
 
       const tarCall = execFilePromisified.mock.calls.find(
-        (call: unknown[]) => call[0] === 'tar' && call[1]?.includes('-xzf'),
+        (call: unknown[]) => call[0] === 'tar' && (call[1] as string)?.includes('-xzf'),
       );
       expect(tarCall).toBeDefined();
       expect(tarCall![1]).toEqual(

@@ -1,6 +1,6 @@
 export interface AIProvider {
   generateCompletion(prompt: string, options?: CompletionOptions): Promise<string>;
-  generateStructuredOutput<T>(prompt: string, schema: any, options?: CompletionOptions): Promise<T>;
+  generateStructuredOutput<T>(prompt: string, schema: Record<string, unknown>, options?: CompletionOptions): Promise<T>;
   generateEmbedding?(text: string): Promise<number[]>;
   getProviderName(): string;
   validateConfig(): Promise<boolean>;

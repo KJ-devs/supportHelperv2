@@ -1,11 +1,16 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DeepAnalysisService } from '../../../src/modules/agent-v2/deep-analysis.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CodeInvestigationService } from '../../../src/modules/agent-v2/code-investigation.service';
 import { AgenticLoopService } from '../../../src/modules/agent-v2/agentic-loop.service';
 import { DiagnosisService, Diagnosis } from '../../../src/modules/agent-v2/diagnosis.service';
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 
 describe('DeepAnalysisService', () => {
   let service: DeepAnalysisService;
@@ -93,6 +98,10 @@ describe('DeepAnalysisService', () => {
       getDiagnosis: jest.fn(),
     };
 
+    const mockEventEmitter = {
+      emit: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DeepAnalysisService,
@@ -100,6 +109,7 @@ describe('DeepAnalysisService', () => {
         { provide: CodeInvestigationService, useValue: mockCodeInvestigation },
         { provide: AgenticLoopService, useValue: mockAgenticLoop },
         { provide: DiagnosisService, useValue: mockDiagnosisService },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 

@@ -23,9 +23,9 @@ jest.mock('ioredis', () => {
 
 describe('MediaService', () => {
   let service: MediaService;
-  let prismaService: PrismaService;
-  let s3Service: S3Service;
-  let ffprobeService: FFprobeService;
+  let _prismaService: PrismaService;
+  let _s3Service: S3Service;
+  let _ffprobeService: FFprobeService;
 
   const mockPrismaService = {
     ticket: {
@@ -88,9 +88,9 @@ describe('MediaService', () => {
     }).compile();
 
     service = module.get<MediaService>(MediaService);
-    prismaService = module.get<PrismaService>(PrismaService);
-    s3Service = module.get<S3Service>(S3Service);
-    ffprobeService = module.get<FFprobeService>(FFprobeService);
+    _prismaService = module.get<PrismaService>(PrismaService);
+    _s3Service = module.get<S3Service>(S3Service);
+    _ffprobeService = module.get<FFprobeService>(FFprobeService);
   });
 
   afterEach(() => {

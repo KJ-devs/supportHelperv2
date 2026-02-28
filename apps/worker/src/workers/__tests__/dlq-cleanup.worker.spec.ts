@@ -5,7 +5,6 @@ import { Job } from 'bullmq';
 
 describe('DlqCleanupWorker', () => {
   let worker: DlqCleanupWorker;
-  let dlqCleanupService: DlqCleanupService;
 
   const mockDlqCleanupService = {
     runCleanup: jest.fn(),
@@ -23,7 +22,6 @@ describe('DlqCleanupWorker', () => {
     }).compile();
 
     worker = module.get<DlqCleanupWorker>(DlqCleanupWorker);
-    dlqCleanupService = module.get<DlqCleanupService>(DlqCleanupService);
 
     jest.clearAllMocks();
   });

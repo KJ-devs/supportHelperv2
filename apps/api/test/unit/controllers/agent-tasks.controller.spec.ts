@@ -250,6 +250,7 @@ describe('AgentTasksController', () => {
         'plan',
         userId,
         'Incorrect approach',
+        undefined,
       );
     });
   });

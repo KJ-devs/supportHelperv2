@@ -308,7 +308,7 @@ export class MediaService {
 
     // Generate download URLs for each media
     const mediaWithUrls = await Promise.all(
-      media.map(async (m: any) => {
+      media.map(async (m) => {
         let downloadUrl: string | null = null;
 
         if (m.processingStatus === 'uploaded' || m.processingStatus === 'completed') {

@@ -27,15 +27,12 @@ export class GithubReposService {
 
     const { page = 1, perPage = 30, sort = 'updated', visibility = 'all' } = query;
 
-    const params: any = {
+    const params = {
       per_page: perPage,
       page,
-      sort,
+      sort: sort as 'created' | 'updated' | 'pushed' | 'full_name',
+      ...(visibility !== 'all' ? { visibility: visibility as 'public' | 'private' | 'all' } : {}),
     };
-
-    if (visibility !== 'all') {
-      params.visibility = visibility;
-    }
 
     const { data, headers } = await octokit.repos.listForAuthenticatedUser(params);
 

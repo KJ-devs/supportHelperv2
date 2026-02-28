@@ -1,16 +1,22 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ServiceUnavailableException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AgenticLoopService, AgenticLoopOptions } from '../../../src/modules/agent-v2/agentic-loop.service';
 import { ToolExecutorService } from '../../../src/modules/agent-v2/tool-executor.service';
-import { AnthropicClientFactory } from '../../../src/modules/ai-config/anthropic-client.factory';
+import { ToolCapableProviderFactory } from '../../../src/modules/ai-config/tool-capable-provider.factory';
+import { AiConfigService } from '../../../src/modules/ai-config/ai-config.service';
 import { AGENT_TOOLS } from '../../../src/modules/agent-v2/agent-tools';
-import Anthropic from '@anthropic-ai/sdk';
+import type { ToolCapableProvider, AgentTurnResult } from '../../../src/ai/providers/tool-capable-provider.interface';
 
 describe('AgenticLoopService', () => {
   let service: AgenticLoopService;
   let toolExecutor: jest.Mocked<ToolExecutorService>;
-  let anthropicFactory: jest.Mocked<AnthropicClientFactory>;
+  let providerFactory: jest.Mocked<ToolCapableProviderFactory>;
+  let aiConfigService: jest.Mocked<AiConfigService>;
   let eventEmitter: jest.Mocked<EventEmitter2>;
 
   const mockTicket = {
@@ -33,54 +39,53 @@ describe('AgenticLoopService', () => {
     sessionId: 'session-abc',
   };
 
-  const createMockAnthropicClient = (responses: Anthropic.Message[]) => {
-    let callCount = 0;
-    return {
-      messages: {
-        create: jest.fn().mockImplementation(() => {
-          const response = responses[callCount] ?? responses[responses.length - 1];
-          callCount++;
-          return Promise.resolve(response);
-        }),
-      },
-    };
-  };
-
-  const makeTextResponse = (text: string): Anthropic.Message => ({
-    id: 'msg-1',
-    type: 'message',
-    role: 'assistant',
-    content: [{ type: 'text', text }],
-    model: 'claude-sonnet-4-20250514',
-    stop_reason: 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 100, output_tokens: 50 },
+  const makeTextTurn = (text: string): AgentTurnResult => ({
+    textBlocks: [{ type: 'text', text }],
+    toolUseBlocks: [],
+    stopReason: 'end_turn',
+    assistantMessage: { role: 'assistant', content: [{ type: 'text', text }] },
   });
 
-  const makeToolUseResponse = (
+  const makeToolUseTurn = (
     toolName: string,
     toolId: string,
     input: Record<string, unknown>,
-  ): Anthropic.Message => ({
-    id: 'msg-2',
-    type: 'message',
-    role: 'assistant',
-    content: [
-      { type: 'tool_use', id: toolId, name: toolName, input },
-    ],
-    model: 'claude-sonnet-4-20250514',
-    stop_reason: 'tool_use',
-    stop_sequence: null,
-    usage: { input_tokens: 100, output_tokens: 50 },
+  ): AgentTurnResult => ({
+    textBlocks: [],
+    toolUseBlocks: [{ type: 'tool_use', id: toolId, name: toolName, input }],
+    stopReason: 'tool_use',
+    assistantMessage: {
+      role: 'assistant',
+      content: [{ type: 'tool_use', id: toolId, name: toolName, input }],
+    },
   });
+
+  const createMockProvider = (turns: AgentTurnResult[]): ToolCapableProvider => {
+    let callCount = 0;
+    return {
+      chat: jest.fn().mockImplementation(() => {
+        const turn = turns[callCount] ?? turns[turns.length - 1];
+        callCount++;
+        return Promise.resolve(turn);
+      }),
+    };
+  };
 
   beforeEach(async () => {
     const mockToolExecutor = {
       execute: jest.fn().mockResolvedValue({ content: 'tool result' }),
     };
 
-    const mockAnthropicFactory = {
+    const mockProviderFactory = {
       createForTenant: jest.fn(),
+    };
+
+    const mockAiConfigService = {
+      getFullConfig: jest.fn().mockResolvedValue({
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-6',
+        apiKey: 'sk-test',
+      }),
     };
 
     const mockEventEmitter = {
@@ -91,14 +96,16 @@ describe('AgenticLoopService', () => {
       providers: [
         AgenticLoopService,
         { provide: ToolExecutorService, useValue: mockToolExecutor },
-        { provide: AnthropicClientFactory, useValue: mockAnthropicFactory },
+        { provide: ToolCapableProviderFactory, useValue: mockProviderFactory },
+        { provide: AiConfigService, useValue: mockAiConfigService },
         { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 
     service = module.get<AgenticLoopService>(AgenticLoopService);
     toolExecutor = module.get(ToolExecutorService);
-    anthropicFactory = module.get(AnthropicClientFactory);
+    providerFactory = module.get(ToolCapableProviderFactory);
+    aiConfigService = module.get(AiConfigService);
     eventEmitter = module.get(EventEmitter2);
   });
 
@@ -111,20 +118,19 @@ describe('AgenticLoopService', () => {
   });
 
   describe('run', () => {
-    it('throws ServiceUnavailableException when no AI client configured', async () => {
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(null);
+    it('throws ServiceUnavailableException when no AI provider configured', async () => {
+      (providerFactory.createForTenant as jest.Mock).mockRejectedValue(
+        new ServiceUnavailableException(
+          'No AI provider configured for this tenant. Set up an AI provider in Settings.',
+        ),
+      );
 
       await expect(service.run(baseOptions)).rejects.toThrow(ServiceUnavailableException);
-      await expect(service.run(baseOptions)).rejects.toThrow(
-        'No Anthropic API key configured',
-      );
     });
 
     it('returns finalContent immediately when no tool_use blocks', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeTextResponse('Here is my analysis of the bug.'),
-      ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      const mockProvider = createMockProvider([makeTextTurn('Here is my analysis of the bug.')]);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
 
       const result = await service.run(baseOptions);
 
@@ -135,11 +141,11 @@ describe('AgenticLoopService', () => {
     });
 
     it('executes tool calls and appends results to messages', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
-        makeTextResponse('Found the bug in auth.ts'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
+        makeTextTurn('Found the bug in auth.ts'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('file content');
 
       const result = await service.run(baseOptions);
@@ -155,12 +161,12 @@ describe('AgenticLoopService', () => {
     });
 
     it('loops until no more tool_use blocks', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
-        makeToolUseResponse('search_code', 'tool-2', { query: 'token' }),
-        makeTextResponse('Root cause identified.'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
+        makeToolUseTurn('search_code', 'tool-2', { query: 'token' }),
+        makeTextTurn('Root cause identified.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('result');
 
       const result = await service.run(baseOptions);
@@ -171,28 +177,25 @@ describe('AgenticLoopService', () => {
     });
 
     it('stops at maxIterations limit', async () => {
-      // Always returns tool calls — loop should stop at maxIterations
-      const infiniteToolResponse = makeToolUseResponse('read_file', 'tool-x', { file_path: 'a.ts' });
-      const mockClient = {
-        messages: {
-          create: jest.fn().mockResolvedValue(infiniteToolResponse),
-        },
+      const infiniteToolTurn = makeToolUseTurn('read_file', 'tool-x', { file_path: 'a.ts' });
+      const mockProvider = {
+        chat: jest.fn().mockResolvedValue(infiniteToolTurn),
       };
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('result');
 
       const result = await service.run({ ...baseOptions, maxIterations: 3 });
 
       expect(result.iterations).toBe(3);
-      expect(mockClient.messages.create).toHaveBeenCalledTimes(3);
+      expect(mockProvider.chat).toHaveBeenCalledTimes(3);
     });
 
     it('emits agent:thinking event at each iteration', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-1', { file_path: 'src/a.ts' }),
-        makeTextResponse('Done.'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-1', { file_path: 'src/a.ts' }),
+        makeTextTurn('Done.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('result');
 
       await service.run(baseOptions);
@@ -210,11 +213,11 @@ describe('AgenticLoopService', () => {
     });
 
     it('emits agent:tool_call before tool execution', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
-        makeTextResponse('Analysis done.'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
+        makeTextTurn('Analysis done.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('file content');
 
       await service.run(baseOptions);
@@ -228,11 +231,11 @@ describe('AgenticLoopService', () => {
     });
 
     it('emits agent:tool_result after tool execution with durationMs', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
-        makeTextResponse('Done.'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-1', { file_path: 'src/auth.ts' }),
+        makeTextTurn('Done.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockResolvedValue('file content');
 
       await service.run(baseOptions);
@@ -250,10 +253,8 @@ describe('AgenticLoopService', () => {
     });
 
     it('emits agent:complete with finalContent', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeTextResponse('Analysis complete.'),
-      ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      const mockProvider = createMockProvider([makeTextTurn('Analysis complete.')]);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
 
       await service.run(baseOptions);
 
@@ -265,30 +266,33 @@ describe('AgenticLoopService', () => {
     });
 
     it('includes existingMessages in conversation history', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeTextResponse('Based on the history, here is my analysis.'),
+      const mockProvider = createMockProvider([
+        makeTextTurn('Based on the history, here is my analysis.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
 
-      const existingMessages: Anthropic.MessageParam[] = [
-        { role: 'user', content: 'Previous question' },
-        { role: 'assistant', content: 'Previous answer' },
+      const existingMessages = [
+        { role: 'user' as const, content: 'Previous question' },
+        { role: 'assistant' as const, content: 'Previous answer' },
       ];
 
       await service.run({ ...baseOptions, existingMessages });
 
-      const createCallArgs = (mockClient.messages.create as jest.Mock).mock.calls[0][0];
-      // Should contain existing messages plus the new initial message
-      expect(createCallArgs.messages).toHaveLength(3);
-      expect(createCallArgs.messages[0]).toEqual({ role: 'user', content: 'Previous question' });
+      const chatCallArgs = (mockProvider.chat as jest.Mock).mock.calls[0][0];
+      // chatCallArgs.messages is a mutable array reference — check order, not length,
+      // since the service appends the assistant turn to the SAME array after chat() returns.
+      // At minimum the existing messages are at the front and the initial message follows.
+      expect(chatCallArgs.messages[0]).toEqual({ role: 'user', content: 'Previous question' });
+      expect(chatCallArgs.messages[1]).toEqual({ role: 'assistant', content: 'Previous answer' });
+      expect(chatCallArgs.messages[2]).toEqual({ role: 'user', content: baseOptions.initialMessage });
     });
 
     it('records toolCallLog entry with error when tool throws', async () => {
-      const mockClient = createMockAnthropicClient([
-        makeToolUseResponse('read_file', 'tool-err', { file_path: 'missing.ts' }),
-        makeTextResponse('Could not read file.'),
+      const mockProvider = createMockProvider([
+        makeToolUseTurn('read_file', 'tool-err', { file_path: 'missing.ts' }),
+        makeTextTurn('Could not read file.'),
       ]);
-      (anthropicFactory.createForTenant as jest.Mock).mockResolvedValue(mockClient);
+      (providerFactory.createForTenant as jest.Mock).mockResolvedValue(mockProvider);
       (toolExecutor.execute as jest.Mock).mockRejectedValue(new Error('File not found'));
 
       const result = await service.run(baseOptions);

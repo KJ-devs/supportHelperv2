@@ -12,7 +12,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
 import { CacheService, CacheKeys, CacheTTL } from '../../cache';
-import { Prisma } from '@prisma/client';
+import { Prisma, TicketStatus } from '@prisma/client';
 
 @Injectable()
 export class TicketsService {
@@ -129,6 +129,7 @@ export class TicketsService {
     const cacheKey = CacheKeys.ticketList(tenantId, filterHash);
 
     if (!search) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cached = await this.cacheService.get<any>(cacheKey);
       if (cached) return cached;
     }
@@ -503,7 +504,7 @@ export class TicketsService {
         switch (action) {
           case 'update_status': {
             const data: Prisma.TicketUpdateManyMutationInput = {
-              status: value as string,
+              status: value as TicketStatus,
             };
             if (value === 'resolved') {
               data.resolvedAt = new Date();
@@ -698,12 +699,12 @@ export class TicketsService {
    * Format Prisma groupBy result
    */
   private formatGroupByResult(
-    result: any[],
+    result: Array<Record<string, unknown>>,
     key: string,
   ): Record<string, number> {
-    return result.reduce((acc, item) => {
-      const value = item[key] || 'unknown';
-      acc[value] = item._count;
+    return result.reduce<Record<string, number>>((acc, item) => {
+      const value = (item[key] as string) || 'unknown';
+      acc[value] = item._count as number;
       return acc;
     }, {});
   }

@@ -51,7 +51,7 @@ http_request_duration_seconds_count{method="GET",route="/api/tickets",status_cod
   @Public()
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()
-  async getMetricsJSON(): Promise<any> {
+  async getMetricsJSON(): Promise<unknown> {
     if (!this.metricsService.isEnabled()) {
       throw new NotFoundException('Metrics endpoint is disabled. Set PROMETHEUS_ENABLED=true to enable.');
     }

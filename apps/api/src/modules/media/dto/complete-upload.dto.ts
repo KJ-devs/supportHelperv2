@@ -4,7 +4,6 @@ import {
   IsString,
   IsOptional,
   IsObject,
-  IsNumber,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { CompleteUploadInput } from '../schemas/media.schema';

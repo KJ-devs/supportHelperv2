@@ -77,7 +77,7 @@ export interface TenantEntity {
   name: string;
   slug: string;
   plan: string;
-  settings?: any; // Compatible with Prisma's JsonValue type
+  settings?: unknown; // Compatible with Prisma's JsonValue type
   createdAt?: Date;
   updatedAt?: Date;
 }

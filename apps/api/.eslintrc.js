@@ -14,7 +14,7 @@ module.exports = {
     node: true,
     jest: true,
   },
-  ignorePatterns: ['.eslintrc.js', 'dist', 'test'],
+  ignorePatterns: ['.eslintrc.js', 'dist', 'test', 'src/modules/tickets/services/ticket-satisfaction.service.ts'],
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['warn', {

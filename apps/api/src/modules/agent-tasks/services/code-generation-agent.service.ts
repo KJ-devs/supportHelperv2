@@ -16,11 +16,19 @@ import {
   GeneratedCodeResult,
 } from '../types/code-generation.types';
 import { Octokit } from '@octokit/rest';
+import Anthropic from '@anthropic-ai/sdk';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
 const MAX_API_CALLS = 10;
 const GENERATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 const MAX_SNIPPET_LINES = 100;
+
+interface TicketContext {
+  title?: string | null;
+  description?: string | null;
+  aiSummary?: string | null;
+  applicationId: string;
+}
 
 @Injectable()
 export class CodeGenerationAgentService {
@@ -166,14 +174,15 @@ export class CodeGenerationAgentService {
           operation: planFile.operation,
           apiCallCount,
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const errMsg = error instanceof Error ? error.message : String(error);
         this.logger.error(
-          `Failed to generate code for ${planFile.filePath}: ${error.message}`,
+          `Failed to generate code for ${planFile.filePath}: ${errMsg}`,
         );
         await this.agentTasksService.appendLog(agentTaskId, {
           step: 'file_generation_failed',
           file: planFile.filePath,
-          error: error.message,
+          error: errMsg,
         });
         // Continue with remaining files
       }
@@ -213,12 +222,12 @@ export class CodeGenerationAgentService {
     agentTaskId: string,
     planFile: ActionPlanFile,
     actionPlan: ActionPlan,
-    ticket: any,
+    ticket: TicketContext,
     octokit: Octokit,
     owner: string,
     repo: string,
     defaultBranch: string,
-    anthropic: any,
+    anthropic: Anthropic,
     model: string,
   ): Promise<GeneratedFile> {
     // 1. Fetch current file content from GitHub (skip for 'create' operations)
@@ -277,7 +286,7 @@ export class CodeGenerationAgentService {
 
     // 6. Extract generated code from response
     const textBlock = response.content.find(
-      (block: any) => block.type === 'text',
+      (block) => block.type === 'text',
     );
 
     if (!textBlock || textBlock.type !== 'text') {
@@ -320,8 +329,8 @@ export class CodeGenerationAgentService {
       }
 
       return undefined;
-    } catch (error: any) {
-      if (error.status === 404) {
+    } catch (error: unknown) {
+      if ((error as { status?: number }).status === 404) {
         this.logger.warn(
           `File not found on GitHub: ${owner}/${repo}/${filePath} (ref: ${ref})`,
         );
@@ -359,7 +368,7 @@ IMPORTANT RULES:
   private buildFilePrompt(
     planFile: ActionPlanFile,
     actionPlan: ActionPlan,
-    ticket: any,
+    ticket: TicketContext,
     originalContent: string | undefined,
     relatedCode: Array<{
       filePath: string;

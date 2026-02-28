@@ -6,9 +6,13 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { GithubIssuesService } from './github-issues.service';
 
+/** Loose typing for GitHub webhook payload fields — shapes vary by event type */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type GithubPayload = Record<string, any>;
+
 export interface WebhookPayload {
   event: string;
-  payload: any;
+  payload: GithubPayload;
   signature: string;
   deliveryId: string;
 }
@@ -102,7 +106,7 @@ export class GithubWebhooksService {
    */
   async processWebhook(
     event: string,
-    payload: any,
+    payload: GithubPayload,
     signature: string,
     deliveryId: string,
   ): Promise<void> {
@@ -175,7 +179,7 @@ export class GithubWebhooksService {
   /**
    * Handle webhook event
    */
-  async handleEvent(event: string, payload: any): Promise<void> {
+  async handleEvent(event: string, payload: GithubPayload): Promise<void> {
     switch (event) {
       case 'issues':
         await this.handleIssueEvent(payload);
@@ -206,7 +210,7 @@ export class GithubWebhooksService {
    * (i.e., a reverse sync), the sync-origin flag will be set to 'platform'
    * and we skip updating the ticket to avoid an infinite loop.
    */
-  private async handleIssueEvent(payload: any): Promise<void> {
+  private async handleIssueEvent(payload: GithubPayload): Promise<void> {
     const { action, issue, repository } = payload;
 
     this.logger.log(
@@ -300,7 +304,7 @@ export class GithubWebhooksService {
   /**
    * Handle pull request events
    */
-  private async handlePullRequestEvent(payload: any): Promise<void> {
+  private async handlePullRequestEvent(payload: GithubPayload): Promise<void> {
     const { action, pull_request, repository } = payload;
 
     this.logger.log(
@@ -338,7 +342,7 @@ export class GithubWebhooksService {
   /**
    * Handle push events
    */
-  private async handlePushEvent(payload: any): Promise<void> {
+  private async handlePushEvent(payload: GithubPayload): Promise<void> {
     const { repository, commits, ref } = payload;
 
     this.logger.log(
@@ -364,7 +368,7 @@ export class GithubWebhooksService {
   /**
    * Handle issue comment events
    */
-  private async handleIssueCommentEvent(payload: any): Promise<void> {
+  private async handleIssueCommentEvent(payload: GithubPayload): Promise<void> {
     const { action, issue, comment, repository } = payload;
 
     if (action !== 'created') {
@@ -394,7 +398,7 @@ export class GithubWebhooksService {
   /**
    * Handle check_run events (CI status feedback)
    */
-  private async handleCheckRunEvent(payload: any): Promise<void> {
+  private async handleCheckRunEvent(payload: GithubPayload): Promise<void> {
     const { action, check_run, repository } = payload;
 
     this.logger.log(
@@ -427,7 +431,7 @@ export class GithubWebhooksService {
   /**
    * Handle installation events (lifecycle management)
    */
-  private async handleInstallationEvent(payload: any): Promise<void> {
+  private async handleInstallationEvent(payload: GithubPayload): Promise<void> {
     const { action, installation, sender } = payload;
     const installationId = BigInt(installation.id);
 
@@ -541,7 +545,7 @@ export class GithubWebhooksService {
     ticketId: string,
     labels: Array<{ name: string }>,
   ): Promise<void> {
-    const updates: any = {};
+    const updates: { type?: string; severity?: string } = {};
 
     for (const label of labels) {
       if (label.name.startsWith('type:')) {
@@ -587,7 +591,7 @@ export class GithubWebhooksService {
   /**
    * Extract standardized event data from webhook payload
    */
-  private extractEventData(event: string, payload: any): WebhookEventData {
+  private extractEventData(event: string, payload: GithubPayload): WebhookEventData {
     const data: WebhookEventData = {
       type: event,
       action: payload.action || 'unknown',
@@ -608,7 +612,7 @@ export class GithubWebhooksService {
         title: payload.issue.title,
         state: payload.issue.state,
         body: payload.issue.body,
-        labels: payload.issue.labels?.map((l: any) => l.name) || [],
+        labels: (payload.issue as Record<string, unknown> & { labels?: Array<{ name: string }> }).labels?.map((l) => l.name) || [],
       };
     }
 
@@ -629,7 +633,7 @@ export class GithubWebhooksService {
         conclusion: payload.check_run.conclusion || null,
         headSha: payload.check_run.head_sha,
         pullRequests:
-          payload.check_run.pull_requests?.map((pr: any) => ({
+          (payload.check_run as Record<string, unknown> & { pull_requests?: Array<{ number: number }> }).pull_requests?.map((pr) => ({
             number: pr.number,
           })) || [],
       };

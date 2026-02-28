@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Application, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CacheService, CacheKeys, CacheTTL } from '../cache';
 import { generateSDKKey } from '@support-helper/shared';
@@ -42,7 +42,7 @@ export class ApplicationsService {
 
   async findOne(id: string, tenantId: string) {
     const cacheKey = CacheKeys.applicationDetail(tenantId, id);
-    const cached = await this.cacheService.get<any>(cacheKey);
+    const cached = await this.cacheService.get<Application>(cacheKey);
     if (cached) return cached;
 
     const app = await this.prisma.application.findFirst({

@@ -61,7 +61,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const severityColor = this.getSeverityColor(ticket.severity);
 
@@ -130,7 +130,7 @@ export class DiscordProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const severityColor = this.getSeverityColor(ticket.severity);
 

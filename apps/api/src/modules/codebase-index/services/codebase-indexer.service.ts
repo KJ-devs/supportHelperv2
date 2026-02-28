@@ -18,7 +18,6 @@ import { GithubAppService } from '../../github/services/github-app.service';
 import { chunkCodeFile } from '../../../ai/code-chunker';
 import { shouldIndexFile } from '../../../ai/file-filter';
 import { IndexingResult } from '../types/codebase-index.types';
-import { CodeChunk } from '../../../ai/code-chunker';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB
 const INSERT_BATCH_SIZE = 100;
@@ -28,7 +27,7 @@ interface CollectedChunk {
   chunkIndex: number;
   content: string;
   language: string;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }
 
 @Injectable()

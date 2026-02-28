@@ -90,6 +90,9 @@ describe('Ticket Flow Integration', () => {
       add: jest.fn().mockResolvedValue({ id: 'job-001' }),
     };
 
+    const mockDeepAnalysisQueue = { add: jest.fn().mockResolvedValue({ id: 'job-da-001' }) };
+    const mockTriageQueue = { add: jest.fn().mockResolvedValue({ id: 'job-triage-001' }) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TicketsService,
@@ -97,6 +100,8 @@ describe('Ticket Flow Integration', () => {
         { provide: TicketsGateway, useValue: mockGateway },
         { provide: CacheService, useValue: mockCacheService },
         { provide: getQueueToken('github'), useValue: mockGithubQueue },
+        { provide: getQueueToken('deep-analysis'), useValue: mockDeepAnalysisQueue },
+        { provide: getQueueToken('triage'), useValue: mockTriageQueue },
       ],
     }).compile();
 

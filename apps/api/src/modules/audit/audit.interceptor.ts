@@ -21,7 +21,7 @@ export class AuditInterceptor implements NestInterceptor {
 
   constructor(private readonly auditService: AuditService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     const request = context.switchToHttp().getRequest();
     const method = request.method;
 
@@ -117,12 +117,16 @@ export class AuditInterceptor implements NestInterceptor {
   /**
    * Extract IP address from request, considering proxies
    */
-  private extractIpAddress(request: any): string | undefined {
+  private extractIpAddress(request: Record<string, unknown>): string | undefined {
+    const headers = request.headers as Record<string, string | string[] | undefined> | undefined;
+    const connection = request.connection as { remoteAddress?: string } | undefined;
+    const xForwardedFor = headers?.['x-forwarded-for'];
+    const firstForwarded = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor?.split(',')[0]?.trim();
     return (
-      request.ip ||
-      request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-      request.headers['x-real-ip'] ||
-      request.connection?.remoteAddress
+      (request.ip as string | undefined) ||
+      firstForwarded ||
+      (headers?.['x-real-ip'] as string | undefined) ||
+      connection?.remoteAddress
     );
   }
 }

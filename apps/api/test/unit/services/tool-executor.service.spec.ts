@@ -1,9 +1,13 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ToolExecutorService, ToolExecutionContext } from '../../../src/modules/agent-v2/tool-executor.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CodeInvestigationService, RepoContext } from '../../../src/modules/agent-v2/code-investigation.service';
 import { CodebaseSearchService } from '../../../src/modules/codebase-index/services/codebase-search.service';
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 
 describe('ToolExecutorService', () => {
   let service: ToolExecutorService;

@@ -116,7 +116,7 @@ export class JiraProvider extends BaseIntegrationProvider {
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const baseUrl = this.getBaseUrl(config);
       const priorityMapping = this.getPriorityMapping(config);
@@ -149,7 +149,7 @@ export class JiraProvider extends BaseIntegrationProvider {
       if (ticket.severity) labels.push(ticket.severity);
       if (ticket.type) labels.push(ticket.type);
 
-      const issuePayload: any = {
+      const issuePayload: Record<string, unknown> = {
         fields: {
           project: {
             key: config.projectKey,
@@ -179,7 +179,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
       const severity = ticket.severity?.toLowerCase();
       if (severity && priorityMapping[severity]) {
-        issuePayload.fields.priority = {
+        (issuePayload.fields as Record<string, unknown>).priority = {
           name: priorityMapping[severity],
         };
       }
@@ -212,7 +212,7 @@ export class JiraProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const baseUrl = this.getBaseUrl(config);
       const priorityMapping = this.getPriorityMapping(config);
@@ -244,7 +244,7 @@ export class JiraProvider extends BaseIntegrationProvider {
       if (ticket.severity) labels.push(ticket.severity);
       if (ticket.type) labels.push(ticket.type);
 
-      const updatePayload: any = {
+      const updatePayload: Record<string, unknown> = {
         fields: {
           summary: ticket.title || 'Untitled Ticket',
           description: {
@@ -268,7 +268,7 @@ export class JiraProvider extends BaseIntegrationProvider {
 
       const severity = ticket.severity?.toLowerCase();
       if (severity && priorityMapping[severity]) {
-        updatePayload.fields.priority = {
+        (updatePayload.fields as Record<string, unknown>).priority = {
           name: priorityMapping[severity],
         };
       }
@@ -340,7 +340,7 @@ export class JiraProvider extends BaseIntegrationProvider {
             key: string;
             fields: {
               summary: string;
-              description?: any;
+              description?: unknown;
               status?: { name: string };
               priority?: { name: string };
               issuetype?: { name: string };
@@ -387,12 +387,13 @@ export class JiraProvider extends BaseIntegrationProvider {
     }
   }
 
-  private extractTextFromAdf(adfNode: any): string {
+  private extractTextFromAdf(adfNode: unknown): string {
     if (!adfNode) return '';
     if (typeof adfNode === 'string') return adfNode;
-    if (adfNode.type === 'text') return adfNode.text || '';
-    if (adfNode.content && Array.isArray(adfNode.content)) {
-      return adfNode.content.map((child: any) => this.extractTextFromAdf(child)).join('\n');
+    const node = adfNode as { type?: string; text?: string; content?: unknown[] };
+    if (node.type === 'text') return node.text || '';
+    if (node.content && Array.isArray(node.content)) {
+      return node.content.map((child) => this.extractTextFromAdf(child)).join('\n');
     }
     return '';
   }

@@ -24,5 +24,5 @@ export class UpdateAiConfigDto {
   })
   @IsOptional()
   @IsObject()
-  settings?: Record<string, any>;
+  settings?: Record<string, unknown>;
 }

@@ -1,9 +1,13 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { CodeInvestigationService } from '../../../src/modules/agent-v2/code-investigation.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { GithubAppService } from '../../../src/modules/github/services/github-app.service';
 import { CacheService } from '../../../src/cache/cache.service';
-import { Octokit } from '@octokit/rest';
+import type { Octokit } from '@octokit/rest';
 
 describe('CodeInvestigationService', () => {
   let service: CodeInvestigationService;
@@ -33,12 +37,16 @@ describe('CodeInvestigationService', () => {
     installationId: '12345',
     tenantId: 'tenant-123',
     applicationId: 'app-123',
+    repoConfigId: 'config-123',
+    role: 'source',
+    fullName: 'acme/my-app',
+    isPrimary: true,
   };
 
   beforeEach(async () => {
     const mockPrisma = {
       projectGithubConfig: {
-        findUnique: jest.fn(),
+        findFirst: jest.fn(),
       },
     };
 
@@ -76,29 +84,33 @@ describe('CodeInvestigationService', () => {
 
   describe('getRepoContext', () => {
     it('returns null when no ProjectGithubConfig exists', async () => {
-      (prisma.projectGithubConfig.findUnique as jest.Mock).mockResolvedValue(null);
+      // getRepoContext calls getPrimaryRepoContext which uses findFirst twice (primary, then fallback)
+      (prisma.projectGithubConfig.findFirst as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getRepoContext('app-123');
 
       expect(result).toBeNull();
-      expect(prisma.projectGithubConfig.findUnique).toHaveBeenCalledWith({
-        where: { applicationId: 'app-123' },
-        include: { installation: true, application: true },
-      });
+      expect(prisma.projectGithubConfig.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ applicationId: 'app-123' }),
+        }),
+      );
     });
 
     it('returns RepoContext with octokit, owner, repo, defaultBranch', async () => {
       const mockConfig = {
+        id: 'config-123',
         owner: 'acme',
         repo: 'my-app',
         defaultBranch: 'main',
+        isPrimary: true,
+        role: 'source',
         installation: {
-          installationId: 12345,
+          installationId: BigInt(12345),
           tenantId: 'tenant-123',
         },
-        application: { id: 'app-123' },
       };
-      (prisma.projectGithubConfig.findUnique as jest.Mock).mockResolvedValue(mockConfig);
+      (prisma.projectGithubConfig.findFirst as jest.Mock).mockResolvedValue(mockConfig);
       (githubAppService.getInstallationOctokit as jest.Mock).mockResolvedValue(mockOctokit);
 
       const result = await service.getRepoContext('app-123');
@@ -190,8 +202,8 @@ describe('CodeInvestigationService', () => {
 
     it('filters to max 2 depth levels when recursive=true', async () => {
       const treeItems = [
-        { path: 'src/a.ts', type: 'blob', size: 100 },
-        { path: 'src/utils/b.ts', type: 'blob', size: 100 },
+        { path: 'a.ts', type: 'blob', size: 100 },
+        { path: 'src/b.ts', type: 'blob', size: 100 },
         { path: 'src/deep/nested/c.ts', type: 'blob', size: 100 },
       ];
       (mockOctokit.git.getTree as jest.Mock).mockResolvedValue({
@@ -200,8 +212,8 @@ describe('CodeInvestigationService', () => {
 
       const result = await service.listDirectory(mockRepoCtx, 'src', true);
 
-      // depth 1 = "src/a.ts" (2 parts), depth 2 = "src/utils/b.ts" (3 parts) — both <= 2
-      // depth 3 = "src/deep/nested/c.ts" (4 parts) — excluded
+      // depth 1: "a.ts" (1 part) — passes, depth 2: "src/b.ts" (2 parts) — passes
+      // depth 4: "src/deep/nested/c.ts" (4 parts) — excluded (> 2)
       expect(result).toHaveLength(2);
       expect(result.map((r) => r.path)).not.toContain('src/deep/nested/c.ts');
     });
@@ -298,10 +310,12 @@ describe('CodeInvestigationService', () => {
       });
       (cacheService.set as jest.Mock).mockResolvedValue(undefined);
 
-      const result = await service.getRepoStructure(mockRepoCtx, 2);
+      // maxDepth=3 → depth > 3 excluded
+      // src/index.ts (depth 2) → included
+      // src/utils/helper.ts (depth 3) → included
+      // src/modules/auth/auth.service.ts (depth 4) → excluded
+      const result = await service.getRepoStructure(mockRepoCtx, 3);
 
-      // maxDepth=2 — path with 3 parts (src/index.ts) ok, 3 parts (src/utils/helper.ts) ok,
-      // 4 parts (src/modules/auth/auth.service.ts) excluded
       expect(result).toContain('index.ts');
       expect(result).toContain('helper.ts');
       expect(result).not.toContain('auth.service.ts');

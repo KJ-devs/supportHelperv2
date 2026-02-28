@@ -1,13 +1,18 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
+import { getQueueToken } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { GithubWebhookProcessor, GithubWebhookJobData } from '../../../src/modules/github/processors/github-webhook.processor';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { GithubIssuesService } from '../../../src/modules/github/services/github-issues.service';
-
-jest.mock('@octokit/rest', () => ({
-  Octokit: jest.fn().mockImplementation(() => ({})),
-}));
+import { AutoMergeService } from '../../../src/modules/github/services/auto-merge.service';
+import { CodebaseIndexerService } from '../../../src/modules/codebase-index/services/codebase-indexer.service';
+import { CIFeedbackService } from '../../../src/modules/agent-tasks/services/ci-feedback.service';
+import { CacheService } from '../../../src/cache/cache.service';
 
 describe('GithubWebhookProcessor', () => {
   let processor: GithubWebhookProcessor;
@@ -24,6 +29,29 @@ describe('GithubWebhookProcessor', () => {
     syncTicketStatusToGithub: jest.fn(),
   };
 
+  const mockCodebaseIndexer = {
+    queueIncrementalIndex: jest.fn(),
+  };
+
+  const mockAutoMergeService = {
+    checkAndMerge: jest.fn().mockResolvedValue({ merged: false, reason: 'disabled' }),
+    handlePRMerged: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockCIFeedbackService = {
+    handleCIFailure: jest.fn().mockResolvedValue({ handled: false }),
+  };
+
+  const mockCacheService = {
+    get: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+    del: jest.fn().mockResolvedValue(undefined),
+  };
+
+  const mockCodebaseIndexQueue = {
+    add: jest.fn().mockResolvedValue({ id: 'job-idx-001' }),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,6 +63,26 @@ describe('GithubWebhookProcessor', () => {
         {
           provide: GithubIssuesService,
           useValue: mockIssuesService,
+        },
+        {
+          provide: AutoMergeService,
+          useValue: mockAutoMergeService,
+        },
+        {
+          provide: CodebaseIndexerService,
+          useValue: mockCodebaseIndexer,
+        },
+        {
+          provide: CIFeedbackService,
+          useValue: mockCIFeedbackService,
+        },
+        {
+          provide: CacheService,
+          useValue: mockCacheService,
+        },
+        {
+          provide: getQueueToken('codebase-indexing'),
+          useValue: mockCodebaseIndexQueue,
         },
       ],
     }).compile();

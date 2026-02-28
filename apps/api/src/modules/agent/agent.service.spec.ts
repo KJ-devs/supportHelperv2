@@ -7,8 +7,8 @@ import { AIService } from '../../ai/ai.service';
 
 describe('AgentService', () => {
   let service: AgentService;
-  let prisma: PrismaService;
-  let aiService: AIService;
+  let _prisma: PrismaService;
+  let _aiService: AIService;
   let agentQueue: { add: jest.Mock };
 
   const mockTenantId = 'tenant-123';
@@ -89,8 +89,8 @@ describe('AgentService', () => {
     }).compile();
 
     service = module.get<AgentService>(AgentService);
-    prisma = module.get<PrismaService>(PrismaService);
-    aiService = module.get<AIService>(AIService);
+    _prisma = module.get<PrismaService>(PrismaService);
+    _aiService = module.get<AIService>(AIService);
     agentQueue = module.get(getQueueToken('agent-orchestration'));
 
     jest.clearAllMocks();

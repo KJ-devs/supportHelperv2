@@ -12,5 +12,5 @@ export interface CodeSearchResult {
   content: string;
   language: string;
   distance: number;
-  metadata: Record<string, any>;
+  metadata: Record<string, unknown>;
 }

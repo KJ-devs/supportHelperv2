@@ -54,7 +54,7 @@ export class ReviewExpiryProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job): Promise<{ expired: number }> {
+  async process(_job: Job): Promise<{ expired: number }> {
     this.logger.log('Running review expiry check...');
     const expired = await this.validationModeService.expireStaleReviews();
     this.logger.log(`Review expiry check complete: ${expired} task(s) expired`);

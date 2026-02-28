@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { TicketStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CodeInvestigationService, RepoContext } from './code-investigation.service';
 import { CodebaseSearchService } from '../codebase-index/services/codebase-search.service';
@@ -194,7 +195,7 @@ export class ToolExecutorService {
       case 'update_ticket_status': {
         return this.prisma.ticket.update({
           where: { id: input.ticket_id as string },
-          data: { status: input.status as string },
+          data: { status: input.status as TicketStatus },
           select: { id: true, status: true },
         });
       }

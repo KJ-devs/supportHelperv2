@@ -30,7 +30,7 @@ export class UsersService {
 
   async findOne(id: string, tenantId: string) {
     const cacheKey = CacheKeys.userProfile(tenantId, id);
-    const cached = await this.cacheService.get<any>(cacheKey);
+    const cached = await this.cacheService.get<{ id: string; tenantId: string; email: string; name: string | null; role: string; createdAt: Date }>(cacheKey);
     if (cached) return cached;
 
     const user = await this.prisma.user.findFirst({

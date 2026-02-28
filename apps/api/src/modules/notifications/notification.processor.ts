@@ -4,13 +4,17 @@ import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 
+/** Notification channel config — dynamic JSON fields vary per channel type */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NotificationConfig = Record<string, any>;
+
 export interface SendNotificationJobData {
   ticketId: string;
   tenantId: string;
   channel: string;
   eventType: string;
-  data: Record<string, any>;
-  config: Record<string, any>;
+  data: Record<string, unknown>;
+  config: NotificationConfig;
   preferenceId: string;
 }
 
@@ -25,7 +29,7 @@ export class NotificationProcessor extends WorkerHost {
     super();
   }
 
-  async process(job: Job<SendNotificationJobData>): Promise<any> {
+  async process(job: Job<SendNotificationJobData>): Promise<unknown> {
     const { channel, ticketId, tenantId, eventType, data, config } = job.data;
 
     this.logger.log(
@@ -89,8 +93,8 @@ export class NotificationProcessor extends WorkerHost {
     ticketId: string,
     tenantId: string,
     eventType: string,
-    data: Record<string, any>,
-    config: Record<string, any>,
+    data: Record<string, unknown>,
+    config: NotificationConfig,
   ): Promise<void> {
     const { Resend } = await import('resend');
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
@@ -152,8 +156,8 @@ export class NotificationProcessor extends WorkerHost {
 
   private async sendWebhook(
     eventType: string,
-    data: Record<string, any>,
-    config: Record<string, any>,
+    data: Record<string, unknown>,
+    config: NotificationConfig,
   ): Promise<void> {
     const webhookUrl = config.webhookUrl;
     if (!webhookUrl) {
@@ -186,8 +190,8 @@ export class NotificationProcessor extends WorkerHost {
 
   private async sendSlack(
     eventType: string,
-    data: Record<string, any>,
-    config: Record<string, any>,
+    data: Record<string, unknown>,
+    config: NotificationConfig,
   ): Promise<void> {
     const slackWebhookUrl = config.slackWebhookUrl;
     if (!slackWebhookUrl) {
@@ -293,7 +297,7 @@ export class NotificationProcessor extends WorkerHost {
 
   private buildEmailSubject(
     eventType: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
   ): string {
     const title = data.ticketTitle || data.title || 'Ticket';
     const eventLabels: Record<string, string> = {
@@ -310,15 +314,15 @@ export class NotificationProcessor extends WorkerHost {
 
   private buildEmailHtml(
     eventType: string,
-    data: Record<string, any>,
+    data: Record<string, unknown>,
   ): string {
     // Special template for ticket_resolved event
     if (eventType === 'ticket_resolved') {
       return this.buildResolutionEmailHtml(data);
     }
 
-    const title = data.ticketTitle || data.title || 'Ticket Update';
-    const summary = data.summary || data.description || '';
+    const title = (data.ticketTitle || data.title || 'Ticket Update') as string;
+    const summary = (data.summary || data.description || '') as string;
     const emoji = this.getEventEmoji(eventType);
     const eventLabel = this.formatEventType(eventType);
 
@@ -354,15 +358,15 @@ export class NotificationProcessor extends WorkerHost {
 </html>`.trim();
   }
 
-  private buildResolutionEmailHtml(data: Record<string, any>): string {
-    const title = data.ticketTitle || 'Your Issue';
-    const summary = data.summary || 'Your issue has been resolved.';
-    const changes = Array.isArray(data.changes) ? data.changes : [];
-    const version = data.version || 'the next release';
-    const reopenToken = data.reopenToken || '';
-    const ticketId = data.ticketId || '';
-    const prUrl = data.prUrl || '';
-    const publicId = data.publicId || '';
+  private buildResolutionEmailHtml(data: Record<string, unknown>): string {
+    const title = (data.ticketTitle || 'Your Issue') as string;
+    const summary = (data.summary || 'Your issue has been resolved.') as string;
+    const changes = Array.isArray(data.changes) ? (data.changes as string[]) : [];
+    const version = (data.version || 'the next release') as string;
+    const reopenToken = (data.reopenToken || '') as string;
+    const ticketId = (data.ticketId || '') as string;
+    const prUrl = (data.prUrl || '') as string;
+    const publicId = (data.publicId || '') as string;
 
     // Build API base URL from config or use default
     const apiUrl = this.configService.get<string>('API_URL') || 'http://localhost:3001';

@@ -6,8 +6,8 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 describe('IntegrationsService', () => {
   let service: IntegrationsService;
-  let prisma: PrismaService;
-  let crypto: IntegrationsCryptoService;
+  let _prisma: PrismaService;
+  let _crypto: IntegrationsCryptoService;
 
   const mockPrisma = {
     integration: {
@@ -39,8 +39,8 @@ describe('IntegrationsService', () => {
     }).compile();
 
     service = module.get<IntegrationsService>(IntegrationsService);
-    prisma = module.get<PrismaService>(PrismaService);
-    crypto = module.get<IntegrationsCryptoService>(IntegrationsCryptoService);
+    _prisma = module.get<PrismaService>(PrismaService);
+    _crypto = module.get<IntegrationsCryptoService>(IntegrationsCryptoService);
   });
 
   afterEach(() => {

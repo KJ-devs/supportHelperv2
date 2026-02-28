@@ -106,12 +106,12 @@ export class TicketsAIService {
    * Fallback: Find similar tickets by keywords and title similarity
    */
   private async findSimilarByKeywords(
-    ticket: any,
+    ticket: { id: string; title?: string | null; description?: string | null },
     tenantId: string,
     limit: number,
   ) {
     // Simple keyword-based similarity as fallback
-    const keywords = this.extractKeywords(ticket.title, ticket.description);
+    const keywords = this.extractKeywords(ticket.title ?? '', ticket.description ?? undefined);
 
     if (keywords.length === 0) {
       return [];

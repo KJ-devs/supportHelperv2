@@ -9,7 +9,7 @@ jest.mock('@aws-sdk/s3-request-presigner');
 
 describe('S3Service', () => {
   let service: S3Service;
-  let configService: ConfigService;
+  let _configService: ConfigService;
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
@@ -36,7 +36,7 @@ describe('S3Service', () => {
     }).compile();
 
     service = module.get<S3Service>(S3Service);
-    configService = module.get<ConfigService>(ConfigService);
+    _configService = module.get<ConfigService>(ConfigService);
   });
 
   afterEach(() => {

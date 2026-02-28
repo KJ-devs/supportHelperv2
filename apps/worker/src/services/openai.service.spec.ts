@@ -15,12 +15,18 @@ jest.mock('@anthropic-ai/sdk', () => {
   }));
 });
 
-// Mock OpenAI (used for embeddings only)
+// Mock OpenAI (embeddings + chat completions for vision/classification fallback)
 const mockEmbeddingsCreate = jest.fn();
+const mockChatCompletionsCreate = jest.fn();
 jest.mock('openai', () => {
   return jest.fn().mockImplementation(() => ({
     embeddings: {
       create: mockEmbeddingsCreate,
+    },
+    chat: {
+      completions: {
+        create: mockChatCompletionsCreate,
+      },
     },
   }));
 });
@@ -88,6 +94,9 @@ describe('OpenAIService', () => {
           useValue: {
             $queryRawUnsafe: jest.fn(),
             $executeRawUnsafe: jest.fn(),
+            aiConfig: {
+              findUnique: jest.fn().mockResolvedValue(null),
+            },
           },
         },
       ],
@@ -99,42 +108,41 @@ describe('OpenAIService', () => {
 
     // Initialize Redis mock
     await service.onModuleInit();
-    mockRedis = (service as unknown).redis;
+    mockRedis = (service as any).redis;
   });
 
   describe('analyzeVideo', () => {
     const mockFrames = [Buffer.from('frame1'), Buffer.from('frame2')];
     const tenantId = 'test-tenant-id';
 
+    // OpenAI chat completions response format (service uses OpenAI path when no ANTHROPIC_API_KEY env var)
+    const mockVideoAnalysisJsonText = JSON.stringify({
+      summary: 'User clicked button and error appeared',
+      severity: 'high',
+      type: 'bug',
+      reproSteps: ['Open app', 'Click button', 'See error'],
+      component: 'Dashboard',
+      uiElements: ['button', 'modal'],
+      errorMessages: ['Error: Failed to load'],
+      confidence: {
+        overall: 0.9,
+        severity: 0.85,
+        type: 0.9,
+        component: 0.8,
+      },
+    });
+
     const mockVideoAnalysisResponse = {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            summary: 'User clicked button and error appeared',
-            severity: 'high',
-            type: 'bug',
-            reproSteps: ['Open app', 'Click button', 'See error'],
-            component: 'Dashboard',
-            uiElements: ['button', 'modal'],
-            errorMessages: ['Error: Failed to load'],
-            confidence: {
-              overall: 0.9,
-              severity: 0.85,
-              type: 0.9,
-              component: 0.8,
-            },
-          }),
-        },
-      ],
+      choices: [{ message: { content: mockVideoAnalysisJsonText } }],
       usage: {
-        input_tokens: 1000,
-        output_tokens: 200,
+        prompt_tokens: 1000,
+        completion_tokens: 200,
+        total_tokens: 1200,
       },
     };
 
     it('should analyze video frames successfully', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
+      mockChatCompletionsCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const result = await service.analyzeVideo(mockFrames, tenantId);
 
@@ -148,20 +156,20 @@ describe('OpenAIService', () => {
       expect(result.confidence.overall).toBe(0.9);
     });
 
-    it('should use Claude model for vision analysis', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
+    it('should use OpenAI model for vision analysis', async () => {
+      mockChatCompletionsCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       await service.analyzeVideo(mockFrames, tenantId);
 
-      expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect(mockChatCompletionsCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-sonnet-4-6',
+          model: 'gpt-4o',
         })
       );
     });
 
     it('should handle context with OCR text and UI detections', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
+      mockChatCompletionsCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const context = {
         ocrText: 'Error: Something went wrong',
@@ -171,11 +179,11 @@ describe('OpenAIService', () => {
       const result = await service.analyzeVideo(mockFrames, tenantId, context);
 
       expect(result.summary).toBeDefined();
-      expect(mockAnthropicCreate).toHaveBeenCalled();
+      expect(mockChatCompletionsCreate).toHaveBeenCalled();
     });
 
     it('should return fallback analysis on API error', async () => {
-      mockAnthropicCreate.mockRejectedValue(new Error('API Error'));
+      mockChatCompletionsCreate.mockRejectedValue(new Error('API Error'));
 
       const result = await service.analyzeVideo(mockFrames, tenantId);
 
@@ -184,7 +192,7 @@ describe('OpenAIService', () => {
     });
 
     it('should select key frames when too many frames provided', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockVideoAnalysisResponse);
+      mockChatCompletionsCreate.mockResolvedValue(mockVideoAnalysisResponse);
 
       const manyFrames = Array(50)
         .fill(null)
@@ -192,9 +200,10 @@ describe('OpenAIService', () => {
       await service.analyzeVideo(manyFrames, tenantId);
 
       // Should have selected max 10 key frames
-      const callArgs = mockAnthropicCreate.mock.calls[0][0];
-      const imageCount = callArgs.messages[0].content.filter(
-        (c: any) => c.type === 'image'
+      const callArgs = mockChatCompletionsCreate.mock.calls[0]![0];
+      const userMessage = callArgs.messages[1];
+      const imageCount = userMessage.content.filter(
+        (c: any) => c.type === 'image_url'
       ).length;
       expect(imageCount).toBeLessThanOrEqual(10);
     });
@@ -203,26 +212,29 @@ describe('OpenAIService', () => {
   describe('classifyTicket', () => {
     const tenantId = 'test-tenant-id';
 
+    // OpenAI chat completions response format (service uses OpenAI path when no ANTHROPIC_API_KEY env var)
     const mockClassificationResponse = {
-      content: [
+      choices: [
         {
-          type: 'text',
-          text: JSON.stringify({
-            type: 'bug',
-            severity: 'high',
-            keywords: ['crash', 'login', 'authentication'],
-            confidence: { type: 0.95, severity: 0.9 },
-          }),
+          message: {
+            content: JSON.stringify({
+              type: 'bug',
+              severity: 'high',
+              keywords: ['crash', 'login', 'authentication'],
+              confidence: { type: 0.95, severity: 0.9 },
+            }),
+          },
         },
       ],
       usage: {
-        input_tokens: 100,
-        output_tokens: 50,
+        prompt_tokens: 100,
+        completion_tokens: 50,
+        total_tokens: 150,
       },
     };
 
     it('should classify ticket successfully', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
+      mockChatCompletionsCreate.mockResolvedValue(mockClassificationResponse);
 
       const result = await service.classifyTicket('App crashes when logging in', tenantId);
 
@@ -232,20 +244,20 @@ describe('OpenAIService', () => {
       expect(result.confidence.type).toBe(0.95);
     });
 
-    it('should use Claude Haiku for classification', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
+    it('should use gpt-4o-mini for classification', async () => {
+      mockChatCompletionsCreate.mockResolvedValue(mockClassificationResponse);
 
       await service.classifyTicket('Test ticket', tenantId);
 
-      expect(mockAnthropicCreate).toHaveBeenCalledWith(
+      expect(mockChatCompletionsCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-haiku-4-5-20251001',
+          model: 'gpt-4o-mini',
         })
       );
     });
 
     it('should return fallback classification on error', async () => {
-      mockAnthropicCreate.mockRejectedValue(new Error('API Error'));
+      mockChatCompletionsCreate.mockRejectedValue(new Error('API Error'));
 
       const result = await service.classifyTicket('Test ticket', tenantId);
 
@@ -255,19 +267,20 @@ describe('OpenAIService', () => {
     });
 
     it('should normalize invalid severity values', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [
           {
-            type: 'text',
-            text: JSON.stringify({
-              type: 'bug',
-              severity: 'invalid-severity',
-              keywords: [],
-              confidence: { type: 0.5, severity: 0.5 },
-            }),
+            message: {
+              content: JSON.stringify({
+                type: 'bug',
+                severity: 'invalid-severity',
+                keywords: [],
+                confidence: { type: 0.5, severity: 0.5 },
+              }),
+            },
           },
         ],
-        usage: { input_tokens: 100, output_tokens: 50 },
+        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
       });
 
       const result = await service.classifyTicket('Test', tenantId);
@@ -276,13 +289,14 @@ describe('OpenAIService', () => {
     });
 
     it('should truncate long text input', async () => {
-      mockAnthropicCreate.mockResolvedValue(mockClassificationResponse);
+      mockChatCompletionsCreate.mockResolvedValue(mockClassificationResponse);
 
       const longText = 'a'.repeat(10000);
       await service.classifyTicket(longText, tenantId);
 
-      const callArgs = mockAnthropicCreate.mock.calls[0][0];
-      const userContent = callArgs.messages[0].content;
+      const callArgs = mockChatCompletionsCreate.mock.calls[0]![0];
+      // user message is second message (after system prompt)
+      const userContent = callArgs.messages[1].content;
       expect(userContent.length).toBeLessThanOrEqual(4000);
     });
   });
@@ -461,16 +475,18 @@ describe('OpenAIService', () => {
 
   describe('Rate Limiting', () => {
     const tenantId = 'rate-limit-tenant';
+    // RATE_LIMIT is 10000 (disabled for development)
+    const RATE_LIMIT = 10000;
 
     beforeEach(() => {
       // Reset rate limit state
-      (service as unknown).rateLimitState.clear();
+      (service as any).rateLimitState.clear();
     });
 
     it('should allow requests within rate limit', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: 'text', text: '{}' }],
-        usage: { input_tokens: 10, output_tokens: 10 },
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [{ message: { content: '{}' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
       });
 
       // Should not throw for first requests
@@ -480,9 +496,9 @@ describe('OpenAIService', () => {
     });
 
     it('should throw when rate limit exceeded', async () => {
-      // Manually set rate limit state to exceeded
-      (service as unknown).rateLimitState.set(tenantId, {
-        requestCount: 50,
+      // Manually set rate limit state to exceeded (at or above RATE_LIMIT)
+      (service as any).rateLimitState.set(tenantId, {
+        requestCount: RATE_LIMIT,
         windowStart: Date.now(),
       });
 
@@ -491,14 +507,14 @@ describe('OpenAIService', () => {
 
     it('should reset rate limit after window expires', async () => {
       // Set rate limit state from the past
-      (service as unknown).rateLimitState.set(tenantId, {
-        requestCount: 50,
+      (service as any).rateLimitState.set(tenantId, {
+        requestCount: RATE_LIMIT,
         windowStart: Date.now() - 70000, // 70 seconds ago
       });
 
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: 'text', text: '{}' }],
-        usage: { input_tokens: 10, output_tokens: 10 },
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [{ message: { content: '{}' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
       });
 
       // Should not throw - window has reset
@@ -506,21 +522,21 @@ describe('OpenAIService', () => {
     });
 
     it('should return correct rate limit status', () => {
-      (service as unknown).rateLimitState.set(tenantId, {
+      (service as any).rateLimitState.set(tenantId, {
         requestCount: 30,
         windowStart: Date.now(),
       });
 
       const status = service.getRateLimitStatus(tenantId);
 
-      expect(status.remaining).toBe(20);
+      expect(status.remaining).toBe(RATE_LIMIT - 30);
       expect(status.resetIn).toBeGreaterThan(0);
     });
 
     it('should return full limit for new tenant', () => {
       const status = service.getRateLimitStatus('new-tenant');
 
-      expect(status.remaining).toBe(50);
+      expect(status.remaining).toBe(RATE_LIMIT);
       expect(status.resetIn).toBe(0);
     });
   });
@@ -529,9 +545,9 @@ describe('OpenAIService', () => {
     const tenantId = 'cost-tracking-tenant';
 
     it('should track costs after API calls', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: 'text', text: '{}' }],
-        usage: { input_tokens: 1000, output_tokens: 500 },
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [{ message: { content: '{}' } }],
+        usage: { prompt_tokens: 1000, completion_tokens: 500, total_tokens: 1500 },
       });
 
       await service.classifyTicket('Test', tenantId);
@@ -638,9 +654,9 @@ describe('OpenAIService', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle Anthropic API errors gracefully', async () => {
-      mockAnthropicCreate.mockRejectedValue(
-        new Error('Anthropic API rate limit exceeded')
+    it('should handle API errors gracefully', async () => {
+      mockChatCompletionsCreate.mockRejectedValue(
+        new Error('API rate limit exceeded')
       );
 
       const result = await service.classifyTicket('Test', 'tenant');
@@ -651,14 +667,9 @@ describe('OpenAIService', () => {
     });
 
     it('should handle malformed JSON responses', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: 'not valid json at all no braces',
-          },
-        ],
-        usage: { input_tokens: 10, output_tokens: 10 },
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [{ message: { content: 'not valid json at all no braces' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
       });
 
       const result = await service.classifyTicket('Test', 'tenant');
@@ -668,9 +679,9 @@ describe('OpenAIService', () => {
     });
 
     it('should handle empty API responses', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [{ type: 'text', text: '' }],
-        usage: { input_tokens: 10, output_tokens: 10 },
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [{ message: { content: '' } }],
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
       });
 
       const result = await service.classifyTicket('Test', 'tenant');
@@ -679,14 +690,15 @@ describe('OpenAIService', () => {
     });
 
     it('should extract JSON from markdown code blocks', async () => {
-      mockAnthropicCreate.mockResolvedValue({
-        content: [
+      mockChatCompletionsCreate.mockResolvedValue({
+        choices: [
           {
-            type: 'text',
-            text: '```json\n{"type":"bug","severity":"high","keywords":["crash"],"confidence":{"type":0.9,"severity":0.8}}\n```',
+            message: {
+              content: '```json\n{"type":"bug","severity":"high","keywords":["crash"],"confidence":{"type":0.9,"severity":0.8}}\n```',
+            },
           },
         ],
-        usage: { input_tokens: 10, output_tokens: 10 },
+        usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
       });
 
       const result = await service.classifyTicket('Test', 'tenant');

@@ -94,6 +94,8 @@ describe('SDK Flow Integration', () => {
         { provide: TicketsGateway, useValue: mockGateway },
         { provide: CacheService, useValue: mockCacheService },
         { provide: getQueueToken('github'), useValue: mockGithubQueue },
+        { provide: getQueueToken('deep-analysis'), useValue: { add: jest.fn().mockResolvedValue({ id: 'job-da' }) } },
+        { provide: getQueueToken('triage'), useValue: { add: jest.fn().mockResolvedValue({ id: 'job-triage' }) } },
         {
           provide: JwtService,
           useFactory: () =>

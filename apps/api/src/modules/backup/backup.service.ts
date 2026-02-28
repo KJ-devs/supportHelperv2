@@ -25,7 +25,7 @@ export interface BackupStatus {
   jobId: string;
   status: 'active' | 'completed' | 'failed' | 'waiting' | 'delayed';
   progress?: number;
-  result?: any;
+  result?: unknown;
   error?: string;
 }
 
@@ -159,7 +159,7 @@ export class BackupService {
       const state = await job.getState();
       const progress = job.progress;
 
-      let status: BackupStatus = {
+      const status: BackupStatus = {
         jobId,
         status: state as 'active' | 'completed' | 'failed' | 'delayed' | 'waiting' | 'paused',
         progress: typeof progress === 'number' ? progress : undefined,

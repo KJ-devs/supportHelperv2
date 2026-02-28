@@ -31,7 +31,7 @@ export class CreateNotificationPreferenceDto {
   })
   @IsOptional()
   @IsObject()
-  config?: Record<string, any>;
+  config?: Record<string, unknown>;
 
   @ApiPropertyOptional({
     description: 'Whether this preference is enabled',

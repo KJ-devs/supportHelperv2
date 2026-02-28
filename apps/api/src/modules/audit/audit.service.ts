@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { AuditLog } from '@prisma/client';
+import { AuditLog, Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuditService {
@@ -19,7 +19,7 @@ export class AuditService {
     action: string;
     resourceType?: string;
     resourceId?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
     ipAddress?: string;
   }): Promise<void> {
     try {
@@ -31,7 +31,7 @@ export class AuditService {
           action: params.action,
           resourceType: params.resourceType || null,
           resourceId: params.resourceId || null,
-          details: params.details || {},
+          details: (params.details || {}) as Prisma.InputJsonValue,
           ipAddress: params.ipAddress || null,
         },
       });
@@ -68,7 +68,7 @@ export class AuditService {
     const limit = filters.limit || 50;
 
     // Build where clause
-    const where: any = { tenantId };
+    const where: Prisma.AuditLogWhereInput = { tenantId };
 
     if (filters.actorId) {
       where.actorId = filters.actorId;
@@ -130,7 +130,7 @@ export class AuditService {
     },
   ): Promise<string> {
     // Build where clause (same as findAll but without pagination)
-    const where: any = { tenantId };
+    const where: Prisma.AuditLogWhereInput = { tenantId };
 
     if (filters.actorId) {
       where.actorId = filters.actorId;

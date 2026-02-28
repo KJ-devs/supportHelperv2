@@ -2,24 +2,6 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
 
-interface OllamaGenerateRequest {
-  model: string;
-  prompt: string;
-  stream?: boolean;
-  options?: {
-    temperature?: number;
-    num_predict?: number;
-  };
-  system?: string;
-}
-
-interface OllamaGenerateResponse {
-  model: string;
-  created_at: string;
-  response: string;
-  done: boolean;
-}
-
 interface OllamaChatRequest {
   model: string;
   messages: Array<{ role: string; content: string }>;
@@ -103,7 +85,7 @@ export class OllamaProvider implements AIProvider {
 
   async generateStructuredOutput<T>(
     prompt: string,
-    schema: any,
+    schema: Record<string, unknown>,
     options?: CompletionOptions,
   ): Promise<T> {
     try {

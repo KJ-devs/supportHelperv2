@@ -6,17 +6,19 @@ import { TicketTimelineService } from '../tickets/services/ticket-timeline.servi
 import { ActionPlan, AgentTaskStatus } from './types/action-plan.types';
 
 /** Maps AgentTask status → Ticket status for automatic sync */
-const TASK_TO_TICKET_STATUS: Record<string, string | null> = {
-  analyzing: 'analyzing',
-  plan_pending_review: 'in_progress',
-  code_pending_review: 'in_progress',
-  plan_approved: 'in_progress',
-  code_approved: 'in_progress',
-  generating: 'in_progress',
-  pushing: 'in_progress',
-  pr_created: 'in_progress',
-  completed: 'resolved',
-  failed: 'open',
+import { TicketStatus } from '@prisma/client';
+
+const TASK_TO_TICKET_STATUS: Record<string, TicketStatus | null> = {
+  analyzing: TicketStatus.analyzing,
+  plan_pending_review: TicketStatus.in_progress,
+  code_pending_review: TicketStatus.in_progress,
+  plan_approved: TicketStatus.in_progress,
+  code_approved: TicketStatus.in_progress,
+  generating: TicketStatus.in_progress,
+  pushing: TicketStatus.in_progress,
+  pr_created: TicketStatus.in_progress,
+  completed: TicketStatus.resolved,
+  failed: TicketStatus.open,
   expired: 'open',
 };
 

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, TicketStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -82,7 +82,7 @@ async function main() {
   console.log(`✅ Created application: ${application.id}`);
 
   // Create test tickets - generate enough to test pagination
-  const statuses = ['new', 'open', 'in_progress', 'resolved', 'closed'] as const;
+  const statuses: TicketStatus[] = [TicketStatus.new, TicketStatus.open, TicketStatus.in_progress, TicketStatus.resolved, TicketStatus.closed];
   const types = ['bug', 'crash', 'performance', 'ui', 'feature_request', 'other'] as const;
   const severities = ['critical', 'high', 'medium', 'low'] as const;
   const browsers = ['Chrome 120', 'Firefox 121', 'Safari 17', 'Edge 120'];

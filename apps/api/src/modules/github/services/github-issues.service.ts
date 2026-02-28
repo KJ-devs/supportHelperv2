@@ -209,7 +209,7 @@ export class GithubIssuesService {
     }
 
     const octokit = await this.oauthService.getOctokitForTenant(tenantId);
-    const [owner, repo] = searchRepo.split('/');
+    const [_owner, _repo] = searchRepo.split('/');
 
     // Build search query from ticket
     const searchTerms = this.buildSearchTerms(ticket);
@@ -438,7 +438,7 @@ export class GithubIssuesService {
     if (existing) return;
 
     const octokit = await this.appService.getInstallationOctokit(Number(installationId));
-    const configSettings = (settings as Record<string, any>) ?? {};
+    const configSettings = (settings as Record<string, unknown>) ?? {};
     const customTemplate = configSettings.issueBodyTemplate as string | undefined;
     const issueBody = this.formatTicketAsIssueBody(
       ticket as TicketWithRelations,
@@ -520,11 +520,12 @@ export class GithubIssuesService {
     if (ticket.userContext) {
       const context = this.parseJson(ticket.userContext);
       if (context && typeof context === 'object') {
+        const ctx = context as Record<string, unknown>;
         const lines = [
-          `- **OS**: ${context.os || 'Unknown'}`,
-          `- **Browser**: ${context.browser || 'Unknown'}`,
-          `- **Version**: ${context.version || 'Unknown'}`,
-          context.url ? `- **URL**: ${context.url}` : null,
+          `- **OS**: ${ctx.os || 'Unknown'}`,
+          `- **Browser**: ${ctx.browser || 'Unknown'}`,
+          `- **Version**: ${ctx.version || 'Unknown'}`,
+          ctx.url ? `- **URL**: ${ctx.url}` : null,
         ].filter(Boolean);
         userContextText = lines.join('\n');
       }
@@ -634,7 +635,7 @@ export class GithubIssuesService {
   /**
    * Parse JSON safely
    */
-  private parseJson(value: any): any {
+  private parseJson(value: unknown): unknown {
     if (typeof value === 'string') {
       try {
         return JSON.parse(value);

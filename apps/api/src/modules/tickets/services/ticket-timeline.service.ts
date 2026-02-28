@@ -1,4 +1,5 @@
 import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TicketsGateway } from '../tickets.gateway';
 import { NotificationService } from '../../notifications/notification.service';
@@ -18,7 +19,7 @@ const NOTIFIABLE_EVENTS = new Set([
 export interface TimelineEntry {
   id: string;
   eventType: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
   createdAt: Date;
   status: 'done' | 'in_progress' | 'failed';
 }
@@ -39,14 +40,14 @@ export class TicketTimelineService {
     ticketId: string,
     tenantId: string,
     eventType: string,
-    data?: Record<string, any>,
+    data?: Record<string, unknown>,
   ): Promise<void> {
     const event = await this.prisma.ticketEvent.create({
       data: {
         ticketId,
         tenantId,
         eventType,
-        data: data || {},
+        data: (data || {}) as Prisma.InputJsonValue,
       },
     });
 
@@ -99,7 +100,7 @@ export class TicketTimelineService {
     return events.map((e) => ({
       id: e.id,
       eventType: e.eventType,
-      data: e.data as Record<string, any>,
+      data: e.data as Record<string, unknown>,
       createdAt: e.createdAt,
       status: this.inferStatus(e.eventType),
     }));

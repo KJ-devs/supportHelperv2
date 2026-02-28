@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { AgentTasksService } from '../../../src/modules/agent-tasks/agent-tasks.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { TicketTimelineService } from '../../../src/modules/tickets/services/ticket-timeline.service';
@@ -37,6 +38,10 @@ describe('AgentTasksService', () => {
         {
           provide: TicketTimelineService,
           useValue: mockTicketTimelineService,
+        },
+        {
+          provide: EventEmitter2,
+          useValue: { emit: jest.fn() },
         },
       ],
     }).compile();

@@ -4,6 +4,29 @@ import { AIService } from '../../../ai/ai.service';
 import { GithubOAuthService } from './github-oauth.service';
 import { CreateUserStoryDto, GeneratedUserStoryDto, UserStoryIssueResponseDto } from '../dto';
 
+interface AgentMessage {
+  role: string;
+  content: string;
+}
+
+interface AgentSession {
+  messages?: AgentMessage[];
+}
+
+interface TicketContext {
+  id?: string;
+  title?: string | null;
+  description?: string | null;
+  aiSummary?: string | null;
+  aiAnalysis?: unknown;
+  reproductionSteps?: unknown;
+  severity?: string | null;
+  type?: string | null;
+  status?: string | null;
+  keywords?: string[];
+  agentSessions?: AgentSession[];
+}
+
 @Injectable()
 export class GithubUserstoryService {
   private readonly logger = new Logger(GithubUserstoryService.name);
@@ -152,7 +175,7 @@ export class GithubUserstoryService {
   /**
    * Build the AI prompt for User Story generation
    */
-  private buildUserStoryPrompt(ticket: any, additionalContext?: string): string {
+  private buildUserStoryPrompt(ticket: TicketContext, additionalContext?: string): string {
     const parts: string[] = [];
 
     parts.push(`You are a product manager. Transform the following bug report / support ticket into a structured GitHub User Story.`);
@@ -259,7 +282,7 @@ export class GithubUserstoryService {
   private formatUserStoryBody(
     userStory: GeneratedUserStoryDto,
     ticketId: string,
-    ticket: any,
+    ticket: TicketContext,
   ): string {
     const sections: string[] = [];
 
@@ -315,7 +338,7 @@ export class GithubUserstoryService {
   /**
    * Build labels for the User Story GitHub issue
    */
-  private buildLabels(userStory: GeneratedUserStoryDto, ticket: any): string[] {
+  private buildLabels(userStory: GeneratedUserStoryDto, ticket: TicketContext): string[] {
     const labels: string[] = ['user-story', 'from-ticket'];
 
     if (ticket.severity) {

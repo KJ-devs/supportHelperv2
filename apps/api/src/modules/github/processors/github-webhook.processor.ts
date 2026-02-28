@@ -9,10 +9,14 @@ import { CodebaseIndexerService } from '../../codebase-index/services/codebase-i
 import { CIFeedbackService } from '../../agent-tasks/services/ci-feedback.service';
 import { CacheService } from '../../../cache/cache.service';
 
+/** Loose typing for GitHub webhook payload fields — shapes vary by event type */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type GithubPayload = Record<string, any>;
+
 export interface GithubWebhookJobData {
   event: string;
-  eventData: any;
-  payload: any;
+  eventData: Record<string, unknown>;
+  payload: GithubPayload;
   deliveryId: string;
   webhookEventId?: string;
   receivedAt: string;
@@ -64,7 +68,7 @@ export class GithubWebhookProcessor extends WorkerHost {
     return INDEXABLE_PUSH_EXTENSIONS.has(ext);
   }
 
-  async process(job: Job<GithubWebhookJobData | CreateGithubIssueJobData | SyncTicketStatusJobData>): Promise<any> {
+  async process(job: Job<GithubWebhookJobData | CreateGithubIssueJobData | SyncTicketStatusJobData>): Promise<unknown> {
     // Handle create-github-issue jobs
     if (job.name === 'create-github-issue') {
       const data = job.data as CreateGithubIssueJobData;

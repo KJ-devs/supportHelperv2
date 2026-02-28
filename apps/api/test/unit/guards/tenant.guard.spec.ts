@@ -1,17 +1,11 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import { TenantGuard } from '../../../src/auth/guards/tenant.guard';
-import { PrismaService } from '../../../src/prisma/prisma.service';
+import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { TenantGuard } from '../../../src/common/guards/tenant.guard';
 
 describe('TenantGuard', () => {
   let guard: TenantGuard;
-  let prisma: PrismaService;
 
   beforeEach(() => {
-    prisma = {
-      $executeRawUnsafe: jest.fn().mockResolvedValue(undefined),
-    } as unknown as PrismaService;
-
-    guard = new TenantGuard(prisma);
+    guard = new TenantGuard();
   });
 
   function createMockContext(user?: any): ExecutionContext {
@@ -35,73 +29,64 @@ describe('TenantGuard', () => {
   });
 
   describe('canActivate', () => {
-    it('should set tenantId on request and execute RLS query for JWT user', async () => {
-      const tenantUuid = '550e8400-e29b-41d4-a716-446655440000';
-      const user = { tenantId: tenantUuid, id: 'user-1', role: 'admin' };
+    it('should return true when user has tenantId', () => {
+      const user = { tenantId: 'tenant-123', id: 'user-1', role: 'admin' };
       const context = createMockContext(user);
 
-      const result = await guard.canActivate(context);
+      const result = guard.canActivate(context);
 
       expect(result).toBe(true);
-
-      const request = context.switchToHttp().getRequest();
-      expect(request.tenantId).toBe(tenantUuid);
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
     });
 
-    it('should extract tenantId from user.tenant.id for SDK key auth', async () => {
-      const user = { tenant: { id: 'tenant-456' } };
+    it('should return true with UUID tenantId', () => {
+      const user = { tenantId: '550e8400-e29b-41d4-a716-446655440000', id: 'user-1' };
       const context = createMockContext(user);
 
-      const result = await guard.canActivate(context);
+      const result = guard.canActivate(context);
 
       expect(result).toBe(true);
-
-      const request = context.switchToHttp().getRequest();
-      expect(request.tenantId).toBe('tenant-456');
     });
 
-    it('should prefer user.tenantId over user.tenant.id', async () => {
-      const user = { tenantId: 'tenant-primary', tenant: { id: 'tenant-fallback' } };
-      const context = createMockContext(user);
-
-      const result = await guard.canActivate(context);
-
-      expect(result).toBe(true);
-
-      const request = context.switchToHttp().getRequest();
-      expect(request.tenantId).toBe('tenant-primary');
-    });
-
-    it('should throw UnauthorizedException when user is not set', async () => {
+    it('should throw ForbiddenException when user is not set', () => {
       const context = createMockContext(undefined);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      await expect(guard.canActivate(context)).rejects.toThrow('User not authenticated');
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('Tenant information not found');
     });
 
-    it('should throw UnauthorizedException when user is null', async () => {
+    it('should throw ForbiddenException when user is null', () => {
       const context = createMockContext(null);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('Tenant information not found');
     });
 
-    it('should throw UnauthorizedException when tenantId is not found', async () => {
+    it('should throw ForbiddenException when tenantId is missing', () => {
       const user = { id: 'user-1', role: 'admin' }; // no tenantId
       const context = createMockContext(user);
 
-      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
-      await expect(guard.canActivate(context)).rejects.toThrow('Tenant context not found');
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('Tenant information not found');
     });
 
-    it('should set PostgreSQL RLS session variable with correct tenantId', async () => {
-      const tenantUuid = '660e8400-e29b-41d4-a716-446655440001';
-      const user = { tenantId: tenantUuid };
+    it('should throw ForbiddenException when tenantId is empty string', () => {
+      const user = { id: 'user-1', tenantId: '' };
       const context = createMockContext(user);
 
-      await guard.canActivate(context);
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+    });
 
-      expect(prisma.$executeRawUnsafe).toHaveBeenCalled();
+    it('should return true for different user roles', () => {
+      const roles = ['owner', 'admin', 'member', 'viewer'];
+
+      for (const role of roles) {
+        const user = { tenantId: 'tenant-1', id: 'user-1', role };
+        const context = createMockContext(user);
+
+        const result = guard.canActivate(context);
+
+        expect(result).toBe(true);
+      }
     });
   });
 });

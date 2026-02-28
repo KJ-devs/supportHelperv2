@@ -2,7 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as client from 'openid-client';
 import { NormalizedUserProfile } from './saml.strategy';
-import * as crypto from 'crypto';
+
 
 interface OidcState {
   codeVerifier: string;

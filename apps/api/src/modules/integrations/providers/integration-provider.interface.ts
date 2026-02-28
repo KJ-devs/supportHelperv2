@@ -14,9 +14,9 @@ export interface IntegrationProvider {
 
   testConnection(config: IntegrationConfig): Promise<{ success: boolean; message?: string; error?: string }>;
 
-  syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult>;
+  syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, unknown>): Promise<SyncResult>;
 
-  updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult>;
+  updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, unknown>): Promise<SyncResult>;
 
   deleteTicket?(externalId: string, config: IntegrationConfig): Promise<void>;
 

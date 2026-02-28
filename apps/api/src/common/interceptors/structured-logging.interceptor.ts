@@ -28,7 +28,7 @@ export class StructuredLoggingInterceptor implements NestInterceptor {
     @Optional() @Inject(PinoLoggerService) private readonly logger?: PinoLoggerService
   ) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     // Skip if logger not available
     if (!this.logger) {
       return next.handle();

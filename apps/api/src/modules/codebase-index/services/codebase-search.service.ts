@@ -33,7 +33,7 @@ export class CodebaseSearchService {
       chunk_index: number;
       content: string;
       language: string;
-      metadata: any;
+      metadata: unknown;
       distance: number;
     }> = await this.prisma.$queryRaw`
       SELECT file_path, chunk_index, content, language, metadata,
@@ -50,7 +50,7 @@ export class CodebaseSearchService {
       content: row.content,
       language: row.language,
       distance: Number(row.distance),
-      metadata: row.metadata ?? {},
+      metadata: (row.metadata ?? {}) as Record<string, unknown>,
     }));
   }
 

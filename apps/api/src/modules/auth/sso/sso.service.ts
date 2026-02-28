@@ -3,16 +3,16 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { SsoConfig } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { SsoCryptoService } from './sso-crypto.service';
 import { SamlStrategy, NormalizedUserProfile } from './strategies/saml.strategy';
 import { OidcStrategy } from './strategies/oidc.strategy';
 import { UpdateSsoConfigDto } from './dto';
 import { AuthService } from '../../../auth/auth.service';
-import * as bcrypt from 'bcrypt';
+
 
 @Injectable()
 export class SsoService {
@@ -366,7 +366,7 @@ export class SsoService {
     }
   }
 
-  private decryptAndMaskConfig(ssoConfig: any) {
+  private decryptAndMaskConfig(ssoConfig: SsoConfig) {
     // Decrypt config from database
     const decryptedConfigStr = this.cryptoService.decrypt(ssoConfig.config, ssoConfig.configIv);
     const config = JSON.parse(decryptedConfigStr);

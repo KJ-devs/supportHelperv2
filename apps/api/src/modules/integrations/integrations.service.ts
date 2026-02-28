@@ -217,7 +217,7 @@ export class IntegrationsService {
       throw new NotFoundException('Integration not found');
     }
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       integrationId,
       ...(status && { status }),
       ...(action && { action }),
@@ -292,7 +292,7 @@ export class IntegrationsService {
     };
   }
 
-  private decryptIntegration(integration: any, throwOnError = true) {
+  private decryptIntegration(integration: { id: string; name: string; type: string; config: string; configIv: string; [key: string]: unknown }, throwOnError = true) {
     try {
       const decryptedConfig = JSON.parse(this.cryptoService.decrypt(integration.config, integration.configIv));
 
@@ -301,8 +301,9 @@ export class IntegrationsService {
         config: decryptedConfig,
         configIv: undefined,
       };
-    } catch (error) {
-      this.logger.error(`Failed to decrypt integration ${integration.id}: ${error.message}`);
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Failed to decrypt integration ${integration.id}: ${errMsg}`);
       if (throwOnError) {
         throw new InternalServerErrorException(
           `Integration "${integration.name}" has corrupted credentials. Please reconfigure.`

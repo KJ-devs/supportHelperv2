@@ -27,6 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setTokens = (accessToken: string, refreshToken?: string) => {
     localStorage.setItem(TOKEN_KEY, accessToken);
+    document.cookie = `auth_token=${accessToken}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
     if (refreshToken) {
       localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
     }
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearTokens = () => {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
+    document.cookie = 'auth_token=; path=/; max-age=0';
   };
 
   const getAccessToken = () => localStorage.getItem(TOKEN_KEY);

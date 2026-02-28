@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
 import { TriageClassificationService } from './triage-classification.service';
@@ -61,7 +62,7 @@ export class TriageService {
           tenantId,
           applicationId,
           {
-            type: context.ticket.existingType as any,
+            type: context.ticket.existingType as 'bug' | 'feature_request' | 'question',
             typeConfidence: context.ticket.existingTypeConfidence!,
             severity: 'medium',
             severityConfidence: 0.5,
@@ -348,7 +349,7 @@ export class TriageService {
         ticketId,
         tenantId,
         eventType: 'triage_completed',
-        data: data as any,
+        data: data as Prisma.InputJsonValue,
       },
     });
   }

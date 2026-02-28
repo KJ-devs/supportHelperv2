@@ -53,7 +53,7 @@ export class SlackProvider extends BaseIntegrationProvider {
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const client = new WebClient(config.botToken);
 
@@ -129,7 +129,7 @@ export class SlackProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const client = new WebClient(config.botToken);
 

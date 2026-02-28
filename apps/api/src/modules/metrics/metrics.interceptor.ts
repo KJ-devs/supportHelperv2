@@ -23,7 +23,7 @@ export class MetricsInterceptor implements NestInterceptor {
     @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService
   ) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     // Skip if metrics service not available or disabled
     if (!this.metricsService || !this.metricsService.isEnabled()) {
       return next.handle();

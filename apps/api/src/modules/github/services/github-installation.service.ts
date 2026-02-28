@@ -53,9 +53,9 @@ export class GithubInstallationService {
       const { data: installation } = await octokit.apps.getInstallation({
         installation_id: installationId,
       });
-      const account = installation.account as Record<string, any> | null;
-      accountLogin = account?.login ?? account?.name ?? 'unknown';
-      accountType = account?.type ?? 'Organization';
+      const account = installation.account as Record<string, unknown> | null;
+      accountLogin = (account?.login ?? account?.name ?? 'unknown') as string;
+      accountType = (account?.type ?? 'Organization') as string;
       permissions = (installation.permissions as Record<string, string>) ?? {};
     } catch (error) {
       this.logger.error(
@@ -143,12 +143,12 @@ export class GithubInstallationService {
   async syncInstallationsFromGithub(tenantId: string): Promise<{
     synced: number;
     skipped: number;
-    installations: any[];
+    installations: unknown[];
   }> {
     const appJwt = this.appService.generateAppJwt();
     const octokit = new Octokit({ auth: appJwt });
 
-    let githubInstallations: any[];
+    let githubInstallations: Awaited<ReturnType<typeof octokit.apps.listInstallations>>['data'];
     try {
       const { data } = await octokit.apps.listInstallations({ per_page: 100 });
       githubInstallations = data;
@@ -161,7 +161,7 @@ export class GithubInstallationService {
 
     let synced = 0;
     let skipped = 0;
-    const syncedInstallations: any[] = [];
+    const syncedInstallations: unknown[] = [];
 
     for (const inst of githubInstallations) {
       const existing = await this.prisma.githubInstallation.findUnique({
@@ -174,9 +174,9 @@ export class GithubInstallationService {
         continue;
       }
 
-      const account = inst.account as Record<string, any> | null;
-      const accountLogin = account?.login ?? account?.name ?? 'unknown';
-      const accountType = account?.type ?? 'Organization';
+      const account = inst.account as Record<string, unknown> | null;
+      const accountLogin = (account?.login ?? account?.name ?? 'unknown') as string;
+      const accountType = (account?.type ?? 'Organization') as string;
       const permissions = (inst.permissions as Record<string, string>) ?? {};
       const suspendedAt = inst.suspended_at ? new Date(inst.suspended_at) : null;
 

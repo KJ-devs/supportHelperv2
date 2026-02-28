@@ -135,7 +135,7 @@ export class ProjectGithubController {
     @CurrentTenant() tenantId: string,
   ) {
     const config = await this.configService.getConfig(applicationId, tenantId);
-    const settings = (config?.settings as Record<string, any>) ?? {};
+    const settings = (config?.settings as Record<string, unknown>) ?? {};
     const customTemplate = settings.issueBodyTemplate as string | undefined;
     const isDefault = !customTemplate;
     const template = customTemplate || this.templateRenderer.getDefaultTemplate();
@@ -190,7 +190,7 @@ export class ProjectGithubController {
       template = dto.template;
     } else {
       const config = await this.configService.getConfig(applicationId, tenantId);
-      const settings = (config?.settings as Record<string, any>) ?? {};
+      const settings = (config?.settings as Record<string, unknown>) ?? {};
       template =
         (settings.issueBodyTemplate as string) ||
         this.templateRenderer.getDefaultTemplate();

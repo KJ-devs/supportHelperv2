@@ -40,7 +40,7 @@ export class SentryService implements OnModuleInit, OnModuleDestroy {
           Sentry.expressIntegration(),
           Sentry.prismaIntegration(),
         ],
-        beforeSend(event, hint) {
+        beforeSend(event, _hint) {
           // Filter out sensitive data
           if (event.request?.headers) {
             delete event.request.headers['authorization'];

@@ -11,7 +11,7 @@ export interface FieldMapping {
   sourceField: string;
   targetField: string;
   mappingType: 'direct' | 'transform';
-  defaultValue?: any;
+  defaultValue?: unknown;
   transformFn?: string;
 }
 
@@ -21,7 +21,7 @@ export interface SyncResult {
   externalUrl?: string;
   message?: string;
   error?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PullResult {
@@ -41,7 +41,8 @@ export interface PulledTicket {
   type?: string;
   createdAt?: string;
   updatedAt?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type IntegrationConfig = Record<string, any>;

@@ -36,31 +36,32 @@ export abstract class BaseIntegrationProvider implements IntegrationProvider {
 
   abstract testConnection(config: IntegrationConfig): Promise<{ success: boolean; message?: string; error?: string }>;
 
-  abstract syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult>;
+  abstract syncTicket(ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, unknown>): Promise<SyncResult>;
 
-  abstract updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, any>): Promise<SyncResult>;
+  abstract updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, mappings?: Record<string, unknown>): Promise<SyncResult>;
 
-  protected applyMappings(ticket: Ticket, mappings?: Record<string, any>): Record<string, any> {
-    const mapped: Record<string, any> = {};
+  protected applyMappings(ticket: Ticket, mappings?: Record<string, unknown>): Record<string, unknown> {
+    const mapped: Record<string, unknown> = {};
 
     if (!mappings) return mapped;
 
-    const ticketData = ticket as Record<string, any>;
+    const ticketData = ticket as Record<string, unknown>;
 
     for (const [source, target] of Object.entries(mappings)) {
       if (ticketData[source]) {
-        mapped[target] = ticketData[source];
+        mapped[target as string] = ticketData[source];
       }
     }
 
     return mapped;
   }
 
-  protected handleApiError(error: any, operation: string): SyncResult {
-    this.logger.error(`${operation} failed: ${error.message}`, error.stack);
+  protected handleApiError(error: unknown, operation: string): SyncResult {
+    const err = error as { message?: string; stack?: string };
+    this.logger.error(`${operation} failed: ${err.message}`, err.stack);
     return {
       success: false,
-      error: error.message || 'Unknown error',
+      error: err.message || 'Unknown error',
       metadata: { operation },
     };
   }

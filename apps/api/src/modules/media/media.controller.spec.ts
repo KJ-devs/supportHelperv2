@@ -10,7 +10,7 @@ import { RequestUploadUrlDto, CompleteUploadDto } from './dto';
 
 describe('MediaController', () => {
   let controller: MediaController;
-  let mediaService: MediaService;
+  let _mediaService: MediaService;
   let s3Service: S3Service;
   let prisma: PrismaService;
 
@@ -64,7 +64,7 @@ describe('MediaController', () => {
 
   const mockConfigService = {
     get: jest.fn((key: string) => {
-      const config: Record<string, any> = {
+      const config: Record<string, string | number> = {
         's3.endpoint': 'http://localhost:9000',
         's3.accessKeyId': 'minioadmin',
         's3.secretAccessKey': 'minioadmin',
@@ -95,7 +95,7 @@ describe('MediaController', () => {
     }).compile();
 
     controller = module.get<MediaController>(MediaController);
-    mediaService = module.get<MediaService>(MediaService);
+    _mediaService = module.get<MediaService>(MediaService);
     s3Service = module.get<S3Service>(S3Service);
     prisma = module.get<PrismaService>(PrismaService);
 

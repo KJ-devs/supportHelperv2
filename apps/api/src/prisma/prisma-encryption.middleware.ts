@@ -23,7 +23,7 @@ const READ_ACTIONS = ['findFirst', 'findMany', 'findUnique', 'findFirstOrThrow',
  * Encrypt fields in a data object, skipping nullish values and already-encrypted values.
  */
 function encryptFields(
-  data: Record<string, any>,
+  data: Record<string, unknown>,
   fields: string[],
   encryptionService: EncryptionService,
 ): void {
@@ -42,7 +42,7 @@ function encryptFields(
  * Silently skips values that fail decryption (may be legacy plaintext).
  */
 function decryptFields(
-  record: Record<string, any>,
+  record: Record<string, unknown>,
   fields: string[],
   encryptionService: EncryptionService,
 ): void {
@@ -60,6 +60,13 @@ function decryptFields(
   }
 }
 
+/** Shape of write args passed by Prisma middleware for write operations */
+interface WriteArgs {
+  data?: Record<string, unknown> | Array<Record<string, unknown>>;
+  create?: Record<string, unknown>;
+  update?: Record<string, unknown>;
+}
+
 /**
  * Encrypt data in write args. Handles nested structures:
  * - create/update: args.data
@@ -68,7 +75,7 @@ function decryptFields(
  */
 function encryptWriteArgs(
   action: string,
-  args: any,
+  args: WriteArgs,
   fields: string[],
   encryptionService: EncryptionService,
 ): void {
@@ -83,11 +90,11 @@ function encryptWriteArgs(
         encryptFields(item, fields, encryptionService);
       }
     } else if (args.data) {
-      encryptFields(args.data, fields, encryptionService);
+      encryptFields(args.data as Record<string, unknown>, fields, encryptionService);
     }
   } else {
     // create, update
-    if (args.data) {
+    if (args.data && !Array.isArray(args.data)) {
       encryptFields(args.data, fields, encryptionService);
     }
   }
@@ -97,7 +104,7 @@ function encryptWriteArgs(
  * Decrypt results from read actions.
  */
 function decryptResult(
-  result: any,
+  result: unknown,
   fields: string[],
   encryptionService: EncryptionService,
 ): void {
@@ -106,11 +113,11 @@ function decryptResult(
   if (Array.isArray(result)) {
     for (const record of result) {
       if (record && typeof record === 'object') {
-        decryptFields(record, fields, encryptionService);
+        decryptFields(record as Record<string, unknown>, fields, encryptionService);
       }
     }
   } else if (typeof result === 'object') {
-    decryptFields(result, fields, encryptionService);
+    decryptFields(result as Record<string, unknown>, fields, encryptionService);
   }
 }
 
@@ -124,7 +131,7 @@ function decryptResult(
 export function createEncryptionMiddleware(
   encryptionService: EncryptionService,
 ): Prisma.Middleware {
-  return async (params: Prisma.MiddlewareParams, next: (params: Prisma.MiddlewareParams) => Promise<any>) => {
+  return async (params: Prisma.MiddlewareParams, next: (params: Prisma.MiddlewareParams) => Promise<unknown>) => {
     const model = params.model as string | undefined;
     const action = params.action;
 

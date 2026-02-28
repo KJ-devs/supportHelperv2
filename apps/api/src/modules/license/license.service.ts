@@ -10,7 +10,6 @@ import {
   PlanLimits,
   PlanType,
   FREE_PLAN_LIMITS,
-  PLAN_FEATURES,
 } from './license.types';
 
 @Injectable()

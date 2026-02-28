@@ -64,7 +64,9 @@
 - Retry boundary: parameterized test covering attempts 1-4 with `it.each`
 - Pattern for DLQ payload: use `(deadLetterQueue.add as jest.Mock).mock.calls[0]![1]` to destructure and assert all fields
 - Gotcha: `saveVisualCues` calls `prisma.media.findUnique` (needs mock) AND `prisma.media.update` (3rd update call in happy path after processing+visualCues+completed)
-- Gotcha: worker test suites `integration-sync.worker.spec.ts`, `backup.worker.spec.ts`, `openai.service.spec.ts`, `dlq-cleanup.worker.spec.ts`, `dlq-cleanup.service.spec.ts` have pre-existing TS2322 errors unrelated to video-analysis work
+- Gotcha: worker test suites `integration-sync.worker.spec.ts`, `backup.worker.spec.ts`, `openai.service.spec.ts`, `dlq-cleanup.worker.spec.ts`, `dlq-cleanup.service.spec.ts` had pre-existing TS errors — now all FIXED (2026-02-28)
+- Worker TS fix patterns: `noUnusedLocals: true` in worker tsconfig → underscore prefix does NOT suppress TS6133, must REMOVE the unused variable declaration entirely; `(service as unknown).prop` = TS2571, must use `(service as any).prop`; `call[1]?.includes()` on `unknown[]` → `(call[1] as string)?.includes()`
+- OpenAI service test gotcha: `openai.service.spec.ts` routes to OpenAI path (not Anthropic) when `openaiConfig.apiKey` is set in mock but no `ANTHROPIC_API_KEY` env var. Mock must include `chat.completions.create` for analyzeVideo/classifyTicket tests. `RATE_LIMIT = 10000` (not 50) — tests must use actual constant value.
 
 ## Tests Added (2026-02-08 remediation)
 - Auth guards: jwt-auth, sdk-key (common), tenant, roles -> `test/unit/guards/`
@@ -240,6 +242,16 @@
 - Setup files must be .tsx (not .ts) if they contain JSX for mocking components
 - **AES-256-GCM encryption in tests**: Must use proper `encryptAES256GCM()` from @support-helper/shared to create valid encrypted configs. Base64 strings won't work - the auth tag must be appended correctly
 - **Worker tests location**: Worker tests can be colocated in `__tests__/` subdirectories within `apps/worker/src/workers/`
+
+## Test Suite Repair Patterns (2026-02-28)
+- See `test-repair-patterns.md` for full patterns for fixing tests when source code evolves
+- ESM @octokit/rest mock MUST go before imports (jest hoisting only works at start of file for ts-jest)
+- Mutable arrays passed to mock fns — jest.mock.calls[0][0] reflects POST-mutation state
+- TicketsService now injects 3 queues: github, deep-analysis, triage — provide all in TestingModule
+- AgenticLoopService: ToolCapableProviderFactory.createForTenant() returns ToolCapableProvider with chat() method (not Anthropic messages.create)
+- GithubInstallationService.removeInstallation: needs prisma.projectGithubConfig.deleteMany in mock
+- Many services use projectGithubConfig.findFirst (not findUnique) after multi-repo refactor
+- RepoContext now has: repoConfigId, role, fullName, isPrimary fields (not just owner/repo/defaultBranch)
 - **Module mocking paths**: When mocking imports in worker tests, account for the `__tests__/` subdirectory in relative paths (e.g., `../../../../api/...` not `../../../api/...`)
 - **Testing environment validation**: Must set ALL required env vars when testing optional var validation (e.g., API_PORT) - validation checks all required vars first
 - **Environment variable testing**: Save and restore `process.env` using beforeEach/afterAll to isolate tests

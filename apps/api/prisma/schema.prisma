@@ -84,6 +84,24 @@ model Application {
   @@map("applications")
 }
 
+enum TicketStatus {
+  new
+  open
+  in_progress
+  pending
+  analyzing
+  analyzed
+  analysis_failed
+  triaged
+  waiting
+  waiting_response
+  escalated
+  fix_proposed
+  resolved
+  merged
+  closed
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // TICKETS & REPORTS
 // ═══════════════════════════════════════════════════════════════════════
@@ -95,7 +113,7 @@ model Ticket {
   reporterId         String?   @map("reporter_id") @db.Uuid
 
   // Status & Classification
-  status             String    @default("new") @db.VarChar(50)
+  status             TicketStatus @default(new)
   type               String?   @db.VarChar(50)
   typeConfidence     Decimal?  @map("type_confidence") @db.Decimal(3, 2)
   severity           String?   @db.VarChar(50)

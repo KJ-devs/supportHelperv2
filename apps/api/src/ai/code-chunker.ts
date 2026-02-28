@@ -121,8 +121,6 @@ function chunkTypeScript(
 
   // If the first boundary doesn't start at line 0, include the import block
   // as part of the first chunk
-  const firstBoundary = boundaries[0].line;
-
   for (let b = 0; b < boundaries.length; b++) {
     const start = b === 0 ? 0 : boundaries[b].line;
     const end =

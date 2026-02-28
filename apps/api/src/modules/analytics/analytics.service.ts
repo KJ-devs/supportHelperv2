@@ -325,7 +325,7 @@ export class AnalyticsService {
     });
   }
 
-  private async getAvgFirstResponseTime(tenantId: string) {
+  private async getAvgFirstResponseTime(_tenantId: string) {
     // Placeholder - would need agent_messages table
     return 2.5; // hours
   }
@@ -341,12 +341,12 @@ export class AnalyticsService {
     return total > 0 ? (resolved / total) * 100 : 0;
   }
 
-  private async getReopenRate(tenantId: string) {
+  private async getReopenRate(_tenantId: string) {
     // Placeholder - would need ticket history tracking
     return 5.2; // percentage
   }
 
-  private async getCustomerSatisfaction(tenantId: string) {
+  private async getCustomerSatisfaction(_tenantId: string) {
     // Placeholder - would need satisfaction ratings
     return 4.2; // out of 5
   }

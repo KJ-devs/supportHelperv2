@@ -315,8 +315,9 @@ describe('GithubIssuesService', () => {
     beforeEach(() => {
       appService = (service as unknown as ServiceInternals).appService as Record<string, jest.Mock>;
       // Add missing prisma mocks for autoCreate
+      // The service uses ticket.findUnique (not findFirst) and projectGithubConfig.findFirst
       (prisma as unknown as PrismaMock).ticket.findUnique = jest.fn();
-      (prisma as unknown as PrismaMock).projectGithubConfig = { findUnique: jest.fn() };
+      (prisma as unknown as PrismaMock).projectGithubConfig = { findFirst: jest.fn() };
       // Clear shared mock to avoid leaking from previous tests
       mockOctokit.issues.create.mockClear();
       mockOctokit.issues.create.mockResolvedValue({
@@ -326,7 +327,7 @@ describe('GithubIssuesService', () => {
 
     it('should create issue via installation token when config exists', async () => {
       (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -346,7 +347,7 @@ describe('GithubIssuesService', () => {
 
     it('should include default labels from config settings', async () => {
       (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -377,7 +378,7 @@ describe('GithubIssuesService', () => {
 
     it('should skip when no ProjectGithubConfig exists', async () => {
       (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue(null);
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue(null);
 
       await service.autoCreateIssueFromTicket('ticket-123');
 
@@ -386,7 +387,7 @@ describe('GithubIssuesService', () => {
 
     it('should skip when issue already exists for ticket+repo', async () => {
       (prisma as unknown as PrismaMock).ticket.findUnique.mockResolvedValue({ ...mockTicket, applicationId: 'app-123' });
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         owner: 'owner',
         repo: 'repo',
         installationId: BigInt(12345),
@@ -473,7 +474,8 @@ describe('GithubIssuesService', () => {
     };
 
     beforeEach(() => {
-      (prisma as unknown as PrismaMock).projectGithubConfig = { findUnique: jest.fn() };
+      // syncTicketStatusToGithub uses projectGithubConfig.findFirst (not findUnique)
+      (prisma as unknown as PrismaMock).projectGithubConfig = { findFirst: jest.fn() };
       // Reset shared mock call history
       mockOctokit.issues.update.mockClear();
       mockOctokit.issues.update.mockResolvedValue({ data: {} });
@@ -493,7 +495,7 @@ describe('GithubIssuesService', () => {
       const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -514,7 +516,7 @@ describe('GithubIssuesService', () => {
       const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -530,7 +532,7 @@ describe('GithubIssuesService', () => {
       const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         installationId: BigInt(12345),
       });
       (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
@@ -560,7 +562,7 @@ describe('GithubIssuesService', () => {
       const cs = (service as unknown as ServiceInternals).cacheService as { get: jest.Mock; set: jest.Mock };
       cs.get.mockResolvedValue(null);
       (prisma.githubIssue.findMany as jest.Mock).mockResolvedValue([mockGithubIssue]);
-      (prisma as unknown as PrismaMock).projectGithubConfig.findUnique.mockResolvedValue({
+      (prisma as unknown as PrismaMock).projectGithubConfig.findFirst.mockResolvedValue({
         installationId: BigInt(12345),
       });
       mockOctokit.issues.update.mockRejectedValueOnce(new Error('API error'));

@@ -1,6 +1,7 @@
 import { Injectable, Inject, Logger, NotFoundException, BadRequestException, forwardRef, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
 import { AgentGateway } from './agent.gateway';
@@ -14,6 +15,27 @@ export enum AgentState {
   WAITING = 'waiting',
   RESOLVED = 'resolved',
   ESCALATED = 'escalated',
+}
+
+interface TicketContext {
+  id: string;
+  tenantId: string;
+  title?: string | null;
+  description?: string | null;
+  aiSummary?: string | null;
+  type?: string | null;
+  severity?: string | null;
+}
+
+interface AnalysisResult {
+  confidence: number;
+  needsEscalation?: boolean;
+  needsMoreInfo?: boolean;
+  hasSolution?: boolean;
+  solution?: string;
+  escalationReason?: string;
+  questions?: string[];
+  summary?: string;
 }
 
 @Injectable()
@@ -92,7 +114,7 @@ export class AgentService {
    * @deprecated Analysis is now handled by the worker via the agent-orchestration
    * BullMQ queue. This method is no longer called from startSession().
    */
-  private async processTicketAnalysis(sessionId: string, ticket: any) {
+  private async processTicketAnalysis(sessionId: string, ticket: TicketContext) {
     this.logger.log(`Analyzing ticket ${ticket.id}`);
 
     try {
@@ -146,7 +168,7 @@ export class AgentService {
   /**
    * Analyze ticket using AI
    */
-  private async analyzeTicket(ticket: any) {
+  private async analyzeTicket(ticket: TicketContext) {
     const prompt = `
 Analyze this support ticket and provide:
 1. Problem summary
@@ -183,7 +205,7 @@ Respond in JSON format.
   /**
    * Determine next agent state based on analysis
    */
-  private determineNextState(analysis: any): AgentState {
+  private determineNextState(analysis: AnalysisResult): AgentState {
     if (analysis.needsEscalation || analysis.confidence < 50) {
       return AgentState.ESCALATED;
     }
@@ -205,8 +227,8 @@ Respond in JSON format.
   private async executeStateAction(
     sessionId: string,
     state: AgentState,
-    ticket: any,
-    analysis: any
+    ticket: TicketContext,
+    analysis: AnalysisResult
   ) {
     switch (state) {
       case AgentState.PROPOSING:
@@ -229,7 +251,7 @@ Respond in JSON format.
   /**
    * Propose solution to user
    */
-  private async proposeSolution(sessionId: string, ticket: any, analysis: any) {
+  private async proposeSolution(sessionId: string, ticket: TicketContext, analysis: AnalysisResult) {
     const message = `Based on my analysis, here's a suggested solution:\n\n${analysis.solution}\n\nWould this help resolve your issue?`;
 
     await this.prisma.agentMessage.create({
@@ -239,7 +261,7 @@ Respond in JSON format.
         content: message,
         channel: 'web',
         metadata: {
-          analysis,
+          analysis: analysis as unknown as Prisma.InputJsonValue,
         },
       },
     });
@@ -250,7 +272,7 @@ Respond in JSON format.
   /**
    * Request more information from user
    */
-  private async requestMoreInfo(sessionId: string, ticket: any, analysis: any) {
+  private async requestMoreInfo(sessionId: string, ticket: TicketContext, analysis: AnalysisResult) {
     const questions = analysis.questions || [
       'Could you provide more details about when this issue occurs?',
     ];
@@ -274,7 +296,7 @@ Respond in JSON format.
    * Assigns the ticket, notifies the assignee via WebSocket and email,
    * and records an escalation message in the agent session.
    */
-  private async escalateToHuman(sessionId: string, ticket: any, analysis: any) {
+  private async escalateToHuman(sessionId: string, ticket: TicketContext, analysis: AnalysisResult) {
     const escalationReason = analysis.escalationReason || 'Requires human review';
 
     // Find available support agent
@@ -427,7 +449,7 @@ Respond in JSON format.
     return updated;
   }
 
-  async sendMessage(sessionId: string, tenantId: string, content: string, userId?: string) {
+  async sendMessage(sessionId: string, tenantId: string, content: string, _userId?: string) {
     const session = await this.getSession(sessionId, tenantId);
 
     // Reject messages sent to closed (resolved or escalated) sessions
@@ -641,16 +663,18 @@ Respond in JSON format.
   /**
    * Generate agent response using AI
    */
-  private async generateAgentResponse(session: any, userMessage: string) {
-    const context = session.messages
-      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+  private async generateAgentResponse(session: Record<string, unknown>, userMessage: string) {
+    const messages = session.messages as Array<{ role: string; content: string }>;
+    const ticket = session.ticket as { title: string; description: string };
+    const context = messages
+      .map((m) => `${m.role}: ${m.content}`)
       .join('\n');
 
     const prompt = `
 You are a helpful support agent. Based on the conversation history and ticket details, respond to the user's message.
 
-Ticket: ${session.ticket.title}
-Description: ${session.ticket.description}
+Ticket: ${ticket.title}
+Description: ${ticket.description}
 
 Conversation:
 ${context}

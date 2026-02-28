@@ -6,6 +6,7 @@ import {
   ConflictException,
   HttpException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GithubAppService } from './github-app.service';
 
@@ -168,7 +169,7 @@ export class ProjectGithubConfigService {
   async updateSettings(
     applicationId: string,
     tenantId: string,
-    settings: Record<string, any>,
+    settings: object,
   ) {
     // Verify application belongs to tenant
     const application = await this.prisma.application.findFirst({
@@ -189,11 +190,11 @@ export class ProjectGithubConfigService {
 
     // Merge new settings with existing
     const existingSettings = (config.settings as Record<string, unknown>) ?? {};
-    const mergedSettings = { ...existingSettings, ...settings };
+    const mergedSettings = { ...existingSettings, ...(settings as Record<string, unknown>) };
 
     const updated = await this.prisma.projectGithubConfig.update({
       where: { id: config.id },
-      data: { settings: mergedSettings },
+      data: { settings: mergedSettings as Prisma.InputJsonValue },
     });
 
     return this.serializeConfig(updated);
@@ -202,7 +203,7 @@ export class ProjectGithubConfigService {
   /**
    * Serialize config for JSON response (BigInt -> number).
    */
-  private serializeConfig(config: any) {
+  private serializeConfig(config: Prisma.ProjectGithubConfigGetPayload<Record<string, never>>) {
     return {
       id: config.id,
       applicationId: config.applicationId,

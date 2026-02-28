@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 export interface DispatchNotificationParams {
@@ -8,7 +9,7 @@ export interface DispatchNotificationParams {
   tenantId: string;
   applicationId: string;
   eventType: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
 @Injectable()
@@ -83,7 +84,7 @@ export class NotificationService {
           channel: pref.channel,
           eventType,
           status: 'pending',
-          metadata: data,
+          metadata: data as Prisma.InputJsonValue,
         },
       });
     }

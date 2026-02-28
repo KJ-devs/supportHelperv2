@@ -66,7 +66,7 @@ export class TicketsGateway
   @SubscribeMessage('join-tenant')
   async handleJoinTenant(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { tenantId?: string },
+    @MessageBody() _data: { tenantId?: string },
   ) {
     const user = client.data.user as WsUser;
 
@@ -89,7 +89,7 @@ export class TicketsGateway
   @SubscribeMessage('leave-tenant')
   async handleLeaveTenant(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { tenantId?: string },
+    @MessageBody() _data: { tenantId?: string },
   ) {
     const user = client.data.user as WsUser;
     const tenantId = user.tenantId;
@@ -108,19 +108,19 @@ export class TicketsGateway
   // Server-side emit helpers (called by TicketsService / Controller)
   // ----------------------------------------------------------------
 
-  emitTicketCreated(tenantId: string, ticket: any) {
+  emitTicketCreated(tenantId: string, ticket: Record<string, unknown>) {
     this.server
       .to(this.tenantRoom(tenantId))
       .emit('ticket:created', { event: 'ticket:created', ticket, timestamp: new Date() });
   }
 
-  emitTicketUpdated(tenantId: string, ticket: any) {
+  emitTicketUpdated(tenantId: string, ticket: Record<string, unknown>) {
     this.server
       .to(this.tenantRoom(tenantId))
       .emit('ticket:updated', { event: 'ticket:updated', ticket, timestamp: new Date() });
   }
 
-  emitTicketAssigned(tenantId: string, ticket: any) {
+  emitTicketAssigned(tenantId: string, ticket: Record<string, unknown>) {
     this.server
       .to(this.tenantRoom(tenantId))
       .emit('ticket:assigned', { event: 'ticket:assigned', ticket, timestamp: new Date() });
@@ -132,13 +132,13 @@ export class TicketsGateway
       .emit('ticket:deleted', { event: 'ticket:deleted', ticket: { id: ticketId }, timestamp: new Date() });
   }
 
-  emitAiAnalysisCompleted(tenantId: string, ticket: any) {
+  emitAiAnalysisCompleted(tenantId: string, ticket: Record<string, unknown>) {
     this.server
       .to(this.tenantRoom(tenantId))
       .emit('ticket:ai-analysis-completed', { event: 'ticket:ai-analysis-completed', ticket, timestamp: new Date() });
   }
 
-  emitTimelineEvent(tenantId: string, ticketId: string, event: any) {
+  emitTimelineEvent(tenantId: string, ticketId: string, event: Record<string, unknown>) {
     this.server
       .to(this.tenantRoom(tenantId))
       .emit('ticket:timeline-event', {

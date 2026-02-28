@@ -172,7 +172,7 @@ export class AgentGateway
   // Server-side emit helpers (called by AgentService)
   // ----------------------------------------------------------------
 
-  emitNewMessage(sessionId: string, message: any) {
+  emitNewMessage(sessionId: string, message: Record<string, unknown>) {
     this.server
       .to(this.roomName(sessionId))
       .emit('new-message', { sessionId, message });
@@ -184,7 +184,7 @@ export class AgentGateway
       .emit('agent-typing', { sessionId, isTyping });
   }
 
-  emitSessionUpdate(sessionId: string, state: any) {
+  emitSessionUpdate(sessionId: string, state: Record<string, unknown>) {
     this.server
       .to(this.roomName(sessionId))
       .emit('session-update', { sessionId, state });

@@ -8,7 +8,7 @@ import { AnthropicClientFactory } from '../../ai-config/anthropic-client.factory
 import { AiConfigService } from '../../ai-config/ai-config.service';
 import { CodebaseSearchService } from '../../codebase-index/services/codebase-search.service';
 import { GithubAppService } from '../../github/services/github-app.service';
-import { ActionPlan } from '../types/action-plan.types';
+import { ActionPlan, ActionPlanFile } from '../types/action-plan.types';
 import { Octokit } from '@octokit/rest';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-20250514';
@@ -150,9 +150,10 @@ export class CodeAnalysisAgentService {
         .slice(0, MAX_TREE_ENTRIES);
 
       return filePaths;
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
       this.logger.warn(
-        `Failed to get repo tree for ${owner}/${repo}: ${error.message}`,
+        `Failed to get repo tree for ${owner}/${repo}: ${errMsg}`,
       );
       return [];
     }
@@ -205,7 +206,7 @@ Rules:
   }
 
   private buildUserPrompt(
-    ticket: any,
+    ticket: Record<string, unknown>,
     repoTree: string[],
     relevantCode: Array<{
       filePath: string;
@@ -294,7 +295,7 @@ Rules:
       jsonStr = jsonBlockMatch[1].trim();
     }
 
-    let parsed: any;
+    let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(jsonStr);
     } catch {
@@ -339,19 +340,19 @@ Rules:
     }
 
     const plan: ActionPlan = {
-      summary: parsed.summary,
-      rootCause: parsed.rootCause,
-      files: parsed.files.map((f: any, i: number) => ({
-        filePath: f.filePath,
-        operation: f.operation,
-        description: f.description || '',
-        changeType: f.changeType,
+      summary: parsed.summary as string,
+      rootCause: parsed.rootCause as string,
+      files: (parsed.files as Array<Record<string, unknown>>).map((f, i: number) => ({
+        filePath: f.filePath as string,
+        operation: f.operation as ActionPlanFile['operation'],
+        description: (f.description as string) || '',
+        changeType: f.changeType as ActionPlanFile['changeType'],
         order: typeof f.order === 'number' ? f.order : i + 1,
       })),
-      testingStrategy: parsed.testingStrategy || '',
-      risks: Array.isArray(parsed.risks) ? parsed.risks : [],
-      estimatedComplexity: validComplexities.includes(parsed.estimatedComplexity)
-        ? parsed.estimatedComplexity
+      testingStrategy: (parsed.testingStrategy as string) || '',
+      risks: Array.isArray(parsed.risks) ? (parsed.risks as string[]) : [],
+      estimatedComplexity: validComplexities.includes(parsed.estimatedComplexity as string)
+        ? (parsed.estimatedComplexity as 'high' | 'medium' | 'low')
         : 'medium',
     };
 

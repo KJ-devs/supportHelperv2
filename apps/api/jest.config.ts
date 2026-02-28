@@ -57,6 +57,7 @@ const config: Config = {
     '^.+\\.ts$': [
       'ts-jest',
       {
+        diagnostics: false,
         tsconfig: {
           esModuleInterop: true,
           allowSyntheticDefaultImports: true,
@@ -70,7 +71,7 @@ const config: Config = {
 
   // Transform node_modules that are ESM
   transformIgnorePatterns: [
-    'node_modules/(?!(@support-helper)/)',
+    'node_modules/(?!(@support-helper|@octokit|octokit|before-after-hook|universal-user-agent|is-plain-object|node-fetch)/)',
   ],
 
   // Setup files
@@ -95,6 +96,7 @@ const config: Config = {
         '^.+\\.ts$': [
           'ts-jest',
           {
+            diagnostics: false,
             tsconfig: {
               esModuleInterop: true,
               allowSyntheticDefaultImports: true,
@@ -103,7 +105,7 @@ const config: Config = {
         ],
       },
       transformIgnorePatterns: [
-        'node_modules/(?!(@support-helper)/)',
+        'node_modules/(?!(@support-helper|@octokit|octokit|before-after-hook|universal-user-agent|is-plain-object|node-fetch)/)',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
@@ -118,6 +120,7 @@ const config: Config = {
         '^.+\\.ts$': [
           'ts-jest',
           {
+            diagnostics: false,
             tsconfig: {
               esModuleInterop: true,
               allowSyntheticDefaultImports: true,
@@ -126,7 +129,7 @@ const config: Config = {
         ],
       },
       transformIgnorePatterns: [
-        'node_modules/(?!(@support-helper)/)',
+        'node_modules/(?!(@support-helper|@octokit|octokit|before-after-hook|universal-user-agent|is-plain-object|node-fetch)/)',
       ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',

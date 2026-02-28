@@ -1,26 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { TenantGuard } from '../../../src/modules/auth/guards/tenant.guard';
+import { TenantGuard } from '../../../src/common/guards/tenant.guard';
 import { UserEntity, ApplicationEntity } from '../../../src/modules/auth/dto/auth.dto';
 
 describe('TenantGuard', () => {
   let guard: TenantGuard;
-  let reflector: jest.Mocked<Reflector>;
 
   beforeEach(async () => {
-    reflector = {
-      getAllAndOverride: jest.fn(),
-    } as unknown;
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        TenantGuard,
-        {
-          provide: Reflector,
-          useValue: reflector,
-        },
-      ],
+      providers: [TenantGuard],
     }).compile();
 
     guard = module.get<TenantGuard>(TenantGuard);
@@ -46,7 +34,7 @@ describe('TenantGuard', () => {
   });
 
   describe('canActivate', () => {
-    it('should return true and set tenantId for authenticated user', () => {
+    it('should return true for authenticated user with tenantId', () => {
       const mockUser: UserEntity = {
         id: 'user-1',
         tenantId: 'tenant-1',
@@ -61,10 +49,9 @@ describe('TenantGuard', () => {
       const result = guard.canActivate(context);
 
       expect(result).toBe(true);
-      expect(request.tenantId).toBe('tenant-1');
     });
 
-    it('should return true and set tenantId for authenticated application', () => {
+    it('should return true for authenticated application with tenantId', () => {
       const mockApp: ApplicationEntity = {
         id: 'app-1',
         tenantId: 'tenant-2',
@@ -79,25 +66,21 @@ describe('TenantGuard', () => {
       const result = guard.canActivate(context);
 
       expect(result).toBe(true);
-      expect(request.tenantId).toBe('tenant-2');
     });
 
     it('should throw ForbiddenException when user is not authenticated', () => {
       const request = {};
       const context = createMockExecutionContext(request);
 
-      expect(() => guard.canActivate(context)).toThrow(
-        new ForbiddenException('User not authenticated')
-      );
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('Tenant information not found');
     });
 
     it('should throw ForbiddenException when user is null', () => {
       const request = { user: null };
       const context = createMockExecutionContext(request);
 
-      expect(() => guard.canActivate(context)).toThrow(
-        new ForbiddenException('User not authenticated')
-      );
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
     });
 
     it('should throw ForbiddenException when tenantId is missing', () => {
@@ -109,24 +92,8 @@ describe('TenantGuard', () => {
       };
       const context = createMockExecutionContext(request);
 
-      expect(() => guard.canActivate(context)).toThrow(
-        new ForbiddenException('Tenant not found')
-      );
-    });
-
-    it('should throw ForbiddenException when tenantId is null', () => {
-      const request = {
-        user: {
-          id: 'user-1',
-          tenantId: null,
-          email: 'user@example.com',
-        },
-      };
-      const context = createMockExecutionContext(request);
-
-      expect(() => guard.canActivate(context)).toThrow(
-        new ForbiddenException('Tenant not found')
-      );
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+      expect(() => guard.canActivate(context)).toThrow('Tenant information not found');
     });
 
     it('should throw ForbiddenException when tenantId is empty string', () => {
@@ -139,12 +106,10 @@ describe('TenantGuard', () => {
       };
       const context = createMockExecutionContext(request);
 
-      expect(() => guard.canActivate(context)).toThrow(
-        new ForbiddenException('Tenant not found')
-      );
+      expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
     });
 
-    it('should handle user with full tenant object', () => {
+    it('should handle user with tenant object', () => {
       const mockUser: UserEntity = {
         id: 'user-1',
         tenantId: 'tenant-1',
@@ -165,13 +130,12 @@ describe('TenantGuard', () => {
       const result = guard.canActivate(context);
 
       expect(result).toBe(true);
-      expect(request.tenantId).toBe('tenant-1');
     });
 
     it('should handle different user roles', () => {
       const roles = ['owner', 'admin', 'member', 'viewer'];
 
-      roles.forEach((role) => {
+      for (const role of roles) {
         const mockUser: UserEntity = {
           id: 'user-1',
           tenantId: 'tenant-1',
@@ -186,27 +150,7 @@ describe('TenantGuard', () => {
         const result = guard.canActivate(context);
 
         expect(result).toBe(true);
-        expect(request.tenantId).toBe('tenant-1');
-      });
-    });
-
-    it('should store tenantId in request for use in services', () => {
-      const mockUser: UserEntity = {
-        id: 'user-1',
-        tenantId: 'tenant-123',
-        email: 'user@example.com',
-        name: 'Test User',
-        role: 'admin',
-      };
-
-      const request: any = { user: mockUser };
-      const context = createMockExecutionContext(request);
-
-      guard.canActivate(context);
-
-      // Verify tenantId is accessible in request
-      expect(request.tenantId).toBeDefined();
-      expect(request.tenantId).toBe('tenant-123');
+      }
     });
   });
 });

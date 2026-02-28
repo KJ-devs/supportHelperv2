@@ -48,11 +48,11 @@ export class NotionProvider extends BaseIntegrationProvider {
     }
   }
 
-  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async syncTicket(ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const notion = new Client({ auth: config.apiToken });
 
-      const properties: any = {
+      const properties: Record<string, unknown> = {
         Name: {
           title: [
             {
@@ -88,7 +88,7 @@ export class NotionProvider extends BaseIntegrationProvider {
         };
       }
 
-      const children: any[] = [];
+      const children: Record<string, unknown>[] = [];
 
       if (ticket.description) {
         children.push({
@@ -141,8 +141,10 @@ export class NotionProvider extends BaseIntegrationProvider {
 
       const page = await notion.pages.create({
         parent: { database_id: config.databaseId },
-        properties,
-        children: children.length > 0 ? children : undefined,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        properties: properties as any,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        children: (children.length > 0 ? children : undefined) as any,
       });
 
       return {
@@ -156,11 +158,11 @@ export class NotionProvider extends BaseIntegrationProvider {
     }
   }
 
-  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, any>): Promise<SyncResult> {
+  async updateTicket(externalId: string, ticket: Ticket, config: IntegrationConfig, _mappings?: Record<string, unknown>): Promise<SyncResult> {
     try {
       const notion = new Client({ auth: config.apiToken });
 
-      const properties: any = {
+      const properties: Record<string, unknown> = {
         Name: {
           title: [
             {
@@ -198,7 +200,8 @@ export class NotionProvider extends BaseIntegrationProvider {
 
       const page = await notion.pages.update({
         page_id: externalId,
-        properties,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        properties: properties as any,
       });
 
       return {
@@ -264,10 +267,11 @@ export class NotionProvider extends BaseIntegrationProvider {
               page_size: 3,
             });
             description = blocks.results
-              .filter((b: any) => b.type === 'paragraph')
-              .map((b: any) => {
-                const richText = b.paragraph?.rich_text || [];
-                return richText.map((t: any) => t.plain_text || '').join('');
+              .filter((b: unknown) => (b as { type?: string }).type === 'paragraph')
+              .map((b: unknown) => {
+                const block = b as { paragraph?: { rich_text?: Array<{ plain_text?: string }> } };
+                const richText = block.paragraph?.rich_text || [];
+                return richText.map((t) => t.plain_text || '').join('');
               })
               .join('\n')
               .trim();

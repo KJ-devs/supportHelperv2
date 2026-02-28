@@ -1,4 +1,5 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { EncryptionService } from '../../common/services/encryption.service';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
@@ -10,7 +11,8 @@ export interface AiConfigResponse {
   provider: string;
   maskedApiKey: string | null;
   model: string;
-  settings: Record<string, any>;
+  endpoint?: string;
+  settings: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -33,6 +35,9 @@ export class AiConfigService {
       return null;
     }
 
+    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
+    const settings = config.settings as Record<string, unknown>;
+
     return {
       id: config.id,
       tenantId: config.tenantId,
@@ -41,7 +46,8 @@ export class AiConfigService {
         this.encryptionService.decrypt(config.encryptedApiKey),
       ),
       model: config.model,
-      settings: config.settings as Record<string, any>,
+      endpoint: settings?.endpoint as string | undefined,
+      settings,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -51,7 +57,11 @@ export class AiConfigService {
     tenantId: string,
     dto: UpdateAiConfigDto,
   ): Promise<AiConfigResponse> {
-    const data: any = {};
+    const existing = await this.prisma.aiConfig.findUnique({
+      where: { tenantId },
+    });
+
+    const data: Record<string, unknown> = {};
 
     if (dto.apiKey) {
       data.encryptedApiKey = this.encryptionService.encrypt(dto.apiKey);
@@ -59,8 +69,14 @@ export class AiConfigService {
     if (dto.model !== undefined) {
       data.model = dto.model;
     }
-    if (dto.settings !== undefined) {
-      data.settings = dto.settings;
+
+    // Merge endpoint and other settings
+    const mergedSettings: Record<string, unknown> = {
+      ...(existing?.settings as Record<string, unknown>),
+      ...dto.settings,
+    };
+    if (dto.endpoint !== undefined) {
+      mergedSettings.endpoint = dto.endpoint;
     }
 
     const existing = await this.prisma.aiConfig.findUnique({
@@ -83,12 +99,15 @@ export class AiConfigService {
       config = await this.prisma.aiConfig.create({
         data: {
           tenantId,
-          encryptedApiKey: data.encryptedApiKey,
-          model: dto.model || 'claude-sonnet-4-20250514',
-          settings: dto.settings || {},
+          provider,
+          encryptedApiKey: dto.apiKey || '',
+          model: dto.model || this.getDefaultModel(provider),
+          settings: mergedSettings as Prisma.InputJsonValue,
         },
       });
     }
+
+    const settings = config.settings as Record<string, unknown>;
 
     return {
       id: config.id,
@@ -98,7 +117,8 @@ export class AiConfigService {
         this.encryptionService.decrypt(config.encryptedApiKey),
       ),
       model: config.model,
-      settings: config.settings as Record<string, any>,
+      endpoint: settings?.endpoint as string | undefined,
+      settings,
       createdAt: config.createdAt,
       updatedAt: config.updatedAt,
     };
@@ -141,23 +161,27 @@ export class AiConfigService {
       }
 
       return { valid: true };
-    } catch (error: any) {
-      this.logger.warn(`API key validation failed: ${error.message}`);
+    } catch (error: unknown) {
+      const err = error as { message?: string; status?: number };
+      this.logger.warn(`API key validation failed: ${err.message}`);
 
-      if (error.status === 401) {
+      if (err.status === 401) {
         return { valid: false, error: 'Invalid API key' };
       }
-      if (error.status === 403) {
-        return { valid: false, error: 'API key does not have required permissions' };
+      if (err.status === 403) {
+        return {
+          valid: false,
+          error: 'API key does not have required permissions',
+        };
       }
-      if (error.status === 429) {
+      if (err.status === 429) {
         // Rate-limited but the key itself is valid
         return { valid: true };
       }
 
       return {
         valid: false,
-        error: error.message || 'Failed to validate API key',
+        error: err.message || 'Failed to validate configuration',
       };
     }
   }
@@ -176,13 +200,13 @@ export class AiConfigService {
       return null;
     }
 
-    const settings = config.settings as Record<string, any>;
+    const settings = config.settings as Record<string, unknown>;
 
     return {
       provider: config.provider,
       apiKey: config.encryptedApiKey, // auto-decrypted by Prisma encryption middleware
       model: config.model,
-      endpoint: settings?.endpoint,
+      endpoint: settings?.endpoint as string | undefined,
     };
   }
 

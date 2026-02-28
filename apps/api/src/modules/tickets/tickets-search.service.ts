@@ -85,6 +85,7 @@ export class TicketsSearchService implements OnModuleInit {
   /**
    * Index a ticket in Meilisearch
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async indexTicket(ticket: any): Promise<void> {
     if (!this.enabled) return;
 
@@ -115,6 +116,7 @@ export class TicketsSearchService implements OnModuleInit {
   /**
    * Update ticket in Meilisearch
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async updateTicket(ticket: any): Promise<void> {
     await this.indexTicket(ticket); // Meilisearch upserts by default
   }
@@ -189,6 +191,7 @@ export class TicketsSearchService implements OnModuleInit {
   /**
    * Bulk index tickets (for initial indexing or re-indexing)
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async bulkIndex(tickets: any[]): Promise<void> {
     if (!this.enabled) return;
 

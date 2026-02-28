@@ -6,8 +6,6 @@ import { PrismaService } from '../prisma.service';
 
 describe('DlqCleanupService', () => {
   let service: DlqCleanupService;
-  let prisma: PrismaService;
-  let dlqQueue: any;
 
   const mockPrisma = {
     archivedDeadLetterJob: {
@@ -52,8 +50,6 @@ describe('DlqCleanupService', () => {
     }).compile();
 
     service = module.get<DlqCleanupService>(DlqCleanupService);
-    prisma = module.get<PrismaService>(PrismaService);
-    dlqQueue = mockQueue;
 
     jest.clearAllMocks();
   });

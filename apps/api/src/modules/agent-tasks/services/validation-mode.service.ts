@@ -113,9 +113,6 @@ export class ValidationModeService {
       throw new NotFoundException(`Agent task ${taskId} not found`);
     }
 
-    const expectedStatus =
-      phase === 'plan' ? 'plan_pending_review' : 'code_pending_review';
-
     // Also allow approving from plan_ready / code_ready for backward compat
     const validStatuses =
       phase === 'plan'

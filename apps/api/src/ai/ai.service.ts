@@ -15,8 +15,8 @@ export interface VideoAnalysisResult {
   reproductionSteps: string[];
 }
 
-const EMBEDDING_BATCH_SIZE = 100;
-const EMBEDDING_MAX_CHARS = 32000; // ~8191 tokens * ~4 chars/token
+const _EMBEDDING_BATCH_SIZE = 100;
+const _EMBEDDING_MAX_CHARS = 32000; // ~8191 tokens * ~4 chars/token
 
 @Injectable()
 export class AIService {
@@ -254,7 +254,7 @@ Respond ONLY with valid JSON.
         reproductionSteps: 'array',
       };
 
-      const analysis = await provider.generateStructuredOutput<any>(prompt, schema, {
+      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
         systemPrompt:
           'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.',
         temperature: 0.3,
@@ -262,13 +262,13 @@ Respond ONLY with valid JSON.
       });
 
       return {
-        summary: analysis.summary || 'Unable to generate summary',
-        severity: analysis.severity || 'medium',
-        severityConfidence: analysis.severityConfidence || 0.5,
-        type: analysis.type || 'other',
-        typeConfidence: analysis.typeConfidence || 0.5,
-        keywords: analysis.keywords || [],
-        reproductionSteps: analysis.reproductionSteps || [],
+        summary: (analysis.summary as string) || 'Unable to generate summary',
+        severity: (analysis.severity as string) || 'medium',
+        severityConfidence: (analysis.severityConfidence as number) || 0.5,
+        type: (analysis.type as string) || 'other',
+        typeConfidence: (analysis.typeConfidence as number) || 0.5,
+        keywords: (analysis.keywords as string[]) || [],
+        reproductionSteps: (analysis.reproductionSteps as string[]) || [],
       };
     } catch (error) {
       this.logger.error(
@@ -284,7 +284,7 @@ Respond ONLY with valid JSON.
    */
   async processUserDescription(
     description: string,
-    userContext?: Record<string, any>,
+    userContext?: Record<string, unknown>,
     tenantId?: string,
   ): Promise<VideoAnalysisResult & { enrichedDescription: string }> {
     const provider = await this.getActiveProvider(tenantId);
@@ -334,7 +334,7 @@ Respond ONLY with valid JSON.
         reproductionSteps: 'array',
       };
 
-      const analysis = await provider.generateStructuredOutput<any>(prompt, schema, {
+      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
         systemPrompt:
           'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.',
         temperature: 0.3,
@@ -342,14 +342,14 @@ Respond ONLY with valid JSON.
       });
 
       return {
-        enrichedDescription: analysis.enrichedDescription || description,
-        summary: analysis.summary || 'Unable to generate summary',
-        severity: analysis.severity || 'medium',
-        severityConfidence: analysis.severityConfidence || 0.5,
-        type: analysis.type || 'other',
-        typeConfidence: analysis.typeConfidence || 0.5,
-        keywords: analysis.keywords || [],
-        reproductionSteps: analysis.reproductionSteps || [],
+        enrichedDescription: (analysis.enrichedDescription as string) || description,
+        summary: (analysis.summary as string) || 'Unable to generate summary',
+        severity: (analysis.severity as string) || 'medium',
+        severityConfidence: (analysis.severityConfidence as number) || 0.5,
+        type: (analysis.type as string) || 'other',
+        typeConfidence: (analysis.typeConfidence as number) || 0.5,
+        keywords: (analysis.keywords as string[]) || [],
+        reproductionSteps: (analysis.reproductionSteps as string[]) || [],
       };
     } catch (error) {
       this.logger.error(

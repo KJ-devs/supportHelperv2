@@ -17,7 +17,7 @@ import { MetricsService } from '../../monitoring/metrics.service';
 export class MetricsInterceptor implements NestInterceptor {
   constructor(private readonly metricsService: MetricsService) {}
 
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (!this.metricsService.isEnabled()) {
       return next.handle();
     }
