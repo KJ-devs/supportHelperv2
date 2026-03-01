@@ -253,6 +253,19 @@ export class ToolExecutorService {
         );
       }
 
+      case 'edit_file': {
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
+        return this.codeInvestigation.editFile(
+          ctx,
+          input.branch as string,
+          input.file_path as string,
+          input.old_text as string,
+          input.new_text as string,
+          input.commit_message as string,
+        );
+      }
+
       case 'create_pull_request': {
         const ctx = await this.resolveRepoContext(input, context);
         if (!ctx) return { error: NO_REPO_ERROR };

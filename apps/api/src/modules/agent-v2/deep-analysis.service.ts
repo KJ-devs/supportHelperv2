@@ -554,7 +554,9 @@ ${repoStructure}
 
 **Phase 3 — Fix (REQUIRED when confidence >= 0.7):**
 8. create_branch — name it "fix/ticket-${ticket.id.slice(0, 8)}-<short-description>"
-9. write_file — write the COMPLETE file content (never partial) for every affected file
+9. Apply your changes using the right tool:
+   - **edit_file** (preferred) — for targeted changes < 50 lines. Provide exact old_text and new_text.
+   - **write_file** — for new files or when rewriting most of the file content.
 10. create_pull_request — title: "fix(<scope>): <description>", body must include root cause and changes
 
 You have NOT finished your task until create_pull_request is called (when confidence >= 0.7).
@@ -565,7 +567,8 @@ update_diagnosis alone is not the end — it is the decision point that leads to
 - Never guess about code structure — use your tools to verify
 - Keep tool calls efficient — don't read files you don't need
 - NEVER write to the default branch — always create a fix branch first
-- NEVER provide partial file content in write_file — always the complete file
+- Prefer edit_file over write_file for modifications — it uses fewer tokens and is less error-prone
+- Use write_file only for new files or complete rewrites
 - If the fix spans more than 5 files → call escalate_to_human (too risky for automated fix)`;
 
     if (videoContext && videoContext.length > 0) {

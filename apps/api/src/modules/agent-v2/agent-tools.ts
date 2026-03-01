@@ -16,6 +16,7 @@ export type ToolName =
   | 'escalate_to_human'
   | 'create_branch'
   | 'write_file'
+  | 'edit_file'
   | 'create_pull_request';
 
 export interface ToolCallResult {
@@ -352,6 +353,41 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
       },
       required: ['branch', 'file_path', 'content', 'commit_message'],
+    },
+  },
+  {
+    name: 'edit_file',
+    description:
+      'Apply a targeted edit to a file on a branch. Preferred over write_file for small changes (< 50 lines). Provide the exact old text to find and the new text to replace it with.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        branch: {
+          type: 'string',
+          description: 'Target branch name (must already exist)',
+        },
+        file_path: {
+          type: 'string',
+          description: 'Path relative to repo root (e.g. "src/services/auth.service.ts")',
+        },
+        old_text: {
+          type: 'string',
+          description: 'Exact text to find in the file (must match exactly)',
+        },
+        new_text: {
+          type: 'string',
+          description: 'Replacement text',
+        },
+        commit_message: {
+          type: 'string',
+          description: 'Git commit message (e.g. "fix: handle null user in auth guard")',
+        },
+        repo: {
+          type: 'string',
+          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
+      },
+      required: ['branch', 'file_path', 'old_text', 'new_text', 'commit_message'],
     },
   },
   {

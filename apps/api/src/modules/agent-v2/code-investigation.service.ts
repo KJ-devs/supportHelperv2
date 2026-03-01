@@ -418,6 +418,69 @@ export class CodeInvestigationService {
   }
 
   /**
+   * Apply a targeted find-and-replace edit to a file on a branch.
+   * Reads the current content, replaces old_text with new_text, and commits.
+   */
+  async editFile(
+    ctx: RepoContext,
+    branch: string,
+    filePath: string,
+    oldText: string,
+    newText: string,
+    commitMessage: string,
+  ): Promise<{ sha: string; url: string }> {
+    // 1. Read the current file content
+    let currentContent: string;
+    let existingSha: string;
+    try {
+      const { data } = await ctx.octokit.repos.getContent({
+        owner: ctx.owner,
+        repo: ctx.repo,
+        path: filePath,
+        ref: branch,
+      });
+
+      if (!('content' in data) || !('sha' in data)) {
+        throw new Error(`${filePath} is not a file or has no content`);
+      }
+
+      currentContent = Buffer.from(data.content, 'base64').toString('utf-8');
+      existingSha = data.sha;
+    } catch (error) {
+      if ((error as any).status === 404) {
+        throw new Error(`File not found: ${filePath} on branch ${branch}`);
+      }
+      throw error;
+    }
+
+    // 2. Find and replace
+    if (!currentContent.includes(oldText)) {
+      throw new Error(
+        `old_text not found in ${filePath}. Ensure the text matches exactly (including whitespace and line breaks).`,
+      );
+    }
+
+    const updatedContent = currentContent.replace(oldText, newText);
+
+    // 3. Write the updated file
+    const { data } = await ctx.octokit.repos.createOrUpdateFileContents({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      path: filePath,
+      message: commitMessage,
+      content: Buffer.from(updatedContent).toString('base64'),
+      branch,
+      sha: existingSha,
+    });
+
+    const commitSha = data.commit.sha!;
+    const fileUrl = data.content?.html_url ?? '';
+
+    this.logger.log(`Edited ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`);
+    return { sha: commitSha, url: fileUrl };
+  }
+
+  /**
    * Open a pull request.
    */
   async createPullRequest(

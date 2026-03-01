@@ -65,6 +65,11 @@ describe('ToolExecutorService', () => {
       getRepoStructure: jest.fn(),
       getFileHistory: jest.fn(),
       getFileBlame: jest.fn(),
+      writeFile: jest.fn(),
+      editFile: jest.fn(),
+      createBranch: jest.fn(),
+      createPullRequest: jest.fn(),
+      getRepoContextByName: jest.fn(),
     };
 
     const mockCodebaseSearch = {
@@ -244,6 +249,94 @@ describe('ToolExecutorService', () => {
       const result = await service.execute('read_file', { file_path: 'src/auth.ts' }, mockContext);
 
       expect(result).toEqual({ error: 'Network timeout' });
+    });
+
+    // ── edit_file tests ──────────────────────────────────────
+    it('delegates edit_file to CodeInvestigationService.editFile', async () => {
+      (codeInvestigation.editFile as jest.Mock).mockResolvedValue({
+        sha: 'abc1234',
+        url: 'https://github.com/acme/my-app/blob/abc1234/src/auth.ts',
+      });
+
+      const result = await service.execute(
+        'edit_file',
+        {
+          branch: 'fix/ticket-abc-null',
+          file_path: 'src/auth.ts',
+          old_text: 'if (user)',
+          new_text: 'if (user != null)',
+          commit_message: 'fix: handle null user',
+        },
+        mockContext,
+      );
+
+      expect(codeInvestigation.editFile).toHaveBeenCalledWith(
+        mockRepoCtx,
+        'fix/ticket-abc-null',
+        'src/auth.ts',
+        'if (user)',
+        'if (user != null)',
+        'fix: handle null user',
+      );
+      expect(result).toEqual({
+        sha: 'abc1234',
+        url: 'https://github.com/acme/my-app/blob/abc1234/src/auth.ts',
+      });
+    });
+
+    it('returns error when edit_file old_text not found', async () => {
+      (codeInvestigation.editFile as jest.Mock).mockRejectedValue(
+        new Error('old_text not found in src/auth.ts. Ensure the text matches exactly (including whitespace and line breaks).'),
+      );
+
+      const result = await service.execute(
+        'edit_file',
+        {
+          branch: 'fix/ticket-abc',
+          file_path: 'src/auth.ts',
+          old_text: 'nonexistent text',
+          new_text: 'replacement',
+          commit_message: 'fix: attempt',
+        },
+        mockContext,
+      );
+
+      expect(result).toEqual({ error: expect.stringContaining('old_text not found') });
+    });
+
+    it('returns error when edit_file target file does not exist', async () => {
+      (codeInvestigation.editFile as jest.Mock).mockRejectedValue(
+        new Error('File not found: src/missing.ts on branch fix/ticket-abc'),
+      );
+
+      const result = await service.execute(
+        'edit_file',
+        {
+          branch: 'fix/ticket-abc',
+          file_path: 'src/missing.ts',
+          old_text: 'some text',
+          new_text: 'new text',
+          commit_message: 'fix: attempt',
+        },
+        mockContext,
+      );
+
+      expect(result).toEqual({ error: expect.stringContaining('File not found') });
+    });
+
+    it('returns NO_REPO_ERROR for edit_file when no repo', async () => {
+      const result = await service.execute(
+        'edit_file',
+        {
+          branch: 'fix/ticket-abc',
+          file_path: 'src/auth.ts',
+          old_text: 'old',
+          new_text: 'new',
+          commit_message: 'fix',
+        },
+        contextNoRepo,
+      );
+      expect(result).toEqual({ error: expect.stringContaining('No repository connected') });
     });
 
     it('returns update_diagnosis result without calling other services', async () => {

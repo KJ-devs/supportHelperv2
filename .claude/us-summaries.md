@@ -203,3 +203,14 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Unified all embedding generation to `text-embedding-3-small` (1536d). Prisma migration drops+recreates ticket embedding column with correct dimension. HNSW index recreated. Old Redis-cached embeddings will expire naturally (24h TTL). Cost reduction: 80% ($0.00013→$0.00002/1K tokens).
 - **Decisions**: Used `text-embedding-3-small` (not `large` with reduced dimensions) because codebase embeddings already use `small` and 1536d is sufficient for bug search. Migration drops existing embeddings (they'll be re-generated on next video analysis).
 - **Date**: 2026-03-01
+
+## [US-AI-06] #237 write_file en mode diff/patch — DONE ✅
+- **Files**:
+  - `apps/api/src/modules/agent-v2/agent-tools.ts` — added `edit_file` to ToolName union + AGENT_TOOLS array
+  - `apps/api/src/modules/agent-v2/code-investigation.service.ts` — added `editFile()` method (read→find→replace→commit)
+  - `apps/api/src/modules/agent-v2/tool-executor.service.ts` — added `edit_file` case in dispatcher
+  - `apps/api/src/modules/agent-v2/deep-analysis.service.ts` — updated system prompt to recommend edit_file for <50 line changes
+  - `apps/api/test/unit/services/tool-executor.service.spec.ts` — 4 new tests (success, old_text not found, file not found, no repo)
+- **Changes**: Added `edit_file` tool alongside `write_file`. Reads file via GitHub API, does exact find-and-replace, commits. System prompt now recommends `edit_file` for targeted changes and `write_file` only for new files/complete rewrites. 19 tool-executor tests pass.
+- **Decisions**: `edit_file` replaces only the first occurrence of `old_text` (same as Claude Code's Edit tool). Error messages are descriptive to help the AI agent retry with corrected text.
+- **Date**: 2026-03-01
