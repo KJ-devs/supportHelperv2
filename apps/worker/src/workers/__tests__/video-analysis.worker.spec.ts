@@ -11,6 +11,11 @@ import { PrismaService } from '../../services/prisma.service';
 import { MeilisearchService } from '../../services/meilisearch.service';
 import { VideoAnalysisJobData, VideoAnalysisResult } from '../../queues/queue.types';
 
+// Mock fs/promises for analyzeVideo (reads frame files into Buffers)
+jest.mock('fs/promises', () => ({
+  readFile: jest.fn().mockResolvedValue(Buffer.from('mock-frame-data')),
+}));
+
 describe('VideoAnalysisWorker', () => {
   let worker: VideoAnalysisWorker;
   let ffmpegService: jest.Mocked<FFmpegService>;
@@ -77,10 +82,13 @@ describe('VideoAnalysisWorker', () => {
 
   const mockVisionAnalysis = {
     summary: 'User encountered connection error on login page',
+    severity: 'high' as const,
+    type: 'bug' as const,
+    reproSteps: ['Navigate to login page', 'Enter username', 'Click login', 'Error displayed'],
+    component: 'Login',
     uiElements: ['Login Button', 'Username Field', 'Password Field', 'Error Modal'],
-    actions: ['Navigate to login page', 'Enter username', 'Click login', 'Error displayed'],
     errorMessages: ['Error: Connection failed'],
-    recommendations: ['Check network connectivity', 'Verify backend service is running'],
+    confidence: { overall: 0.85, severity: 0.8, type: 0.9, component: 0.7 },
   };
 
   const mockEmbeddings = {
@@ -123,7 +131,7 @@ describe('VideoAnalysisWorker', () => {
         {
           provide: OpenAIService,
           useValue: {
-            analyzeFrames: jest.fn(),
+            analyzeVideo: jest.fn(),
             generateEmbedding: jest.fn(),
           },
         },
@@ -180,7 +188,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -196,7 +204,13 @@ describe('VideoAnalysisWorker', () => {
           totalText: mockOCRResult.totalText,
           averageConfidence: mockOCRResult.averageConfidence,
         },
-        visionAnalysis: mockVisionAnalysis,
+        visionAnalysis: {
+          summary: mockVisionAnalysis.summary,
+          uiElements: mockVisionAnalysis.uiElements,
+          actions: mockVisionAnalysis.reproSteps,
+          errorMessages: mockVisionAnalysis.errorMessages,
+          recommendations: [],
+        },
         embeddings: {
           dimensions: 3072,
           vectorId: 'ticket-123-media-456',
@@ -209,22 +223,29 @@ describe('VideoAnalysisWorker', () => {
       expect(ffmpegService.extractKeyframes).toHaveBeenCalledWith('/tmp/video.mp4');
       expect(ocrService.extractTextBatch).toHaveBeenCalledWith(mockKeyframeResult.frames);
       expect(yoloService.detectBatch).toHaveBeenCalledWith(mockKeyframeResult.frames);
-      expect(openaiService.analyzeFrames).toHaveBeenCalledWith(
-        mockKeyframeResult.frames,
-        mockOCRResult.totalText,
-        mockYoloDetections
+      expect(openaiService.analyzeVideo).toHaveBeenCalledWith(
+        expect.any(Array),
+        'tenant-789',
+        { ocrText: mockOCRResult.totalText, uiDetections: mockYoloDetections },
       );
 
       // Verify database updates
       // 3 calls: processing -> visualCues metadata -> completed
       expect(prisma.media.update).toHaveBeenCalledTimes(3);
+      const expectedVision = {
+        summary: mockVisionAnalysis.summary,
+        uiElements: mockVisionAnalysis.uiElements,
+        actions: mockVisionAnalysis.reproSteps,
+        errorMessages: mockVisionAnalysis.errorMessages,
+        recommendations: [],
+      };
       expect(prisma.ticket.update).toHaveBeenCalledWith({
         where: { id: 'ticket-123' },
         data: {
           aiSummary: mockVisionAnalysis.summary,
           aiAnalysis: {
             ocr: mockOCRResult,
-            vision: mockVisionAnalysis,
+            vision: expectedVision,
             uiDetections: mockYoloDetections.slice(0, 100),
             metadata: mockKeyframeResult.metadata,
           },
@@ -250,7 +271,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -272,7 +293,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -312,7 +333,7 @@ describe('VideoAnalysisWorker', () => {
       s3Service.downloadToTemp.mockResolvedValue('/tmp/video.mp4');
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob({
@@ -323,10 +344,10 @@ describe('VideoAnalysisWorker', () => {
 
       expect(ocrService.extractTextBatch).not.toHaveBeenCalled();
       expect(prisma.videoEvent.createMany).not.toHaveBeenCalled();
-      expect(openaiService.analyzeFrames).toHaveBeenCalledWith(
-        mockKeyframeResult.frames,
-        '',
-        mockYoloDetections
+      expect(openaiService.analyzeVideo).toHaveBeenCalledWith(
+        expect.any(Array),
+        'tenant-789',
+        { ocrText: undefined, uiDetections: mockYoloDetections },
       );
     });
 
@@ -334,7 +355,7 @@ describe('VideoAnalysisWorker', () => {
       s3Service.downloadToTemp.mockResolvedValue('/tmp/video.mp4');
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob({
@@ -344,10 +365,10 @@ describe('VideoAnalysisWorker', () => {
       await worker.process(job);
 
       expect(yoloService.detectBatch).not.toHaveBeenCalled();
-      expect(openaiService.analyzeFrames).toHaveBeenCalledWith(
-        mockKeyframeResult.frames,
-        mockOCRResult.totalText,
-        []
+      expect(openaiService.analyzeVideo).toHaveBeenCalledWith(
+        expect.any(Array),
+        'tenant-789',
+        { ocrText: mockOCRResult.totalText, uiDetections: [] },
       );
     });
 
@@ -364,7 +385,7 @@ describe('VideoAnalysisWorker', () => {
       });
       const result = await worker.process(job);
 
-      expect(openaiService.analyzeFrames).not.toHaveBeenCalled();
+      expect(openaiService.analyzeVideo).not.toHaveBeenCalled();
       expect(result.visionAnalysis).toBeUndefined();
     });
 
@@ -381,7 +402,7 @@ describe('VideoAnalysisWorker', () => {
       });
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob({
@@ -455,7 +476,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockRejectedValue(new Error('OpenAI rate limit exceeded'));
+      openaiService.analyzeVideo.mockRejectedValue(new Error('OpenAI rate limit exceeded'));
 
       const job = mockJob();
       const result = await worker.process(job);
@@ -469,7 +490,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockRejectedValue(new Error('Embedding API error'));
 
       const job = mockJob();
@@ -486,7 +507,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -559,7 +580,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -708,7 +729,7 @@ describe('VideoAnalysisWorker', () => {
         averageConfidence: 0,
       });
       yoloService.detectBatch.mockResolvedValue([]);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -737,7 +758,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-      openaiService.analyzeFrames.mockResolvedValue(null as unknown);
+      openaiService.analyzeVideo.mockResolvedValue(null as unknown as any);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -757,7 +778,7 @@ describe('VideoAnalysisWorker', () => {
       ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
       ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
       yoloService.detectBatch.mockResolvedValue(manyDetections);
-      openaiService.analyzeFrames.mockResolvedValue(mockVisionAnalysis);
+      openaiService.analyzeVideo.mockResolvedValue(mockVisionAnalysis);
       openaiService.generateEmbedding.mockResolvedValue(mockEmbeddings);
 
       const job = mockJob();
@@ -932,7 +953,7 @@ describe('VideoAnalysisWorker', () => {
         const job = mockJob();
         await worker.process(job);
 
-        expect(openaiService.analyzeFrames).not.toHaveBeenCalled();
+        expect(openaiService.analyzeVideo).not.toHaveBeenCalled();
         expect(openaiService.generateEmbedding).not.toHaveBeenCalled();
       });
     });
@@ -958,7 +979,7 @@ describe('VideoAnalysisWorker', () => {
         ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
         ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
         yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-        openaiService.analyzeFrames.mockRejectedValue(
+        openaiService.analyzeVideo.mockRejectedValue(
           new Error('OpenAI API rate limit exceeded: 429 Too Many Requests'),
         );
 
@@ -1010,7 +1031,7 @@ describe('VideoAnalysisWorker', () => {
         ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
         ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
         yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-        openaiService.analyzeFrames.mockRejectedValue(
+        openaiService.analyzeVideo.mockRejectedValue(
           new Error('OpenAI Vision API unavailable'),
         );
 
@@ -1029,7 +1050,7 @@ describe('VideoAnalysisWorker', () => {
         ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
         ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
         yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-        openaiService.analyzeFrames.mockRejectedValue(
+        openaiService.analyzeVideo.mockRejectedValue(
           new Error('OpenAI Vision API unavailable'),
         );
 
@@ -1048,7 +1069,7 @@ describe('VideoAnalysisWorker', () => {
         ffmpegService.extractKeyframes.mockResolvedValue(mockKeyframeResult);
         ocrService.extractTextBatch.mockResolvedValue(mockOCRResult);
         yoloService.detectBatch.mockResolvedValue(mockYoloDetections);
-        openaiService.analyzeFrames.mockRejectedValue(
+        openaiService.analyzeVideo.mockRejectedValue(
           new Error('OpenAI Vision API unavailable'),
         );
 

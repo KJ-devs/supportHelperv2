@@ -139,15 +139,29 @@ export class VideoAnalysisWorker extends WorkerHost {
         await job.updateProgress(65);
       }
 
-      // Step 5: GPT-4 Vision analysis
+      // Step 5: AI Vision analysis (multi-tenant, supports Anthropic + OpenAI)
       let visionAnalysis = null;
       if (!options?.skipVision) {
-        this.logger.log('Step 5: Running GPT-4 Vision analysis');
-        visionAnalysis = await this.openaiService.analyzeFrames(
-          framesToProcess,
-          ocrResults?.totalText || '',
-          uiDetections
+        this.logger.log('Step 5: Running AI Vision analysis');
+        const fs = await import('fs/promises');
+        const frameBuffers = await Promise.all(
+          framesToProcess.map((fp) => fs.readFile(fp)),
         );
+        const analysis = await this.openaiService.analyzeVideo(
+          frameBuffers,
+          tenantId,
+          { ocrText: ocrResults?.totalText, uiDetections },
+        );
+        // Map VideoAnalysis → legacy visionAnalysis shape used by downstream code
+        if (analysis) {
+          visionAnalysis = {
+            summary: analysis.summary,
+            uiElements: analysis.uiElements,
+            actions: analysis.reproSteps,
+            errorMessages: analysis.errorMessages,
+            recommendations: [],
+          };
+        }
         await job.updateProgress(80);
       }
 

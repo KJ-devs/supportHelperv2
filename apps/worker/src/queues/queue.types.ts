@@ -201,6 +201,8 @@ export interface AgentResult {
     branchName?: string;
     // Validation mode metadata (US-3.4)
     needsReview?: boolean;
+    // API delegation metadata
+    diagnosisFound?: boolean;
   };
   error?: string;
 }

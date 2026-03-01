@@ -10,7 +10,6 @@ import { QUEUE_NAMES } from '../queues';
 import {
   AgentJobData,
   AgentResult,
-  TicketAnalysis,
   FunctionCallResult,
 } from '../queues/queue.types';
 import { OpenAIService } from '../services/openai.service';
@@ -104,6 +103,32 @@ export class AgentWorker extends WorkerHost {
     private readonly agentQueue: Queue,
   ) {
     super();
+  }
+
+  /**
+   * Build a minimal HS256 JWT for worker→API internal calls.
+   */
+  private buildServiceJwt(jwtSecret: string): string {
+    const crypto = require('crypto');
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: 'worker-service',
+        role: 'system',
+        tenantId: 'system',
+        iat: now,
+        exp: now + 300,
+      }),
+    ).toString('base64url');
+
+    const data = `${header}.${payload}`;
+    const signature = crypto
+      .createHmac('sha256', jwtSecret)
+      .update(data)
+      .digest('base64url');
+
+    return `${data}.${signature}`;
   }
 
   /**
@@ -454,139 +479,103 @@ export class AgentWorker extends WorkerHost {
   }
 
   /**
-   * Analyze ticket with AI - extract insights and classify.
+   * Analyze ticket with AI — delegates to the API's DeepAnalysisService
+   * via internal HTTP call (same pattern as DeepAnalysisWorker).
    *
-   * When `sessionId` is present in job data (enqueued by the API's AgentService
-   * via startSession()), this handler also updates the AgentSession status so the
-   * session reflects the completed analysis rather than staying in ANALYZING.
+   * Previously used the legacy AgentService.runWithFunctionCalling() which
+   * ran a separate AI loop in the worker process. Now the API's agentic loop
+   * (with retry, context pruning, 16 tools) handles the analysis.
    */
   private async handleAnalyzeTicket(job: Job<AgentJobData>): Promise<AgentResult> {
     const { ticketId, tenantId, sessionId } = job.data;
 
-    this.logger.log(`Analyzing ticket ${ticketId}`);
+    this.logger.log(`Analyzing ticket ${ticketId} via API delegation`);
     await job.updateProgress(10);
 
-    // Get ticket with all related data
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        media: {
-          include: {
-            videoEvents: true,
-          },
-        },
-        application: true,
-      },
-    });
+    const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
+    const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
-    if (!ticket) {
-      throw new Error(`Ticket ${ticketId} not found`);
+    if (!internalSecret || !jwtSecret) {
+      this.logger.error('INTERNAL_API_SECRET or JWT_SECRET not configured — cannot delegate to API');
+      return {
+        success: false,
+        type: 'analyze-ticket',
+        ticketId,
+        error: 'Internal auth not configured',
+      };
     }
 
+    const serviceJwt = this.buildServiceJwt(jwtSecret);
+    const endpoint = `${apiUrl}/api/agent/v2/internal/analyze`;
+
+    this.logger.log(`Delegating analyze-ticket for ${ticketId} to API: ${endpoint}`);
     await job.updateProgress(20);
 
-    // Build analysis prompt
-    const analysisPrompt = this.buildAnalysisPrompt(ticket);
-
-    // Run GPT-4o with multi-turn function calling loop via AgentService
-    const loopResult = await this.agentService.runWithFunctionCalling({
-      systemPrompt: `You are an expert technical support AI assistant. Analyze the following ticket and provide:
-1. A clear classification of the issue type
-2. An assessment of the severity
-3. Key keywords for search
-4. A concise summary
-5. Extracted reproduction steps if available
-
-Use the available tools (search_similar_tickets, get_ticket_details) to gather context before producing your final JSON analysis.
-Your final response MUST be a valid JSON object with keys: classification, severity, keywords, summary, reproductionSteps.`,
-      userPrompt: analysisPrompt,
-      tenantId,
-      ticket,
-      maxTokens: 2048,
-    });
-
-    this.logger.log(
-      `analyze-ticket loop: ${loopResult.iterations} iterations, ` +
-      `${loopResult.toolCallLog.length} tool calls executed`
-    );
-
-    await job.updateProgress(60);
-
-    // Collect tool call results for the job result metadata
-    const functionCalls: FunctionCallResult[] = loopResult.toolCallLog.map(tc => ({
-      name: tc.name,
-      arguments: {},
-      result: tc.result,
-    }));
-
-    // Parse analysis result from the loop's final text response
-    const analysis = this.parseAnalysisResponse(loopResult.finalContent);
-
-    await job.updateProgress(80);
-
-    // Update ticket with analysis
-    await this.prisma.ticket.update({
-      where: { id: ticketId },
-      data: {
-        type: analysis.classification.type,
-        typeConfidence: analysis.classification.confidence,
-        severity: analysis.severity.level,
-        severityConfidence: analysis.severity.confidence,
-        keywords: analysis.keywords,
-        aiSummary: analysis.summary,
-        aiAnalysis: JSON.parse(
-          JSON.stringify({
-            ...((ticket.aiAnalysis as Record<string, unknown>) || {}),
-            agentAnalysis: analysis,
-            analyzedAt: new Date().toISOString(),
-          })
-        ),
-        reproductionSteps: analysis.reproductionSteps,
-      },
-    });
-
-    await job.updateProgress(90);
-
-    // If this job was enqueued by the API's AgentService (startSession), update
-    // the AgentSession so the dashboard reflects the completed analysis.
-    if (sessionId) {
-      const nextStatus = analysis.severity.level === 'critical' ||
-        analysis.classification.confidence < 50
-        ? 'escalated'
-        : 'proposing';
-
-      await this.prisma.agentSession.update({
-        where: { id: sessionId },
-        data: {
-          status: nextStatus,
-          agentState: JSON.parse(JSON.stringify({
-            step: 'analysis_complete',
-            analysis,
-            confidence: analysis.classification.confidence,
-          })),
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-internal-secret': internalSecret,
+          Authorization: `Bearer ${serviceJwt}`,
         },
-      }).catch((err: unknown) => {
-        // Session may have been deleted; log and continue — ticket update already succeeded.
-        this.logger.warn(
-          `Could not update AgentSession ${sessionId}: ${getErrorMessage(err)}`,
-        );
+        body: JSON.stringify({ ticketId, tenantId }),
       });
+
+      await job.updateProgress(80);
+
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(`API responded with ${response.status}: ${body}`);
+      }
+
+      const result = (await response.json()) as {
+        ticketId: string;
+        diagnosisFound: boolean;
+        diagnosis: unknown;
+      };
+
+      // If session exists, update it based on API result
+      if (sessionId) {
+        const nextStatus = result.diagnosisFound ? 'proposing' : 'escalated';
+        await this.prisma.agentSession.update({
+          where: { id: sessionId },
+          data: {
+            status: nextStatus,
+            agentState: JSON.parse(JSON.stringify({
+              step: 'analysis_complete',
+              diagnosisFound: result.diagnosisFound,
+            })),
+          },
+        }).catch((err: unknown) => {
+          this.logger.warn(
+            `Could not update AgentSession ${sessionId}: ${getErrorMessage(err)}`,
+          );
+        });
+      }
+
+      await job.updateProgress(100);
+
+      this.logger.log(
+        `Ticket ${ticketId} analyzed via API: diagnosisFound=${result.diagnosisFound}`,
+      );
+
+      return {
+        success: true,
+        type: 'analyze-ticket',
+        ticketId,
+        metadata: { sessionId, diagnosisFound: result.diagnosisFound },
+      };
+    } catch (error) {
+      this.logger.error(`analyze-ticket API delegation failed: ${getErrorMessage(error)}`);
+      return {
+        success: false,
+        type: 'analyze-ticket',
+        ticketId,
+        error: getErrorMessage(error),
+      };
     }
-
-    await job.updateProgress(100);
-
-    this.logger.log(`Ticket ${ticketId} analyzed: ${analysis.classification.type}`);
-
-    return {
-      success: true,
-      type: 'analyze-ticket',
-      ticketId,
-      analysis,
-      functionCalls,
-      metadata: {
-        sessionId,
-      },
-    };
   }
 
   /**
@@ -2502,77 +2491,6 @@ Rules:
   // ═══════════════════════════════════════════════════════════════════════
   // Helper Methods
   // ═══════════════════════════════════════════════════════════════════════
-
-  /**
-   * Build analysis prompt from ticket data
-   */
-  private buildAnalysisPrompt(ticket: any): string {
-    const parts: string[] = [];
-
-    parts.push(`## Ticket Information`);
-    parts.push(`Ticket ID: ${ticket.id}`);
-    parts.push(`Title: ${ticket.title || 'No title'}`);
-    parts.push(`Description: ${ticket.description || 'No description'}`);
-
-    if (ticket.userContext) {
-      parts.push(`\n## User Environment`);
-      parts.push(JSON.stringify(ticket.userContext, null, 2));
-    }
-
-    if (ticket.media?.length) {
-      parts.push(`\n## Media Analysis`);
-      for (const media of ticket.media) {
-        if (media.videoEvents?.length) {
-          parts.push(`Video OCR text:`);
-          const ocrTexts = media.videoEvents
-            .filter((e: any) => e.ocrText)
-            .map((e: any) => e.ocrText);
-          parts.push(ocrTexts.join('\n').slice(0, 2000));
-        }
-      }
-    }
-
-    if (ticket.aiSummary) {
-      parts.push(`\n## Previous AI Summary`);
-      parts.push(ticket.aiSummary);
-    }
-
-    parts.push(`\n## Request`);
-    parts.push(`Analyze this ticket and return a JSON object with:
-{
-  "classification": { "type": "bug|feature_request|question|documentation|performance|security|other", "confidence": 0.0-1.0 },
-  "severity": { "level": "critical|high|medium|low", "confidence": 0.0-1.0 },
-  "keywords": ["keyword1", "keyword2"],
-  "summary": "A concise summary of the issue",
-  "reproductionSteps": ["step1", "step2"] // if identifiable
-}`);
-
-    return parts.join('\n');
-  }
-
-  /**
-   * Parse analysis response from GPT
-   */
-  private parseAnalysisResponse(content: string): TicketAnalysis {
-    try {
-      const parsed = JSON.parse(content);
-      return {
-        classification: parsed.classification || { type: 'other', confidence: 0.5 },
-        severity: parsed.severity || { level: 'medium', confidence: 0.5 },
-        keywords: parsed.keywords || [],
-        summary: parsed.summary || '',
-        reproductionSteps: parsed.reproductionSteps,
-      };
-    } catch (error) {
-      this.logger.warn(`Failed to parse analysis response: ${getErrorMessage(error)}`);
-      return {
-        classification: { type: 'other', confidence: 0.5 },
-        severity: { level: 'medium', confidence: 0.5 },
-        keywords: [],
-        summary: content,
-      };
-    }
-  }
 
   /**
    * Store agent session

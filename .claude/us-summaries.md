@@ -176,3 +176,16 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Created `AiCacheService` wrapping existing `CacheService` with AI-specific key generation (SHA-256 of operation+systemPrompt+prompt+model+temperature). Cache applied on 3 API methods + 1 Worker method. Agentic loop and embeddings intentionally NOT cached. Metrics logged every 100 requests.
 - **Decisions**: Used `@Optional()` for AiCacheService injection in AIService (graceful degradation if cache unavailable). Worker uses direct ioredis (consistent with existing embedding cache pattern). Key includes temperature to differentiate deterministic vs creative responses.
 - **Date**: 2026-03-01
+
+## [US-AI-04] #235 Supprimer le Système AI Legacy du Worker — DONE ✅
+- **Files**:
+  - `apps/worker/src/workers/video-analysis.worker.ts` — replaced `analyzeFrames()` with `analyzeVideo()` (reads frames as Buffers, maps VideoAnalysis → legacy shape)
+  - `apps/worker/src/workers/agent.worker.ts` — `handleAnalyzeTicket()` now delegates to API via HTTP (same pattern as DeepAnalysisWorker), added `buildServiceJwt()`, removed unused `buildAnalysisPrompt()` and `parseAnalysisResponse()`
+  - `apps/worker/src/services/agent.service.ts` — marked as deprecated with comment block
+  - `apps/worker/src/services/openai.service.ts` — removed `analyzeFrames()`, `analyzeBatchLegacy()`, `aggregateVisionResults()` (~150 lines)
+  - `apps/worker/src/queues/queue.types.ts` — added `diagnosisFound` to `AgentResult.metadata`
+  - `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` — updated mocks from `analyzeFrames` → `analyzeVideo`, added `fs/promises` mock, updated assertions for mapped VideoAnalysis shape
+  - `apps/worker/src/services/openai.service.spec.ts` — removed `analyzeFrames` backward-compat test
+- **Changes**: Unified AI execution path: VideoAnalysisWorker uses `analyzeVideo()` (multi-tenant), AgentWorker delegates `analyze-ticket` to API agent-v2 via HTTP. Removed ~150 lines of legacy code from OpenAIService. 331 worker tests + 84 API tests pass. Build 6/6.
+- **Decisions**: Kept `AgentService` class (marked deprecated) — other AgentWorker handlers still use it. AgentWorker HTTP delegation uses same `buildServiceJwt()` + `x-internal-secret` pattern as DeepAnalysisWorker. Added null safety for `analyzeVideo` return.
+- **Date**: 2026-03-01

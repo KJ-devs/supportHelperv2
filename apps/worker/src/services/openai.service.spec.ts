@@ -586,35 +586,6 @@ describe('OpenAIService', () => {
   });
 
   describe('Legacy Methods', () => {
-    it('should maintain backward compatibility with analyzeFrames', async () => {
-      // Mock fs.readFile
-      jest.mock('fs/promises', () => ({
-        readFile: jest.fn().mockResolvedValue(Buffer.from('test-image')),
-      }));
-
-      mockAnthropicCreate.mockResolvedValue({
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              summary: 'Test summary',
-              uiElements: ['button'],
-              actions: ['click'],
-              errorMessages: ['error'],
-              recommendations: ['fix'],
-            }),
-          },
-        ],
-      });
-
-      const result = await service.analyzeFrames(['/path/to/frame1.png'], 'OCR text', [
-        { type: 'button' },
-      ]);
-
-      expect(result.summary).toBeDefined();
-      expect(result.uiElements).toBeDefined();
-    });
-
     it('should maintain backward compatibility with chat method', async () => {
       mockAnthropicCreate.mockResolvedValue({
         content: [

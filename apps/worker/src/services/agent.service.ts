@@ -11,6 +11,15 @@ import { EmailService } from './email.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
+// ⚠️  DEPRECATED — This entire service is superseded by the API's
+//    AgenticLoopService (apps/api/src/modules/agent-v2/).
+//    The AgentWorker now delegates to the API via internal HTTP calls.
+//    This service is retained only for backwards compatibility with
+//    existing sessions. Do NOT add new features here.
+//    See US-AI-04 (#235) for migration context.
+// ═══════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
 // STATE MACHINE (Zod Enum)
 // ═══════════════════════════════════════════════════════════════════════
 
