@@ -15,15 +15,20 @@ import {
 import { AiConfigService } from './ai-config.service';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 import { ValidateKeyDto } from './dto/validate-key.dto';
+import { UpdateQuotaDto } from './dto/update-quota.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
+import { QuotaService } from './quota.service';
 
 @ApiTags('AI Configuration')
 @ApiBearerAuth()
 @Controller('settings/ai')
 @UseGuards(JwtAuthGuard)
 export class AiConfigController {
-  constructor(private readonly aiConfigService: AiConfigService) {}
+  constructor(
+    private readonly aiConfigService: AiConfigService,
+    private readonly quotaService: QuotaService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'Get current AI configuration (masked key)' })
@@ -70,6 +75,48 @@ export class AiConfigController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async validateKey(@Body() dto: ValidateKeyDto) {
-    return this.aiConfigService.validateKey(dto.apiKey);
+    return this.aiConfigService.validateKey(
+      dto.apiKey ?? '',
+      dto.provider,
+      dto.endpoint,
+      dto.model,
+    );
+  }
+
+  // ─── Quota Endpoints ───────────────────────────────────────────────────────
+
+  @Get('quota')
+  @ApiOperation({ summary: 'Get AI quota status for current tenant' })
+  @ApiResponse({
+    status: 200,
+    description: 'Quota status retrieved',
+    schema: {
+      properties: {
+        plan: { type: 'string' },
+        monthlyQuota: { type: 'number' },
+        currentUsage: { type: 'number' },
+        remaining: { type: 'number', description: '-1 means unlimited (BYOK)' },
+        isByok: { type: 'boolean' },
+        resetsAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getQuota(@CurrentTenant() tenantId: string) {
+    return this.quotaService.getQuotaStatus(tenantId);
+  }
+
+  @Patch('quota')
+  @ApiOperation({
+    summary: 'Update quota settings for current tenant (admin use)',
+  })
+  @ApiResponse({ status: 200, description: 'Quota updated' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async updateQuota(
+    @CurrentTenant() tenantId: string,
+    @Body() dto: UpdateQuotaDto,
+  ) {
+    return this.quotaService.updateQuota(tenantId, dto);
   }
 }

@@ -29,6 +29,7 @@ model Tenant {
   githubInstallations     GithubInstallation[]
   integrations            Integration[]
   aiConfig                AiConfig?
+  tenantQuota             TenantQuota?
   codebaseEmbeddings      CodebaseEmbedding[]
   agentTasks              AgentTask[]
   ticketEvents            TicketEvent[]
@@ -406,6 +407,26 @@ model AiConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("ai_configs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TENANT QUOTAS
+// ═══════════════════════════════════════════════════════════════════════
+
+model TenantQuota {
+  id           String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId     String   @unique @map("tenant_id") @db.Uuid
+  plan         String   @default("free") @db.VarChar(20) // free, pro, enterprise
+  monthlyQuota Int      @default(10) @map("monthly_quota")
+  currentUsage Int      @default(0) @map("current_usage")
+  quotaResetAt DateTime @map("quota_reset_at")
+  isByok       Boolean  @default(false) @map("is_byok")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_quotas")
 }
 
 // ═══════════════════════════════════════════════════════════════════════
