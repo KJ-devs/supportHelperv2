@@ -11,7 +11,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
 import { usersApi, ApiError } from '@/lib/api/users';
 import toast, { Toaster } from 'react-hot-toast';
-import { User, Lock, Bell, Users, CreditCard, Key, Bot, Github, Shield, BarChart3 } from 'lucide-react';
+import { User, Lock, Bell, Users, CreditCard, Key, Bot, Github, Shield, BarChart3, TrendingUp } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
@@ -145,6 +145,7 @@ export default function SettingsPage() {
     { href: '/dashboard/settings/plan', label: 'Plan & Usage', icon: CreditCard },
     { href: '/dashboard/settings/license', label: 'License', icon: Key },
     { href: '/dashboard/settings/ai', label: 'AI Configuration', icon: Bot },
+    { href: '/dashboard/settings/ai-usage', label: 'AI Usage', icon: TrendingUp },
     { href: '/dashboard/settings/github', label: 'GitHub', icon: Github },
     { href: '/dashboard/settings/auth/sso', label: 'SSO', icon: Shield },
     { href: '/dashboard/settings/status', label: 'Statut Systeme', icon: BarChart3 },

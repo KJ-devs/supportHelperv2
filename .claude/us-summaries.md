@@ -247,3 +247,26 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Created `ModelTieringService` with 3-tier model routing: Tier 1 (Claude Sonnet → investigation, chat), Tier 2 (Gemini Flash → vision, enrichment), Tier 3 (Claude Haiku → classification). Per-tenant custom tiers via `AiConfig.settings.tiers` JSON. Fallback chain: tier provider → tenant default → system anthropic → system openai. Every call logs task, provider, model, and reason. `AIService` methods now route to optimal provider per task type.
 - **Decisions**: `@Optional()` injection for backward compat. Per-tenant overrides stored in existing `AiConfig.settings` JSON field (no schema migration needed). Agentic loop not modified (uses separate `ToolCapableProviderFactory`).
 - **Date**: 2026-03-01
+
+## [US-AI-10] #241 Page Settings AI Dashboard (BYOK) — DONE ✅
+- **Files**:
+  - `apps/dashboard/app/dashboard/settings/ai/page.tsx` — complete rebuild with 5-provider BYOK page
+  - `apps/dashboard/lib/types/ai-config.ts` — extended types for Gemini/Bedrock
+  - `apps/api/src/modules/ai-config/dto/update-ai-config.dto.ts` — added GEMINI/BEDROCK to AIProviderType enum
+  - `apps/api/src/modules/ai-config/dto/validate-key.dto.ts` — made apiKey optional for Ollama/Bedrock
+  - `apps/api/src/modules/ai-config/ai-config.service.ts` — updated for Gemini/Bedrock default models, optional API key
+- **Changes**: Full settings/ai page with provider grid (Anthropic, OpenAI, Gemini, Bedrock, Ollama), API key management with show/hide, model dropdown per provider, test connection button, provider-specific fields (AWS region, Ollama endpoint), status banner (Connected/Not configured).
+- **Date**: 2026-03-01
+
+## [US-AI-12] #243 Quotas par Tenant + Tier Gratuit — DONE ✅
+- **Files**:
+  - `apps/api/prisma/schema.prisma` — added TenantQuota model + Tenant relation
+  - `apps/api/prisma/migrations/20260301200000_add_tenant_quota/migration.sql` (NEW)
+  - `apps/api/src/modules/ai-config/quota.service.ts` (NEW) — QuotaService with checkQuota, incrementUsage, resetQuotaIfNeeded, ensureQuotaExists
+  - `apps/api/src/modules/ai-config/quota.guard.ts` (NEW) — NestJS guard checking quota before AI calls
+  - `apps/api/src/modules/ai-config/dto/update-quota.dto.ts` (NEW) — DTO for plan changes
+  - `apps/api/src/modules/ai-config/ai-config.controller.ts` — added GET/PATCH quota endpoints
+  - `apps/api/src/modules/ai-config/ai-config.module.ts` — registered QuotaService, QuotaGuard
+  - `apps/api/test/unit/ai/quota.service.spec.ts` (NEW) — 14 tests
+- **Changes**: TenantQuota model with plan (free/pro/enterprise), monthly quota, usage tracking, BYOK flag. QuotaGuard for endpoint-level protection. Auto-reset on 1st of month. Lazy creation of quota records. Plans: free=10, pro=500, enterprise=5000 analyses/month.
+- **Date**: 2026-03-01
