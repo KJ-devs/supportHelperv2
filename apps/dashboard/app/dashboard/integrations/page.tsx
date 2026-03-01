@@ -236,18 +236,18 @@ function IntegrationsPageContent() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto">
-        {/* Header - Gradient Hero */}
-        <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 rounded-2xl p-8 mb-8 text-white">
+        {/* Header */}
+        <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">Integrations</h1>
-              <p className="mt-2 text-blue-100 max-w-lg">
-                Connect Support Helper with your favorite tools. Push tickets out, pull them in, or sync both ways.
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Integrations</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                Connectez Support Helper avec vos outils. Envoyez, importez ou synchronisez vos tickets.
               </p>
             </div>
             <button
               onClick={handleCreate}
-              className="px-5 py-2.5 bg-white text-indigo-600 font-semibold rounded-xl hover:bg-blue-50 transition-colors shadow-lg shadow-indigo-500/25"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors text-sm"
             >
               + Add Integration
             </button>

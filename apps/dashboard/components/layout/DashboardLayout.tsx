@@ -28,7 +28,6 @@ import {
   Puzzle,
   X,
   Menu,
-  ChevronLeft,
   LogOut,
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
@@ -39,16 +38,41 @@ interface NavItem {
   icon: LucideIcon;
 }
 
-const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-  { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
-  { href: '/dashboard/agent-tasks', label: 'Agent Tasks', icon: Bot },
-  { href: '/dashboard/applications', label: 'Applications', icon: AppWindow },
-  { href: '/dashboard/integrations', label: 'Integrations', icon: Plug },
-  { href: '/dashboard/github', label: 'GitHub', icon: Github },
-  { href: '/dashboard/analytics', label: 'Analytiques', icon: BarChart3 },
-  { href: '/dashboard/sdk-demo', label: 'SDK Demo', icon: Puzzle },
-  { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
+  {
+    title: 'Principal',
+    items: [
+      { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
+      { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
+      { href: '/dashboard/agent-tasks', label: 'Tâches IA', icon: Bot },
+    ],
+  },
+  {
+    title: 'Configuration',
+    items: [
+      { href: '/dashboard/applications', label: 'Applications', icon: AppWindow },
+      { href: '/dashboard/integrations', label: 'Intégrations', icon: Plug },
+      { href: '/dashboard/github', label: 'GitHub', icon: Github },
+    ],
+  },
+  {
+    title: 'Rapports',
+    items: [
+      { href: '/dashboard/analytics', label: 'Analytiques', icon: BarChart3 },
+    ],
+  },
+  {
+    title: 'Outils',
+    items: [
+      { href: '/dashboard/sdk-demo', label: 'Démo SDK', icon: Puzzle },
+      { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
+    ],
+  },
 ];
 
 interface DashboardLayoutProps {
@@ -58,6 +82,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
+  // sidebarOpen controls ONLY the mobile drawer
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
@@ -69,9 +94,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024);
+      // Close mobile drawer when switching to desktop
       if (window.innerWidth >= 1024) {
-        setSidebarOpen(true);
-      } else {
         setSidebarOpen(false);
       }
     };
@@ -92,20 +116,48 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 bg-white dark:bg-gray-900 shadow-lg dark:shadow-gray-800/20 transition-transform duration-300 ${
-          sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-        } w-64`}
-      >
-        {/* Logo */}
-        <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
-          <Link href="/dashboard" className="flex items-center space-x-2">
-            <Bug className="w-6 h-6 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-            <span className="font-bold text-gray-900 dark:text-gray-100">Support Helper</span>
-          </Link>
+  const NavSections = () => (
+    <nav className="px-4 py-6 flex-1 overflow-y-auto" aria-label="Menu principal">
+      {navSections.map((section, sectionIndex) => (
+        <div key={section.title} className={sectionIndex > 0 ? 'mt-6' : ''}>
+          <p className="px-4 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+            {section.title}
+          </p>
+          <div className="space-y-1">
+            {section.items.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors min-h-[44px] focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isActive
+                      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  }`}
+                  aria-current={isActive ? 'page' : undefined}
+                >
+                  <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+
+  const SidebarContent = () => (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="flex items-center justify-between px-6 py-4 border-b dark:border-gray-700">
+        <Link href="/dashboard" className="flex items-center space-x-2">
+          <Bug className="w-6 h-6 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+          <span className="font-bold text-gray-900 dark:text-gray-100">Support Helper</span>
+        </Link>
+        {isMobile && (
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
@@ -113,9 +165,30 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
+        )}
+      </div>
+
+      {/* Navigation */}
+      <NavSections />
+
+      {/* User Info */}
+      <div className="border-t dark:border-gray-700 p-4 mt-auto">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user.name || user.email}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.role}</p>
+          </div>
+          <button
+            onClick={() => logout()}
+            className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
+            title="Se déconnecter"
+            aria-label="Se déconnecter"
+          >
+            <LogOut className="w-5 h-5" aria-hidden="true" />
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 
         {/* Navigation */}
@@ -140,46 +213,38 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           })}
         </nav>
 
-        {/* User Info */}
-        <div className="absolute bottom-0 left-0 right-0 border-t dark:border-gray-700 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user.name || user.email}</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.role}</p>
-            </div>
-            <button
-              onClick={() => logout()}
-              className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              title="Se déconnecter"
-              aria-label="Se déconnecter"
-            >
-              <LogOut className="w-5 h-5" aria-hidden="true" />
-            </button>
-          </div>
-        </div>
+      {/* Desktop Sidebar — always visible on lg+ screens, no toggle */}
+      <aside
+        className="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 shadow-lg dark:shadow-gray-800/20"
+        aria-label="Navigation principale"
+      >
+        <SidebarContent />
       </aside>
 
       {/* Mobile Drawer */}
       {isMobile && (
         <Sheet isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} side="left">
-          <div className="flex flex-col h-full">
-            <SidebarContent />
-          </div>
+          <SidebarContent />
         </Sheet>
       )}
 
-      {/* Main Content */}
-      <div className={`transition-all duration-300 ${sidebarOpen && !isMobile ? 'lg:ml-64' : ''}`}>
+      {/* Main Content — always offset by sidebar width on desktop */}
+      <div className="lg:ml-64">
         {/* Header */}
         <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-gray-800/20 sticky top-0 z-40 border-b border-transparent dark:border-gray-700">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-              aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
-            >
-              {sidebarOpen ? <ChevronLeft className="w-5 h-5" aria-hidden="true" /> : <Menu className="w-5 h-5" aria-hidden="true" />}
-            </button>
+            {/* Mobile-only: hamburger menu button */}
+            {isMobile && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded lg:hidden"
+                aria-label="Ouvrir le menu"
+                aria-expanded={sidebarOpen}
+                aria-controls="sidebar"
+              >
+                <Menu className="w-5 h-5" aria-hidden="true" />
+              </button>
+            )}
 
             <div className="flex-1 flex items-center justify-center px-2 sm:px-8">
               <GlobalSearch />

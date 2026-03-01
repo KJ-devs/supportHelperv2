@@ -36,3 +36,7 @@ yarn-error.log*
 *.swp
 *.swo
 *~
+
+# screenshots
+screenshots/*.png
+screenshots/after/
