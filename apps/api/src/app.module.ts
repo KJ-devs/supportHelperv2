@@ -77,6 +77,9 @@ import { SsoModule } from './modules/auth/sso/sso.module';
 // Triage (Automatic ticket classification & routing)
 import { TriageModule } from './modules/triage/triage.module';
 
+// Billing (Stripe subscriptions)
+import { BillingModule } from './modules/billing/billing.module';
+
 /**
  * Root Application Module
  *
@@ -221,6 +224,9 @@ import { TriageModule } from './modules/triage/triage.module';
 
     // Triage (Automatic ticket classification & routing)
     TriageModule,
+
+    // Billing (Stripe subscriptions)
+    BillingModule,
   ],
   providers: [
     // Global rate limiting guard

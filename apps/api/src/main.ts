@@ -23,8 +23,16 @@ async function bootstrap() {
   // Validate environment variables BEFORE NestJS initialization
   validateEnvironmentVariables();
 
-  // Create the app
-  const app = await NestFactory.create(AppModule);
+  // Create the app with Pino logger
+  // rawBody: true is required for Stripe webhook signature verification
+  const app = await NestFactory.create(AppModule, {
+    bufferLogs: true, // Buffer logs until logger is attached
+    rawBody: true,
+  });
+
+  // Get and attach the Pino logger
+  const pinoLogger = app.get(PinoLoggerService);
+  app.useLogger(pinoLogger);
 
   // Enable graceful shutdown hooks
   app.enableShutdownHooks();

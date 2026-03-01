@@ -116,6 +116,11 @@ const OPTIONAL_VARIABLES = [
   'GITHUB_CLIENT_ID',
   'GITHUB_CLIENT_SECRET',
   'GITHUB_WEBHOOK_SECRET',
+  // Stripe (optional — billing features disabled if not set)
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'STRIPE_PRICE_PRO',
+  'STRIPE_PRICE_ENTERPRISE',
 ];
 
 /**

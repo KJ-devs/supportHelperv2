@@ -143,6 +143,7 @@ export default function SettingsPage() {
 
   const settingsPages = [
     { href: '/dashboard/settings/plan', label: 'Plan & Usage', icon: CreditCard },
+    { href: '/dashboard/settings/billing', label: 'Billing', icon: CreditCard },
     { href: '/dashboard/settings/license', label: 'License', icon: Key },
     { href: '/dashboard/settings/ai', label: 'AI Configuration', icon: Bot },
     { href: '/dashboard/settings/ai-usage', label: 'AI Usage', icon: TrendingUp },
