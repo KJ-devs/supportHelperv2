@@ -191,7 +191,10 @@ export class OllamaProvider implements AIProvider {
   async validateConfig(): Promise<boolean> {
     try {
       // Test connection by listing models
-      const response = await fetch(`${this.endpoint}/api/tags`);
+      const response = await withRetry(
+        () => fetch(`${this.endpoint}/api/tags`),
+        { label: 'Ollama.validateConfig' },
+      );
       return response.ok;
     } catch (error) {
       this.logger.warn(
