@@ -19,6 +19,8 @@ import { UpdateQuotaDto } from './dto/update-quota.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { QuotaService } from './quota.service';
+import { AiUsageService } from './ai-usage.service';
+import { AiCircuitBreakerService } from '../../ai/circuit-breaker.service';
 
 @ApiTags('AI Configuration')
 @ApiBearerAuth()
@@ -28,6 +30,8 @@ export class AiConfigController {
   constructor(
     private readonly aiConfigService: AiConfigService,
     private readonly quotaService: QuotaService,
+    private readonly aiUsageService: AiUsageService,
+    private readonly circuitBreakerService: AiCircuitBreakerService,
   ) {}
 
   @Get()
@@ -118,5 +122,84 @@ export class AiConfigController {
     @Body() dto: UpdateQuotaDto,
   ) {
     return this.quotaService.updateQuota(tenantId, dto);
+  }
+
+  // ─── Usage Endpoints ───────────────────────────────────────────────────────
+
+  @Get('usage')
+  @ApiOperation({ summary: 'Get AI usage stats for the last 30 days' })
+  @ApiResponse({
+    status: 200,
+    description: 'AI usage statistics retrieved',
+    schema: {
+      properties: {
+        totalCost: { type: 'number' },
+        totalTokens: { type: 'number' },
+        totalRequests: { type: 'number' },
+        costPerTicket: { type: 'number' },
+        period: { type: 'number' },
+        byDay: {
+          type: 'array',
+          items: {
+            properties: {
+              date: { type: 'string' },
+              cost: { type: 'number' },
+              tokens: { type: 'number' },
+              requests: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getUsage(@CurrentTenant() tenantId: string) {
+    return this.aiUsageService.getUsage(tenantId, 30);
+  }
+
+  // ─── Circuit Breaker Endpoints ────────────────────────────────────────────
+
+  @Get('budget-status')
+  @ApiOperation({ summary: 'Get daily AI budget status for current tenant' })
+  @ApiResponse({
+    status: 200,
+    description: 'Budget status retrieved',
+    schema: {
+      properties: {
+        dailySpending: { type: 'number', description: 'Current daily spending in USD' },
+        dailyLimit: { type: 'number', nullable: true, description: 'Daily limit in USD, null = unlimited' },
+        percentUsed: { type: 'number', description: 'Percentage of daily budget used (0 when unlimited)' },
+        isBlocked: { type: 'boolean', description: 'Whether AI calls are currently blocked' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getBudgetStatus(@CurrentTenant() tenantId: string) {
+    const spending = await this.circuitBreakerService.getDailySpending(tenantId);
+    const limit = await this.circuitBreakerService.getBudgetLimit(tenantId);
+    return {
+      dailySpending: spending,
+      dailyLimit: limit,
+      percentUsed: limit ? Math.round((spending / limit) * 100) : 0,
+      isBlocked: limit !== null ? spending >= limit : false,
+    };
+  }
+
+  @Post('reset-circuit')
+  @ApiOperation({ summary: 'Reset the AI circuit breaker for current tenant (admin action)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Circuit breaker reset successfully',
+    schema: {
+      properties: {
+        status: { type: 'string' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async resetCircuit(@CurrentTenant() tenantId: string) {
+    await this.circuitBreakerService.resetCircuit(tenantId);
+    return { status: 'reset', message: 'Circuit breaker has been reset.' };
   }
 }

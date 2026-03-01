@@ -7,9 +7,11 @@ import { AIProviderFactory } from '../../ai/providers/ai-provider.factory';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { QuotaService } from './quota.service';
 import { QuotaGuard } from './quota.guard';
+import { AiUsageService } from './ai-usage.service';
+import { AIModule } from '../../ai/ai.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AIModule],
   controllers: [AiConfigController],
   providers: [
     AiConfigService,
@@ -18,6 +20,7 @@ import { QuotaGuard } from './quota.guard';
     AIProviderFactory,
     QuotaService,
     QuotaGuard,
+    AiUsageService,
   ],
   exports: [
     AiConfigService,
@@ -25,6 +28,7 @@ import { QuotaGuard } from './quota.guard';
     ToolCapableProviderFactory,
     QuotaService,
     QuotaGuard,
+    AiUsageService,
   ],
 })
 export class AiConfigModule {}
