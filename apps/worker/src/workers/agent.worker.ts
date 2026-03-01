@@ -5,6 +5,7 @@ import { Job, Queue } from 'bullmq';
 import { Octokit } from '@octokit/rest';
 import { createDecipheriv } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { QUEUE_NAMES } from '../queues';
 import {
   AgentJobData,
@@ -1216,27 +1217,21 @@ Keep responses concise but thorough.`,
 
     await job.updateProgress(50);
 
-    // 6. Get Anthropic API key for the tenant
-    const anthropicApiKey = await this.getDecryptedAnthropicKey(tenantId);
-    if (!anthropicApiKey) {
-      await this.setAgentTaskError(agentTaskId, 'No Anthropic API key configured for this tenant.');
-      throw new Error('No Anthropic API key configured');
+    // 6. Get AI config for the tenant (provider-agnostic)
+    const aiProviderConfig = await this.getDecryptedAiConfig(tenantId);
+    if (!aiProviderConfig) {
+      await this.setAgentTaskError(agentTaskId, 'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.');
+      throw new Error('No AI provider configured');
     }
-
-    // Get configured model
-    const aiConfig = await this.prisma.aiConfig.findUnique({
-      where: { tenantId },
-    });
-    const model = aiConfig?.model || 'claude-sonnet-4-20250514';
 
     await this.appendAgentTaskLog(agentTaskId, {
       step: 'ai_configured',
-      message: `Using model ${model}`,
+      message: `Using ${aiProviderConfig.provider} model ${aiProviderConfig.model}`,
     });
 
     await job.updateProgress(60);
 
-    // 7. Build prompts and call Claude
+    // 7. Build prompts and call AI provider
     const systemPrompt = this.buildActionPlanSystemPrompt();
     let userPrompt = this.buildActionPlanUserPrompt(ticket, repoTree, relevantCode);
 
@@ -1250,33 +1245,18 @@ Keep responses concise but thorough.`,
       });
     }
 
-    const anthropic = new Anthropic({ apiKey: anthropicApiKey });
-
-    this.logger.log(`Calling Claude (${model}) for action plan generation`);
+    this.logger.log(`Calling ${aiProviderConfig.provider} (${aiProviderConfig.model}) for action plan generation`);
     await this.appendAgentTaskLog(agentTaskId, {
-      step: 'calling_claude',
-      message: 'Sending analysis request to Claude',
+      step: 'calling_ai',
+      message: `Sending analysis request to ${aiProviderConfig.provider}`,
     });
 
-    const response = await anthropic.messages.create({
-      model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
+    const responseText = await this.callAiCompletion(aiProviderConfig, systemPrompt, userPrompt, 4096);
 
     await job.updateProgress(80);
 
     // 8. Parse action plan from response
-    const textBlock = response.content.find(
-      (block: { type: string }) => block.type === 'text',
-    ) as { type: 'text'; text: string } | undefined;
-    if (!textBlock) {
-      await this.setAgentTaskError(agentTaskId, 'Claude returned an unexpected response format');
-      throw new Error('No text block in Claude response');
-    }
-
-    const actionPlan = this.parseActionPlanResponse(textBlock.text);
+    const actionPlan = this.parseActionPlanResponse(responseText);
 
     await this.appendAgentTaskLog(agentTaskId, {
       step: 'plan_parsed',
@@ -1450,21 +1430,16 @@ Keep responses concise but thorough.`,
 
       const octokit = new Octokit({ auth: connection.accessToken });
 
-      // 5. Get Anthropic API key
-      const anthropicApiKey = await this.getDecryptedAnthropicKey(tenantId);
-      if (!anthropicApiKey) {
-        await this.setAgentTaskError(agentTaskId, 'No Anthropic API key configured for this tenant.');
-        throw new Error('No Anthropic API key configured');
+      // 5. Get AI config (provider-agnostic)
+      const aiProviderConfig = await this.getDecryptedAiConfig(tenantId);
+      if (!aiProviderConfig) {
+        await this.setAgentTaskError(agentTaskId, 'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.');
+        throw new Error('No AI provider configured');
       }
-
-      const aiConfig = await this.prisma.aiConfig.findUnique({
-        where: { tenantId },
-      });
-      const model = aiConfig?.model || 'claude-sonnet-4-20250514';
 
       await this.appendAgentTaskLog(agentTaskId, {
         step: 'ai_configured',
-        message: `Using model ${model}`,
+        message: `Using ${aiProviderConfig.provider} model ${aiProviderConfig.model}`,
       });
 
       await job.updateProgress(20);
@@ -1473,7 +1448,6 @@ Keep responses concise but thorough.`,
       const sortedFiles = [...actionPlan.files].sort(
         (a: any, b: any) => (a.order || 0) - (b.order || 0),
       );
-      const anthropic = new Anthropic({ apiKey: anthropicApiKey });
       const generatedFiles: Array<{
         filePath: string;
         content: string;
@@ -1537,29 +1511,20 @@ Keep responses concise but thorough.`,
           aiSummary: null,
         });
 
-        // Build prompt and call Claude, including CI error context for retries
+        // Build prompt and call AI provider, including CI error context for retries
         const userPrompt = this.buildCodeGenUserPrompt(file, currentContent, codeContext, actionPlan, agentTask.ciErrorLog);
 
         apiCallCount++;
-        this.logger.log(`Calling Claude for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`);
+        this.logger.log(`Calling ${aiProviderConfig.provider} for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`);
 
-        const response = await anthropic.messages.create({
-          model,
-          max_tokens: 8192,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        });
-
-        const textBlock = response.content.find(
-          (block: { type: string }) => block.type === 'text',
-        ) as { type: 'text'; text: string } | undefined;
-
-        if (!textBlock) {
-          this.logger.warn(`No text response for ${file.filePath}, skipping`);
+        let generatedCode: string;
+        try {
+          const responseText = await this.callAiCompletion(aiProviderConfig, systemPrompt, userPrompt, 8192);
+          generatedCode = this.extractCodeFromResponse(responseText);
+        } catch (error) {
+          this.logger.warn(`No response for ${file.filePath}: ${getErrorMessage(error)}, skipping`);
           continue;
         }
-
-        const generatedCode = this.extractCodeFromResponse(textBlock.text);
         generatedFiles.push({
           filePath: file.filePath,
           content: generatedCode,
@@ -2189,52 +2154,113 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
   }
 
   /**
-   * Get decrypted Anthropic API key for a tenant.
+   * Get decrypted AI config for a tenant (provider, apiKey, model).
+   * Falls back to ANTHROPIC_API_KEY env var if no tenant config exists.
    * The API encrypts with AES-256-GCM in iv:authTag:ciphertext format (base64).
    */
-  private async getDecryptedAnthropicKey(tenantId: string): Promise<string | null> {
+  private async getDecryptedAiConfig(tenantId: string): Promise<{
+    provider: string;
+    apiKey: string;
+    model: string;
+  } | null> {
     const aiConfig = await this.prisma.aiConfig.findUnique({
       where: { tenantId },
     });
 
-    if (!aiConfig?.encryptedApiKey) return null;
+    if (!aiConfig?.encryptedApiKey) {
+      // Fallback to env var (backward compatible)
+      const envKey = this.configService.get<string>('ANTHROPIC_API_KEY');
+      if (envKey) {
+        return { provider: 'anthropic', apiKey: envKey, model: 'claude-sonnet-4-20250514' };
+      }
+      return null;
+    }
 
     const encryptedValue = aiConfig.encryptedApiKey;
+    let apiKey: string;
 
     // Check if value looks encrypted (iv:authTag:ciphertext, base64)
     const parts = encryptedValue.split(':');
     if (parts.length !== 3) {
       // Value may be stored as plaintext (legacy or no middleware)
-      return encryptedValue;
+      apiKey = encryptedValue;
+    } else {
+      // Decrypt using ENCRYPTION_KEY env var (same key as API's EncryptionService)
+      const keyHex = this.configService.get<string>('ENCRYPTION_KEY');
+      if (!keyHex) {
+        this.logger.warn('ENCRYPTION_KEY not configured, cannot decrypt API key');
+        return null;
+      }
+
+      try {
+        const key = Buffer.from(keyHex, 'hex');
+        const [ivB64, authTagB64, ciphertextB64] = parts;
+        const iv = Buffer.from(ivB64!, 'base64');
+        const authTag = Buffer.from(authTagB64!, 'base64');
+        const ciphertext = Buffer.from(ciphertextB64!, 'base64');
+
+        const decipher = createDecipheriv('aes-256-gcm', key, iv);
+        decipher.setAuthTag(authTag);
+
+        const decrypted = Buffer.concat([
+          decipher.update(ciphertext),
+          decipher.final(),
+        ]);
+
+        apiKey = decrypted.toString('utf8');
+      } catch (error) {
+        this.logger.error(`Failed to decrypt AI API key: ${getErrorMessage(error)}`);
+        return null;
+      }
     }
 
-    // Decrypt using ENCRYPTION_KEY env var (same key as API's EncryptionService)
-    const keyHex = this.configService.get<string>('ENCRYPTION_KEY');
-    if (!keyHex) {
-      this.logger.warn('ENCRYPTION_KEY not configured, cannot decrypt API key');
-      return null;
+    return {
+      provider: aiConfig.provider || 'anthropic',
+      apiKey,
+      model: aiConfig.model || 'claude-sonnet-4-20250514',
+    };
+  }
+
+  /**
+   * Call AI provider for chat completion (text only).
+   * Dispatches to Anthropic or OpenAI based on provider config.
+   */
+  private async callAiCompletion(
+    config: { provider: string; apiKey: string; model: string },
+    systemPrompt: string,
+    userPrompt: string,
+    maxTokens: number,
+  ): Promise<string> {
+    if (config.provider === 'openai') {
+      const openai = new OpenAI({ apiKey: config.apiKey });
+      const response = await openai.chat.completions.create({
+        model: config.model,
+        max_tokens: maxTokens,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+      const content = response.choices[0]?.message?.content;
+      if (!content) throw new Error('OpenAI returned empty response');
+      return content;
     }
 
-    try {
-      const key = Buffer.from(keyHex, 'hex');
-      const [ivB64, authTagB64, ciphertextB64] = parts;
-      const iv = Buffer.from(ivB64!, 'base64');
-      const authTag = Buffer.from(authTagB64!, 'base64');
-      const ciphertext = Buffer.from(ciphertextB64!, 'base64');
+    // Default: Anthropic
+    const anthropic = new Anthropic({ apiKey: config.apiKey });
+    const response = await anthropic.messages.create({
+      model: config.model,
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
 
-      const decipher = createDecipheriv('aes-256-gcm', key, iv);
-      decipher.setAuthTag(authTag);
+    const textBlock = response.content.find(
+      (block: { type: string }) => block.type === 'text',
+    ) as { type: 'text'; text: string } | undefined;
 
-      const decrypted = Buffer.concat([
-        decipher.update(ciphertext),
-        decipher.final(),
-      ]);
-
-      return decrypted.toString('utf8');
-    } catch (error) {
-      this.logger.error(`Failed to decrypt Anthropic API key: ${getErrorMessage(error)}`);
-      return null;
-    }
+    if (!textBlock) throw new Error('Anthropic returned empty response');
+    return textBlock.text;
   }
 
   private buildActionPlanSystemPrompt(): string {

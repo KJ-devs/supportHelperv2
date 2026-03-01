@@ -92,13 +92,24 @@ export class AgenticLoopService {
 
       this.eventEmitter.emit('agent:thinking', { ticketId, sessionId, iteration: iterations });
 
-      const turn = await provider.chat({
-        model,
-        maxTokens,
-        systemPrompt,
-        messages,
-        tools,
-      });
+      let turn: Awaited<ReturnType<typeof provider.chat>>;
+      try {
+        turn = await provider.chat({
+          model,
+          maxTokens,
+          systemPrompt,
+          messages,
+          tools,
+        });
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : 'Unknown provider error';
+        this.logger.error(
+          `provider.chat() failed on iteration ${iterations}: ${errorMsg}`,
+          err instanceof Error ? err.stack : undefined,
+        );
+        finalContent = `Analysis interrupted: AI provider error — ${errorMsg}`;
+        break;
+      }
 
       // Append the assistant message to history
       messages.push(turn.assistantMessage);

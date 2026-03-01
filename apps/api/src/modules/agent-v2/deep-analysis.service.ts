@@ -53,6 +53,17 @@ export class DeepAnalysisService {
       throw new NotFoundException(`Ticket ${ticketId} not found`);
     }
 
+    // Create an AgentTask record so the dashboard can track this analysis
+    const agentTask = await this.prisma.agentTask.create({
+      data: {
+        ticketId,
+        tenantId,
+        applicationId: ticket.applicationId,
+        status: 'analyzing',
+        startedAt: new Date(),
+      },
+    });
+
     // Mark ticket as analyzing
     await this.prisma.ticket.update({
       where: { id: ticketId },
@@ -165,6 +176,16 @@ Start by identifying which parts of the codebase are likely involved, then read 
         },
       });
 
+      // Mark AgentTask as completed
+      await this.prisma.agentTask.update({
+        where: { id: agentTask.id },
+        data: {
+          status: 'completed',
+          completedAt: new Date(),
+          diagnosisSnapshot: finalDiagnosis ? (finalDiagnosis as object) : undefined,
+        },
+      });
+
       return finalDiagnosis;
     } catch (err) {
       const errorMessage = (err as Error).message;
@@ -181,6 +202,16 @@ Start by identifying which parts of the codebase are likely involved, then read 
           tenantId,
           eventType: 'analysis_failed',
           data: { error: errorMessage },
+        },
+      });
+
+      // Mark AgentTask as failed
+      await this.prisma.agentTask.update({
+        where: { id: agentTask.id },
+        data: {
+          status: 'failed',
+          completedAt: new Date(),
+          error: errorMessage,
         },
       });
 

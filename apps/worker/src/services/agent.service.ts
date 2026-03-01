@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
+import { TicketStatus } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { OpenAIService } from './openai.service';
 import { GithubService, GithubConnection } from './github.service';
@@ -1118,7 +1119,7 @@ export class AgentService implements OnModuleInit {
 
     const updated = await this.prisma.ticket.update({
       where: { id: ticketId },
-      data: { status },
+      data: { status: status as TicketStatus },
       select: { id: true, status: true, updatedAt: true },
     });
 

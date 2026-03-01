@@ -139,7 +139,7 @@ export class TicketsService {
       tenantId,
       ...(status && { status }),
       ...(type && { type }),
-      ...(severity && { severity }),
+      ...(severity && { severity: { not: severity } }),
       ...(applicationId && { applicationId }),
       ...(assignedTo && { assignedTo }),
       ...(reporterId && { reporterId }),

@@ -74,6 +74,10 @@ describe('DeepAnalysisService', () => {
       ticketEvent: {
         create: jest.fn(),
       },
+      agentTask: {
+        create: jest.fn().mockResolvedValue({ id: 'task-123' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
       agentSession: {
         findFirst: jest.fn(),
         update: jest.fn(),

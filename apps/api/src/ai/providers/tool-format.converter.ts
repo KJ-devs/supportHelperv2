@@ -168,12 +168,22 @@ export class ToolFormatConverter {
       ? [{ type: 'text', text: message.content }]
       : [];
 
-    const toolUseBlocks: ToolUseBlock[] = (message.tool_calls ?? []).map((tc) => ({
-      type: 'tool_use',
-      id: tc.id,
-      name: tc.function.name,
-      input: JSON.parse(tc.function.arguments) as Record<string, unknown>,
-    }));
+    const toolUseBlocks: ToolUseBlock[] = (message.tool_calls ?? []).map((tc) => {
+      let input: Record<string, unknown> = {};
+      try {
+        input = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+      } catch (err) {
+        console.error(
+          `[ToolFormatConverter] Failed to parse tool call arguments for "${tc.function.name}": ${(err as Error).message}. Raw: ${tc.function.arguments}`,
+        );
+      }
+      return {
+        type: 'tool_use',
+        id: tc.id,
+        name: tc.function.name,
+        input,
+      };
+    });
 
     const assistantContent: ContentBlock[] = [...textBlocks, ...toolUseBlocks];
     const stopReason =

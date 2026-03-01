@@ -226,40 +226,69 @@ Key variables (see `.env.example` for full list):
 | `API_PORT` | API port (default 3001) |
 | `DASHBOARD_URL` | CORS origin for dashboard |
 
-## User Story Workflow (MANDATORY)
+## User Story Workflow (MANDATORY — AUTOMATIC CYCLE)
 
-When working on User Stories (US) from GitHub issues, follow this cycle strictly:
+Claude works **one US at a time** in a strict cycle. This cycle is **fully automatic** — Claude does NOT wait for user instructions between US. After completing one US, Claude commits, summarizes, clears context, and immediately starts the next US.
+
+### Automatic US Cycle
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  1. READ    .claude/us-summaries.md (context from past) │
+│  2. READ    GitHub issue (acceptance criteria)          │
+│  3. WORK    Implement the US (focus, no mixing)         │
+│  4. BUILD   pnpm build (must pass, 0 errors)            │
+│  5. TEST    Run relevant tests                          │
+│  6. UPDATE  GitHub issue checkboxes (- [x])             │
+│  7. SUMMARY Append to .claude/us-summaries.md           │
+│  8. COMMIT  git add + commit + push to main             │
+│  9. CLEAR   /clear (fresh context for next US)          │
+│ 10. NEXT    Start the next US from step 1               │
+└─────────────────────────────────────────────────────────┘
+```
 
 ### 1. Before starting a US
-- Read the summary file `.claude/us-summaries.md` to get context from previously completed US
+- Read `.claude/us-summaries.md` to get context from ALL previously completed US
 - Read the GitHub issue to understand acceptance criteria
-- Announce which US you are starting
+- Announce which US you are starting: "Starting [US-AI-XX] Title"
 
 ### 2. While working on a US
-- Focus exclusively on that US — do not mix changes from other US
+- Focus **exclusively** on that US — do not mix changes from other US
 - Check each acceptance criterion as you complete it
+- If blocked, note the blocker and move to the next US
 
-### 3. After completing a US
-- Run `pnpm build` to verify no regressions
-- Update the GitHub issue checkboxes (`- [x]`)
-- Append a summary to `.claude/us-summaries.md` with:
-  - US number and title
-  - What was done (files created/modified)
-  - Key decisions made
-  - Any remaining issues or partial items
-- **Commit and push** all changes
-- **Clear context** (`/clear`) — start fresh for the next US
-- The next conversation picks up by reading `.claude/us-summaries.md`
+### 3. After completing a US (ALL steps mandatory, in order)
+1. Run `pnpm build` and ensure **0 errors**
+2. Run relevant tests (`pnpm test` or package-specific)
+3. Update the GitHub issue checkboxes (`- [x]`) via `gh issue edit`
+4. Append a summary to `.claude/us-summaries.md` (format below)
+5. **Commit and push** all changes to `main`
+6. **Clear context** — run `/clear` to free the context window
+7. **Immediately start the next US** — do NOT wait for user input
 
 ### 4. Summary file format
 ```markdown
-## [US-XXX-##] Title — DONE ✅
+## [US-AI-XX] #NNN Title — DONE ✅
 - **Files**: list of created/modified files
 - **Changes**: what was implemented
 - **Decisions**: any architectural choices made
 - **Remaining**: anything left incomplete (with reason)
 - **Date**: completion date
 ```
+
+### 5. US execution order
+Follow the order defined in the Epic issue. Respect dependencies:
+- Phase 1 US are done first (US-AI-01 through US-AI-06)
+- Phase 2 depends on Phase 1 completion
+- Phase 3 depends on Phase 2 completion
+- Phase 4 depends on Phase 3 completion
+- Within a phase, P0 before P1, P1 before P2
+- Check dependency notes in each US ("Dépend de: ...")
+
+### 6. When to stop the cycle
+- All US in the Epic are completed
+- A US is blocked and cannot proceed (note the blocker, ask the user)
+- The user explicitly asks to stop
 
 ## Pre-Commit Checklist (MANDATORY)
 

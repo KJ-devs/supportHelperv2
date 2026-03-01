@@ -2,6 +2,7 @@ import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullm
 import { Logger } from '@nestjs/common';
 import { Job, Queue } from 'bullmq';
 import { IntegrationSyncJobData, IntegrationSyncResult, IntegrationPullJobData, IntegrationPullResult } from '../queues/queue.types';
+import { TicketStatus } from '@prisma/client';
 import { PrismaService } from '../services/prisma.service';
 import { decryptAES256GCM, parseEncryptionKey } from '@support-helper/shared';
 import { INTEGRATION_PROVIDERS } from '../../../api/src/modules/integrations/providers';
@@ -226,7 +227,7 @@ export class IntegrationSyncWorker extends WorkerHost {
             data: {
               title: pulledTicket.title,
               description: pulledTicket.description || '',
-              status: pulledTicket.status || 'open',
+              status: (pulledTicket.status || 'open') as TicketStatus,
               severity: pulledTicket.severity || 'medium',
               type: pulledTicket.type || 'bug',
               tenantId,
