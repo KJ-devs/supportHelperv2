@@ -75,3 +75,14 @@
 - Wrap hooks in `QueryClientProvider` with `retry: false` options
 - For `fetch`-based calls: mock `global.fetch = vi.fn()`
 - `localStorage` is available in jsdom tests — clear in `beforeEach`/`afterEach`
+- Tests live in `tests/components/` (component tests) and `src/**/*.{test,spec}` (unit tests)
+- `vitest run` exits with code 1 if NO test files are found — always have at least one test file
+
+## Route Group Gotchas (Next.js 15 App Router)
+
+- `app/page.tsx` and `app/(group)/page.tsx` BOTH map to `/` — they conflict
+- EXCEPT: if `app/page.tsx` has NO default export (`export type {}`), Next.js ignores it and uses `(group)/page.tsx`
+- For NESTED routes: `app/(group)/pricing/page.tsx` and `app/pricing/page.tsx` ALWAYS conflict regardless of exports
+- To resolve nested route conflicts: DELETE the standalone file (use `rm` via Bash) — cannot use empty exports trick
+- Pattern for marketing layout: `app/page.tsx` (landing, self-contained) + `app/(marketing)/pricing/page.tsx` (pricing, wrapped by `(marketing)/layout.tsx`)
+- `(marketing)/layout.tsx` provides NavBar + Footer for pricing page; landing page includes them directly
