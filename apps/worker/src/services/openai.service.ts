@@ -152,6 +152,8 @@ export class OpenAIService implements OnModuleInit {
   // Cache settings
   private readonly EMBEDDING_CACHE_TTL = 86400; // 24 hours in seconds
   private readonly EMBEDDING_CACHE_PREFIX = 'openai:embedding:';
+  private readonly CLASSIFICATION_CACHE_TTL = 14400; // 4 hours in seconds
+  private readonly CLASSIFICATION_CACHE_PREFIX = 'ai:completion:classify:';
 
   // Cost per 1K tokens (approximate)
   private readonly MODEL_COSTS: Record<string, { input: number; output: number }> = {
@@ -451,6 +453,21 @@ Provide confidence scores (0-1) for your classifications.`;
   async classifyTicket(text: string, tenantId: string): Promise<Classification> {
     this.logger.debug(`Classifying ticket (${text.length} chars)`);
 
+    // Check Redis cache first
+    const truncatedText = text.substring(0, 4000); // Same truncation used in actual calls
+    const textHash = this.hashText(truncatedText);
+    const cacheKey = `${this.CLASSIFICATION_CACHE_PREFIX}${textHash}`;
+
+    try {
+      const cached = await this.redis.get(cacheKey);
+      if (cached) {
+        this.logger.debug('Classification cache hit');
+        return JSON.parse(cached) as Classification;
+      }
+    } catch (error) {
+      this.logger.warn(`Classification cache read error: ${getErrorMessage(error)}`);
+    }
+
     // Check rate limit
     await this.checkRateLimit(tenantId);
 
@@ -460,10 +477,19 @@ Provide confidence scores (0-1) for your classifications.`;
       tenantConfig?.provider === 'openai' ||
       (!tenantConfig && !process.env.ANTHROPIC_API_KEY && !!this.openaiClient);
 
-    if (useOpenAI) {
-      return this.classifyTicketWithOpenAI(text, tenantId, tenantConfig);
+    const result = useOpenAI
+      ? await this.classifyTicketWithOpenAI(text, tenantId, tenantConfig)
+      : await this.classifyTicketWithAnthropic(text, tenantId);
+
+    // Cache the result
+    try {
+      await this.redis.setex(cacheKey, this.CLASSIFICATION_CACHE_TTL, JSON.stringify(result));
+      this.logger.debug('Classification cached successfully');
+    } catch (error) {
+      this.logger.warn(`Classification cache write error: ${getErrorMessage(error)}`);
     }
-    return this.classifyTicketWithAnthropic(text, tenantId);
+
+    return result;
   }
 
   private readonly CLASSIFICATION_SYSTEM_PROMPT = `You are a bug triage expert. Classify the following support ticket/bug report.

@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { AIProvider } from './providers/ai-provider.interface';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AIProviderConfig, DEFAULT_MODELS } from './providers/ai-provider.types';
+import { AiCacheService, AI_CACHE_TTL } from './ai-cache.service';
 
 export interface VideoAnalysisResult {
   summary: string;
@@ -28,6 +29,7 @@ export class AIService {
     private configService: ConfigService,
     private prisma: PrismaService,
     private providerFactory: AIProviderFactory,
+    @Optional() private aiCache?: AiCacheService,
   ) {}
 
   /**
@@ -223,8 +225,10 @@ export class AIService {
       return this.getMockAnalysis(transcript);
     }
 
-    try {
-      const prompt = `
+    const systemPrompt =
+      'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.';
+
+    const prompt = `
 Analyze the following technical support issue based on the user's description and any OCR text from screenshots.
 
 User Description:
@@ -242,8 +246,9 @@ Please provide a JSON response with the following fields:
 - reproductionSteps: An array of steps to reproduce the issue if mentioned
 
 Respond ONLY with valid JSON.
-      `;
+    `;
 
+    const fetchAnalysis = async (): Promise<VideoAnalysisResult> => {
       const schema = {
         summary: 'string',
         severity: 'string',
@@ -255,8 +260,7 @@ Respond ONLY with valid JSON.
       };
 
       const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
-        systemPrompt:
-          'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.',
+        systemPrompt,
         temperature: 0.3,
         maxTokens: 1000,
       });
@@ -270,11 +274,23 @@ Respond ONLY with valid JSON.
         keywords: (analysis.keywords as string[]) || [],
         reproductionSteps: (analysis.reproductionSteps as string[]) || [],
       };
+    };
+
+    try {
+      if (this.aiCache) {
+        const cacheKey = this.aiCache.buildKey({
+          operation: 'analyzeVideo',
+          prompt,
+          systemPrompt,
+          temperature: 0.3,
+        });
+        return await this.aiCache.getOrSet(cacheKey, AI_CACHE_TTL.ANALYZE_VIDEO, fetchAnalysis);
+      }
+      return await fetchAnalysis();
     } catch (error) {
       this.logger.error(
         `Failed to analyze video: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
-      // Return mock analysis on error for MVP
       return this.getMockAnalysis(transcript);
     }
   }
@@ -292,18 +308,17 @@ Respond ONLY with valid JSON.
     if (!provider) {
       this.logger.warn('No AI provider configured, returning basic processing');
       const mock = this.getMockAnalysis(description);
-      return {
-        ...mock,
-        enrichedDescription: description,
-      };
+      return { ...mock, enrichedDescription: description };
     }
 
-    try {
-      const contextInfo = userContext
-        ? `\n\nTechnical Context:\n- OS/Platform: ${userContext.os || 'Unknown'}\n- Browser: ${userContext.browser || 'Unknown'}\n- Viewport: ${userContext.viewport || 'Unknown'}\n- URL: ${userContext.url || 'Unknown'}\n- Timestamp: ${userContext.timestamp || 'Unknown'}`
-        : '';
+    const contextInfo = userContext
+      ? `\n\nTechnical Context:\n- OS/Platform: ${userContext.os || 'Unknown'}\n- Browser: ${userContext.browser || 'Unknown'}\n- Viewport: ${userContext.viewport || 'Unknown'}\n- URL: ${userContext.url || 'Unknown'}\n- Timestamp: ${userContext.timestamp || 'Unknown'}`
+      : '';
 
-      const prompt = `
+    const systemPrompt =
+      'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.';
+
+    const prompt = `
 You are a technical support AI assistant. A user has submitted a bug report with the following description and technical context.
 
 User Description:
@@ -321,8 +336,9 @@ Please provide a JSON response with the following fields:
 - reproductionSteps: An array of inferred steps to reproduce the issue based on the description
 
 Respond ONLY with valid JSON.
-      `;
+    `;
 
+    const fetchResult = async (): Promise<VideoAnalysisResult & { enrichedDescription: string }> => {
       const schema = {
         enrichedDescription: 'string',
         summary: 'string',
@@ -335,8 +351,7 @@ Respond ONLY with valid JSON.
       };
 
       const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
-        systemPrompt:
-          'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.',
+        systemPrompt,
         temperature: 0.3,
         maxTokens: 1500,
       });
@@ -351,15 +366,25 @@ Respond ONLY with valid JSON.
         keywords: (analysis.keywords as string[]) || [],
         reproductionSteps: (analysis.reproductionSteps as string[]) || [],
       };
+    };
+
+    try {
+      if (this.aiCache) {
+        const cacheKey = this.aiCache.buildKey({
+          operation: 'processDescription',
+          prompt,
+          systemPrompt,
+          temperature: 0.3,
+        });
+        return await this.aiCache.getOrSet(cacheKey, AI_CACHE_TTL.PROCESS_DESCRIPTION, fetchResult);
+      }
+      return await fetchResult();
     } catch (error) {
       this.logger.error(
         `Failed to process description: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
       const mock = this.getMockAnalysis(description);
-      return {
-        ...mock,
-        enrichedDescription: description,
-      };
+      return { ...mock, enrichedDescription: description };
     }
   }
 
@@ -370,20 +395,32 @@ Respond ONLY with valid JSON.
       return 'other';
     }
 
-    try {
-      const response = await provider.generateCompletion(
-        `Classify this issue: ${description}`,
-        {
-          systemPrompt:
-            'You are a technical support AI classifier. Classify the issue into one category only: crash, performance, ui, data-loss, feature-request, or other.',
-          maxTokens: 20,
-          temperature: 0.1,
-        },
-      );
+    const systemPrompt =
+      'You are a technical support AI classifier. Classify the issue into one category only: crash, performance, ui, data-loss, feature-request, or other.';
+    const prompt = `Classify this issue: ${description}`;
 
+    const fetchClassification = async (): Promise<string> => {
+      const response = await provider.generateCompletion(prompt, {
+        systemPrompt,
+        maxTokens: 20,
+        temperature: 0.1,
+      });
       const content = response.toLowerCase();
       const validTypes = ['crash', 'performance', 'ui', 'data-loss', 'feature-request', 'other'];
       return validTypes.find((t) => content.includes(t)) || 'other';
+    };
+
+    try {
+      if (this.aiCache) {
+        const cacheKey = this.aiCache.buildKey({
+          operation: 'classifyIssue',
+          prompt,
+          systemPrompt,
+          temperature: 0.1,
+        });
+        return await this.aiCache.getOrSet(cacheKey, AI_CACHE_TTL.CLASSIFY_ISSUE, fetchClassification);
+      }
+      return await fetchClassification();
     } catch (error) {
       this.logger.error(`Classification failed: ${error}`);
       return 'other';

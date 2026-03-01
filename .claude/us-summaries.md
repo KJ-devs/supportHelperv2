@@ -165,3 +165,14 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Implemented context pruning with: sliding window (keep last 6 messages), mechanical summary of older messages (no AI call), tool_result truncation at 2000 chars, `maxContextTokens` option (default 50K), token estimation (4 chars = 1 token). Always preserves first user message, recent messages, and `update_diagnosis` calls. Logs pruning events with message count and tokens saved.
 - **Decisions**: Mechanical summary (no AI call) to avoid extra cost. Exported pure functions (`estimateTokens`, `estimateMessageTokens`, `truncateToolResults`, `pruneMessages`) for testability. Pruning runs before each `provider.chat()` call.
 - **Date**: 2026-03-01
+
+## [US-AI-03] #234 Cache Redis des Completions AI — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/ai-cache.service.ts` (NEW) — AiCacheService with SHA-256 key generation, TTL constants, metrics logging
+  - `apps/api/src/ai/ai.service.ts` — wrapped analyzeVideoTranscript (1h), processUserDescription (1h), classifyIssue (4h) with cache
+  - `apps/api/src/ai/ai.module.ts` — registered AiCacheService
+  - `apps/worker/src/services/openai.service.ts` — added Redis cache on classifyTicket (4h TTL, prefix `ai:completion:classify:`)
+  - `apps/api/test/unit/ai/ai-cache.service.spec.ts` (NEW) — 9 tests
+- **Changes**: Created `AiCacheService` wrapping existing `CacheService` with AI-specific key generation (SHA-256 of operation+systemPrompt+prompt+model+temperature). Cache applied on 3 API methods + 1 Worker method. Agentic loop and embeddings intentionally NOT cached. Metrics logged every 100 requests.
+- **Decisions**: Used `@Optional()` for AiCacheService injection in AIService (graceful degradation if cache unavailable). Worker uses direct ioredis (consistent with existing embedding cache pattern). Key includes temperature to differentiate deterministic vs creative responses.
+- **Date**: 2026-03-01
