@@ -126,7 +126,7 @@ export interface RateLimitState {
  * Comprehensive AI operations with:
  * - Claude Sonnet 4.5 Vision multi-frame analysis
  * - Claude Haiku 4.5 fast classification
- * - OpenAI text-embedding-3-large (3072 dimensions) - optional
+ * - OpenAI text-embedding-3-small (1536 dimensions) - optional
  * - Redis caching (24h TTL)
  * - Rate limiting (50 req/min)
  * - Cost tracking per tenant
@@ -159,7 +159,7 @@ export class OpenAIService implements OnModuleInit {
   private readonly MODEL_COSTS: Record<string, { input: number; output: number }> = {
     'claude-sonnet-4-6': { input: 0.003, output: 0.015 },
     'claude-haiku-4-5-20251001': { input: 0.0008, output: 0.004 },
-    'text-embedding-3-large': { input: 0.00013, output: 0 },
+    'text-embedding-3-small': { input: 0.00002, output: 0 },
     'gpt-4o': { input: 0.0025, output: 0.01 },
     'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
   };
@@ -659,7 +659,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // EMBEDDINGS (text-embedding-3-large via OpenAI - optional)
+  // EMBEDDINGS (text-embedding-3-small via OpenAI - optional)
   // ═══════════════════════════════════════════════════════════════════════
 
   /**
@@ -713,9 +713,8 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       const response = await withRetry(
         () =>
           this.openaiClient!.embeddings.create({
-            model: 'text-embedding-3-large',
+            model: 'text-embedding-3-small',
             input: truncated,
-            dimensions: 3072, // Full dimensions for best quality
           }),
         { label: 'Worker.generateEmbedding' },
       );
@@ -728,7 +727,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
 
       // Track costs
       if (tenantId && response.usage) {
-        await this.trackCost(tenantId, 'text-embedding-3-large', {
+        await this.trackCost(tenantId, 'text-embedding-3-small', {
           prompt_tokens: response.usage.prompt_tokens,
           completion_tokens: 0,
           total_tokens: response.usage.total_tokens,

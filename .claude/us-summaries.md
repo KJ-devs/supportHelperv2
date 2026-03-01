@@ -189,3 +189,17 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Unified AI execution path: VideoAnalysisWorker uses `analyzeVideo()` (multi-tenant), AgentWorker delegates `analyze-ticket` to API agent-v2 via HTTP. Removed ~150 lines of legacy code from OpenAIService. 331 worker tests + 84 API tests pass. Build 6/6.
 - **Decisions**: Kept `AgentService` class (marked deprecated) — other AgentWorker handlers still use it. AgentWorker HTTP delegation uses same `buildServiceJwt()` + `x-internal-secret` pattern as DeepAnalysisWorker. Added null safety for `analyzeVideo` return.
 - **Date**: 2026-03-01
+
+## [US-AI-05] #236 Unifier les Embedding Models — DONE ✅
+- **Files**:
+  - `apps/api/prisma/schema.prisma` — changed Ticket.embedding from `vector(3072)` to `vector(1536)`
+  - `apps/api/prisma/migrations/20260301180000_unify_embedding_dimensions/migration.sql` (NEW) — drops and recreates embedding column + HNSW index
+  - `apps/worker/src/config/openai.config.ts` — model `text-embedding-3-large` → `text-embedding-3-small`, dimensions 3072→1536, cost updated
+  - `apps/worker/src/config/anthropic.config.ts` — updated comment
+  - `apps/worker/src/services/openai.service.ts` — changed model, removed `dimensions: 3072` param, updated cost tracking
+  - `apps/worker/src/workers/video-analysis.worker.ts` — updated comment
+  - `apps/worker/src/services/openai.service.spec.ts` — updated model name + dimensions in all tests
+  - `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` — updated mock embeddings from 3072→1536
+- **Changes**: Unified all embedding generation to `text-embedding-3-small` (1536d). Prisma migration drops+recreates ticket embedding column with correct dimension. HNSW index recreated. Old Redis-cached embeddings will expire naturally (24h TTL). Cost reduction: 80% ($0.00013→$0.00002/1K tokens).
+- **Decisions**: Used `text-embedding-3-small` (not `large` with reduced dimensions) because codebase embeddings already use `small` and 1536d is sufficient for bug search. Migration drops existing embeddings (they'll be re-generated on next video analysis).
+- **Date**: 2026-03-01

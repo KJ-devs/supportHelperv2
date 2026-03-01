@@ -92,9 +92,9 @@ describe('VideoAnalysisWorker', () => {
   };
 
   const mockEmbeddings = {
-    embedding: new Array(3072).fill(0.1),
+    embedding: new Array(1536).fill(0.1),
     text: 'Test embedding text',
-    dimensions: 3072,
+    dimensions: 1536,
     cached: false,
   };
 
@@ -212,7 +212,7 @@ describe('VideoAnalysisWorker', () => {
           recommendations: [],
         },
         embeddings: {
-          dimensions: 3072,
+          dimensions: 1536,
           vectorId: 'ticket-123-media-456',
         },
         processingTimeMs: expect.any(Number),

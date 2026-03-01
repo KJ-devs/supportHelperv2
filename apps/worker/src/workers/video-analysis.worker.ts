@@ -44,7 +44,7 @@ function extractVisualCues(ocrText: string): VisualCues {
  * 3. Tesseract OCR parallel (4 workers)
  * 4. YOLO v11 UI detection
  * 5. GPT-4o Vision analysis (batch 10 frames)
- * 6. Generate embeddings (text-embedding-3-large)
+ * 6. Generate embeddings (text-embedding-3-small)
  * 7. Update ticket in DB
  * 8. Index Meilisearch
  *

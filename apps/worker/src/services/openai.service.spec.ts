@@ -65,10 +65,10 @@ describe('OpenAIService', () => {
   const mockOpenaiConfig = {
     apiKey: 'test-openai-key',
     models: {
-      embedding: 'text-embedding-3-large',
+      embedding: 'text-embedding-3-small',
     },
     embedding: {
-      dimensions: 3072,
+      dimensions: 1536,
       batchSize: 100,
     },
   };
@@ -302,7 +302,7 @@ describe('OpenAIService', () => {
   });
 
   describe('generateEmbedding', () => {
-    const mockEmbedding = Array(3072).fill(0.1);
+    const mockEmbedding = Array(1536).fill(0.1);
     const mockEmbeddingResponse = {
       data: [{ embedding: mockEmbedding }],
       usage: { prompt_tokens: 50, total_tokens: 50 },
@@ -314,8 +314,8 @@ describe('OpenAIService', () => {
 
       const result = await service.generateEmbedding('Test text');
 
-      expect(result.embedding).toHaveLength(3072);
-      expect(result.dimensions).toBe(3072);
+      expect(result.embedding).toHaveLength(1536);
+      expect(result.dimensions).toBe(1536);
       expect(result.cached).toBe(false);
     });
 
@@ -325,7 +325,7 @@ describe('OpenAIService', () => {
       const result = await service.generateEmbedding('Test text');
 
       expect(result.cached).toBe(true);
-      expect(result.embedding).toHaveLength(3072);
+      expect(result.embedding).toHaveLength(1536);
       expect(mockEmbeddingsCreate).not.toHaveBeenCalled();
     });
 
@@ -342,7 +342,7 @@ describe('OpenAIService', () => {
       );
     });
 
-    it('should use text-embedding-3-large model', async () => {
+    it('should use text-embedding-3-small model', async () => {
       mockRedis.get.mockResolvedValue(null);
       mockEmbeddingsCreate.mockResolvedValue(mockEmbeddingResponse);
 
@@ -350,8 +350,7 @@ describe('OpenAIService', () => {
 
       expect(mockEmbeddingsCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'text-embedding-3-large',
-          dimensions: 3072,
+          model: 'text-embedding-3-small',
         })
       );
     });
@@ -372,13 +371,13 @@ describe('OpenAIService', () => {
 
       const result = await service.generateEmbedding('Test text');
 
-      expect(result.embedding).toHaveLength(3072);
+      expect(result.embedding).toHaveLength(1536);
       expect(result.cached).toBe(false);
     });
   });
 
   describe('searchSimilarTickets', () => {
-    const mockEmbedding = Array(3072).fill(0.1);
+    const mockEmbedding = Array(1536).fill(0.1);
     const mockTickets = [
       {
         id: 'ticket-1',
@@ -450,7 +449,7 @@ describe('OpenAIService', () => {
   });
 
   describe('storeTicketEmbedding', () => {
-    const mockEmbedding = Array(3072).fill(0.1);
+    const mockEmbedding = Array(1536).fill(0.1);
 
     it('should store embedding for ticket', async () => {
       (prismaService.$executeRawUnsafe as jest.Mock).mockResolvedValue(1);

@@ -4,7 +4,7 @@ import { registerAs } from '@nestjs/config';
  * Anthropic Configuration
  *
  * Primary AI provider for completions and vision analysis.
- * OpenAI is retained only for embeddings (text-embedding-3-large).
+ * OpenAI is retained only for embeddings (text-embedding-3-small).
  */
 export default registerAs('anthropic', () => ({
   apiKey: process.env.ANTHROPIC_API_KEY,

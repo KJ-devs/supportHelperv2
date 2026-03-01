@@ -151,8 +151,8 @@ model Ticket {
   diagnosis          Json?     @map("diagnosis") @db.JsonB
   diagnosisUpdatedAt DateTime? @map("diagnosis_updated_at")
 
-  // Vector Embedding (pgvector)
-  embedding          Unsupported("vector(3072)")?
+  // Vector Embedding (pgvector) — unified to text-embedding-3-small (1536d)
+  embedding          Unsupported("vector(1536)")?
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id])
   application   Application    @relation(fields: [applicationId], references: [id])

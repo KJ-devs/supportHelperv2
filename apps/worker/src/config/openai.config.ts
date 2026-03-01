@@ -11,7 +11,7 @@ export default registerAs('openai', () => ({
     vision: 'gpt-4o', // GPT-4 Turbo with Vision
     chat: 'gpt-4o',
     chatFast: 'gpt-4o-mini', // For fast classification
-    embedding: 'text-embedding-3-large',
+    embedding: 'text-embedding-3-small',
   },
 
   // Vision API settings
@@ -21,9 +21,9 @@ export default registerAs('openai', () => ({
     batchSize: 10, // Process 10 frames at a time
   },
 
-  // Embedding settings (text-embedding-3-large)
+  // Embedding settings (text-embedding-3-small — unified across all services)
   embedding: {
-    dimensions: 3072, // Full dimensions for best quality
+    dimensions: 1536,
     batchSize: 100,
     cacheTtl: 86400, // 24 hours in seconds
   },
@@ -45,6 +45,6 @@ export default registerAs('openai', () => ({
   costs: {
     'gpt-4o': { input: 0.005, output: 0.015 },
     'gpt-4o-mini': { input: 0.00015, output: 0.0006 },
-    'text-embedding-3-large': { input: 0.00013, output: 0 },
+    'text-embedding-3-small': { input: 0.00002, output: 0 },
   },
 }));
