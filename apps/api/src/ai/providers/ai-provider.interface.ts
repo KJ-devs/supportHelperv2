@@ -13,4 +13,4 @@ export interface CompletionOptions {
   systemPrompt?: string;
 }
 
-export type AIProviderType = 'openai' | 'anthropic' | 'ollama';
+export type AIProviderType = 'openai' | 'anthropic' | 'ollama' | 'gemini' | 'bedrock';
