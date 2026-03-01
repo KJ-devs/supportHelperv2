@@ -5,6 +5,7 @@ import { AIProvider } from './providers/ai-provider.interface';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AIProviderConfig, DEFAULT_MODELS } from './providers/ai-provider.types';
 import { AiCacheService, AI_CACHE_TTL } from './ai-cache.service';
+import { ModelTieringService, AITask } from './model-tiering.service';
 
 export interface VideoAnalysisResult {
   summary: string;
@@ -30,6 +31,7 @@ export class AIService {
     private prisma: PrismaService,
     private providerFactory: AIProviderFactory,
     @Optional() private aiCache?: AiCacheService,
+    @Optional() private tiering?: ModelTieringService,
   ) {}
 
   /**
@@ -102,6 +104,28 @@ export class AIService {
   async getActiveProvider(tenantId?: string): Promise<AIProvider | null> {
     await this.initializeProvider(tenantId);
     return this.provider;
+  }
+
+  /**
+   * Get the optimal AI provider for a specific task.
+   * Uses ModelTieringService when available, falls back to default provider.
+   */
+  async getProviderForTask(
+    task: AITask,
+    tenantId?: string,
+  ): Promise<AIProvider | null> {
+    if (this.tiering) {
+      try {
+        const resolution = await this.tiering.resolveForTask(task, tenantId);
+        return this.providerFactory.create(resolution.providerConfig);
+      } catch (error) {
+        this.logger.warn(
+          `Tiering resolution failed for task=${task}: ${(error as Error).message}, falling back to default`,
+        );
+      }
+    }
+    // Fallback to single-provider mode
+    return this.getActiveProvider(tenantId);
   }
 
   /**
@@ -218,7 +242,7 @@ export class AIService {
     ocrText?: string,
     tenantId?: string,
   ): Promise<VideoAnalysisResult> {
-    const provider = await this.getActiveProvider(tenantId);
+    const provider = await this.getProviderForTask('enrichment', tenantId);
 
     if (!provider) {
       this.logger.warn('No AI provider configured, returning mock analysis');
@@ -303,7 +327,7 @@ Respond ONLY with valid JSON.
     userContext?: Record<string, unknown>,
     tenantId?: string,
   ): Promise<VideoAnalysisResult & { enrichedDescription: string }> {
-    const provider = await this.getActiveProvider(tenantId);
+    const provider = await this.getProviderForTask('enrichment', tenantId);
 
     if (!provider) {
       this.logger.warn('No AI provider configured, returning basic processing');
@@ -389,7 +413,7 @@ Respond ONLY with valid JSON.
   }
 
   async classifyIssue(description: string, tenantId?: string): Promise<string> {
-    const provider = await this.getActiveProvider(tenantId);
+    const provider = await this.getProviderForTask('classification', tenantId);
 
     if (!provider) {
       return 'other';
@@ -428,7 +452,7 @@ Respond ONLY with valid JSON.
   }
 
   async generateCompletion(prompt: string, tenantId?: string): Promise<string> {
-    const provider = await this.getActiveProvider(tenantId);
+    const provider = await this.getProviderForTask('chat', tenantId);
 
     if (!provider) {
       this.logger.warn('No AI provider configured, returning empty response');

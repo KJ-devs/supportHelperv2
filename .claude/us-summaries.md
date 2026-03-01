@@ -214,3 +214,36 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Added `edit_file` tool alongside `write_file`. Reads file via GitHub API, does exact find-and-replace, commits. System prompt now recommends `edit_file` for targeted changes and `write_file` only for new files/complete rewrites. 19 tool-executor tests pass.
 - **Decisions**: `edit_file` replaces only the first occurrence of `old_text` (same as Claude Code's Edit tool). Error messages are descriptive to help the AI agent retry with corrected text.
 - **Date**: 2026-03-01
+
+## [US-AI-07] #238 GeminiProvider (Gemini 2.0 Flash) — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/providers/gemini.provider.ts` (NEW) — GeminiProvider with vision support, native JSON mode
+  - `apps/api/src/ai/providers/ai-provider.interface.ts` — added `'gemini'` to AIProviderType
+  - `apps/api/src/ai/providers/ai-provider.types.ts` — added Gemini to DEFAULT_MODELS and PROVIDER_LABELS
+  - `apps/api/src/ai/providers/ai-provider.factory.ts` — added `'gemini'` case
+  - `apps/api/src/config/validate-env.ts` — added GOOGLE_AI_API_KEY to optional vars
+  - `apps/api/test/unit/ai/gemini.provider.spec.ts` (NEW) — 21 tests
+- **Changes**: Full `AIProvider` implementation using `@google/generative-ai` SDK. Gemini 2.0 Flash default model. Native JSON mode (`responseMimeType: 'application/json'`). Vision support via `options.images` (base64 inline data). Embeddings delegate to OpenAI `text-embedding-3-small` (Gemini native 768d incompatible with pgvector 1536d). All calls wrapped with `withRetry()`.
+- **Decisions**: Embeddings via OpenAI (not Gemini) to maintain 1536d compatibility. Constructor takes `apiKey` + optional `openaiApiKey`.
+- **Date**: 2026-03-01
+
+## [US-AI-08] #239 BedrockProvider (Claude via AWS) — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/providers/bedrock.provider.ts` (NEW) — BedrockProvider implementing AIProvider + ToolCapableProvider
+  - `apps/api/src/ai/providers/ai-provider.interface.ts` — added `'bedrock'` to AIProviderType
+  - `apps/api/src/ai/providers/ai-provider.types.ts` — added Bedrock to DEFAULT_MODELS and PROVIDER_LABELS
+  - `apps/api/src/ai/providers/ai-provider.factory.ts` — added `'bedrock'` case
+  - `apps/api/test/unit/ai/bedrock.provider.spec.ts` (NEW) — 20 tests
+- **Changes**: Full `AIProvider` + `ToolCapableProvider` implementation using `@aws-sdk/client-bedrock-runtime`. Uses `InvokeModelCommand` for completions (Claude Messages API format), `ConverseCommand` for tool-calling (agent loop). Embeddings delegate to OpenAI. Validates with Haiku model (cheapest). All calls wrapped with `withRetry()`.
+- **Decisions**: Uses IAM credentials (no API key needed). Converse API for tool-calling (native AWS format). Haiku for validation to minimize cost.
+- **Date**: 2026-03-01
+
+## [US-AI-09] #240 Tiering Intelligent des Modèles par Tâche — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/model-tiering.service.ts` (NEW) — ModelTieringService with task→provider routing, tenant custom tiers, fallback logic
+  - `apps/api/src/ai/ai.service.ts` — injected ModelTieringService, added `getProviderForTask()`, updated classifyIssue/analyzeVideoTranscript/processUserDescription/generateCompletion to use task-based routing
+  - `apps/api/src/ai/ai.module.ts` — registered ModelTieringService
+  - `apps/api/test/unit/ai/model-tiering.service.spec.ts` (NEW) — 21 tests
+- **Changes**: Created `ModelTieringService` with 3-tier model routing: Tier 1 (Claude Sonnet → investigation, chat), Tier 2 (Gemini Flash → vision, enrichment), Tier 3 (Claude Haiku → classification). Per-tenant custom tiers via `AiConfig.settings.tiers` JSON. Fallback chain: tier provider → tenant default → system anthropic → system openai. Every call logs task, provider, model, and reason. `AIService` methods now route to optimal provider per task type.
+- **Decisions**: `@Optional()` injection for backward compat. Per-tenant overrides stored in existing `AiConfig.settings` JSON field (no schema migration needed). Agentic loop not modified (uses separate `ToolCapableProviderFactory`).
+- **Date**: 2026-03-01
