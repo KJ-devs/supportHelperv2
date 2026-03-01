@@ -270,3 +270,46 @@ After completing a US, append a summary here then `/clear` the context.
   - `apps/api/test/unit/ai/quota.service.spec.ts` (NEW) — 14 tests
 - **Changes**: TenantQuota model with plan (free/pro/enterprise), monthly quota, usage tracking, BYOK flag. QuotaGuard for endpoint-level protection. Auto-reset on 1st of month. Lazy creation of quota records. Plans: free=10, pro=500, enterprise=5000 analyses/month.
 - **Date**: 2026-03-01
+
+## [US-AI-11] #242 AI Usage Dashboard — DONE ✅
+- **Files**:
+  - `apps/api/src/modules/ai-config/ai-usage.service.ts` (NEW) — reads 30 days of Worker Redis cost data, calculates costPerTicket
+  - `apps/api/src/modules/ai-config/ai-config.controller.ts` — added GET /settings/ai/usage endpoint
+  - `apps/api/src/modules/ai-config/ai-config.module.ts` — registered AiUsageService
+  - `apps/dashboard/app/dashboard/settings/ai-usage/page.tsx` (NEW) — KPI cards, CSS bar chart, data table
+  - `apps/dashboard/lib/api/ai-usage.ts` (NEW) — API client
+  - `apps/dashboard/app/dashboard/settings/page.tsx` — added AI Usage nav link
+- **Changes**: AiUsageService reads Worker's Redis `ai:cost:{tenantId}:{date}` keys (30 days), aggregates totals, calculates cost/ticket. Dashboard page with 4 KPI cards, daily cost bar chart (CSS-based, no library), and sortable data table.
+- **Date**: 2026-03-01
+
+## [US-AI-13] #244 Circuit Breaker par Tenant — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/circuit-breaker.service.ts` (NEW) — AiCircuitBreakerService with daily budget protection
+  - `apps/api/src/ai/ai.module.ts` — registered AiCircuitBreakerService
+  - `apps/api/src/modules/ai-config/ai-config.controller.ts` — added GET budget-status and POST reset-circuit endpoints
+  - `apps/api/test/unit/ai/circuit-breaker.service.spec.ts` (NEW) — 25 tests
+- **Changes**: Redis-based daily budget limiter (default $50/day, configurable via AiConfig.settings.dailyBudgetLimit). Fail-open design (allows on error). 48h TTL for auto-reset. Admin reset endpoint. Separate `ai:circuit:` namespace from Worker's `ai:cost:` keys.
+- **Decisions**: Fail-open by design — circuit breaker errors should not block all AI calls. Budget limit stored in existing AiConfig.settings JSON (no migration).
+- **Date**: 2026-03-01
+
+---
+
+## [US-AI-16] #247 Stripe Integration (Subscriptions) — DONE ✅
+- **Files**:
+  - NEW: `apps/api/src/modules/billing/billing.module.ts`
+  - NEW: `apps/api/src/modules/billing/billing.service.ts`
+  - NEW: `apps/api/src/modules/billing/billing.controller.ts`
+  - NEW: `apps/api/src/modules/billing/stripe-webhook.controller.ts`
+  - NEW: `apps/api/test/unit/billing/billing.service.spec.ts`
+  - NEW: `apps/api/prisma/migrations/20260301210000_add_stripe_customer_id/migration.sql`
+  - NEW: `apps/dashboard/app/dashboard/settings/billing/page.tsx`
+  - NEW: `apps/dashboard/lib/api/billing.ts`
+  - MOD: `apps/api/prisma/schema.prisma` — added `stripeCustomerId` to Tenant
+  - MOD: `apps/api/src/app.module.ts` — registered BillingModule
+  - MOD: `apps/api/src/main.ts` — added `rawBody: true` for Stripe webhook verification
+  - MOD: `apps/api/src/config/validate-env.ts` — documented Stripe optional env vars
+  - MOD: `apps/dashboard/app/dashboard/settings/page.tsx` — added Billing nav link
+- **Changes**: Full Stripe billing integration. BillingService handles getOrCreateCustomer, createCheckoutSession (pro/enterprise), createPortalSession, getSubscription, and 4 webhook event handlers. StripeWebhookController is @Public() with signature verification. Plan changes trigger tenant.plan + TenantQuota upsert in a transaction. Dashboard billing page with plan cards, upgrade/portal buttons, success/cancel URL handling.
+- **Decisions**: Used Stripe v20 API (`2026-02-25.clover`); `current_period_end` removed in v20 — used `billing_cycle_anchor` instead. rawBody:true in NestFactory enables raw body buffer for signature verification. Webhook always returns HTTP 200 even on processing errors. Price IDs mapped via STRIPE_PRICE_PRO / STRIPE_PRICE_ENTERPRISE env vars (optional).
+- **Remaining**: STRIPE_PRICE_PRO / STRIPE_PRICE_ENTERPRISE env vars need to be set with actual Stripe price IDs; NEXT_PUBLIC_STRIPE_PRICE_PRO/ENTERPRISE needed in dashboard for pricing page CTA links.
+- **Date**: 2026-03-01

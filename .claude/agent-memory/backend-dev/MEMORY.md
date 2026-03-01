@@ -165,3 +165,15 @@ Worker checks `'deleteTicket' in provider` before calling, so adding method is s
 ### CacheService.del Pattern
 - `del(key: string)` deletes a single key — no wildcard support
 - For multi-key invalidation, iterate over known keys explicitly
+
+### Stripe Billing Integration (US-AI-16)
+- Module: `apps/api/src/modules/billing/`
+- Stripe SDK version: v20.4.0, API version: `2026-02-25.clover` (NOT '2024-12-18.acacia')
+- `rawBody: true` must be set in `NestFactory.create()` for Stripe webhook signature verification
+- Stripe v20 removed `current_period_end` from Subscription — use `billing_cycle_anchor` instead
+- Price ID → plan mapping via env vars: `STRIPE_PRICE_PRO` → 'pro', `STRIPE_PRICE_ENTERPRISE` → 'enterprise'
+- Webhook controller uses `@Public()` decorator — signature verified via `constructWebhookEvent()`
+- Always return HTTP 200 from webhook endpoint even on processing errors (log and continue)
+- Dashboard billing page: `apps/dashboard/app/dashboard/settings/billing/page.tsx`
+- Dashboard billing API client: `apps/dashboard/lib/api/billing.ts`
+- Tests: `apps/api/test/unit/billing/billing.service.spec.ts` (19 tests, all passing)
