@@ -157,3 +157,11 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Created `withRetry()` utility with exponential backoff (1s×4^attempt), ±20% jitter, Retry-After header support. Retries on 429/500/502/503/529 + network errors. Does NOT retry on 400/401/403/404. Applied to all AI provider methods (API: Anthropic, OpenAI, Ollama) and Worker OpenAIService (8 calls). All 29 tests pass.
 - **Decisions**: Custom implementation (no p-retry dependency). Separate copy for worker since it can't import from API package. Each call has a descriptive label for log tracing.
 - **Date**: 2026-03-01
+
+## [US-AI-02] #233 Context Pruning dans l'Agentic Loop — DONE ✅
+- **Files**:
+  - `apps/api/src/modules/agent-v2/agentic-loop.service.ts` — added pruning functions + integration
+  - `apps/api/test/unit/services/context-pruning.spec.ts` (NEW) — 17 tests
+- **Changes**: Implemented context pruning with: sliding window (keep last 6 messages), mechanical summary of older messages (no AI call), tool_result truncation at 2000 chars, `maxContextTokens` option (default 50K), token estimation (4 chars = 1 token). Always preserves first user message, recent messages, and `update_diagnosis` calls. Logs pruning events with message count and tokens saved.
+- **Decisions**: Mechanical summary (no AI call) to avoid extra cost. Exported pure functions (`estimateTokens`, `estimateMessageTokens`, `truncateToolResults`, `pruneMessages`) for testability. Pruning runs before each `provider.chat()` call.
+- **Date**: 2026-03-01
