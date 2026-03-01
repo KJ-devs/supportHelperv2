@@ -144,3 +144,16 @@ After completing a US, append a summary here then `/clear` the context.
 - **Files**: `jest.config.ts`, `vitest.config.ts`
 - **Changes**: Global thresholds (60/70/75/75), stricter auth+guards (85/90/95/95), dashboard (70/70). Removed app/** exclusion
 - **Date**: 2026-02-28
+
+## [US-AI-01] #232 Retry + Exponential Backoff AI Providers — DONE ✅
+- **Files**:
+  - `apps/api/src/ai/providers/ai-retry.util.ts` (NEW) — withRetry() wrapper
+  - `apps/worker/src/utils/ai-retry.util.ts` (NEW) — duplicate for worker package
+  - `apps/api/src/ai/providers/anthropic.provider.ts` — 4 methods wrapped
+  - `apps/api/src/ai/providers/openai.provider.ts` — 5 methods wrapped
+  - `apps/api/src/ai/providers/ollama.provider.ts` — 3 fetch calls wrapped
+  - `apps/worker/src/services/openai.service.ts` — 8 AI calls wrapped (analyzeVideo×2, classifyTicket×2, generateEmbedding, analyzeFrames, chat, classify)
+  - `apps/api/test/unit/ai/ai-retry.util.spec.ts` (NEW) — 29 tests
+- **Changes**: Created `withRetry()` utility with exponential backoff (1s×4^attempt), ±20% jitter, Retry-After header support. Retries on 429/500/502/503/529 + network errors. Does NOT retry on 400/401/403/404. Applied to all AI provider methods (API: Anthropic, OpenAI, Ollama) and Worker OpenAIService (8 calls). All 29 tests pass.
+- **Decisions**: Custom implementation (no p-retry dependency). Separate copy for worker since it can't import from API package. Each call has a descriptive label for log tracing.
+- **Date**: 2026-03-01

@@ -7,6 +7,7 @@ import * as crypto from 'crypto';
 import { createDecipheriv } from 'crypto';
 import { PrismaService } from './prisma.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+import { withRetry } from '../utils/ai-retry.util';
 
 // ═══════════════════════════════════════════════════════════════════════
 // TENANT AI CONFIG CACHE
@@ -240,20 +241,24 @@ export class OpenAIService implements OnModuleInit {
 
       const systemPrompt = this.buildVideoAnalysisPrompt(context);
 
-      const response = await client.messages.create({
-        model,
-        max_tokens: 4096,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Analyze these video frames from a bug report:' },
-              ...imageContents,
+      const response = await withRetry(
+        () =>
+          client.messages.create({
+            model,
+            max_tokens: 4096,
+            system: systemPrompt,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Analyze these video frames from a bug report:' },
+                  ...imageContents,
+                ],
+              },
             ],
-          },
-        ],
-      });
+          }),
+        { label: 'Worker.analyzeVideoAnthropic' },
+      );
 
       // Track costs
       await this.trackCost(tenantId, model, {
@@ -311,20 +316,24 @@ export class OpenAIService implements OnModuleInit {
         },
       }));
 
-      const response = await openaiClient.chat.completions.create({
-        model,
-        max_tokens: 4096,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Analyze these video frames from a bug report:' },
-              ...imageBlocks,
+      const response = await withRetry(
+        () =>
+          openaiClient.chat.completions.create({
+            model,
+            max_tokens: 4096,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'Analyze these video frames from a bug report:' },
+                  ...imageBlocks,
+                ],
+              },
             ],
-          },
-        ],
-      });
+          }),
+        { label: 'Worker.analyzeVideoOpenAI' },
+      );
 
       // Track costs
       await this.trackCost(tenantId, model, {
@@ -476,17 +485,21 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
     const { client, chatFastModel: model } = await this.getAnthropicClientForTenant(tenantId);
 
     try {
-      const response = await client.messages.create({
-        model,
-        max_tokens: 500,
-        system: this.CLASSIFICATION_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: 'user',
-            content: text.substring(0, 4000),
-          },
-        ],
-      });
+      const response = await withRetry(
+        () =>
+          client.messages.create({
+            model,
+            max_tokens: 500,
+            system: this.CLASSIFICATION_SYSTEM_PROMPT,
+            messages: [
+              {
+                role: 'user',
+                content: text.substring(0, 4000),
+              },
+            ],
+          }),
+        { label: 'Worker.classifyTicketAnthropic' },
+      );
 
       // Track costs
       await this.trackCost(tenantId, model, {
@@ -529,14 +542,18 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
     this.logger.debug(`Classifying ticket with OpenAI ${model}`);
 
     try {
-      const response = await openaiClient.chat.completions.create({
-        model,
-        max_tokens: 500,
-        messages: [
-          { role: 'system', content: this.CLASSIFICATION_SYSTEM_PROMPT },
-          { role: 'user', content: text.substring(0, 4000) },
-        ],
-      });
+      const response = await withRetry(
+        () =>
+          openaiClient.chat.completions.create({
+            model,
+            max_tokens: 500,
+            messages: [
+              { role: 'system', content: this.CLASSIFICATION_SYSTEM_PROMPT },
+              { role: 'user', content: text.substring(0, 4000) },
+            ],
+          }),
+        { label: 'Worker.classifyTicketOpenAI' },
+      );
 
       // Track costs
       await this.trackCost(tenantId, model, {
@@ -667,11 +684,15 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       // Truncate text if too long (max ~8000 tokens)
       const truncated = text.substring(0, 32000);
 
-      const response = await this.openaiClient.embeddings.create({
-        model: 'text-embedding-3-large',
-        input: truncated,
-        dimensions: 3072, // Full dimensions for best quality
-      });
+      const response = await withRetry(
+        () =>
+          this.openaiClient!.embeddings.create({
+            model: 'text-embedding-3-large',
+            input: truncated,
+            dimensions: 3072, // Full dimensions for best quality
+          }),
+        { label: 'Worker.generateEmbedding' },
+      );
 
       const embedding = response.data[0]?.embedding;
 
@@ -1141,14 +1162,18 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
     const model = this.anthropicConfig?.models?.vision || 'claude-sonnet-4-6';
 
     try {
-      const response = await this.anthropicClient.messages.create({
-        model,
-        max_tokens: this.anthropicConfig?.vision?.maxTokens || 4096,
-        system: systemPrompt,
-        messages: [
-          { role: 'user', content: imageContents },
-        ],
-      });
+      const response = await withRetry(
+        () =>
+          this.anthropicClient.messages.create({
+            model,
+            max_tokens: this.anthropicConfig?.vision?.maxTokens || 4096,
+            system: systemPrompt,
+            messages: [
+              { role: 'user', content: imageContents },
+            ],
+          }),
+        { label: `Worker.analyzeFrames[batch=${batchIndex + 1}]` },
+      );
 
       const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       if (!content) {
@@ -1249,12 +1274,16 @@ Format your response as JSON with keys: summary, uiElements, actions, errorMessa
         conversationMessages.unshift({ role: 'user', content: 'Please respond.' });
       }
 
-      const response = await client.messages.create({
-        model,
-        max_tokens: options.max_tokens || 4096,
-        ...(systemPrompt && { system: systemPrompt }),
-        messages: conversationMessages,
-      });
+      const response = await withRetry(
+        () =>
+          client.messages.create({
+            model,
+            max_tokens: options.max_tokens || 4096,
+            ...(systemPrompt && { system: systemPrompt }),
+            messages: conversationMessages,
+          }),
+        { label: 'Worker.chat' },
+      );
 
       const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       return {
@@ -1289,17 +1318,21 @@ Return JSON with each category as a key containing { value, confidence }`;
     const model = this.anthropicConfig?.models?.chat || 'claude-sonnet-4-6';
 
     try {
-      const response = await this.anthropicClient.messages.create({
-        model,
-        max_tokens: 1024,
-        system: 'You are a text classification expert. Classify text accurately. Respond ONLY with valid JSON.',
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
+      const response = await withRetry(
+        () =>
+          this.anthropicClient.messages.create({
+            model,
+            max_tokens: 1024,
+            system: 'You are a text classification expert. Classify text accurately. Respond ONLY with valid JSON.',
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+          }),
+        { label: 'Worker.classify' },
+      );
 
       const content = response.content[0]?.type === 'text' ? response.content[0].text : '';
       if (!content) {

@@ -9,6 +9,7 @@ import {
   ToolCapableProvider,
 } from './tool-capable-provider.interface';
 import { ToolFormatConverter } from './tool-format.converter';
+import { withRetry } from './ai-retry.util';
 
 @Injectable()
 export class AnthropicProvider implements AIProvider, ToolCapableProvider {
@@ -28,13 +29,17 @@ export class AnthropicProvider implements AIProvider, ToolCapableProvider {
     options?: CompletionOptions,
   ): Promise<string> {
     try {
-      const response = await this.client.messages.create({
-        model: options?.model || this.config.model || 'claude-sonnet-4-6',
-        max_tokens: options?.maxTokens ?? 1500,
-        temperature: options?.temperature ?? 0.7,
-        system: options?.systemPrompt,
-        messages: [{ role: 'user', content: prompt }],
-      });
+      const response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: options?.model || this.config.model || 'claude-sonnet-4-6',
+            max_tokens: options?.maxTokens ?? 1500,
+            temperature: options?.temperature ?? 0.7,
+            system: options?.systemPrompt,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        { label: 'Anthropic.generateCompletion' },
+      );
 
       const content = response.content[0];
       if (content.type === 'text') {
@@ -60,18 +65,22 @@ export class AnthropicProvider implements AIProvider, ToolCapableProvider {
         options?.systemPrompt ||
         'You are a helpful assistant that responds with valid JSON only.';
 
-      const response = await this.client.messages.create({
-        model: options?.model || this.config.model || 'claude-sonnet-4-6',
-        max_tokens: options?.maxTokens ?? 1500,
-        temperature: options?.temperature ?? 0.3,
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `${prompt}\n\nRespond ONLY with valid JSON matching this schema: ${JSON.stringify(schema)}`,
-          },
-        ],
-      });
+      const response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: options?.model || this.config.model || 'claude-sonnet-4-6',
+            max_tokens: options?.maxTokens ?? 1500,
+            temperature: options?.temperature ?? 0.3,
+            system: systemPrompt,
+            messages: [
+              {
+                role: 'user',
+                content: `${prompt}\n\nRespond ONLY with valid JSON matching this schema: ${JSON.stringify(schema)}`,
+              },
+            ],
+          }),
+        { label: 'Anthropic.generateStructuredOutput' },
+      );
 
       const content = response.content[0];
       if (content.type !== 'text') {
@@ -101,13 +110,17 @@ export class AnthropicProvider implements AIProvider, ToolCapableProvider {
     tools: AgentTool[];
   }): Promise<AgentTurnResult> {
     try {
-      const response = await this.client.messages.create({
-        model: options.model,
-        max_tokens: options.maxTokens,
-        system: options.systemPrompt,
-        messages: ToolFormatConverter.toAnthropicMessages(options.messages),
-        tools: ToolFormatConverter.toAnthropicTools(options.tools),
-      });
+      const response = await withRetry(
+        () =>
+          this.client.messages.create({
+            model: options.model,
+            max_tokens: options.maxTokens,
+            system: options.systemPrompt,
+            messages: ToolFormatConverter.toAnthropicMessages(options.messages),
+            tools: ToolFormatConverter.toAnthropicTools(options.tools),
+          }),
+        { label: 'Anthropic.chat' },
+      );
       return ToolFormatConverter.fromAnthropicResponse(response);
     } catch (error) {
       this.logger.error(
@@ -129,11 +142,15 @@ export class AnthropicProvider implements AIProvider, ToolCapableProvider {
 
   async validateConfig(): Promise<boolean> {
     // Use Haiku for validation — cheapest, always available, throw to expose real error
-    await this.client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 10,
-      messages: [{ role: 'user', content: 'Say "ok"' }],
-    });
+    await withRetry(
+      () =>
+        this.client.messages.create({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 10,
+          messages: [{ role: 'user', content: 'Say "ok"' }],
+        }),
+      { label: 'Anthropic.validateConfig' },
+    );
     return true;
   }
 }

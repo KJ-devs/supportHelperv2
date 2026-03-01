@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { AIProvider, CompletionOptions } from './ai-provider.interface';
 import { AIProviderConfig } from './ai-provider.types';
+import { withRetry } from './ai-retry.util';
 
 interface OllamaChatRequest {
   model: string;
@@ -63,17 +64,23 @@ export class OllamaProvider implements AIProvider {
         },
       };
 
-      const response = await fetch(`${this.endpoint}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      const data = await withRetry(
+        async () => {
+          const response = await fetch(`${this.endpoint}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+          if (!response.ok) {
+            const err = new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+            (err as any).status = response.status;
+            throw err;
+          }
+          return (await response.json()) as OllamaChatResponse;
+        },
+        { label: 'Ollama.generateCompletion' },
+      );
 
-      if (!response.ok) {
-        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as OllamaChatResponse;
       return data.message.content;
     } catch (error) {
       this.logger.error(
@@ -110,17 +117,23 @@ export class OllamaProvider implements AIProvider {
         },
       };
 
-      const response = await fetch(`${this.endpoint}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      const data = await withRetry(
+        async () => {
+          const response = await fetch(`${this.endpoint}/api/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+          if (!response.ok) {
+            const err = new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+            (err as any).status = response.status;
+            throw err;
+          }
+          return (await response.json()) as OllamaChatResponse;
+        },
+        { label: 'Ollama.generateStructuredOutput' },
+      );
 
-      if (!response.ok) {
-        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as OllamaChatResponse;
       const content = data.message.content;
 
       // Extract JSON from response
@@ -145,17 +158,23 @@ export class OllamaProvider implements AIProvider {
         prompt: text,
       };
 
-      const response = await fetch(`${this.endpoint}/api/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
+      const data = await withRetry(
+        async () => {
+          const response = await fetch(`${this.endpoint}/api/embeddings`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody),
+          });
+          if (!response.ok) {
+            const err = new Error(`Ollama API error: ${response.status} ${response.statusText}`);
+            (err as any).status = response.status;
+            throw err;
+          }
+          return (await response.json()) as OllamaEmbeddingResponse;
+        },
+        { label: 'Ollama.generateEmbedding' },
+      );
 
-      if (!response.ok) {
-        throw new ServiceUnavailableException(`Ollama API error: ${response.status} ${response.statusText}`);
-      }
-
-      const data = (await response.json()) as OllamaEmbeddingResponse;
       return data.embedding;
     } catch (error) {
       this.logger.error(

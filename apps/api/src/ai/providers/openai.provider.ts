@@ -9,6 +9,7 @@ import {
   ToolCapableProvider,
 } from './tool-capable-provider.interface';
 import { ToolFormatConverter } from './tool-format.converter';
+import { withRetry } from './ai-retry.util';
 
 @Injectable()
 export class OpenAIProvider implements AIProvider, ToolCapableProvider {
@@ -29,17 +30,21 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
     options?: CompletionOptions,
   ): Promise<string> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: options?.model || this.config.model || 'gpt-4o',
-        messages: [
-          ...(options?.systemPrompt
-            ? [{ role: 'system' as const, content: options.systemPrompt }]
-            : []),
-          { role: 'user' as const, content: prompt },
-        ],
-        temperature: options?.temperature ?? 0.7,
-        max_tokens: options?.maxTokens ?? 1500,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: options?.model || this.config.model || 'gpt-4o',
+            messages: [
+              ...(options?.systemPrompt
+                ? [{ role: 'system' as const, content: options.systemPrompt }]
+                : []),
+              { role: 'user' as const, content: prompt },
+            ],
+            temperature: options?.temperature ?? 0.7,
+            max_tokens: options?.maxTokens ?? 1500,
+          }),
+        { label: 'OpenAI.generateCompletion' },
+      );
 
       return response.choices[0].message.content || '';
     } catch (error) {
@@ -60,19 +65,23 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
         options?.systemPrompt ||
         'You are a helpful assistant that responds with valid JSON only.';
 
-      const response = await this.client.chat.completions.create({
-        model: options?.model || this.config.model || 'gpt-4o',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          {
-            role: 'user',
-            content: `${prompt}\n\nRespond ONLY with valid JSON matching this schema: ${JSON.stringify(schema)}`,
-          },
-        ],
-        temperature: options?.temperature ?? 0.3,
-        max_tokens: options?.maxTokens ?? 1500,
-        response_format: { type: 'json_object' },
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: options?.model || this.config.model || 'gpt-4o',
+            messages: [
+              { role: 'system', content: systemPrompt },
+              {
+                role: 'user',
+                content: `${prompt}\n\nRespond ONLY with valid JSON matching this schema: ${JSON.stringify(schema)}`,
+              },
+            ],
+            temperature: options?.temperature ?? 0.3,
+            max_tokens: options?.maxTokens ?? 1500,
+            response_format: { type: 'json_object' },
+          }),
+        { label: 'OpenAI.generateStructuredOutput' },
+      );
 
       const content = response.choices[0].message.content;
       if (!content) {
@@ -102,16 +111,20 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
     tools: AgentTool[];
   }): Promise<AgentTurnResult> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: options.model,
-        max_tokens: options.maxTokens,
-        messages: [
-          { role: 'system', content: options.systemPrompt },
-          ...ToolFormatConverter.toOpenAIMessages(options.messages),
-        ],
-        tools: ToolFormatConverter.toOpenAITools(options.tools),
-        tool_choice: options.tools.length > 0 ? 'auto' : undefined,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.chat.completions.create({
+            model: options.model,
+            max_tokens: options.maxTokens,
+            messages: [
+              { role: 'system', content: options.systemPrompt },
+              ...ToolFormatConverter.toOpenAIMessages(options.messages),
+            ],
+            tools: ToolFormatConverter.toOpenAITools(options.tools),
+            tool_choice: options.tools.length > 0 ? 'auto' : undefined,
+          }),
+        { label: 'OpenAI.chat' },
+      );
       return ToolFormatConverter.fromOpenAIResponse(response);
     } catch (error) {
       this.logger.error(
@@ -129,10 +142,14 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
           ? text.slice(0, EMBEDDING_MAX_CHARS)
           : text;
 
-      const response = await this.client.embeddings.create({
-        model: 'text-embedding-3-small',
-        input: truncated,
-      });
+      const response = await withRetry(
+        () =>
+          this.client.embeddings.create({
+            model: 'text-embedding-3-small',
+            input: truncated,
+          }),
+        { label: 'OpenAI.generateEmbedding' },
+      );
 
       return response.data[0].embedding;
     } catch (error) {
@@ -149,7 +166,10 @@ export class OpenAIProvider implements AIProvider, ToolCapableProvider {
 
   async validateConfig(): Promise<boolean> {
     try {
-      await this.client.models.list();
+      await withRetry(
+        () => this.client.models.list(),
+        { label: 'OpenAI.validateConfig' },
+      );
       return true;
     } catch (error) {
       this.logger.warn(
