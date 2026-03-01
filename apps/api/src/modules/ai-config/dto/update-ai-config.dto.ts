@@ -1,6 +1,14 @@
 import { IsString, IsOptional, IsObject } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
+export enum AIProviderType {
+  OPENAI = 'openai',
+  ANTHROPIC = 'anthropic',
+  OLLAMA = 'ollama',
+  GEMINI = 'gemini',
+  BEDROCK = 'bedrock',
+}
+
 export class UpdateAiConfigDto {
   @ApiPropertyOptional({
     description: 'Anthropic API key (sk-ant-...)',

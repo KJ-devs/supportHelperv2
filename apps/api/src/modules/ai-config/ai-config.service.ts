@@ -91,7 +91,12 @@ export class AiConfigService {
         data,
       });
     } else {
-      if (!dto.apiKey) {
+      // Create new config
+      const provider = dto.provider || AIProviderType.ANTHROPIC;
+
+      // Ollama and Bedrock don't require API key (use local/IAM credentials)
+      const noKeyRequired = [AIProviderType.OLLAMA, AIProviderType.BEDROCK];
+      if (!noKeyRequired.includes(provider) && !dto.apiKey) {
         throw new BadRequestException(
           'API key is required when creating a new AI configuration',
         );
@@ -132,19 +137,26 @@ export class AiConfigService {
         return 'claude-sonnet-4-6';
       case AIProviderType.OLLAMA:
         return 'llama3.1';
+      case AIProviderType.GEMINI:
+        return 'gemini-2.0-flash';
+      case AIProviderType.BEDROCK:
+        return 'anthropic.claude-sonnet-4-6-v1:0';
       default:
         return 'claude-sonnet-4-6';
     }
   }
 
   async validateKey(
-    apiKey: string,
+    apiKey?: string,
+    provider?: AIProviderType,
+    endpoint?: string,
+    model?: string,
   ): Promise<{ valid: boolean; error?: string }> {
     try {
       const client = new Anthropic({ apiKey });
 
       const config: AIProviderConfig = {
-        provider: providerType as 'anthropic' | 'openai' | 'ollama',
+        provider: providerType as 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'bedrock',
         apiKey,
         endpoint,
         model,

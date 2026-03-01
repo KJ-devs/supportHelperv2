@@ -1,13 +1,15 @@
-import { IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { AIProviderType } from './update-ai-config.dto';
 
 export class ValidateKeyDto {
-  @ApiProperty({
-    description: 'Anthropic API key to validate',
+  @ApiPropertyOptional({
+    description: 'API key to validate (not required for Ollama or Bedrock)',
     example: 'sk-ant-api03-...',
   })
+  @IsOptional()
   @IsString()
-  apiKey: string;
+  apiKey?: string;
 
   @ApiPropertyOptional({
     description: 'AI provider type',

@@ -2,7 +2,7 @@
  * AI Configuration Types
  */
 
-export type AIProviderType = 'openai' | 'anthropic' | 'ollama';
+export type AIProviderType = 'openai' | 'anthropic' | 'ollama' | 'gemini' | 'bedrock';
 
 export interface AiConfigResponse {
   configured: boolean;
@@ -11,6 +11,7 @@ export interface AiConfigResponse {
   provider: AIProviderType;
   maskedApiKey: string | null;
   model: string;
+  endpoint?: string;
   settings: Record<string, any>;
   createdAt?: string;
   updatedAt?: string;
@@ -21,7 +22,6 @@ export interface AIConfigUpdate {
   apiKey?: string;
   endpoint?: string;
   model?: string;
-  organizationId?: string;
   settings?: Record<string, any>;
 }
 
@@ -35,5 +35,4 @@ export interface TestConnectionPayload {
   apiKey?: string;
   endpoint?: string;
   model?: string;
-  organizationId?: string;
 }
