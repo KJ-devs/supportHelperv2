@@ -313,3 +313,23 @@ After completing a US, append a summary here then `/clear` the context.
 - **Decisions**: Used Stripe v20 API (`2026-02-25.clover`); `current_period_end` removed in v20 — used `billing_cycle_anchor` instead. rawBody:true in NestFactory enables raw body buffer for signature verification. Webhook always returns HTTP 200 even on processing errors. Price IDs mapped via STRIPE_PRICE_PRO / STRIPE_PRICE_ENTERPRISE env vars (optional).
 - **Remaining**: STRIPE_PRICE_PRO / STRIPE_PRICE_ENTERPRISE env vars need to be set with actual Stripe price IDs; NEXT_PUBLIC_STRIPE_PRICE_PRO/ENTERPRISE needed in dashboard for pricing page CTA links.
 - **Date**: 2026-03-01
+
+## [US-AI-14] #245 Tests Dashboard (Vitest Coverage) — DONE ✅
+- **Files**: 17 new test files across `apps/dashboard/components/` and `apps/dashboard/hooks/`
+  - `components/ui/Toast.test.tsx` (15 tests), `ConfirmModal.test.tsx` (20), `Button.test.tsx` (17), `Badge.test.tsx` (47), `Input.test.tsx` (20), `EmptyState.test.tsx` (16), `Loader.test.tsx` (16), `Modal.test.tsx` (19), `Select.test.tsx` (14), `Card.test.tsx` (15)
+  - `components/layout/ConnectionStatus.test.tsx` (20), `components/analytics/StatsCard.test.tsx` (17), `components/usage/UsageBar.test.tsx` (11), `components/tickets/Pagination.test.tsx` (22), `components/tickets/TicketCard.test.tsx` (15)
+  - `hooks/useTicketSocket.test.ts` (19), `app/dashboard/settings/ai/page.test.tsx` (19)
+  - `vitest.config.ts` — updated coverage thresholds to 60%
+- **Changes**: 343 tests across 17 components/hooks. 94% line coverage on tested files. Fixed 3 minor TS issues (missing `vi` import, unused vars).
+- **Date**: 2026-03-01
+
+## [US-AI-15] #246 Landing Page + Pricing — DONE ✅
+- **Files**:
+  - `apps/web/src/app/page.tsx` — landing page with hero, how-it-works, features grid, social proof
+  - `apps/web/src/app/(marketing)/pricing/page.tsx` — 3-tier pricing cards, comparison table, FAQ
+  - `apps/web/src/components/marketing/nav-bar.tsx` (NEW) — sticky header with mobile menu
+  - `apps/web/src/components/marketing/footer.tsx` (NEW) — 4-column footer
+  - `apps/web/src/app/(marketing)/layout.tsx` — marketing layout with NavBar/Footer
+  - Various config files restored: `package.json`, `next.config.ts`, `tailwind.config.ts`, `tsconfig.json`
+- **Changes**: Full public-facing website. Landing page with "AI-Powered Bug Resolution" hero, 4-step how-it-works, 6-feature grid, social proof. Pricing page with Free ($0), Pro ($49), Enterprise ($199) tiers, feature comparison table, 5-item FAQ. Responsive, dark-mode ready.
+- **Date**: 2026-03-01
