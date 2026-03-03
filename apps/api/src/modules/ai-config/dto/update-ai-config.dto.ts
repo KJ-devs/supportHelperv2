@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsObject } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsEnum } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum AIProviderType {
@@ -11,7 +11,16 @@ export enum AIProviderType {
 
 export class UpdateAiConfigDto {
   @ApiPropertyOptional({
-    description: 'Anthropic API key (sk-ant-...)',
+    description: 'AI provider type',
+    enum: AIProviderType,
+    example: AIProviderType.ANTHROPIC,
+  })
+  @IsOptional()
+  @IsEnum(AIProviderType)
+  provider?: AIProviderType;
+
+  @ApiPropertyOptional({
+    description: 'API key for the provider (not required for Ollama)',
     example: 'sk-ant-api03-...',
   })
   @IsOptional()
@@ -25,6 +34,14 @@ export class UpdateAiConfigDto {
   @IsOptional()
   @IsString()
   model?: string;
+
+  @ApiPropertyOptional({
+    description: 'Endpoint URL (for Ollama or custom endpoints)',
+    example: 'http://localhost:11434',
+  })
+  @IsOptional()
+  @IsString()
+  endpoint?: string;
 
   @ApiPropertyOptional({
     description: 'Additional settings (e.g. max tokens, temperature)',

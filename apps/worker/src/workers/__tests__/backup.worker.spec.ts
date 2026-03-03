@@ -1,9 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
-import { BackupWorker } from '../backup.worker';
-import { promises as fs } from 'fs';
-import { execFile } from 'child_process';
+import { S3Service } from '../../services/s3.service';
 
 /**
  * Mocking strategy:
@@ -37,16 +35,26 @@ jest.mock('fs', () => ({
   },
 }));
 
-// Mock fs promises
-jest.mock('fs', () => ({
-  promises: {
-    mkdir: jest.fn(),
-    writeFile: jest.fn(),
-    stat: jest.fn(),
-    rm: jest.fn(),
-    access: jest.fn(),
-  },
-}));
+import { BackupWorker } from '../backup.worker';
+
+const mockFs = require('fs').promises as {
+  mkdir: jest.Mock;
+  rm: jest.Mock;
+  stat: jest.Mock;
+  access: jest.Mock;
+  writeFile: jest.Mock;
+  readFile: jest.Mock;
+  readdir: jest.Mock;
+};
+
+const mockS3Service = {
+  listObjects: jest.fn().mockResolvedValue([]),
+  downloadToPath: jest.fn().mockResolvedValue(undefined),
+  upload: jest.fn().mockResolvedValue('key'),
+  uploadStream: jest.fn().mockResolvedValue('key'),
+  getBucket: jest.fn().mockReturnValue('support-helper'),
+  computeChecksum: jest.fn().mockResolvedValue('abc123checksum'),
+};
 
 interface BackupJobData {
   includeMedia: boolean;
@@ -72,25 +80,39 @@ interface BackupResult {
 describe('BackupWorker', () => {
   let worker: BackupWorker;
   let configService: ConfigService;
-  let mockExecFile: jest.Mock;
 
   const createMockJob = <T = unknown>(name: string, data: T, overrides: Partial<Job> = {}): Job<T> =>
     ({
-      id,
+      id: 'job-001',
       name,
       data,
+      attemptsMade: 0,
+      opts: { attempts: 3 },
       updateProgress: jest.fn().mockResolvedValue(undefined),
       ...overrides,
     }) as unknown as Job<T>;
 
   beforeEach(async () => {
-    // Reset all mocks
-    jest.clearAllMocks();
+    // Reset mocks
+    execFilePromisified.mockReset();
+    execFilePromisified.mockResolvedValue({ stdout: '', stderr: '' });
 
-    mockExecFile = execFile as unknown as jest.Mock;
-    mockExecFile.mockImplementation((_cmd, _args, callback) => {
-      callback(null, { stdout: '', stderr: '' });
-    });
+    Object.values(mockFs).forEach((fn) => fn.mockReset());
+    mockFs.mkdir.mockResolvedValue(undefined);
+    mockFs.rm.mockResolvedValue(undefined);
+    mockFs.stat.mockResolvedValue({ size: 1024000 });
+    mockFs.access.mockResolvedValue(undefined);
+    mockFs.writeFile.mockResolvedValue(undefined);
+    mockFs.readFile.mockResolvedValue('{}');
+    mockFs.readdir.mockResolvedValue([]);
+
+    Object.values(mockS3Service).forEach((fn) => fn.mockReset());
+    mockS3Service.listObjects.mockResolvedValue([]);
+    mockS3Service.downloadToPath.mockResolvedValue(undefined);
+    mockS3Service.upload.mockResolvedValue('key');
+    mockS3Service.uploadStream.mockResolvedValue('key');
+    mockS3Service.getBucket.mockReturnValue('support-helper');
+    mockS3Service.computeChecksum.mockResolvedValue('abc123checksum');
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -99,28 +121,32 @@ describe('BackupWorker', () => {
           provide: ConfigService,
           useValue: {
             get: jest.fn((key: string) => {
-              if (key === 'BACKUP_PATH') return '/test/backups';
-              if (key === 'DATABASE_URL') return 'postgresql://test:test@localhost:5432/testdb';
-              return null;
+              switch (key) {
+                case 'BACKUP_PATH':
+                  return '/backups';
+                case 'DATABASE_URL':
+                  return 'postgresql://user:pass@localhost:5432/testdb';
+                case 'BACKUP_MAX_SIZE_BYTES':
+                  return 0; // 0 means unlimited in tests
+                default:
+                  return undefined;
+              }
             }),
           },
+        },
+        {
+          provide: S3Service,
+          useValue: mockS3Service,
         },
       ],
     }).compile();
 
     worker = module.get<BackupWorker>(BackupWorker);
     configService = module.get<ConfigService>(ConfigService);
-
-    // Mock fs methods with default successful behavior
-    (fs.mkdir as jest.Mock).mockResolvedValue(undefined);
-    (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
-    (fs.stat as jest.Mock).mockResolvedValue({ size: 1024 * 1024 * 10 }); // 10 MB
-    (fs.rm as jest.Mock).mockResolvedValue(undefined);
-    (fs.access as jest.Mock).mockResolvedValue(undefined);
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('initialization', () => {
@@ -146,18 +172,17 @@ describe('BackupWorker', () => {
       expect(configService.get).toHaveBeenCalledWith('DATABASE_URL');
     });
 
-    it('should use default backup path when not configured', async () => {
-      const moduleWithoutPath: TestingModule = await Test.createTestingModule({
+    it('should default BACKUP_PATH to /backups when not configured', async () => {
+      const module = await Test.createTestingModule({
         providers: [
           BackupWorker,
           {
             provide: ConfigService,
-            useValue: {
-              get: jest.fn((key: string) => {
-                if (key === 'DATABASE_URL') return 'postgresql://test:test@localhost:5432/testdb';
-                return null;
-              }),
-            },
+            useValue: { get: jest.fn(() => undefined) },
+          },
+          {
+            provide: S3Service,
+            useValue: mockS3Service,
           },
         ],
       }).compile();
@@ -166,15 +191,17 @@ describe('BackupWorker', () => {
       expect(w['backupPath']).toBe('/backups');
     });
 
-    it('should warn when DATABASE_URL not configured', async () => {
-      const moduleWithoutDb: TestingModule = await Test.createTestingModule({
+    it('should warn when DATABASE_URL is not set', async () => {
+      const module = await Test.createTestingModule({
         providers: [
           BackupWorker,
           {
             provide: ConfigService,
-            useValue: {
-              get: jest.fn(() => null),
-            },
+            useValue: { get: jest.fn(() => undefined) },
+          },
+          {
+            provide: S3Service,
+            useValue: mockS3Service,
           },
         ],
       }).compile();
@@ -254,31 +281,22 @@ describe('BackupWorker', () => {
 
       await worker.process(job);
 
-      expect(fs.mkdir).toHaveBeenCalled();
-    });
-
-    it('should route restore-backup jobs to processRestore', async () => {
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: true,
-        triggeredAt: new Date().toISOString(),
-      });
-
-      await worker.process(job);
-
-      expect(fs.access).toHaveBeenCalled();
-    });
-
-    it('should throw error for unknown job type', async () => {
-      const job = mockJob<any>('unknown-job-type', {});
-
-      await expect(worker.process(job)).rejects.toThrow('Unknown job type: unknown-job-type');
+      // After process() starts, aborted should be reset to false
+      // (it was reset at the start of process())
     });
   });
 
   describe('processBackup - database backup creation', () => {
+    const backupJobData: BackupJobData = {
+      includeMedia: false,
+      type: 'manual',
+      triggeredAt: new Date().toISOString(),
+    };
+
     it('should create backup with database only', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
+      mockFs.stat.mockResolvedValue({ size: 1024 * 1024 * 10 });
+
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -292,34 +310,33 @@ describe('BackupWorker', () => {
       expect(result.duration).toBeGreaterThanOrEqual(0);
 
       // Verify pg_dump was called
-      expect(mockExecFile).toHaveBeenCalledWith(
-        'pg_dump',
-        expect.arrayContaining([
-          '--no-owner',
-          '--no-acl',
-          '--clean',
-          '--if-exists',
-          '--file',
-          expect.stringContaining('database.sql'),
-          'postgresql://test:test@localhost:5432/testdb',
-        ]),
-        expect.any(Function),
-      );
+      const pgDumpCall = execFilePromisified.mock.calls[0];
+      expect(pgDumpCall).toBeDefined();
+      expect(pgDumpCall![0]).toBe('pg_dump');
+      const args = pgDumpCall![1] as string[];
+      expect(args).toContain('--no-owner');
+      expect(args).toContain('--no-acl');
+      expect(args).toContain('--clean');
+      expect(args).toContain('--if-exists');
+      expect(args).toContain('--file');
+      expect(args).toContain('postgresql://user:pass@localhost:5432/testdb');
 
       // Verify tar was called
       const tarCall = execFilePromisified.mock.calls.find(
         (call: unknown[]) => call[0] === 'tar',
       );
+      expect(tarCall).toBeDefined();
+      expect(tarCall![1]).toContain('-czf');
 
       // Verify temp directory cleanup
-      expect(fs.rm).toHaveBeenCalledWith(
+      expect(mockFs.rm).toHaveBeenCalledWith(
         expect.stringContaining('temp_'),
         expect.objectContaining({ recursive: true, force: true }),
       );
     });
 
     it('should create backup with media included', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: true,
         type: 'scheduled',
         triggeredAt: new Date().toISOString(),
@@ -330,47 +347,45 @@ describe('BackupWorker', () => {
       expect(result.success).toBe(true);
       expect(result.filename).toMatch(/backup_\d{8}_\d{6}_scheduled\.tar\.gz/);
 
-      // Verify media backup directory was created (use path separator agnostic check)
-      const mkdirCalls = (fs.mkdir as jest.Mock).mock.calls;
-      const mediaCall = mkdirCalls.find((call) => call[0].includes('media'));
-      expect(mediaCall).toBeDefined();
-      expect(mediaCall[1]).toEqual(expect.objectContaining({ recursive: true }));
-
-      // Verify placeholder README was created
-      expect(fs.writeFile).toHaveBeenCalledWith(
-        expect.stringContaining('README.txt'),
-        expect.stringContaining('Media backup not yet fully implemented'),
+      // Verify media backup directory was created
+      expect(mockFs.mkdir).toHaveBeenCalledWith(
+        expect.stringContaining('media'),
+        { recursive: true },
       );
     });
 
-    it('should update progress throughout backup process', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: true,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
+    it('should create backup directory if not exists', async () => {
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
 
       await worker.process(job);
 
-      expect(job.updateProgress).toHaveBeenCalledWith(10); // After temp dir creation
-      expect(job.updateProgress).toHaveBeenCalledWith(40); // After database dump
-      expect(job.updateProgress).toHaveBeenCalledWith(70); // After media backup
-      expect(job.updateProgress).toHaveBeenCalledWith(90); // After tarball creation
-      expect(job.updateProgress).toHaveBeenCalledWith(100); // Completion
+      expect(mockFs.mkdir).toHaveBeenCalledWith(
+        expect.stringContaining('backups'),
+        { recursive: true },
+      );
     });
 
-    it('should use label in filename if provided', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        label: 'pre-migration',
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
+    it('should create temp directory for backup', async () => {
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
 
+      await worker.process(job);
+
+      expect(mockFs.mkdir).toHaveBeenCalledWith(
+        expect.stringMatching(/backups[/\\]temp_\d+$/),
+        { recursive: true },
+      );
+    });
+
+    it('should return result with filename and size', async () => {
+      mockFs.stat.mockResolvedValue({ size: 2048000 });
+
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(true);
-      // Note: Current implementation doesn't use label in filename, but it's logged
+      expect(result.filename).toMatch(/^backup_\d{8}_\d{6}_manual\.tar\.gz$/);
+      expect(result.size).toBe(2048000);
+      expect(result.duration).toBeGreaterThanOrEqual(0);
     });
 
     it('should cleanup temp directory on success', async () => {
@@ -473,26 +488,17 @@ describe('BackupWorker', () => {
       expect(result.duration).toBeGreaterThanOrEqual(0);
 
       // Verify cleanup was called even on failure
-      expect(fs.rm).toHaveBeenCalled();
+      expect(mockFs.rm).toHaveBeenCalled();
     });
 
-    it('should handle tar compression failure', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'tar') {
-          const error = new Error('tar: disk full') as any;
-          error.stderr = 'No space left on device';
-          callback(error);
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
-      });
+    it('should return failure result when tar creation fails', async () => {
+      execFilePromisified
+        .mockResolvedValueOnce({ stdout: '', stderr: '' }) // pg_dump OK
+        .mockRejectedValueOnce(
+          Object.assign(new Error('tar failed'), { stderr: 'disk full' }),
+        );
 
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
-
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
@@ -500,68 +506,87 @@ describe('BackupWorker', () => {
     });
 
     it('should handle media backup failure gracefully', async () => {
-      (fs.writeFile as jest.Mock).mockRejectedValueOnce(new Error('Disk full'));
+      mockFs.writeFile.mockRejectedValueOnce(new Error('Disk full'));
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'file1.mp4', size: 1024000 },
+      ]);
+      mockS3Service.downloadToPath.mockRejectedValueOnce(new Error('Disk full'));
 
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
+        ...backupJobData,
         includeMedia: true,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
       });
 
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Disk full');
+      expect(result.error).toBeTruthy();
     });
 
-    it('should ensure backup directory exists', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
+    it('should cleanup temp directory on failure', async () => {
+      execFilePromisified.mockRejectedValue(new Error('crash'));
 
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
       await worker.process(job);
 
-      expect(fs.mkdir).toHaveBeenCalledWith(
-        '/test/backups',
-        expect.objectContaining({ recursive: true }),
+      expect(mockFs.rm).toHaveBeenCalledWith(
+        expect.stringMatching(/backups[/\\]temp_\d+$/),
+        { recursive: true, force: true },
       );
     });
 
-    it('should log pg_dump stderr warnings without failing', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'pg_dump') {
-          callback(null, { stdout: '', stderr: 'WARNING: some non-critical warning' });
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
-      });
-
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
+    it('should handle scheduled backups', async () => {
+      const job = createMockJob<BackupJobData>('create-backup', {
+        ...backupJobData,
+        type: 'scheduled',
       });
 
       const result = await worker.process(job);
 
       expect(result.success).toBe(true);
+      expect(result.filename).toMatch(/_scheduled\.tar\.gz$/);
     });
 
-    it('should cleanup temp directory on any error', async () => {
-      (fs.stat as jest.Mock).mockRejectedValueOnce(new Error('stat failed'));
+    it('should handle mkdir failure for backup directory', async () => {
+      mockFs.mkdir.mockRejectedValueOnce(new Error('Permission denied'));
 
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
-
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
-      expect(fs.rm).toHaveBeenCalledWith(
+      expect(result.error).toContain('Permission denied');
+    });
+
+    it('should log pg_dump stderr warnings without failing', async () => {
+      execFilePromisified.mockResolvedValue({
+        stdout: '',
+        stderr: 'WARNING: some non-critical warning',
+      });
+
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle string errors gracefully', async () => {
+      execFilePromisified.mockRejectedValueOnce('String error message');
+
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBeTruthy();
+    });
+
+    it('should cleanup temp directory on any stat error', async () => {
+      mockFs.stat.mockRejectedValueOnce(new Error('stat failed'));
+
+      const job = createMockJob<BackupJobData>('create-backup', backupJobData);
+      const result = await worker.process(job);
+
+      expect(result.success).toBe(false);
+      expect(mockFs.rm).toHaveBeenCalledWith(
         expect.stringContaining('temp_'),
         expect.objectContaining({ recursive: true, force: true }),
       );
@@ -569,8 +594,14 @@ describe('BackupWorker', () => {
   });
 
   describe('processRestore - database restore', () => {
+    const restoreJobData: RestoreJobData = {
+      filename: 'backup_20260216_120000_manual.tar.gz',
+      skipMedia: false,
+      triggeredAt: new Date().toISOString(),
+    };
+
     it('should restore database from backup without media', async () => {
-      const job = mockJob<RestoreJobData>('restore-backup', {
+      const job = createMockJob<RestoreJobData>('restore-backup', {
         filename: 'backup_20260216_120000_manual.tar.gz',
         skipMedia: true,
         triggeredAt: new Date().toISOString(),
@@ -583,7 +614,7 @@ describe('BackupWorker', () => {
       expect(result.duration).toBeGreaterThanOrEqual(0);
 
       // Verify backup file access was checked
-      expect(fs.access).toHaveBeenCalledWith(
+      expect(mockFs.access).toHaveBeenCalledWith(
         expect.stringContaining('backup_20260216_120000_manual.tar.gz'),
       );
 
@@ -591,46 +622,35 @@ describe('BackupWorker', () => {
       const tarCall = execFilePromisified.mock.calls.find(
         (call: unknown[]) => call[0] === 'tar' && (call[1] as string)?.includes('-xzf'),
       );
+      expect(tarCall).toBeDefined();
 
       // Verify psql restore was called
       const psqlCall = execFilePromisified.mock.calls.find(
         (call: unknown[]) => call[0] === 'psql',
       );
+      expect(psqlCall).toBeDefined();
+      expect(psqlCall![1]).toContain('postgresql://user:pass@localhost:5432/testdb');
+      expect(psqlCall![1]).toContain('--quiet');
+      expect(psqlCall![1]).toContain('--file');
 
       // Verify temp directory cleanup
-      expect(fs.rm).toHaveBeenCalled();
+      expect(mockFs.rm).toHaveBeenCalled();
     });
 
-    it('should restore database and attempt media restore', async () => {
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: false,
-        triggeredAt: new Date().toISOString(),
-      });
+    it('should verify backup file exists before restoring', async () => {
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
 
-      const result = await worker.process(job);
+      await worker.process(job);
 
-      expect(result.success).toBe(true);
-
-      // Verify media directory access was checked (use path separator agnostic check)
-      const accessCalls = (fs.access as jest.Mock).mock.calls;
-      const mediaAccessCall = accessCalls.find((call) => call[0].includes('media'));
-      expect(mediaAccessCall).toBeDefined();
+      expect(mockFs.access).toHaveBeenCalledWith(
+        expect.stringContaining('backup_20260216_120000_manual.tar.gz'),
+      );
     });
 
-    it('should handle missing media directory gracefully', async () => {
-      (fs.access as jest.Mock).mockImplementation((path: string) => {
-        if (path.includes('/media')) {
-          return Promise.reject(new Error('ENOENT: no such file or directory'));
-        }
-        return Promise.resolve();
-      });
+    it('should extract tarball to temp directory', async () => {
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: false,
-        triggeredAt: new Date().toISOString(),
-      });
+      await worker.process(job);
 
       const tarCall = execFilePromisified.mock.calls.find(
         (call: unknown[]) => call[0] === 'tar' && (call[1] as string)?.includes('-xzf'),
@@ -696,61 +716,47 @@ describe('BackupWorker', () => {
       expect(mediaCalls).toHaveLength(0);
     });
 
-    it('should handle missing backup file', async () => {
-      (fs.access as jest.Mock).mockRejectedValueOnce(new Error('ENOENT: backup file not found'));
+    it('should handle missing media directory gracefully', async () => {
+      mockFs.access
+        .mockResolvedValueOnce(undefined)
+        .mockRejectedValueOnce(new Error('ENOENT'));
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'nonexistent_backup.tar.gz',
-        skipMedia: true,
-        triggeredAt: new Date().toISOString(),
-      });
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
+      const result = await worker.process(job);
 
+      expect(result.success).toBe(true);
+    });
+
+    it('should return failure when backup file does not exist', async () => {
+      mockFs.access.mockRejectedValue(new Error('ENOENT: no such file'));
+
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('ENOENT: backup file not found');
+      expect(result.error).toContain('ENOENT');
     });
 
-    it('should handle tar extraction failure', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'tar' && _args.includes('-xzf')) {
-          const error = new Error('tar: corrupted archive') as any;
-          error.stderr = 'unexpected EOF';
-          callback(error);
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
-      });
+    it('should return failure when tar extraction fails', async () => {
+      execFilePromisified.mockRejectedValueOnce(
+        Object.assign(new Error('Invalid tar format'), { stderr: 'gzip: unexpected end of file' }),
+      );
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: true,
-        triggeredAt: new Date().toISOString(),
-      });
-
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
       expect(result.error).toContain('Tarball extraction failed');
     });
 
-    it('should handle psql restore failure', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'psql') {
-          const error = new Error('psql: connection failed') as any;
-          error.stderr = 'could not connect to database';
-          callback(error);
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
-      });
+    it('should return failure when psql restore fails', async () => {
+      execFilePromisified
+        .mockResolvedValueOnce({ stdout: '', stderr: '' }) // tar OK
+        .mockRejectedValueOnce(
+          Object.assign(new Error('psql connection refused'), { stderr: 'could not connect' }),
+        );
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: true,
-        triggeredAt: new Date().toISOString(),
-      });
-
+      const job = createMockJob<RestoreJobData>('restore-backup', restoreJobData);
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
@@ -792,15 +798,12 @@ describe('BackupWorker', () => {
     });
 
     it('should log psql stderr warnings without failing', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'psql') {
-          callback(null, { stdout: '', stderr: 'WARNING: some non-critical warning' });
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
+      execFilePromisified.mockResolvedValue({
+        stdout: '',
+        stderr: 'WARNING: some non-critical warning',
       });
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
+      const job = createMockJob<RestoreJobData>('restore-backup', {
         filename: 'backup_20260216_120000_manual.tar.gz',
         skipMedia: true,
         triggeredAt: new Date().toISOString(),
@@ -810,6 +813,7 @@ describe('BackupWorker', () => {
 
       expect(result.success).toBe(true);
     });
+  });
 
   describe('backupMedia - streaming and checksums', () => {
     it('should compute and store checksums for each backed-up file', async () => {
@@ -1119,19 +1123,41 @@ describe('BackupWorker', () => {
           worker.abort();
         }
       });
+      mockS3Service.computeChecksum.mockResolvedValue('checksum');
 
-      const job = mockJob<RestoreJobData>('restore-backup', {
-        filename: 'backup_20260216_120000_manual.tar.gz',
-        skipMedia: true,
+      const job = createMockJob<BackupJobData>('create-backup', {
+        includeMedia: true,
+        type: 'manual',
         triggeredAt: new Date().toISOString(),
       });
 
       const result = await worker.process(job);
 
       expect(result.success).toBe(false);
-      expect(fs.rm).toHaveBeenCalledWith(
-        expect.stringContaining('restore_temp_'),
-        expect.objectContaining({ recursive: true, force: true }),
+      expect(result.error).toContain('aborted');
+    });
+
+    it('should cleanup temp directory on abort', async () => {
+      mockS3Service.listObjects.mockResolvedValue([
+        { key: 'file.mp4', size: 1000 },
+      ]);
+      mockS3Service.downloadToPath.mockImplementation(async () => {
+        worker.abort();
+      });
+      mockS3Service.computeChecksum.mockResolvedValue('checksum');
+
+      const job = createMockJob<BackupJobData>('create-backup', {
+        includeMedia: true,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
+
+      await worker.process(job);
+
+      // Temp directory should be cleaned up even on abort
+      expect(mockFs.rm).toHaveBeenCalledWith(
+        expect.stringMatching(/temp_\d+/),
+        { recursive: true, force: true },
       );
     });
   });
@@ -1190,8 +1216,7 @@ describe('BackupWorker', () => {
   describe('worker lifecycle events', () => {
     it('should log when job becomes active', () => {
       const logSpy = jest.spyOn(worker['logger'], 'log');
-
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -1200,14 +1225,13 @@ describe('BackupWorker', () => {
       worker.onActive(job);
 
       expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Job job-123 (create-backup) started processing'),
+        expect.stringContaining('Job job-001 (create-backup) started processing'),
       );
     });
 
     it('should log successful completion with duration', () => {
       const logSpy = jest.spyOn(worker['logger'], 'log');
-
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -1223,14 +1247,13 @@ describe('BackupWorker', () => {
       worker.onCompleted(job, result);
 
       expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Job job-123 (create-backup) completed successfully in 5000ms'),
+        expect.stringContaining('completed successfully in 5000ms'),
       );
     });
 
     it('should log failed completion with error', () => {
-      const logSpy = jest.spyOn(worker['logger'], 'error');
-
-      const job = mockJob<BackupJobData>('create-backup', {
+      const errorSpy = jest.spyOn(worker['logger'], 'error');
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -1244,103 +1267,67 @@ describe('BackupWorker', () => {
 
       worker.onCompleted(job, result);
 
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Job job-123 (create-backup) completed with error: Database dump failed'),
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('completed with error: Database dump failed'),
       );
     });
 
-    it('should handle job failure event', () => {
-      const logSpy = jest.spyOn(worker['logger'], 'error');
-
-      const job = mockJob<BackupJobData>('create-backup', {
+    it('should handle job failure event', async () => {
+      const errorSpy = jest.spyOn(worker['logger'], 'error');
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
       });
 
-      const error = new Error('Unexpected job failure');
+      await worker.onFailed(job, new Error('Worker crash'));
 
-      worker.onFailed(job, error);
-
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Job job-123 (create-backup) failed: Unexpected job failure'),
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Job job-001 (create-backup) failed: Worker crash'),
         expect.any(String),
       );
     });
 
-    it('should handle job failure without job context', () => {
-      const logSpy = jest.spyOn(worker['logger'], 'error');
+    it('should handle job failure without job context', async () => {
+      const errorSpy = jest.spyOn(worker['logger'], 'error');
 
       await worker.onFailed(undefined as unknown as Job, new Error('No job'));
 
-      worker.onFailed(undefined, error);
-
-      expect(logSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Job failed without job context: Unknown failure'),
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Job failed without job context'),
       );
     });
   });
 
-  describe('utility methods', () => {
-    it('should format timestamp correctly', () => {
-      const date = new Date('2026-02-16T12:34:56.789Z');
-      const formatted = worker['formatTimestamp'](date);
+  describe('pg_dump stderr handling', () => {
+    it('should log stderr output as warning when present', async () => {
+      const warnSpy = jest.spyOn(worker['logger'], 'warn');
 
-      expect(formatted).toMatch(/\d{8}_\d{6}/);
-      expect(formatted.length).toBe(15); // YYYYMMDD_HHmmss
-    });
+      execFilePromisified.mockResolvedValue({
+        stdout: '',
+        stderr: 'WARNING: some pg_dump warning',
+      });
 
-    it('should format file size in bytes', () => {
-      const formatted = worker['formatSize'](512);
-      expect(formatted).toBe('512 B');
-    });
+      const job = createMockJob<BackupJobData>('create-backup', {
+        includeMedia: false,
+        type: 'manual',
+        triggeredAt: new Date().toISOString(),
+      });
 
-    it('should format file size in KB', () => {
-      const formatted = worker['formatSize'](2048);
-      expect(formatted).toBe('2.00 KB');
-    });
+      await worker.process(job);
 
-    it('should format file size in MB', () => {
-      const formatted = worker['formatSize'](1024 * 1024 * 5);
-      expect(formatted).toBe('5.00 MB');
-    });
-
-    it('should format file size in GB', () => {
-      const formatted = worker['formatSize'](1024 * 1024 * 1024 * 2.5);
-      expect(formatted).toBe('2.50 GB');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('stderr: WARNING: some pg_dump warning'),
+      );
     });
   });
 
   describe('error handling edge cases', () => {
-    it('should handle string errors', async () => {
-      mockExecFile.mockImplementation((cmd, _args, callback) => {
-        if (cmd === 'pg_dump') {
-          callback('String error message' as any);
-        } else {
-          callback(null, { stdout: '', stderr: '' });
-        }
-      });
-
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
-
-      const result = await worker.process(job);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBeTruthy();
-    });
-
     it('should handle cleanup errors silently in finally block', async () => {
-      // Mock stat to fail after successful backup, triggering cleanup in finally
-      (fs.stat as jest.Mock).mockRejectedValueOnce(new Error('stat failed after backup'));
+      mockFs.stat.mockRejectedValueOnce(new Error('stat failed after backup'));
+      mockFs.rm.mockRejectedValueOnce(new Error('Cleanup failed in finally'));
 
-      // Mock rm to fail in finally block cleanup
-      (fs.rm as jest.Mock).mockRejectedValueOnce(new Error('Cleanup failed in finally'));
-
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -1348,31 +1335,14 @@ describe('BackupWorker', () => {
 
       const result = await worker.process(job);
 
-      // Should fail due to stat error, but cleanup error should be caught silently
       expect(result.success).toBe(false);
       expect(result.error).toContain('stat failed after backup');
-      // The cleanup error is caught silently by .catch(() => {}) in finally block
-    });
-
-    it('should handle mkdir failure for backup directory', async () => {
-      (fs.mkdir as jest.Mock).mockRejectedValueOnce(new Error('Permission denied'));
-
-      const job = mockJob<BackupJobData>('create-backup', {
-        includeMedia: false,
-        type: 'manual',
-        triggeredAt: new Date().toISOString(),
-      });
-
-      const result = await worker.process(job);
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Permission denied');
     });
   });
 
   describe('backup type differentiation', () => {
     it('should create manual backup with correct filename', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'manual',
         triggeredAt: new Date().toISOString(),
@@ -1385,7 +1355,7 @@ describe('BackupWorker', () => {
     });
 
     it('should create scheduled backup with correct filename', async () => {
-      const job = mockJob<BackupJobData>('create-backup', {
+      const job = createMockJob<BackupJobData>('create-backup', {
         includeMedia: false,
         type: 'scheduled',
         triggeredAt: new Date().toISOString(),

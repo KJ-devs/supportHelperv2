@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -81,6 +81,14 @@ function StatusIcon({ status }: { status: string | null }) {
 }
 
 export default function BillingPage() {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      <BillingPageContent />
+    </Suspense>
+  );
+}
+
+function BillingPageContent() {
   const { isLoading: authLoading } = useRequireAuth();
   const searchParams = useSearchParams();
 

@@ -1,23 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AIService } from '../../../src/ai/ai.service';
-
-const mockCreate = jest.fn();
-
-jest.mock('openai', () => {
-  return jest.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: mockCreate,
-      },
-    },
-  }));
-});
+import { AIProviderFactory } from '../../../src/ai/providers/ai-provider.factory';
+import { PrismaService } from '../../../src/prisma/prisma.service';
+import { AIProvider } from '../../../src/ai/providers/ai-provider.interface';
 
 describe('AIService', () => {
   let service: AIService;
+  let mockProvider: jest.Mocked<AIProvider>;
+  let mockProviderFactory: jest.Mocked<AIProviderFactory>;
 
-  describe('when OpenAI is configured', () => {
+  const createMockProvider = (): jest.Mocked<AIProvider> => ({
+    generateCompletion: jest.fn(),
+    generateStructuredOutput: jest.fn(),
+    generateEmbedding: jest.fn(),
+    getProviderName: jest.fn().mockReturnValue('anthropic'),
+    validateConfig: jest.fn().mockResolvedValue(true),
+  });
+
+  describe('when Anthropic is configured', () => {
     beforeEach(async () => {
       mockProvider = createMockProvider();
       mockProviderFactory = {
@@ -31,9 +32,24 @@ describe('AIService', () => {
             provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
-                if (key === 'OPENAI_API_KEY') return 'test-api-key';
+                if (key === 'ANTHROPIC_API_KEY') return 'sk-ant-test-key';
                 return undefined;
               }),
+            },
+          },
+          {
+            provide: AIProviderFactory,
+            useValue: mockProviderFactory,
+          },
+          {
+            provide: PrismaService,
+            useValue: {
+              aiConfig: {
+                findUnique: jest.fn().mockResolvedValue(null),
+              },
+              systemConfig: {
+                upsert: jest.fn(),
+              },
             },
           },
         ],
@@ -44,20 +60,14 @@ describe('AIService', () => {
 
     describe('analyzeVideoTranscript', () => {
       it('should analyze transcript and return result', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                summary: 'Button not working',
-                severity: 'high',
-                severityConfidence: 0.9,
-                type: 'bug',
-                typeConfidence: 0.85,
-                keywords: ['button', 'click'],
-                reproductionSteps: ['Click submit'],
-              }),
-            },
-          }],
+        mockProvider.generateStructuredOutput.mockResolvedValue({
+          summary: 'Button not working',
+          severity: 'high',
+          severityConfidence: 0.9,
+          type: 'bug',
+          typeConfidence: 0.85,
+          keywords: ['button', 'click'],
+          reproductionSteps: ['Click submit'],
         });
 
         const result = await service.analyzeVideoTranscript('The submit button does not work');
@@ -68,72 +78,27 @@ describe('AIService', () => {
         expect(result.keywords).toContain('button');
       });
 
-      it('should handle markdown-wrapped JSON', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{
-            message: {
-              content: '```json\n{"summary":"test","severity":"low","severityConfidence":0.5,"type":"other","typeConfidence":0.5,"keywords":[],"reproductionSteps":[]}\n```',
-            },
-          }],
-        });
-
-        const result = await service.analyzeVideoTranscript('test');
-
-        expect(result.summary).toBe('test');
-      });
-
       it('should return mock analysis on error', async () => {
-        mockCreate.mockRejectedValue(new Error('API Error'));
+        mockProvider.generateStructuredOutput.mockRejectedValue(new Error('API Error'));
 
         const result = await service.analyzeVideoTranscript('test transcript');
 
         expect(result.severity).toBe('medium');
         expect(result.type).toBe('other');
       });
-
-      it('should include OCR text when provided', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                summary: 'test', severity: 'medium', severityConfidence: 0.5,
-                type: 'bug', typeConfidence: 0.5, keywords: [], reproductionSteps: [],
-              }),
-            },
-          }],
-        });
-
-        await service.analyzeVideoTranscript('transcript', 'Error: null pointer');
-
-        expect(mockCreate).toHaveBeenCalledWith(
-          expect.objectContaining({
-            messages: expect.arrayContaining([
-              expect.objectContaining({
-                content: expect.stringContaining('Error: null pointer'),
-              }),
-            ]),
-          }),
-        );
-      });
     });
 
     describe('processUserDescription', () => {
       it('should process and enrich user description', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                enrichedDescription: 'Enriched bug report',
-                summary: 'Bug in form',
-                severity: 'medium',
-                severityConfidence: 0.7,
-                type: 'bug',
-                typeConfidence: 0.8,
-                keywords: ['form', 'bug'],
-                reproductionSteps: ['Open form', 'Submit'],
-              }),
-            },
-          }],
+        mockProvider.generateStructuredOutput.mockResolvedValue({
+          enrichedDescription: 'Enriched bug report',
+          summary: 'Bug in form',
+          severity: 'medium',
+          severityConfidence: 0.7,
+          type: 'bug',
+          typeConfidence: 0.8,
+          keywords: ['form', 'bug'],
+          reproductionSteps: ['Open form', 'Submit'],
         });
 
         const result = await service.processUserDescription('form is broken');
@@ -143,7 +108,7 @@ describe('AIService', () => {
       });
 
       it('should return fallback on error', async () => {
-        mockCreate.mockRejectedValue(new Error('API Error'));
+        mockProvider.generateStructuredOutput.mockRejectedValue(new Error('API Error'));
 
         const result = await service.processUserDescription('broken form');
 
@@ -154,9 +119,7 @@ describe('AIService', () => {
 
     describe('classifyIssue', () => {
       it('should classify issue type', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{ message: { content: 'crash' } }],
-        });
+        mockProvider.generateCompletion.mockResolvedValue('crash');
 
         const result = await service.classifyIssue('App crashes on startup');
 
@@ -164,9 +127,7 @@ describe('AIService', () => {
       });
 
       it('should return other for unknown classification', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{ message: { content: 'something weird' } }],
-        });
+        mockProvider.generateCompletion.mockResolvedValue('something weird');
 
         const result = await service.classifyIssue('unknown issue');
 
@@ -174,7 +135,7 @@ describe('AIService', () => {
       });
 
       it('should return other on error', async () => {
-        mockCreate.mockRejectedValue(new Error('API Error'));
+        mockProvider.generateCompletion.mockRejectedValue(new Error('API Error'));
 
         const result = await service.classifyIssue('test');
 
@@ -184,9 +145,7 @@ describe('AIService', () => {
 
     describe('generateCompletion', () => {
       it('should generate completion', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{ message: { content: 'Generated response' } }],
-        });
+        mockProvider.generateCompletion.mockResolvedValue('Generated response');
 
         const result = await service.generateCompletion('Summarize this');
 
@@ -194,17 +153,7 @@ describe('AIService', () => {
       });
 
       it('should return empty string on error', async () => {
-        mockCreate.mockRejectedValue(new Error('API Error'));
-
-        const result = await service.generateCompletion('test');
-
-        expect(result).toBe('');
-      });
-
-      it('should return empty string when content is null', async () => {
-        mockCreate.mockResolvedValue({
-          choices: [{ message: { content: null } }],
-        });
+        mockProvider.generateCompletion.mockRejectedValue(new Error('API Error'));
 
         const result = await service.generateCompletion('test');
 
@@ -213,7 +162,7 @@ describe('AIService', () => {
     });
   });
 
-  describe('when OpenAI is NOT configured', () => {
+  describe('when no AI provider is configured', () => {
     beforeEach(async () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
@@ -222,6 +171,23 @@ describe('AIService', () => {
             provide: ConfigService,
             useValue: {
               get: jest.fn().mockReturnValue(undefined),
+            },
+          },
+          {
+            provide: AIProviderFactory,
+            useValue: {
+              create: jest.fn(),
+            },
+          },
+          {
+            provide: PrismaService,
+            useValue: {
+              aiConfig: {
+                findUnique: jest.fn().mockResolvedValue(null),
+              },
+              systemConfig: {
+                upsert: jest.fn(),
+              },
             },
           },
         ],

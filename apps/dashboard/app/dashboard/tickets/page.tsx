@@ -18,7 +18,7 @@ import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
-import { AlertTriangle, Ticket as TicketIcon } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 type ViewMode = 'table' | 'grid';
 
@@ -304,12 +304,12 @@ export default function TicketsPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" aria-hidden="true" />
-              <div>
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</h3>
-                <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
+          <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Erreur</h3>
+                <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               </div>
               <Button
                 variant="ghost"
@@ -353,17 +353,6 @@ export default function TicketsPage() {
               {tickets.map((ticket) => (
                 <TicketCard key={ticket.id} ticket={ticket} />
               ))}
-              {tickets.length === 0 && (
-                <div className="col-span-full text-center py-12">
-                  <TicketIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Aucun ticket trouvé
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    Modifiez vos filtres pour voir plus de résultats.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 

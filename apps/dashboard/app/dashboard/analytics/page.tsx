@@ -149,7 +149,7 @@ export default function AnalyticsPage() {
         )}
 
         {/* Key Metrics */}
-        {!hasNoData && (
+        {!hasNoData && (<>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
           <StatsCard
             title="Total Tickets"
@@ -259,7 +259,7 @@ export default function AnalyticsPage() {
             🔄 Actualiser les données
           </Button>
         </div>
-        )}
+        </>)}
       </div>
     </DashboardLayout>
   );

@@ -166,6 +166,7 @@ export default function AiSettingsPage() {
   const [saving, setSaving] = useState(false);
 
   // Form state
+  const [provider, setProvider] = useState<AIProviderType>('anthropic');
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
   const [model, setModel] = useState('');
@@ -173,9 +174,9 @@ export default function AiSettingsPage() {
   const [endpoint, setEndpoint] = useState('');
   const [bedrockRegion, setBedrockRegion] = useState('us-east-1');
 
-  // Validation state
-  const [keyStatus, setKeyStatus] = useState<KeyStatus>('idle');
-  const [keyError, setKeyError] = useState<string | null>(null);
+  // Test connection state
+  const [testStatus, setTestStatus] = useState<TestStatus>('idle');
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   // Validation errors
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -315,12 +316,12 @@ export default function AiSettingsPage() {
         setTestStatus('success');
         setTestMessage('Connection successful — the AI provider is responding correctly.');
       } else {
-        setKeyStatus('invalid');
-        setKeyError(result.error || 'Invalid API key');
+        setTestStatus('error');
+        setTestMessage(result.error || 'Connection failed');
       }
-    } catch {
-      setKeyStatus('invalid');
-      setKeyError('Failed to validate key');
+    } catch (err: any) {
+      setTestStatus('error');
+      setTestMessage(err.message || 'Failed to test connection');
     }
   };
 
@@ -521,44 +522,6 @@ export default function AiSettingsPage() {
 
         {/* Configuration Form */}
         <Card>
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center space-x-3">
-              <div
-                className={`w-3 h-3 rounded-full ${
-                  config?.configured ? 'bg-green-500' : 'bg-gray-300'
-                }`}
-              />
-              <span className="text-sm font-medium text-gray-900">
-                {config?.configured
-                  ? 'AI is configured and ready'
-                  : 'AI is not configured'}
-              </span>
-            </div>
-            {config?.configured && config.maskedApiKey && (
-              <span className="text-sm text-gray-500 font-mono">
-                Key: {config.maskedApiKey}
-              </span>
-            )}
-          </div>
-
-          {!config?.configured && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <p className="text-sm text-blue-800">
-                Configure your Anthropic API key to enable the AI agent. You
-                can obtain a key from{' '}
-                <a
-                  href="https://console.anthropic.com/settings/keys"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline font-medium"
-                >
-                  console.anthropic.com
-                </a>
-                .
-              </p>
-            </div>
-          )}
-
           <form onSubmit={handleSave} className="space-y-6">
             {/* Current provider status */}
             <div className="flex items-center justify-between pb-5 border-b border-gray-200 dark:border-gray-700">

@@ -1,9 +1,9 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { EncryptionService } from '../../common/services/encryption.service';
-import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
-import Anthropic from '@anthropic-ai/sdk';
+import { UpdateAiConfigDto, AIProviderType } from './dto/update-ai-config.dto';
+import { AIProviderFactory } from '../../ai/providers/ai-provider.factory';
+import { AIProviderConfig } from '../../ai/providers/ai-provider.types';
 
 export interface AiConfigResponse {
   id: string;
@@ -23,7 +23,7 @@ export class AiConfigService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly encryptionService: EncryptionService,
+    private readonly providerFactory: AIProviderFactory,
   ) {}
 
   async getConfig(tenantId: string): Promise<AiConfigResponse | null> {
@@ -42,9 +42,7 @@ export class AiConfigService {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(
-        this.encryptionService.decrypt(config.encryptedApiKey),
-      ),
+      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
       model: config.model,
       endpoint: settings?.endpoint as string | undefined,
       settings,
@@ -63,8 +61,12 @@ export class AiConfigService {
 
     const data: Record<string, unknown> = {};
 
+    if (dto.provider !== undefined) {
+      data.provider = dto.provider;
+    }
     if (dto.apiKey) {
-      data.encryptedApiKey = this.encryptionService.encrypt(dto.apiKey);
+      // Prisma encryption middleware will auto-encrypt on write
+      data.encryptedApiKey = dto.apiKey;
     }
     if (dto.model !== undefined) {
       data.model = dto.model;
@@ -78,10 +80,7 @@ export class AiConfigService {
     if (dto.endpoint !== undefined) {
       mergedSettings.endpoint = dto.endpoint;
     }
-
-    const existing = await this.prisma.aiConfig.findUnique({
-      where: { tenantId },
-    });
+    data.settings = mergedSettings;
 
     let config;
 
@@ -98,9 +97,10 @@ export class AiConfigService {
       const noKeyRequired = [AIProviderType.OLLAMA, AIProviderType.BEDROCK];
       if (!noKeyRequired.includes(provider) && !dto.apiKey) {
         throw new BadRequestException(
-          'API key is required when creating a new AI configuration',
+          `API key is required for ${provider} provider`,
         );
       }
+
       config = await this.prisma.aiConfig.create({
         data: {
           tenantId,
@@ -118,9 +118,7 @@ export class AiConfigService {
       id: config.id,
       tenantId: config.tenantId,
       provider: config.provider,
-      maskedApiKey: this.maskApiKey(
-        this.encryptionService.decrypt(config.encryptedApiKey),
-      ),
+      maskedApiKey: this.maskApiKey(config.encryptedApiKey),
       model: config.model,
       endpoint: settings?.endpoint as string | undefined,
       settings,
@@ -153,7 +151,7 @@ export class AiConfigService {
     model?: string,
   ): Promise<{ valid: boolean; error?: string }> {
     try {
-      const client = new Anthropic({ apiKey });
+      const providerType = provider || AIProviderType.ANTHROPIC;
 
       const config: AIProviderConfig = {
         provider: providerType as 'anthropic' | 'openai' | 'ollama' | 'gemini' | 'bedrock',
@@ -231,7 +229,8 @@ export class AiConfigService {
       return null;
     }
 
-    return this.encryptionService.decrypt(config.encryptedApiKey);
+    // encryptedApiKey is auto-decrypted by Prisma encryption middleware
+    return config.encryptedApiKey;
   }
 
   private maskApiKey(apiKey: string): string {

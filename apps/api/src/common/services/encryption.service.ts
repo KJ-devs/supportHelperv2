@@ -7,7 +7,34 @@ const IV_LENGTH = 16;
 const AUTH_TAG_LENGTH = 16;
 
 /**
- * Encrypted payload format: iv:authTag:ciphertext (all base64 encoded)
+ * ========================================================================
+ * ENCRYPTED FIELDS AUDIT
+ * ========================================================================
+ *
+ * Algorithm: AES-256-GCM
+ * Payload format: iv:authTag:ciphertext (all base64-encoded, colon-separated)
+ * Key source: ENCRYPTION_KEY env var (64 hex chars = 32 bytes)
+ *
+ * Models and fields encrypted by this service:
+ *
+ * 1. GithubConnection (github_connections table)
+ *    - accessToken  (access_token)   -- GitHub OAuth access token
+ *    - refreshToken (refresh_token)  -- GitHub OAuth refresh token
+ *    Encrypted by: GithubOAuthService (manual) + PrismaEncryptionMiddleware (auto)
+ *
+ * 2. AiConfig (ai_configs table)
+ *    - encryptedApiKey (encrypted_api_key) -- Tenant BYOK API key (Anthropic, etc.)
+ *    Encrypted by: AiConfigService (manual) + PrismaEncryptionMiddleware (auto)
+ *
+ * Note: Integration model (integrations table) uses a SEPARATE encryption
+ * system (IntegrationsCryptoService) with INTEGRATION_ENCRYPTION_KEY and
+ * a different format (config + configIv fields). It is NOT covered by
+ * this service or the Prisma middleware.
+ *
+ * The PrismaEncryptionMiddleware detects already-encrypted values
+ * (3 colon-separated base64 parts) to prevent double-encryption,
+ * making it safe to run alongside manual encrypt/decrypt calls.
+ * ========================================================================
  *
  * This service provides AES-256-GCM encryption for sensitive data at rest.
  * It validates the ENCRYPTION_KEY env var at startup and refuses to start
@@ -98,6 +125,19 @@ export class EncryptionService implements OnModuleInit {
     ]);
 
     return decrypted.toString('utf8');
+  }
+
+  /**
+   * Check if a value looks like it's already encrypted in iv:authTag:ciphertext format.
+   * Used by the Prisma middleware to avoid double-encryption.
+   */
+  static isEncrypted(value: string): boolean {
+    if (typeof value !== 'string') return false;
+    const parts = value.split(':');
+    if (parts.length !== 3) return false;
+    // Validate each part is valid base64
+    const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+    return parts.every(part => part.length > 0 && base64Regex.test(part));
   }
 
   /**

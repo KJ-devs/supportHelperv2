@@ -8,11 +8,14 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { RateLimitLoggingInterceptor } from './common/interceptors/rate-limit-logging.interceptor';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { validateEnvironmentVariables } from './config/validate-env';
+import { PinoLoggerService } from './common/logger/pino-logger.service';
 
 // BigInt cannot be serialized by JSON.stringify by default.
 // This polyfill converts BigInt to Number for JSON responses (e.g. Media.fileSize).
-interface BigInt {
-  toJSON(): number;
+declare global {
+  interface BigInt {
+    toJSON(): number;
+  }
 }
 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
 (BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {

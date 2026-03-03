@@ -47,7 +47,7 @@ export class AutoMergeService {
     }
 
     // 2. Check settings.auto_merge_enabled
-    const settings = (config.settings as { auto_merge_enabled?: boolean } | null) || {};
+    const settings = (config.settings as { auto_merge_enabled?: boolean; required_approvals?: number; merge_strategy?: string } | null) || {};
     if (!settings.auto_merge_enabled) {
       return { merged: false, reason: 'disabled' };
     }

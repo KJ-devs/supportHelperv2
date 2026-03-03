@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import type { Application, CreateApplicationData } from '@/lib/types/application';
 import { Modal, Button, Input, Select } from '@/components/ui';
-import { Globe, Smartphone, Monitor, Package, Video, FileText, Bot, Bell, Lightbulb } from 'lucide-react';
+import { Video, FileText, Bot, Bell, Lightbulb } from 'lucide-react';
 
 interface ApplicationModalProps {
   isOpen: boolean;

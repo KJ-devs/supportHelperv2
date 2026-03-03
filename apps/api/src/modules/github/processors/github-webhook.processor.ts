@@ -105,6 +105,9 @@ export class GithubWebhookProcessor extends WorkerHost {
         case 'issue_comment':
           return this.processIssueCommentEvent(webhookData);
 
+        case 'pull_request_review':
+          return this.processPullRequestReviewEvent(webhookData);
+
         case 'check_run':
           return this.processCheckRunEvent(webhookData);
 
@@ -218,7 +221,7 @@ export class GithubWebhookProcessor extends WorkerHost {
     const defaultBranch: string = repository.default_branch;
 
     this.logger.log(
-      `Processed push to ${repository.full_name} (${ref}): ${commits?.length || 0} commits`,
+      `Processed push to ${repoFullName} (${ref}): ${commits?.length || 0} commits`,
     );
 
     // Only trigger codebase indexing for pushes to the default branch
@@ -405,7 +408,7 @@ export class GithubWebhookProcessor extends WorkerHost {
       `Processed check_run ${action}: ${check_run.name} on ${repository.full_name} - ${check_run.conclusion || 'pending'}`,
     );
 
-    // On completed check runs with failure, find linked tickets
+    // On completed check runs with failure, find linked tickets and trigger CI feedback loop
     if (action === 'completed' && check_run.conclusion === 'failure') {
       const linkedTickets: string[] = [];
 
@@ -428,6 +431,26 @@ export class GithubWebhookProcessor extends WorkerHost {
         );
       }
 
+      // US-4.3: CI feedback loop — re-queue code generation for agent-generated PRs
+      const branchRef = check_run.pull_requests?.[0]?.head?.ref;
+      if (branchRef) {
+        const [repoOwner = '', repoName = ''] = (repository.full_name as string).split('/');
+        const ciResult = await this.ciFeedbackService.handleCIFailure({
+          owner: repoOwner,
+          repo: repoName,
+          branchName: branchRef,
+          checkName: check_run.name,
+          conclusion: check_run.conclusion,
+          headSha: check_run.head_sha,
+        });
+
+        if (ciResult.handled) {
+          this.logger.log(
+            `CI feedback loop: branch "${branchRef}" — action: ${ciResult.action}`,
+          );
+        }
+      }
+
       return {
         handled: true,
         action,
@@ -436,6 +459,31 @@ export class GithubWebhookProcessor extends WorkerHost {
         repository: repository.full_name,
         linkedTickets,
       };
+    }
+
+    // On successful check run, try auto-merge (CI passing might be the last condition)
+    if (action === 'completed' && check_run.conclusion === 'success') {
+      for (const pr of check_run.pull_requests || []) {
+        const [repoOwner, repoName] = (repository.full_name as string).split('/');
+        if (repoOwner && repoName) {
+          try {
+            const result = await this.autoMergeService.checkAndMerge(
+              repoOwner,
+              repoName,
+              pr.number,
+            );
+            if (result.merged) {
+              this.logger.log(
+                `Auto-merged PR ${repository.full_name}#${pr.number} after check "${check_run.name}" passed`,
+              );
+            }
+          } catch (error) {
+            this.logger.warn(
+              `Auto-merge check failed for ${repository.full_name}#${pr.number}: ${error instanceof Error ? error.message : error}`,
+            );
+          }
+        }
+      }
     }
 
     return {

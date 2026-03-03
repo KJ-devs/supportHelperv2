@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
 
 /**
  * IP Whitelist Guard
@@ -38,7 +39,7 @@ export class IpWhitelistGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<Request & { __rateLimit_bypassed?: boolean }>();
+    const request = context.switchToHttp().getRequest<Request & { __rateLimit_bypassed?: boolean; connection?: { remoteAddress?: string } }>();
     const clientIp = this.getClientIp(request);
 
     if (this.whitelist.has(clientIp)) {
@@ -57,10 +58,9 @@ export class IpWhitelistGuard implements CanActivate {
    */
   private getClientIp(request: Request & { connection?: { remoteAddress?: string } }): string {
     const forwarded = request.headers['x-forwarded-for'];
-    if (forwarded) {
-      // X-Forwarded-For can be comma-separated list, take first
+    if (typeof forwarded === 'string' && forwarded) {
       return forwarded.split(',')[0].trim();
     }
-    return request.ip || request.connection.remoteAddress || '';
+    return request.ip || request.connection?.remoteAddress || '';
   }
 }

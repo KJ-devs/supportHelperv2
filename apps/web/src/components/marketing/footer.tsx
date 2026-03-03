@@ -1,8 +1,6 @@
 import Link from 'next/link';
 import { Zap, Github } from 'lucide-react';
 
-const DASHBOARD_URL = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost:3000';
-
 const footerLinks = {
   Product: [
     { label: 'Features', href: '/#features' },
@@ -10,8 +8,8 @@ const footerLinks = {
     { label: 'Changelog', href: '#' },
   ],
   Resources: [
-    { label: 'Documentation', href: `${DASHBOARD_URL}/docs`, external: true },
-    { label: 'API Reference', href: `${DASHBOARD_URL}/docs/api`, external: true },
+    { label: 'Documentation', href: '/docs' },
+    { label: 'API Reference', href: '/docs#api' },
     { label: 'Status', href: '#' },
   ],
   Company: [
@@ -19,7 +17,7 @@ const footerLinks = {
     { label: 'Privacy', href: '/privacy' },
     { label: 'Terms', href: '/terms' },
   ],
-};
+} satisfies Record<string, { label: string; href: string }[]>;
 
 export function Footer() {
   return (
@@ -57,23 +55,12 @@ export function Footer() {
               <ul className="mt-3 space-y-2">
                 {links.map((link) => (
                   <li key={link.label}>
-                    {'external' in link && link.external ? (
-                      <a
-                        href={link.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {link.label}
-                      </a>
-                    ) : (
-                      <Link
-                        href={link.href}
-                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      >
-                        {link.label}
-                      </Link>
-                    )}
+                    <Link
+                      href={link.href}
+                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {link.label}
+                    </Link>
                   </li>
                 ))}
               </ul>

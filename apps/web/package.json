@@ -14,6 +14,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@hookform/resolvers": "^3.9.1",
     "@radix-ui/react-alert-dialog": "^1.1.4",
     "@radix-ui/react-avatar": "^1.1.2",
@@ -40,6 +41,7 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "geist": "^1.7.0",
+    "gsap": "^3.14.2",
     "immer": "^10.1.1",
     "lucide-react": "^0.469.0",
     "next": "15.1.0",

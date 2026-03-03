@@ -7,7 +7,7 @@ const DASHBOARD_URL = process.env.NEXT_PUBLIC_DASHBOARD_URL || 'http://localhost
 export const metadata: Metadata = {
   title: 'Pricing',
   description:
-    'Simple, transparent pricing. Start free with 10 AI analyses per month. Upgrade to Pro or Enterprise as you grow.',
+    'Simple, transparent pricing. Start free with 5 AI analyses per month. Upgrade to Pro or Enterprise as you grow.',
 };
 
 type FeatureValue = boolean | string;
@@ -25,16 +25,17 @@ interface PricingTier {
 
 const TIERS: PricingTier[] = [
   {
-    name: 'Free',
+    name: 'Starter',
     price: '$0',
     period: '/month',
-    description: 'Perfect for side projects and trying out AI-powered bug resolution.',
+    description: 'Try AI-powered bug resolution on your side project. No credit card required.',
     cta: 'Start Free',
     ctaHref: `${DASHBOARD_URL}/signup`,
     featured: false,
     features: {
-      'AI Analyses': '10/month',
+      'AI Analyses': '5/month',
       'AI Model': 'Gemini Flash',
+      'Applications': '1',
       'Video Analysis': true,
       'Deep Code Analysis': false,
       'Auto-fix PRs': false,
@@ -46,40 +47,42 @@ const TIERS: PricingTier[] = [
   },
   {
     name: 'Pro',
-    price: '$49',
+    price: '$79',
     period: '/month',
-    description: 'For professional teams that need unlimited analyses and their own AI key.',
-    cta: 'Start Trial',
+    description: 'For teams that ship fast and need unlimited AI-powered bug resolution.',
+    cta: 'Start 14-day Trial',
     ctaHref: `${DASHBOARD_URL}/signup?plan=pro`,
     featured: true,
     features: {
       'AI Analyses': 'Unlimited (BYOK)',
       'AI Model': 'Your choice (BYOK)',
+      'Applications': 'Unlimited',
       'Video Analysis': true,
       'Deep Code Analysis': true,
       'Auto-fix PRs': true,
       'SSO / SAML': false,
-      'Support': 'Email',
+      'Support': 'Email & chat',
       'Custom Integrations': true,
       'Dedicated Account Manager': false,
     },
   },
   {
     name: 'Enterprise',
-    price: '$199',
+    price: '$249',
     period: '/month',
-    description: 'For large organizations needing SSO, dedicated AI, and premium support.',
+    description: 'For organizations needing SSO, dedicated AI infrastructure, and premium SLA.',
     cta: 'Contact Sales',
     ctaHref: 'mailto:sales@supporthelper.io',
     featured: false,
     features: {
       'AI Analyses': 'Unlimited',
       'AI Model': 'Dedicated',
+      'Applications': 'Unlimited',
       'Video Analysis': true,
       'Deep Code Analysis': true,
       'Auto-fix PRs': true,
       'SSO / SAML': true,
-      'Support': 'Dedicated',
+      'Support': 'Priority + SLA',
       'Custom Integrations': true,
       'Dedicated Account Manager': true,
     },
@@ -89,6 +92,7 @@ const TIERS: PricingTier[] = [
 const FEATURE_ROWS = [
   'AI Analyses',
   'AI Model',
+  'Applications',
   'Video Analysis',
   'Deep Code Analysis',
   'Auto-fix PRs',
@@ -105,9 +109,9 @@ const FAQ = [
       'BYOK lets you connect your own API key from AI providers like Anthropic, OpenAI, or Google Gemini. Your data goes directly to your chosen provider — we never see your prompts or results. This also means your AI costs are billed directly by the provider at their standard rates.',
   },
   {
-    question: 'How does the free tier work?',
+    question: 'How does the Starter tier work?',
     answer:
-      'The free tier gives you 10 AI analyses per month at no cost. Analyses use Gemini Flash, a fast and capable model. When you hit the limit, you can upgrade to Pro with your own API key for unlimited analyses.',
+      'The Starter tier gives you 5 AI analyses per month at no cost — enough to see the full power of AI bug resolution. Analyses use Gemini Flash, a fast and capable model. When you hit the limit, upgrade to Pro with your own API key for unlimited analyses.',
   },
   {
     question: 'Can I change plans later?',

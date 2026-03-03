@@ -232,7 +232,7 @@ export class SdkTicketsController {
         hasVideo: !!video,
         videoSize: video?.size,
       },
-      type: mappedType as 'bug' | 'feature_request' | 'question' | 'documentation' | 'performance' | 'security' | 'other',
+      type: mappedType as 'bug' | 'feature_request' | 'question' | 'documentation' | 'performance' | 'security',
       severity: mappedSeverity as 'critical' | 'high' | 'medium' | 'low',
     });
 

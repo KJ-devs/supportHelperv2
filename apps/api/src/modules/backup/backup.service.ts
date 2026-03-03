@@ -23,7 +23,7 @@ export interface BackupMetadata {
 
 export interface BackupStatus {
   jobId: string;
-  status: 'active' | 'completed' | 'failed' | 'waiting' | 'delayed';
+  status: 'active' | 'completed' | 'failed' | 'waiting' | 'delayed' | 'paused';
   progress?: number;
   result?: unknown;
   error?: string;

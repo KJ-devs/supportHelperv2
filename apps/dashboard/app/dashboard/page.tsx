@@ -292,7 +292,7 @@ export default function DashboardPage() {
               const Icon = link.icon;
               return (
                 <Link key={link.href} href={link.href}>
-                  <Card className="h-full hover:shadow-lg transition-shadow cursor-pointer">
+                  <Card className="h-full hover:shadow-lg dark:hover:shadow-gray-700/20 transition-shadow cursor-pointer">
                     <div className="flex items-center gap-3 mb-2">
                       <Icon className="w-5 h-5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">

@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ThrottlerException } from '@nestjs/throttler';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 
 /**
  * Custom exception filter for rate limiting

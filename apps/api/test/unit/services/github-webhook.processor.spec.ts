@@ -148,6 +148,7 @@ describe('GithubWebhookProcessor', () => {
         action: 'synchronize',
         prNumber: 15,
         repository: 'owner/repo',
+        merged: false,
       });
     });
 

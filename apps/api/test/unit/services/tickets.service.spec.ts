@@ -152,6 +152,7 @@ describe('TicketsService', () => {
           userContext: dto.userContext,
           reproductionSteps: dto.reproductionSteps,
           sessionId: dto.sessionId,
+          publicId: expect.any(String),
           tenant: { connect: { id: 'tenant-123' } },
           application: { connect: { id: 'app-123' } },
           reporter: { connect: { id: 'user-123' } },

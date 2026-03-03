@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, HttpStatus, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus, Logger, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { HealthService, HealthStatus, CronJobStatus, QueueStatus } from '../monitoring/health.service';
@@ -39,7 +39,17 @@ export class HealthController {
   })
   @ApiResponse({ status: 503, description: 'Service is unhealthy' })
   async health(@Res() res: Response): Promise<void> {
-    const health = await this.healthService.getComprehensiveHealth();
+    let health: HealthStatus;
+    try {
+      health = await this.cacheService.getOrSet<HealthStatus>(
+        CacheKeys.healthComprehensive(),
+        CacheTTL.HEALTH_COMPREHENSIVE,
+        () => this.healthService.getComprehensiveHealth(),
+      );
+    } catch (error) {
+      this.logger.warn('Cache unavailable for health check, running directly', error);
+      health = await this.healthService.getComprehensiveHealth();
+    }
     const statusCode = health.status === 'unhealthy'
       ? HttpStatus.SERVICE_UNAVAILABLE
       : HttpStatus.OK;
@@ -65,7 +75,17 @@ export class HealthController {
   @ApiResponse({ status: 200, description: 'Service is ready to accept traffic' })
   @ApiResponse({ status: 503, description: 'Service is not ready' })
   async ready(@Res() res: Response): Promise<void> {
-    const isReady = await this.healthService.isReady();
+    let isReady: boolean;
+    try {
+      isReady = await this.cacheService.getOrSet<boolean>(
+        CacheKeys.healthReady(),
+        CacheTTL.HEALTH_READY,
+        () => this.healthService.isReady(),
+      );
+    } catch (error) {
+      this.logger.warn('Cache unavailable for readiness check, running directly', error);
+      isReady = await this.healthService.isReady();
+    }
     if (isReady) {
       res.status(HttpStatus.OK).json({ status: 'ok' });
     } else {

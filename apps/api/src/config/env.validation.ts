@@ -115,6 +115,14 @@ class EnvironmentVariables {
  * Validate environment variables
  */
 export function validate(config: Record<string, unknown>) {
+  // Support legacy S3 env var names
+  if (!config.S3_ACCESS_KEY_ID && config.S3_ACCESS_KEY) {
+    config.S3_ACCESS_KEY_ID = config.S3_ACCESS_KEY;
+  }
+  if (!config.S3_SECRET_ACCESS_KEY && config.S3_SECRET_KEY) {
+    config.S3_SECRET_ACCESS_KEY = config.S3_SECRET_KEY;
+  }
+
   const validatedConfig = plainToClass(EnvironmentVariables, config, {
     enableImplicitConversion: true,
   });

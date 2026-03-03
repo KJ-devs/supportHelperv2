@@ -160,7 +160,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {isMobile && (
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
             aria-label="Fermer le menu"
           >
             <X className="w-5 h-5" aria-hidden="true" />
@@ -191,27 +191,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     </div>
   );
 
-        {/* Navigation */}
-        <nav className="px-4 py-6 space-y-1">
-          {navItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-medium'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <SkipLink />
 
       {/* Desktop Sidebar — always visible on lg+ screens, no toggle */}
       <aside
@@ -253,7 +235,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="flex items-center space-x-2 sm:space-x-4">
               <ConnectionStatus isConnected={isConnected} error={socketError} />
               <ThemeToggle />
-              <span className="hidden sm:inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full">
+              <span className="hidden sm:inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full" role="status" aria-label={`Rôle: ${user.role}`}>
                 {user.role}
               </span>
             </div>
@@ -261,10 +243,19 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+        <main id="main-content" className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8" tabIndex={-1}>
           {children}
         </main>
       </div>
+
+      {/* Mobile Overlay */}
+      {sidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }

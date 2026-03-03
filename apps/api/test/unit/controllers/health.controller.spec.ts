@@ -7,6 +7,7 @@ import { CacheService } from '../../../src/cache/cache.service';
 describe('HealthController', () => {
   let controller: HealthController;
   let healthService: jest.Mocked<HealthService>;
+  let cacheService: jest.Mocked<CacheService>;
 
   const mockResponse = () => {
     const res: any = {};
@@ -38,6 +39,10 @@ describe('HealthController', () => {
           provide: CacheService,
           useValue: {
             getMetrics: jest.fn().mockReturnValue({ hits: 0, misses: 0, hitRate: '0%', total: 0 }),
+            getOrSet: jest.fn().mockImplementation((_key, _ttl, factory) => factory()),
+            get: jest.fn().mockResolvedValue(undefined),
+            set: jest.fn().mockResolvedValue(undefined),
+            del: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -45,6 +50,7 @@ describe('HealthController', () => {
 
     controller = module.get<HealthController>(HealthController);
     healthService = module.get(HealthService);
+    cacheService = module.get(CacheService);
   });
 
   it('should be defined', () => {
@@ -111,6 +117,65 @@ describe('HealthController', () => {
 
       expect(res.status).toHaveBeenCalledWith(200);
     });
+
+    it('should use cacheService.getOrSet with correct key and TTL', async () => {
+      const mockHealth = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: 100,
+        version: '0.1.0',
+        services: {},
+      };
+      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
+      const res = mockResponse();
+
+      await controller.health(res);
+
+      expect(cacheService.getOrSet).toHaveBeenCalledWith(
+        'health:comprehensive',
+        30,
+        expect.any(Function),
+      );
+    });
+
+    it('should return cached result on cache hit without calling healthService', async () => {
+      const cachedHealth = {
+        status: 'healthy',
+        timestamp: '2026-02-15T00:00:00Z',
+        uptime: 50,
+        version: '0.1.0',
+        services: { postgres: { status: 'healthy' } },
+      };
+      (cacheService.getOrSet as jest.Mock).mockResolvedValue(cachedHealth);
+      const res = mockResponse();
+
+      await controller.health(res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(cachedHealth);
+      // healthService.getComprehensiveHealth should NOT be called directly
+      // (it may be called via factory, but when cache hits, the factory is not invoked)
+      expect(healthService.getComprehensiveHealth).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to direct call when cache throws', async () => {
+      const mockHealth = {
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: 100,
+        version: '0.1.0',
+        services: {},
+      };
+      (cacheService.getOrSet as jest.Mock).mockRejectedValue(new Error('Redis connection refused'));
+      (healthService.getComprehensiveHealth as jest.Mock).mockResolvedValue(mockHealth);
+      const res = mockResponse();
+
+      await controller.health(res);
+
+      expect(healthService.getComprehensiveHealth).toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(mockHealth);
+    });
   });
 
   describe('live', () => {
@@ -126,6 +191,15 @@ describe('HealthController', () => {
       (healthService.isAlive as jest.Mock).mockReturnValue(false);
 
       expect(() => controller.live()).toThrow(ServiceUnavailableException);
+    });
+
+    it('should NOT use cache (always real-time)', () => {
+      (healthService.isAlive as jest.Mock).mockReturnValue(true);
+
+      controller.live();
+
+      expect(cacheService.getOrSet).not.toHaveBeenCalled();
+      expect(cacheService.get).not.toHaveBeenCalled();
     });
   });
 
@@ -146,6 +220,42 @@ describe('HealthController', () => {
 
       await controller.ready(res);
 
+      expect(res.status).toHaveBeenCalledWith(503);
+      expect(res.json).toHaveBeenCalledWith({ status: 'not ready' });
+    });
+
+    it('should use cacheService.getOrSet with correct key and TTL', async () => {
+      (healthService.isReady as jest.Mock).mockResolvedValue(true);
+      const res = mockResponse();
+
+      await controller.ready(res);
+
+      expect(cacheService.getOrSet).toHaveBeenCalledWith(
+        'health:ready',
+        30,
+        expect.any(Function),
+      );
+    });
+
+    it('should return cached readiness result on cache hit', async () => {
+      (cacheService.getOrSet as jest.Mock).mockResolvedValue(true);
+      const res = mockResponse();
+
+      await controller.ready(res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith({ status: 'ok' });
+      expect(healthService.isReady).not.toHaveBeenCalled();
+    });
+
+    it('should fall back to direct call when cache throws', async () => {
+      (cacheService.getOrSet as jest.Mock).mockRejectedValue(new Error('Redis down'));
+      (healthService.isReady as jest.Mock).mockResolvedValue(false);
+      const res = mockResponse();
+
+      await controller.ready(res);
+
+      expect(healthService.isReady).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(503);
       expect(res.json).toHaveBeenCalledWith({ status: 'not ready' });
     });

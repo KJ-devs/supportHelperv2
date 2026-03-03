@@ -10,6 +10,7 @@ export { Input } from './Input';
 export { Select } from './Select';
 export { Loader, PageLoader } from './Loader';
 export { Modal } from './Modal';
+export { SkipLink } from './SkipLink';
 export { Sheet } from './Sheet';
 export { MarkdownRenderer } from './MarkdownRenderer';
 export { ToastProvider, useToast } from './Toast';

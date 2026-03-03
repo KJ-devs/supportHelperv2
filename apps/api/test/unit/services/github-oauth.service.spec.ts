@@ -3,7 +3,6 @@ import { BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GithubOAuthService } from '../../../src/modules/github/services/github-oauth.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
-import { EncryptionService } from '../../../src/common/services/encryption.service';
 
 jest.mock('@octokit/rest', () => ({
   Octokit: jest.fn().mockImplementation(() => ({
@@ -35,17 +34,13 @@ describe('GithubOAuthService', () => {
     'app.dashboardUrl': 'http://localhost:3000',
   };
 
-  const mockEncryptionService = {
-    encrypt: jest.fn((value: string) => `encrypted:${value}`),
-    decrypt: jest.fn((value: string) => value.replace('encrypted:', '')),
-  };
-
+  // Mock data simulates values after Prisma middleware auto-decryption
   const mockConnection = {
     id: 'conn-123',
     tenantId: 'tenant-123',
     installationId: BigInt(0),
-    accessToken: 'encrypted:gho_test',
-    refreshToken: 'encrypted:refresh_token',
+    accessToken: 'gho_test',
+    refreshToken: 'refresh_token',
     tokenExpiresAt: new Date(Date.now() + 86400000),
     repos: ['owner/repo'],
     createdAt: new Date(),
@@ -72,10 +67,6 @@ describe('GithubOAuthService', () => {
           useValue: {
             get: jest.fn((key: string) => configValues[key]),
           },
-        },
-        {
-          provide: EncryptionService,
-          useValue: mockEncryptionService,
         },
       ],
     }).compile();
@@ -129,9 +120,9 @@ describe('GithubOAuthService', () => {
 
       await service.saveConnection('tenant-123', 'gho_token', BigInt(0));
 
-      expect(mockEncryptionService.encrypt).toHaveBeenCalledWith('gho_token');
+      // Plaintext tokens are passed; Prisma middleware auto-encrypts on write
       expect(prisma.githubConnection.create).toHaveBeenCalledWith({
-        data: expect.objectContaining({ accessToken: 'encrypted:gho_token' }),
+        data: expect.objectContaining({ accessToken: 'gho_token' }),
       });
     });
 
@@ -141,10 +132,10 @@ describe('GithubOAuthService', () => {
 
       await service.saveConnection('tenant-123', 'new_token');
 
-      expect(mockEncryptionService.encrypt).toHaveBeenCalledWith('new_token');
+      // Plaintext tokens are passed; Prisma middleware auto-encrypts on write
       expect(prisma.githubConnection.update).toHaveBeenCalledWith({
         where: { id: 'conn-123' },
-        data: expect.objectContaining({ accessToken: 'encrypted:new_token' }),
+        data: expect.objectContaining({ accessToken: 'new_token' }),
       });
     });
 

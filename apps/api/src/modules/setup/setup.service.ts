@@ -153,10 +153,10 @@ export class SetupService {
       where: { key: 'smtp_config' },
       create: {
         key: 'smtp_config',
-        value: config,
+        value: JSON.parse(JSON.stringify(config)),
       },
       update: {
-        value: config,
+        value: JSON.parse(JSON.stringify(config)),
       },
     });
 
@@ -267,10 +267,10 @@ export class SetupService {
       where: { key: 'setup_progress' },
       create: {
         key: 'setup_progress',
-        value: progress,
+        value: JSON.parse(JSON.stringify(progress)),
       },
       update: {
-        value: progress,
+        value: JSON.parse(JSON.stringify(progress)),
       },
     });
 

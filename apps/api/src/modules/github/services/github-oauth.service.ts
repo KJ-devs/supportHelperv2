@@ -1,7 +1,6 @@
 import { Injectable, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../prisma/prisma.service';
-import { EncryptionService } from '../../../common/services/encryption.service';
 import { Octokit } from '@octokit/rest';
 import * as crypto from 'crypto';
 
@@ -40,7 +39,6 @@ export class GithubOAuthService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
-    private encryption: EncryptionService,
   ) {
     this.clientId = this.config.get('github.clientId') || '';
     this.clientSecret = this.config.get('github.clientSecret') || '';
@@ -210,11 +208,7 @@ export class GithubOAuthService {
   ) {
     const tokenExpiresAt = expiresIn ? new Date(Date.now() + expiresIn * 1000) : null;
 
-    // Encrypt tokens before storing
-    const encryptedAccessToken = this.encryption.encrypt(accessToken);
-    const encryptedRefreshToken = refreshToken ? this.encryption.encrypt(refreshToken) : undefined;
-
-    // Check if connection already exists
+    // Prisma encryption middleware auto-encrypts accessToken and refreshToken on write
     const existing = await this.prisma.githubConnection.findFirst({
       where: { tenantId },
     });
@@ -223,8 +217,8 @@ export class GithubOAuthService {
       return this.prisma.githubConnection.update({
         where: { id: existing.id },
         data: {
-          accessToken: encryptedAccessToken,
-          refreshToken: encryptedRefreshToken,
+          accessToken,
+          refreshToken,
           tokenExpiresAt,
         },
       });
@@ -234,8 +228,8 @@ export class GithubOAuthService {
       data: {
         tenantId,
         installationId,
-        accessToken: encryptedAccessToken,
-        refreshToken: encryptedRefreshToken,
+        accessToken,
+        refreshToken,
         tokenExpiresAt,
         repos: [],
       },
@@ -284,22 +278,8 @@ export class GithubOAuthService {
       throw new UnauthorizedException('GitHub token expired, please reconnect');
     }
 
-    // Decrypt access token before use (with fallback for legacy plaintext tokens)
-    let decryptedToken: string;
-    try {
-      decryptedToken = this.encryption.decrypt(connection.accessToken);
-    } catch {
-      // Token is stored in plaintext (pre-encryption migration) — use as-is
-      // and re-encrypt it for future use
-      this.logger.warn('Found legacy plaintext GitHub token, migrating to encrypted storage');
-      decryptedToken = connection.accessToken;
-      const encryptedToken = this.encryption.encrypt(decryptedToken);
-      await this.prisma.githubConnection.update({
-        where: { id: connection.id },
-        data: { accessToken: encryptedToken },
-      });
-    }
-    return new Octokit({ auth: decryptedToken });
+    // accessToken is auto-decrypted by Prisma encryption middleware
+    return new Octokit({ auth: connection.accessToken });
   }
 
   /**

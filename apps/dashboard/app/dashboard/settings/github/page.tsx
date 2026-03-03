@@ -40,6 +40,23 @@ function GitHubSettingsContent() {
   // Applications (for repo linking)
   const [applications, setApplications] = useState<Application[]>([]);
 
+  // Selected application for settings (independent from RepoSelector)
+  const [selectedSettingsAppId, setSelectedSettingsAppId] = useState<string>('');
+  const [appConfig, setAppConfig] = useState<any>(null);
+  const [configLoading, setConfigLoading] = useState(false);
+
+  // Agent settings form state
+  const [agentMode, setAgentMode] = useState<'auto' | 'review_plan' | 'review_all'>('auto');
+  const [maxRetries, setMaxRetries] = useState(3);
+  const [timeoutMinutes, setTimeoutMinutes] = useState(5);
+  const [savingAgent, setSavingAgent] = useState(false);
+
+  // Merge settings form state
+  const [autoMergeEnabled, setAutoMergeEnabled] = useState(false);
+  const [mergeStrategy, setMergeStrategy] = useState<'squash' | 'merge' | 'rebase'>('squash');
+  const [requiredReviews, setRequiredReviews] = useState(1);
+  const [savingMerge, setSavingMerge] = useState(false);
+
   // Toast
   const toast = useToast();
 
@@ -106,6 +123,23 @@ function GitHubSettingsContent() {
     try {
       const data = await applicationsApi.getApplications();
       setApplications(data || []);
+      // Auto-select first linked app for settings
+      if (data && data.length > 0) {
+        const linkedApps = await Promise.all(
+          data.map(async (app) => {
+            try {
+              const config = await githubApi.getGithubConfig(app.id);
+              return config?.repo ? app.id : null;
+            } catch {
+              return null;
+            }
+          })
+        );
+        const firstLinked = linkedApps.find((id) => id !== null);
+        if (firstLinked) {
+          setSelectedSettingsAppId(firstLinked);
+        }
+      }
     } catch {
       // Applications may not be loaded yet
     }
@@ -449,6 +483,7 @@ function GitHubSettingsContent() {
               applications={applications}
               onRepoLinked={() => {
                 fetchApplications();
+                fetchAppConfig();
               }}
               onToast={showToast}
             />

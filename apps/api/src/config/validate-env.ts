@@ -11,6 +11,15 @@
  */
 
 import { InternalServerErrorException } from '@nestjs/common';
+import { config } from 'dotenv';
+import { resolve } from 'path';
+
+// Load .env files before validation (same order as ConfigModule)
+const root = resolve(__dirname, '..', '..', '..', '..');
+config({ path: resolve(root, '.env.local'), override: false });
+config({ path: resolve(root, '.env'), override: false });
+config({ path: resolve(__dirname, '..', '..', '.env.local'), override: false });
+config({ path: resolve(__dirname, '..', '..', '.env'), override: false });
 
 interface ValidationError {
   variable: string;
@@ -23,6 +32,7 @@ interface ValidationError {
  */
 const REQUIRED_VARIABLES: Array<{
   name: string;
+  aliases?: string[];
   validator?: (value: string) => boolean;
   setupHint?: string;
 }> = [
@@ -66,10 +76,12 @@ const REQUIRED_VARIABLES: Array<{
   },
   {
     name: 'S3_ACCESS_KEY_ID',
+    aliases: ['S3_ACCESS_KEY'],
     setupHint: 'S3/MinIO access key ID (e.g., minioadmin for local MinIO)',
   },
   {
     name: 'S3_SECRET_ACCESS_KEY',
+    aliases: ['S3_SECRET_KEY'],
     setupHint: 'S3/MinIO secret access key (e.g., minioadmin for local MinIO)',
   },
   {
@@ -128,35 +140,22 @@ const OPTIONAL_VARIABLES = [
  * @throws Error if validation fails
  */
 export function validateEnvironmentVariables(): void {
-  // Load .env.local before validation (dotenv is already in ConfigModule dependencies)
-  const path = require('path');
-  const fs = require('fs');
-  const dotenv = require('dotenv');
-
-  // Try to load .env.local from multiple possible locations
-  const envPaths = [
-    path.resolve(process.cwd(), '.env.local'),
-    path.resolve(process.cwd(), '../../.env.local'),
-    path.resolve(__dirname, '../../../.env.local'),
-    path.resolve(__dirname, '../../../../.env.local'),
-  ];
-
-  for (const envPath of envPaths) {
-    if (fs.existsSync(envPath)) {
-      const result = dotenv.config({ path: envPath, override: true });
-      // Debug: check if JWT_SECRET is loaded
-      console.log('[validate-env] Loaded from:', envPath);
-      console.log('[validate-env] JWT_SECRET present:', !!process.env.JWT_SECRET);
-      console.log('[validate-env] JWT_SECRET length:', process.env.JWT_SECRET?.length || 0);
-      break;
-    }
-  }
-
   const errors: ValidationError[] = [];
 
   // Validate required variables
-  for (const { name, validator, setupHint } of REQUIRED_VARIABLES) {
-    const value = process.env[name];
+  for (const { name, aliases, validator, setupHint } of REQUIRED_VARIABLES) {
+    let value = process.env[name];
+
+    // Check aliases if primary name is not set
+    if ((!value || value.trim() === '') && aliases) {
+      for (const alias of aliases) {
+        if (process.env[alias] && process.env[alias].trim() !== '') {
+          value = process.env[alias];
+          process.env[name] = value; // Promote alias to expected name
+          break;
+        }
+      }
+    }
 
     if (!value || value.trim() === '') {
       errors.push({

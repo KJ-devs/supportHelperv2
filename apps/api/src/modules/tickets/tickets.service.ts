@@ -2,14 +2,16 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   Inject,
   Logger,
   forwardRef,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { nanoid } from 'nanoid';
 import { PrismaService } from '../../prisma/prisma.service';
-import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto } from './dto';
+import { CreateTicketDto, UpdateTicketDto, FilterTicketsDto, BulkTicketDto } from './dto';
 import { TicketsGateway } from './tickets.gateway';
 import { CacheService, CacheKeys, CacheTTL } from '../../cache';
 import { Prisma, TicketStatus } from '@prisma/client';

@@ -172,19 +172,14 @@ export default function ApplicationsPage() {
 
         {/* Empty State */}
         {!isLoading && applications.length === 0 && (
-          <Card className="text-center py-12">
-            <AppWindow className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
-            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-              Aucune application
-            </h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Créez votre première application pour commencer à recevoir des tickets.
-            </p>
-            <Button onClick={handleCreate} className="flex items-center gap-2">
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              Créer une application
-            </Button>
-          </Card>
+          <EmptyState
+            icon="📱"
+            title="Aucune application"
+            description="Créez votre première application pour commencer à recevoir des tickets."
+            actionLabel="Créer une application"
+            onAction={handleCreate}
+            variant="bordered"
+          />
         )}
 
         {/* Applications Grid */}

@@ -27,6 +27,7 @@ import {
   GithubInstallationService,
   ProjectGithubConfigService,
   TemplateRendererService,
+  AutoMergeService,
 } from './services';
 
 // Controllers
@@ -117,6 +118,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubInstallationService,
     ProjectGithubConfigService,
     TemplateRendererService,
+    AutoMergeService,
     // BullMQ processor
     GithubWebhookProcessor,
   ],
@@ -130,6 +132,7 @@ import { GithubWebhookProcessor } from './processors';
     GithubInstallationService,
     ProjectGithubConfigService,
     TemplateRendererService,
+    AutoMergeService,
   ],
 })
 export class GithubModule {}

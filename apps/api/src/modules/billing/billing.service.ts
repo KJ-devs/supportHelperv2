@@ -24,16 +24,28 @@ export interface SubscriptionStatus {
 @Injectable()
 export class BillingService {
   private readonly logger = new Logger(BillingService.name);
-  private readonly stripe: Stripe;
+  private readonly stripe: Stripe | null;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY') || '';
-    this.stripe = new Stripe(secretKey, {
-      apiVersion: '2026-02-25.clover',
-    });
+    const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
+    if (secretKey) {
+      this.stripe = new Stripe(secretKey, {
+        apiVersion: '2026-02-25.clover',
+      });
+    } else {
+      this.logger.warn('STRIPE_SECRET_KEY not set — billing features disabled');
+      this.stripe = null;
+    }
+  }
+
+  private ensureStripe(): Stripe {
+    if (!this.stripe) {
+      throw new BadRequestException('Billing is not configured (STRIPE_SECRET_KEY missing)');
+    }
+    return this.stripe;
   }
 
   // ─── Internal helpers ──────────────────────────────────────────────────────
@@ -113,7 +125,7 @@ export class BillingService {
     }
 
     // Create a new Stripe customer
-    const customer = await this.stripe.customers.create({
+    const customer = await this.ensureStripe().customers.create({
       name: tenant.name,
       metadata: { tenantId },
     });
@@ -147,7 +159,7 @@ export class BillingService {
     const customerId = await this.getOrCreateCustomer(tenantId);
     const dashboardUrl = this.configService.get<string>('DASHBOARD_URL') || 'http://localhost:3000';
 
-    const session = await this.stripe.checkout.sessions.create({
+    const session = await this.ensureStripe().checkout.sessions.create({
       customer: customerId,
       payment_method_types: ['card'],
       mode: 'subscription',
@@ -181,7 +193,7 @@ export class BillingService {
 
     const dashboardUrl = this.configService.get<string>('DASHBOARD_URL') || 'http://localhost:3000';
 
-    const session = await this.stripe.billingPortal.sessions.create({
+    const session = await this.ensureStripe().billingPortal.sessions.create({
       customer: tenant.stripeCustomerId,
       return_url: `${dashboardUrl}/dashboard/settings/billing`,
     });
@@ -215,7 +227,7 @@ export class BillingService {
     }
 
     // Fetch active subscriptions from Stripe
-    const subscriptions = await this.stripe.subscriptions.list({
+    const subscriptions = await this.ensureStripe().subscriptions.list({
       customer: tenant.stripeCustomerId,
       status: 'active',
       limit: 1,
@@ -225,7 +237,7 @@ export class BillingService {
 
     if (!subscription) {
       // Check for trials or other statuses
-      const allSubscriptions = await this.stripe.subscriptions.list({
+      const allSubscriptions = await this.ensureStripe().subscriptions.list({
         customer: tenant.stripeCustomerId,
         limit: 1,
       });
@@ -271,7 +283,7 @@ export class BillingService {
       return;
     }
 
-    const subscription = await this.stripe.subscriptions.retrieve(
+    const subscription = await this.ensureStripe().subscriptions.retrieve(
       session.subscription as string,
     );
 
@@ -373,6 +385,6 @@ export class BillingService {
    */
   constructWebhookEvent(rawBody: Buffer, signature: string): Stripe.Event {
     const webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '';
-    return this.stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    return this.ensureStripe().webhooks.constructEvent(rawBody, signature, webhookSecret);
   }
 }

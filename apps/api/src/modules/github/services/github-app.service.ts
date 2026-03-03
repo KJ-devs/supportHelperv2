@@ -54,11 +54,12 @@ export class GithubAppService {
     }
 
     const now = Math.floor(Date.now() / 1000);
+    const iat = now - 60;
 
     const payload = {
       iss: this.appId,
-      iat: now - 60,
-      exp: now + 600,
+      iat,
+      exp: iat + 600,
     };
 
     try {

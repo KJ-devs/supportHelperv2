@@ -46,6 +46,7 @@ export class AiConfigController {
         provider: 'anthropic',
         model: 'claude-sonnet-4-6',
         maskedApiKey: null,
+        endpoint: null,
         settings: {},
       };
     }
@@ -66,7 +67,7 @@ export class AiConfigController {
   }
 
   @Post('validate-key')
-  @ApiOperation({ summary: 'Validate an Anthropic API key' })
+  @ApiOperation({ summary: 'Validate an AI provider API key/configuration' })
   @ApiResponse({
     status: 200,
     description: 'Validation result',
