@@ -45,6 +45,12 @@ class InternalAnalyzeDto {
   @IsString()
   @IsNotEmpty()
   tenantId: string;
+
+  n1Context?: {
+    reasoning: string;
+    investigationHints?: string[];
+    similarTicketIds?: string[];
+  };
 }
 
 @ApiTags('AI Agent V2')
@@ -209,7 +215,7 @@ export class AgentV2Controller {
   @UseGuards(InternalAuthGuard)
   @ApiExcludeEndpoint()
   async internalAnalyze(@Body() dto: InternalAnalyzeDto) {
-    const diagnosis = await this.deepAnalysis.analyze(dto.ticketId, dto.tenantId);
+    const diagnosis = await this.deepAnalysis.analyze(dto.ticketId, dto.tenantId, dto.n1Context);
     return {
       ticketId: dto.ticketId,
       diagnosisFound: diagnosis !== null,

@@ -31,6 +31,11 @@ export interface Ticket {
   resolvedAt?: string;
   closedAt?: string;
 
+  // N1 Triage Assessment
+  n1Assessment?: N1Assessment | null;
+  n1Decision?: string | null;
+  n1AssessedAt?: string | null;
+
   // Relations
   application?: Application;
   reporter?: User;
@@ -93,6 +98,17 @@ export interface AgentMessage {
   content: string;
   channel: 'chat' | 'system' | 'internal';
   createdAt: string;
+}
+
+export interface N1Assessment {
+  decision: 'no_fix_needed' | 'duplicate' | 'escalate_n2';
+  confidence: number;
+  reasoning: string;
+  duplicateTicketId?: string;
+  userResponse: string;
+  escalationContext?: string;
+  investigationHints?: string[];
+  similarTicketIds?: string[];
 }
 
 // Query Parameters

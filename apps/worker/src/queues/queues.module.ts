@@ -11,6 +11,7 @@ export const QUEUE_NAMES = {
   CODEBASE_INDEXING: 'codebase-indexing',
   DEEP_ANALYSIS: 'deep-analysis',
   TRIAGE: 'triage',
+  N1_TRIAGE: 'n1-triage',
   BACKUP: 'backup',
   USAGE_SNAPSHOT: 'usage-snapshot',
 } as const;
@@ -149,6 +150,20 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
     // Rate limiter: pro = 100 jobs/min, free = 20 jobs/min per tenant key.
     BullModule.registerQueue({
       name: QUEUE_NAMES.TRIAGE,
+      defaultJobOptions: {
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 5000,
+        },
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      },
+    }),
+
+    // N1 Triage Queue (Level 1 rapid assessment)
+    BullModule.registerQueue({
+      name: QUEUE_NAMES.N1_TRIAGE,
       defaultJobOptions: {
         attempts: 3,
         backoff: {

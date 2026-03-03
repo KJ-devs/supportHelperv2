@@ -5,6 +5,7 @@ import { AgentWorker } from '../workers/agent.worker';
 import { IntegrationSyncWorker } from '../workers/integration-sync.worker';
 import { CodebaseIndexingWorker } from '../workers/codebase-indexing.worker';
 import { DeepAnalysisWorker } from '../workers/deep-analysis.worker';
+import { N1TriageWorker } from '../workers/n1-triage.worker';
 import { TriageWorker } from '../workers/triage.worker';
 import { BackupWorker } from '../workers/backup.worker';
 import { DeadLetterWorker } from '../workers/dead-letter.worker';
@@ -23,6 +24,7 @@ import { UsageSnapshotProcessor } from './usage-snapshot.processor';
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
     DeepAnalysisWorker,
+    N1TriageWorker,
     TriageWorker,
     BackupWorker,
     DeadLetterWorker,
@@ -35,6 +37,7 @@ import { UsageSnapshotProcessor } from './usage-snapshot.processor';
     IntegrationSyncWorker,
     CodebaseIndexingWorker,
     DeepAnalysisWorker,
+    N1TriageWorker,
     TriageWorker,
     BackupWorker,
     DeadLetterWorker,

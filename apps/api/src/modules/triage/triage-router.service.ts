@@ -26,7 +26,7 @@ export class TriageRouterService {
 
   constructor(
     private readonly prisma: PrismaService,
-    @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue,
+    @InjectQueue('n1-triage') private readonly n1TriageQueue: Queue,
     @InjectQueue('agent-orchestration')
     private readonly agentQueue: Queue,
   ) {}
@@ -100,23 +100,22 @@ export class TriageRouterService {
       };
     }
 
-    // Enqueue deep analysis with severity-based priority
+    // Enqueue N1 triage (Level 1 assessment before deep analysis)
     const ticket = await this.prisma.ticket.findUnique({
       where: { id: ticketId },
       select: { severity: true },
     });
     const priority = severityToBullMQPriority(ticket?.severity);
 
-    await this.deepAnalysisQueue.add(
-      'analyze',
+    await this.n1TriageQueue.add(
+      'assess',
       { ticketId, tenantId, applicationId },
       {
         priority,
         attempts: 3,
-        backoff: { type: 'exponential', delay: 30000 },
-        delay: 5000,
-        removeOnComplete: 50,
-        removeOnFail: 100,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: 100,
+        removeOnFail: 500,
       },
     );
 
@@ -127,7 +126,7 @@ export class TriageRouterService {
       data: { status: 'analyzing' },
     });
 
-    this.logger.log(`Ticket ${ticketId}: routed to deep_analysis`);
+    this.logger.log(`Ticket ${ticketId}: routed to n1_triage`);
     return { action: 'deep_analysis', needsReview };
   }
 

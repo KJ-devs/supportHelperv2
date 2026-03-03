@@ -25,7 +25,7 @@ import { TriageController } from './triage.controller';
         removeOnFail: 500,
       },
     }),
-    BullModule.registerQueue({ name: 'deep-analysis' }),
+    BullModule.registerQueue({ name: 'n1-triage' }),
     BullModule.registerQueue({ name: 'agent-orchestration' }),
   ],
   controllers: [TriageController],

@@ -51,7 +51,15 @@ export class DeepAnalysisService {
     @Optional() private readonly ticketsAiService: TicketsAIService,
   ) {}
 
-  async analyze(ticketId: string, tenantId: string): Promise<Diagnosis | null> {
+  async analyze(
+    ticketId: string,
+    tenantId: string,
+    n1Context?: {
+      reasoning: string;
+      investigationHints?: string[];
+      similarTicketIds?: string[];
+    },
+  ): Promise<Diagnosis | null> {
     const ticket = await this.loadTicketWithContext(ticketId, tenantId);
 
     if (!ticket) {
@@ -111,7 +119,19 @@ export class DeepAnalysisService {
       }
     }
 
-    const systemPrompt = this.buildAgentSystemPrompt(ticket, repoStructure, videoContext, visualCues, similarTickets);
+    let systemPrompt = this.buildAgentSystemPrompt(ticket, repoStructure, videoContext, visualCues, similarTickets);
+
+    // Enrich system prompt with N1 triage context if available
+    if (n1Context) {
+      systemPrompt += '\n\n## N1 Triage Assessment';
+      systemPrompt += `\nReason for escalation: ${n1Context.reasoning}`;
+      if (n1Context.investigationHints && n1Context.investigationHints.length > 0) {
+        systemPrompt += `\nInvestigation hints: ${n1Context.investigationHints.join(', ')}`;
+      }
+      if (n1Context.similarTicketIds && n1Context.similarTicketIds.length > 0) {
+        systemPrompt += `\nSimilar ticket IDs (check their diagnosis for context): ${n1Context.similarTicketIds.join(', ')}`;
+      }
+    }
 
     const userPrompt = `A new ticket has been submitted. Please investigate the codebase to find the root cause.
 
@@ -135,7 +155,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
         status: ticket.status,
       },
       tenantId,
-      maxIterations: 15,
+      maxIterations: n1Context?.investigationHints?.length ? 10 : 15,
       maxTokens: 4096,
       timeoutMs: 2 * 60 * 1000,
       ticketId,

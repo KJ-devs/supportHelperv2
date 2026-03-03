@@ -261,6 +261,11 @@ export interface DeepAnalysisJobData {
   ticketId: string;
   tenantId: string;
   applicationId: string;
+  n1Context?: {
+    reasoning: string;
+    investigationHints?: string[];
+    similarTicketIds?: string[];
+  };
 }
 
 export interface DeepAnalysisResult {
@@ -287,6 +292,24 @@ export interface TriageWorkerResult {
   success: boolean;
   ticketId: string;
   routedTo: string | null;
+  duration: number;
+  error?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// N1 TRIAGE JOBS (Level 1 rapid assessment)
+// ═══════════════════════════════════════════════════════════════════════
+
+export interface N1TriageJobData {
+  ticketId: string;
+  tenantId: string;
+  applicationId: string;
+}
+
+export interface N1TriageResult {
+  success: boolean;
+  ticketId: string;
+  decision: string | null;
   duration: number;
   error?: string;
 }

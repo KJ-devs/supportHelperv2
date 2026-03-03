@@ -10,6 +10,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
+import { agentTasksApi } from '@/lib/api/agent-tasks';
 import { getTicketDiagnosis } from '@/lib/api/agent-v2';
 import type { Ticket } from '@/lib/types/ticket';
 import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
@@ -17,7 +18,9 @@ import { DiagnosisPanelV3A } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { AgentSection } from '@/components/agent-chat/AgentSection';
 import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button, ConfirmModal, useToast } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
-import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import { N1AssessmentBadge } from '@/components/n1-assessment/N1AssessmentBadge';
+import type { N1Assessment } from '@/lib/types/ticket';
+import { AlertTriangle, RefreshCw, Trash2, Bot } from 'lucide-react';
 import { useTicketSocket, type AgentEscalatedToN2Event } from '@/hooks/useTicketSocket';
 
 // --- Collapsible section header ---
@@ -65,6 +68,7 @@ export default function TicketDetailPage() {
 
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [isDiagnosisLoading, setIsDiagnosisLoading] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Media pre-signed URLs
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
@@ -161,6 +165,19 @@ export default function TicketDetailPage() {
     fetchDiagnosis();
   }, [fetchTicket, fetchDiagnosis]);
 
+  const handleTriggerAnalysis = async () => {
+    try {
+      setIsAnalyzing(true);
+      const task = await agentTasksApi.triggerAnalysis(ticketId);
+      toast.success('Analyse IA lancee');
+      router.push(`/dashboard/agent-tasks/${task.id}`);
+    } catch (err: any) {
+      toast.error(err.message || 'Impossible de lancer l\'analyse');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
   if (authLoading || isLoading) {
     return <PageLoader />;
   }
@@ -185,6 +202,16 @@ export default function TicketDetailPage() {
 
         {/* Right: actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={handleTriggerAnalysis}
+            isLoading={isAnalyzing}
+            className="flex items-center gap-1.5"
+          >
+            <Bot className="w-3.5 h-3.5" aria-hidden="true" />
+            Analyser
+          </Button>
           <Button variant="ghost" size="sm" onClick={handleRefresh} className="flex items-center gap-1.5">
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
@@ -272,6 +299,17 @@ export default function TicketDetailPage() {
                   )}
                 </div>
               </div>
+
+              {/* ── N1 ASSESSMENT ── */}
+              {ticket.n1Decision && (
+                <N1AssessmentBadge
+                  assessment={ticket.n1Assessment as N1Assessment | null}
+                  decision={ticket.n1Decision}
+                  assessedAt={ticket.n1AssessedAt}
+                  ticketId={ticketId}
+                  onOverride={handleRefresh}
+                />
+              )}
 
               <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
 

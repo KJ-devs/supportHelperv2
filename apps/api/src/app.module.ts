@@ -84,6 +84,9 @@ import { SsoModule } from './modules/auth/sso/sso.module';
 // Triage (Automatic ticket classification & routing)
 import { TriageModule } from './modules/triage/triage.module';
 
+// N1 Triage (Level 1 rapid assessment before deep analysis)
+import { N1TriageModule } from './modules/n1-triage/n1-triage.module';
+
 // Billing (Stripe subscriptions)
 import { BillingModule } from './modules/billing/billing.module';
 
@@ -234,6 +237,9 @@ import { AdminModule } from './modules/admin/admin.module';
 
     // Triage (Automatic ticket classification & routing)
     TriageModule,
+
+    // N1 Triage (Level 1 rapid assessment before deep analysis)
+    N1TriageModule,
 
     // Billing (Stripe subscriptions)
     BillingModule,

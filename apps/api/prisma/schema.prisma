@@ -153,6 +153,11 @@ model Ticket {
   diagnosis          Json?     @map("diagnosis") @db.JsonB
   diagnosisUpdatedAt DateTime? @map("diagnosis_updated_at")
 
+  // N1 Triage Assessment
+  n1Assessment       Json?     @map("n1_assessment") @db.JsonB
+  n1AssessedAt       DateTime? @map("n1_assessed_at")
+  n1Decision         String?   @map("n1_decision") @db.VarChar(30)
+
   // Vector Embedding (pgvector) — unified to text-embedding-3-small (1536d)
   embedding          Unsupported("vector(1536)")?
 

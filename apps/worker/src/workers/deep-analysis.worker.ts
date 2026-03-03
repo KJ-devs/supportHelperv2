@@ -107,7 +107,7 @@ export class DeepAnalysisWorker extends WorkerHost {
           'x-internal-secret': internalSecret,
           Authorization: `Bearer ${serviceJwt}`,
         },
-        body: JSON.stringify({ ticketId, tenantId }),
+        body: JSON.stringify({ ticketId, tenantId, n1Context: job.data.n1Context }),
       });
 
       await job.updateProgress(90);
