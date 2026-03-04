@@ -383,6 +383,18 @@ After completing a US, append a summary here then `/clear` the context.
 - **Remaining**: rien
 - **Date**: 2026-03-04
 
+## [US-AGENT-05] #254 QueueMonitorService et endpoint métriques — DONE ✅
+- **Files**:
+  - `apps/api/src/modules/agent/queue-monitor.service.ts` (NEW) — QueueMonitorService injectable
+  - `apps/api/src/modules/agent/agent.module.ts` — added 5 extra queue registrations + QueueMonitorService provider/export
+  - `apps/api/src/modules/admin/admin.controller.ts` (NEW) — GET /api/admin/queue-metrics
+  - `apps/api/src/modules/admin/admin.module.ts` (NEW) — AdminModule importing AgentModule
+  - `apps/api/src/app.module.ts` — registered AdminModule
+- **Changes**: QueueMonitorService collects metrics for 6 queues (agent-orchestration, triage, deep-analysis, video-analysis, github-sync, integration-sync) via `getJobCounts()`. Computes avg processing time from last 100 completed jobs and failure rate. Endpoint secured with `JwtAuthGuard + RolesGuard + @Roles(OWNER, ADMIN)`.
+- **Decisions**: AdminModule is a thin controller module that imports AgentModule (which owns QueueMonitorService). `@Optional`-safe: queue errors are caught per-queue and return null metrics. No new test files required (no unit test criteria in AC).
+- **Remaining**: rien
+- **Date**: 2026-03-04
+
 ## [US-AGENT-02] #251 Définir AgentHandoffContext dans packages/shared — DONE ✅
 - **Files**: `packages/shared/src/types/agent-context.ts` (NEW), `packages/shared/src/index.ts`
 - **Changes**: Interface `AgentHandoffContext` + sous-types créés et exportés (`TriageType`, `TriageSeverity`, `TriageRoute`, `AgentRole`, `N2Complexity`, `DecisionTraceEntry`, `TriageDecision`, `N1Analysis`, `N2Plan`)

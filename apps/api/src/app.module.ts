@@ -87,6 +87,9 @@ import { TriageModule } from './modules/triage/triage.module';
 // Billing (Stripe subscriptions)
 import { BillingModule } from './modules/billing/billing.module';
 
+// Admin (Queue metrics & platform management)
+import { AdminModule } from './modules/admin/admin.module';
+
 /**
  * Root Application Module
  *
@@ -234,6 +237,9 @@ import { BillingModule } from './modules/billing/billing.module';
 
     // Billing (Stripe subscriptions)
     BillingModule,
+
+    // Admin (Queue metrics & platform management)
+    AdminModule,
   ],
   providers: [
     // Global rate limiting guard

@@ -4,6 +4,7 @@ import { AgentService } from './agent.service';
 import { AgentController } from './agent.controller';
 import { AgentGateway } from './agent.gateway';
 import { WsJwtGuard } from './ws-jwt.guard';
+import { QueueMonitorService } from './queue-monitor.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
 import { AuthModule } from '../../auth/auth.module';
@@ -17,21 +18,28 @@ import { NotificationModule } from '../notifications/notification.module';
     AuthModule,
     forwardRef(() => TicketsModule),
     forwardRef(() => NotificationModule),
-    BullModule.registerQueue({
-      name: 'agent-orchestration',
-      defaultJobOptions: {
-        attempts: 5,
-        backoff: {
-          type: 'exponential',
-          delay: 60000,
+    BullModule.registerQueue(
+      {
+        name: 'agent-orchestration',
+        defaultJobOptions: {
+          attempts: 5,
+          backoff: {
+            type: 'exponential',
+            delay: 60000,
+          },
+          removeOnComplete: 100,
+          removeOnFail: 500,
         },
-        removeOnComplete: 100,
-        removeOnFail: 500,
       },
-    }),
+      { name: 'triage' },
+      { name: 'deep-analysis' },
+      { name: 'video-analysis' },
+      { name: 'github-sync' },
+      { name: 'integration-sync' },
+    ),
   ],
   controllers: [AgentController],
-  providers: [AgentService, AgentGateway, WsJwtGuard],
-  exports: [AgentService],
+  providers: [AgentService, AgentGateway, WsJwtGuard, QueueMonitorService],
+  exports: [AgentService, QueueMonitorService],
 })
 export class AgentModule {}
