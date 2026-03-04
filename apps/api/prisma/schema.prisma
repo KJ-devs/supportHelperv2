@@ -40,6 +40,7 @@ model Tenant {
   auditLogs               AuditLog[]
   ssoConfig               SsoConfig?
   archivedDeadLetterJobs  ArchivedDeadLetterJob[]
+  ticketRelations         TicketRelation[]
 
   @@map("tenants")
 }
@@ -174,6 +175,8 @@ model Ticket {
   ticketEvents         TicketEvent[]
   notificationLogs     NotificationLog[]
   ticketMessages       TicketMessage[]
+  relationsAsSource    TicketRelation[] @relation("SourceTicket")
+  relationsAsTarget    TicketRelation[] @relation("TargetTicket")
 
   @@index([tenantId])
   @@index([applicationId])
@@ -789,4 +792,36 @@ model ArchivedDeadLetterJob {
   @@index([ticketId])
   @@index([archivedAt]) // for cleanup queries
   @@map("archived_dead_letter_jobs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// TICKET RELATIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+enum TicketRelationType {
+  duplicate
+  similar
+  related
+}
+
+model TicketRelation {
+  id              String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId        String             @map("tenant_id") @db.Uuid
+  sourceTicketId  String             @map("source_ticket_id") @db.Uuid
+  targetTicketId  String             @map("target_ticket_id") @db.Uuid
+  relationType    TicketRelationType @map("relation_type")
+  createdBy       String             @map("created_by") @db.VarChar(20) // "ai" or "manual"
+  confidence      Decimal?           @db.Decimal(3, 2)
+  metadata        Json?              @default("{}") @db.JsonB
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sourceTicket Ticket @relation("SourceTicket", fields: [sourceTicketId], references: [id], onDelete: Cascade)
+  targetTicket Ticket @relation("TargetTicket", fields: [targetTicketId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceTicketId, targetTicketId, relationType])
+  @@index([sourceTicketId])
+  @@index([targetTicketId])
+  @@index([tenantId])
+  @@map("ticket_relations")
 }
