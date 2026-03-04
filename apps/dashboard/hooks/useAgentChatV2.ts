@@ -46,7 +46,7 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     setSessionId(null);
     sessionIdRef.current = null;
     autoAnalysisTriggered.current = false;
-    setInitCounter((c) => c + 1);
+    setInitCounter(c => c + 1);
   }, []);
 
   // Initialize session and load messages
@@ -103,7 +103,7 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     const token = getAuthToken();
     if (!token) return;
 
-    const socket = io(`${API_URL}/agent`, {
+    const socket = io(`${API_URL}/agent-v2`, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -115,15 +115,15 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     socketRef.current = socket;
 
     socket.on('agent:message', (data: AgentMessageRecord) => {
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === data.id)) return prev;
+      setMessages(prev => {
+        if (prev.some(m => m.id === data.id)) return prev;
         return [...prev, data];
       });
       setIsAgentThinking(false);
     });
 
     socket.on('agent:tool_call', (data: { toolName: string }) => {
-      setToolActivity((prev) => [...prev.slice(-4), data.toolName]);
+      setToolActivity(prev => [...prev.slice(-4), data.toolName]);
     });
 
     socket.on('agent:typing', (data: { isTyping: boolean }) => {
@@ -139,40 +139,37 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     };
   }, []);
 
-  const sendMessage = useCallback(
-    async (content: string) => {
-      if (!sessionIdRef.current) return;
+  const sendMessage = useCallback(async (content: string) => {
+    if (!sessionIdRef.current) return;
 
-      const optimisticMessage: AgentMessageRecord = {
-        id: `optimistic-${Date.now()}`,
-        role: 'user',
-        content,
+    const optimisticMessage: AgentMessageRecord = {
+      id: `optimistic-${Date.now()}`,
+      role: 'user',
+      content,
+      createdAt: new Date().toISOString(),
+    };
+
+    setMessages(prev => [...prev, optimisticMessage]);
+    setIsAgentThinking(true);
+
+    try {
+      const response = await sendAgentMessage(sessionIdRef.current, content);
+      const assistantMessage: AgentMessageRecord = {
+        id: `response-${Date.now()}`,
+        role: 'assistant',
+        content: response.content,
+        toolsUsed: response.toolsUsed,
         createdAt: new Date().toISOString(),
       };
-
-      setMessages((prev) => [...prev, optimisticMessage]);
-      setIsAgentThinking(true);
-
-      try {
-        const response = await sendAgentMessage(sessionIdRef.current, content);
-        const assistantMessage: AgentMessageRecord = {
-          id: `response-${Date.now()}`,
-          role: 'assistant',
-          content: response.content,
-          toolsUsed: response.toolsUsed,
-          createdAt: new Date().toISOString(),
-        };
-        setMessages((prev) => [...prev, assistantMessage]);
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Failed to send message';
-        setError(message);
-      } finally {
-        setIsAgentThinking(false);
-        setToolActivity([]);
-      }
-    },
-    [],
-  );
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Failed to send message';
+      setError(message);
+    } finally {
+      setIsAgentThinking(false);
+      setToolActivity([]);
+    }
+  }, []);
 
   // Keep sendMessageRef in sync so the auto-analysis effect can call it without a stale closure
   sendMessageRef.current = sendMessage;
@@ -189,7 +186,7 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     ) {
       autoAnalysisTriggered.current = true;
       sendMessageRef.current(
-        'Please analyze this ticket thoroughly and provide your diagnosis, including root cause, affected files, confidence level, and suggested fix.',
+        'Please analyze this ticket thoroughly and provide your diagnosis, including root cause, affected files, confidence level, and suggested fix.'
       );
     }
   }, [sessionId, isLoading, isNewSession, messages.length]);

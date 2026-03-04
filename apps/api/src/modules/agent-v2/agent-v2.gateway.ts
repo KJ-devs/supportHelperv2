@@ -14,6 +14,7 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
 import { WsJwtGuard } from '../agent/ws-jwt.guard';
 import { DeepAnalysisService } from './deep-analysis.service';
+import { PrismaService } from '../../prisma/prisma.service';
 import {
   getWebSocketCorsConfig,
   WS_PING_INTERVAL,
@@ -34,9 +35,7 @@ interface WsUser {
   pingTimeout: WS_PING_TIMEOUT,
 })
 @UseGuards(WsJwtGuard)
-export class AgentV2Gateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class AgentV2Gateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -44,6 +43,7 @@ export class AgentV2Gateway
 
   constructor(
     private readonly deepAnalysisService: DeepAnalysisService,
+    private readonly prisma: PrismaService
   ) {}
 
   afterInit() {
@@ -54,7 +54,7 @@ export class AgentV2Gateway
     const user = client.data.user as WsUser | undefined;
     if (user) {
       this.logger.log(
-        `Client connected: ${client.id} (user: ${user.userId}, tenant: ${user.tenantId})`,
+        `Client connected: ${client.id} (user: ${user.userId}, tenant: ${user.tenantId})`
       );
     } else {
       this.logger.log(`Client connected: ${client.id} (unauthenticated)`);
@@ -70,30 +70,54 @@ export class AgentV2Gateway
   @SubscribeMessage('agent:join_session')
   async handleJoinSession(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { sessionId: string; ticketId?: string },
+    @MessageBody() data: { sessionId: string; ticketId?: string }
   ) {
     if (!data?.sessionId) {
       throw new WsException('sessionId is required');
+    }
+
+    const user = client.data.user as WsUser;
+
+    // Verify the session belongs to the user's tenant
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: data.sessionId },
+      include: { ticket: { select: { tenantId: true } } },
+    });
+
+    if (!session || session.ticket.tenantId !== user.tenantId) {
+      throw new WsException('Session not found or access denied');
     }
 
     const sessionRoom = this.sessionRoomName(data.sessionId);
     await client.join(sessionRoom);
 
     if (data.ticketId) {
+      // Verify the ticket belongs to the user's tenant
+      const ticket = await this.prisma.ticket.findFirst({
+        where: { id: data.ticketId, tenantId: user.tenantId },
+        select: { id: true },
+      });
+
+      if (!ticket) {
+        throw new WsException('Ticket not found or access denied');
+      }
+
       const ticketRoom = this.ticketRoomName(data.ticketId);
       await client.join(ticketRoom);
     }
 
-    const user = client.data.user as WsUser;
     this.logger.log(`User ${user.userId} joined session room ${data.sessionId}`);
 
-    return { event: 'joined-session', data: { sessionId: data.sessionId, ticketId: data.ticketId } };
+    return {
+      event: 'joined-session',
+      data: { sessionId: data.sessionId, ticketId: data.ticketId },
+    };
   }
 
   @SubscribeMessage('agent:send_message')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { sessionId: string; content: string },
+    @MessageBody() data: { sessionId: string; content: string }
   ) {
     const user = client.data.user as WsUser;
     if (!data?.sessionId || !data?.content) {
@@ -105,42 +129,49 @@ export class AgentV2Gateway
         data.sessionId,
         data.content,
         user.tenantId,
-        user.userId,
+        user.userId
       );
 
-      client
-        .to(this.sessionRoomName(data.sessionId))
-        .emit('agent:message', {
-          sessionId: data.sessionId,
-          role: 'assistant',
-          content: result.content,
-          toolsUsed: result.toolsUsed,
-          timestamp: new Date().toISOString(),
-        });
+      client.to(this.sessionRoomName(data.sessionId)).emit('agent:message', {
+        sessionId: data.sessionId,
+        role: 'assistant',
+        content: result.content,
+        toolsUsed: result.toolsUsed,
+        timestamp: new Date().toISOString(),
+      });
 
       client.emit('agent:typing', { isTyping: false });
 
       return { event: 'message-sent', data: result };
     } catch (error) {
-      throw new WsException(
-        error instanceof Error ? error.message : 'Failed to process message',
-      );
+      throw new WsException(error instanceof Error ? error.message : 'Failed to process message');
     }
   }
 
   @SubscribeMessage('join-session')
   async handleJoinSessionLegacy(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { sessionId: string },
+    @MessageBody() data: { sessionId: string }
   ) {
     if (!data?.sessionId) {
       throw new WsException('sessionId is required');
     }
 
+    const user = client.data.user as WsUser;
+
+    // Verify the session belongs to the user's tenant
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: data.sessionId },
+      include: { ticket: { select: { tenantId: true } } },
+    });
+
+    if (!session || session.ticket.tenantId !== user.tenantId) {
+      throw new WsException('Session not found or access denied');
+    }
+
     const room = this.sessionRoomName(data.sessionId);
     await client.join(room);
 
-    const user = client.data.user as WsUser;
     this.logger.log(`User ${user.userId} joined session room ${data.sessionId}`);
 
     return { event: 'joined-session', data: { sessionId: data.sessionId } };
@@ -149,7 +180,7 @@ export class AgentV2Gateway
   @SubscribeMessage('leave-session')
   async handleLeaveSession(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { sessionId: string },
+    @MessageBody() data: { sessionId: string }
   ) {
     if (!data?.sessionId) {
       throw new WsException('sessionId is required');
@@ -201,11 +232,7 @@ export class AgentV2Gateway
   }
 
   @OnEvent('agent:thinking')
-  handleAgentThinkingEvent(event: {
-    ticketId?: string;
-    sessionId?: string;
-    iteration: number;
-  }) {
+  handleAgentThinkingEvent(event: { ticketId?: string; sessionId?: string; iteration: number }) {
     if (!event.sessionId) return;
     this.server.to(this.sessionRoomName(event.sessionId)).emit('agent:thinking', {
       sessionId: event.sessionId,
@@ -216,11 +243,7 @@ export class AgentV2Gateway
   }
 
   @OnEvent('agent:complete')
-  handleAgentCompleteEvent(event: {
-    ticketId?: string;
-    sessionId?: string;
-    finalContent: string;
-  }) {
+  handleAgentCompleteEvent(event: { ticketId?: string; sessionId?: string; finalContent: string }) {
     if (!event.sessionId) return;
     this.server.to(this.sessionRoomName(event.sessionId)).emit('agent:complete', {
       sessionId: event.sessionId,
@@ -255,7 +278,7 @@ export class AgentV2Gateway
     }
 
     this.logger.log(
-      `Broadcast ticket:fix_proposed for ticket ${event.ticketId} (PR #${event.prNumber})`,
+      `Broadcast ticket:fix_proposed for ticket ${event.ticketId} (PR #${event.prNumber})`
     );
   }
 
@@ -270,12 +293,7 @@ export class AgentV2Gateway
     });
   }
 
-  emitToolResult(
-    sessionId: string,
-    toolName: string,
-    durationMs: number,
-    hasError: boolean,
-  ) {
+  emitToolResult(sessionId: string, toolName: string, durationMs: number, hasError: boolean) {
     this.server.to(this.sessionRoomName(sessionId)).emit('agent:tool_result', {
       sessionId,
       toolName,

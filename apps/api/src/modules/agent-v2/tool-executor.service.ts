@@ -29,13 +29,13 @@ export class ToolExecutorService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly codeInvestigation: CodeInvestigationService,
-    private readonly codebaseSearch: CodebaseSearchService,
+    private readonly codebaseSearch: CodebaseSearchService
   ) {}
 
   async execute(
     toolName: ToolName,
     input: Record<string, unknown>,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
   ): Promise<unknown> {
     const startTime = Date.now();
     try {
@@ -55,7 +55,7 @@ export class ToolExecutorService {
    */
   private async resolveRepoContext(
     input: Record<string, unknown>,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
   ): Promise<RepoContext | null> {
     const repoParam = input.repo as string | undefined;
     if (repoParam && repoParam.includes('/')) {
@@ -63,7 +63,7 @@ export class ToolExecutorService {
       const resolved = await this.codeInvestigation.getRepoContextByName(
         context.applicationId,
         owner,
-        repo,
+        repo
       );
       return resolved;
     }
@@ -73,7 +73,7 @@ export class ToolExecutorService {
   private async dispatchTool(
     toolName: ToolName,
     input: Record<string, unknown>,
-    context: ToolExecutionContext,
+    context: ToolExecutionContext
   ): Promise<unknown> {
     switch (toolName) {
       case 'read_file': {
@@ -83,7 +83,7 @@ export class ToolExecutorService {
           ctx,
           input.file_path as string,
           input.start_line as number | undefined,
-          input.end_line as number | undefined,
+          input.end_line as number | undefined
         );
       }
 
@@ -93,7 +93,7 @@ export class ToolExecutorService {
         return this.codeInvestigation.listDirectory(
           ctx,
           input.path as string,
-          (input.recursive as boolean | undefined) ?? false,
+          (input.recursive as boolean | undefined) ?? false
         );
       }
 
@@ -104,7 +104,7 @@ export class ToolExecutorService {
           ctx,
           input.query as string,
           input.file_pattern as string | undefined,
-          (input.max_results as number | undefined) ?? 20,
+          (input.max_results as number | undefined) ?? 20
         );
       }
 
@@ -112,7 +112,7 @@ export class ToolExecutorService {
         return this.codebaseSearch.findRelevantFiles(
           context.applicationId,
           input.query as string,
-          (input.limit as number | undefined) ?? 10,
+          (input.limit as number | undefined) ?? 10
         );
       }
 
@@ -122,7 +122,7 @@ export class ToolExecutorService {
         return this.codeInvestigation.getRepoStructure(
           ctx,
           (input.max_depth as number | undefined) ?? 3,
-          (input.exclude_patterns as string[] | undefined) ?? [],
+          (input.exclude_patterns as string[] | undefined) ?? []
         );
       }
 
@@ -132,7 +132,7 @@ export class ToolExecutorService {
         return this.codeInvestigation.getFileHistory(
           ctx,
           input.file_path as string,
-          (input.limit as number | undefined) ?? 5,
+          (input.limit as number | undefined) ?? 5
         );
       }
 
@@ -143,13 +143,13 @@ export class ToolExecutorService {
           ctx,
           input.file_path as string,
           input.start_line as number | undefined,
-          input.end_line as number | undefined,
+          input.end_line as number | undefined
         );
       }
 
       case 'list_repos': {
         const repos = await this.codeInvestigation.getAllRepoContexts(context.applicationId);
-        return repos.map((r) => ({
+        return repos.map(r => ({
           fullName: r.fullName,
           role: r.role,
           isPrimary: r.isPrimary,
@@ -172,7 +172,7 @@ export class ToolExecutorService {
           input.query as string,
           context.tenantId,
           context.ticket.id,
-          (input.limit as number | undefined) ?? 5,
+          (input.limit as number | undefined) ?? 5
         );
       }
 
@@ -185,7 +185,10 @@ export class ToolExecutorService {
           include: {
             media: {
               include: {
-                videoEvents: true,
+                videoEvents: {
+                  where: { ocrText: { not: null } },
+                  orderBy: { timestampMs: 'asc' },
+                },
               },
             },
             application: true,
@@ -194,8 +197,14 @@ export class ToolExecutorService {
       }
 
       case 'update_ticket_status': {
+        const ticketToUpdate = await this.prisma.ticket.findFirst({
+          where: { id: input.ticket_id as string, tenantId: context.tenantId },
+        });
+        if (!ticketToUpdate) {
+          return { error: 'Ticket not found or access denied' };
+        }
         return this.prisma.ticket.update({
-          where: { id: input.ticket_id as string },
+          where: { id: ticketToUpdate.id },
           data: { status: input.status as TicketStatus },
           select: { id: true, status: true },
         });
@@ -205,8 +214,15 @@ export class ToolExecutorService {
         const ticketId = input.ticket_id as string;
         const reason = input.reason as string;
 
+        const ticketToEscalate = await this.prisma.ticket.findFirst({
+          where: { id: ticketId, tenantId: context.tenantId },
+        });
+        if (!ticketToEscalate) {
+          return { error: 'Ticket not found or access denied' };
+        }
+
         await this.prisma.ticket.update({
-          where: { id: ticketId },
+          where: { id: ticketToEscalate.id },
           data: { status: 'open' },
         });
 
@@ -238,7 +254,7 @@ export class ToolExecutorService {
         return this.codeInvestigation.createBranch(
           ctx,
           input.branch_name as string,
-          input.from_branch as string | undefined,
+          input.from_branch as string | undefined
         );
       }
 
@@ -250,7 +266,7 @@ export class ToolExecutorService {
           input.branch as string,
           input.file_path as string,
           input.content as string,
-          input.commit_message as string,
+          input.commit_message as string
         );
       }
 
@@ -263,7 +279,7 @@ export class ToolExecutorService {
           input.file_path as string,
           input.old_text as string,
           input.new_text as string,
-          input.commit_message as string,
+          input.commit_message as string
         );
       }
 
@@ -276,7 +292,7 @@ export class ToolExecutorService {
           input.title as string,
           input.body as string,
           input.head_branch as string,
-          input.base_branch as string | undefined,
+          input.base_branch as string | undefined
         );
 
         // Transition ticket to fix_proposed and record the event
@@ -299,9 +315,7 @@ export class ToolExecutorService {
           },
         });
 
-        this.logger.log(
-          `Ticket ${context.ticket.id} → fix_proposed (PR #${pr.number})`,
-        );
+        this.logger.log(`Ticket ${context.ticket.id} → fix_proposed (PR #${pr.number})`);
 
         return pr;
       }
@@ -317,7 +331,7 @@ export class ToolExecutorService {
     query: string,
     tenantId: string,
     ticketId: string,
-    limit: number,
+    limit: number
   ): Promise<unknown> {
     // Use pgvector to search similar tickets by embedding
     const results: Array<{
@@ -370,7 +384,7 @@ export class ToolExecutorService {
       return textResults;
     }
 
-    return results.map((r) => ({
+    return results.map(r => ({
       id: r.id,
       title: r.title,
       status: r.status,
