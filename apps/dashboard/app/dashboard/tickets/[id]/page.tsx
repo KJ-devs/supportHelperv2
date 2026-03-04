@@ -19,6 +19,7 @@ import { AgentSection } from '@/components/agent-chat/AgentSection';
 import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button, ConfirmModal, useToast } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { N1AssessmentBadge } from '@/components/n1-assessment/N1AssessmentBadge';
+import { RelatedTicketsSection } from '@/components/ticket-relations/RelatedTicketsSection';
 import type { N1Assessment } from '@/lib/types/ticket';
 import { AlertTriangle, RefreshCw, Trash2, Bot } from 'lucide-react';
 import { useTicketSocket, type AgentEscalatedToN2Event } from '@/hooks/useTicketSocket';
@@ -310,6 +311,9 @@ export default function TicketDetailPage() {
                   onOverride={handleRefresh}
                 />
               )}
+
+              {/* ── RELATED TICKETS ── */}
+              <RelatedTicketsSection ticketId={ticketId} />
 
               <div className="border-b border-gray-100 dark:border-gray-800 mb-6" />
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import type { N1Assessment } from '@/lib/types/ticket';
 import { Badge, Button } from '@/components/ui';
 import { n1TriageApi } from '@/lib/api/n1-triage';
@@ -101,9 +102,12 @@ export function N1AssessmentBadge({
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Duplicate of:
               </span>
-              <span className="text-xs text-blue-500 ml-1">
-                {assessment.duplicateTicketId}
-              </span>
+              <Link
+                href={`/dashboard/tickets/${assessment.duplicateTicketId}`}
+                className="text-xs text-blue-500 hover:text-blue-600 hover:underline ml-1"
+              >
+                {assessment.duplicateTicketId.slice(0, 8)}...
+              </Link>
             </div>
           )}
 
@@ -125,8 +129,20 @@ export function N1AssessmentBadge({
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
                 Similar tickets:
               </span>
-              <span className="text-xs text-gray-600 dark:text-gray-300 ml-1">
-                {assessment.similarTicketIds.join(', ')}
+              <span className="ml-1 space-x-1">
+                {assessment.similarTicketIds.map((id, i) => (
+                  <span key={id}>
+                    <Link
+                      href={`/dashboard/tickets/${id}`}
+                      className="text-xs text-blue-500 hover:text-blue-600 hover:underline"
+                    >
+                      {id.slice(0, 8)}
+                    </Link>
+                    {i < assessment.similarTicketIds!.length - 1 && (
+                      <span className="text-xs text-gray-400">,</span>
+                    )}
+                  </span>
+                ))}
               </span>
             </div>
           )}
