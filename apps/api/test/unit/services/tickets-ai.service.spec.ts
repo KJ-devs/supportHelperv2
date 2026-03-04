@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { AIService } from '../../../src/ai/ai.service';
 
 describe('TicketsAIService', () => {
   let service: TicketsAIService;
@@ -28,6 +29,12 @@ describe('TicketsAIService', () => {
             ticket: { findFirst: jest.fn(), findMany: jest.fn(), update: jest.fn() },
             $queryRaw: jest.fn(),
             $executeRaw: jest.fn(),
+          },
+        },
+        {
+          provide: AIService,
+          useValue: {
+            generateEmbedding: jest.fn().mockResolvedValue([]),
           },
         },
         {

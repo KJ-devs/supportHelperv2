@@ -4,6 +4,8 @@
  * Types for the automatic ticket classification and routing system.
  */
 
+import { SimilarTicketContext } from '@support-helper/shared';
+
 export interface TriageContext {
   ticket: {
     id: string;
@@ -33,13 +35,7 @@ export interface TriageContext {
     hasGithubConfig: boolean;
     repoName: string | null;
   };
-  similarTickets: Array<{
-    id: string;
-    title: string | null;
-    type: string | null;
-    resolution: string | null;
-    similarity: number;
-  }>;
+  similarTickets: SimilarTicketContext[];
 }
 
 export interface TriageClassification {

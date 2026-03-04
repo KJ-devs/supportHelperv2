@@ -45,3 +45,23 @@ export interface AgentHandoffContext {
   n2Plan?: N2Plan
   decisionTrace: DecisionTraceEntry[]
 }
+
+export interface SimilarTicketFix {
+  rootCause: string
+  proposedFix?: string
+  affectedFiles?: string[]
+  prUrl?: string | null
+}
+
+export interface SimilarTicketContext {
+  id: string
+  title: string | null
+  aiSummary: string | null
+  keywords: string[]
+  type: string | null
+  severity: string | null
+  status: string
+  similarity: number
+  diagnosis?: SimilarTicketFix
+  resolvedAt: string | null
+}

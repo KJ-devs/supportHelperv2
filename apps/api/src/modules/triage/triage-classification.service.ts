@@ -159,12 +159,24 @@ export class TriageClassificationService {
       }
     }
 
-    if (ctx.similarTickets.length > 0) {
-      parts.push('\n## Similar Past Tickets');
-      for (const t of ctx.similarTickets.slice(0, 3)) {
-        parts.push(
-          `- "${t.title}" (type: ${t.type}, resolution: ${t.resolution || 'unresolved'})`,
-        );
+    const relevantSimilar = ctx.similarTickets.filter((t) => t.similarity >= 0.60).slice(0, 3);
+    if (relevantSimilar.length > 0) {
+      parts.push('\n## Similar Resolved Tickets (use as classification hints)');
+      for (const t of relevantSimilar) {
+        const pct = Math.round(t.similarity * 100);
+        const resolvedDate = t.resolvedAt ? t.resolvedAt.slice(0, 10) : 'unknown date';
+        const confidenceTag = t.similarity > 0.90 ? ' — HIGH CONFIDENCE MATCH' : '';
+        parts.push(`\n### [similarity: ${pct}%] "${t.title || 'Untitled'}" — RESOLVED ${resolvedDate}${confidenceTag}`);
+        parts.push(`- Type: ${t.type || 'unknown'} | Severity: ${t.severity || 'unknown'}`);
+        if (t.diagnosis) {
+          parts.push(`- Root cause: ${t.diagnosis.rootCause}`);
+          if (t.diagnosis.proposedFix) {
+            parts.push(`- Fix applied: ${t.diagnosis.proposedFix}`);
+          }
+        }
+        if (t.similarity < 0.90) {
+          parts.push(`- Note: similar pattern — verify if still applicable`);
+        }
       }
     }
 

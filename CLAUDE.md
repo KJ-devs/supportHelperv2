@@ -263,8 +263,10 @@ Claude works **one US at a time** in a strict cycle. This cycle is **fully autom
 3. Update the GitHub issue checkboxes (`- [x]`) via `gh issue edit`
 4. Append a summary to `.claude/us-summaries.md` (format below)
 5. **Commit and push** all changes to `main`
-6. **Clear context** — run `/clear` to free the context window
-7. **Immediately start the next US** — do NOT wait for user input
+6. **WRITE SUMMARY FIRST** — always write to `.claude/us-summaries.md` BEFORE clearing
+7. **Clear context** — run `/clear` to free the context window
+8. **READ SUMMARIES FIRST** — after /clear, the first action is always reading `.claude/us-summaries.md`
+9. **Immediately start the next US** — do NOT wait for user input
 
 ### 4. Summary file format
 ```markdown
@@ -289,6 +291,39 @@ Follow the order defined in the Epic issue. Respect dependencies:
 - All US in the Epic are completed
 - A US is blocked and cannot proceed (note the blocker, ask the user)
 - The user explicitly asks to stop
+
+## Team Agent Workflow (MANDATORY for agentic team sessions)
+
+When working as part of an automated agent team, the following rules apply **in addition** to the US Workflow above:
+
+### Context Isolation Between US
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  BEFORE US:  Read .claude/us-summaries.md (ALL summaries)  │
+│  DURING US:  Focus exclusively on the assigned US           │
+│  AFTER US:   Append summary → commit → /clear               │
+│  NEXT US:    First action = re-read .claude/us-summaries.md │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Summary Format (write BEFORE /clear)
+```markdown
+## [US-AGENT-XX] #NNN Title — DONE ✅
+- **Files**: list of created/modified files
+- **Changes**: what was implemented (concrete, not vague)
+- **Decisions**: any architectural choices and why
+- **API/Types**: new interfaces, endpoints, or events added
+- **Remaining**: anything left incomplete (with reason)
+- **Date**: completion date
+```
+
+### Rules
+1. **NEVER start implementation** without reading `.claude/us-summaries.md` first
+2. **ALWAYS write summary** to `.claude/us-summaries.md` before clearing context
+3. **Context is ephemeral** — assume nothing persists between /clear calls
+4. **Summaries are the shared memory** — write them as if the next agent knows nothing
+5. If a US depends on a previous one, verify the previous summary exists before starting
 
 ## Pre-Commit Checklist (MANDATORY)
 

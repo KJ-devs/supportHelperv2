@@ -9,6 +9,8 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -39,6 +41,8 @@ import {
   bulkTicketSchema,
 } from './dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
+import { InternalRoute } from '../../common/decorators/internal-route.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -235,5 +239,28 @@ export class TicketsController {
     }
 
     return ticket;
+  }
+
+  /**
+   * Internal endpoint: (re)generate and store embedding for a ticket.
+   * Called by the worker after video analysis to refresh the embedding
+   * with enriched context (title + description + aiSummary + keywords).
+   */
+  @Post(':id/generate-embedding')
+  @InternalRoute()
+  @UseGuards(InternalAuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Internal] Generate and store ticket embedding' })
+  @ApiResponse({ status: 200, description: 'Embedding generated successfully' })
+  async generateEmbedding(
+    @Param('id') id: string,
+    @Body('tenantId') tenantId: string,
+  ) {
+    if (!tenantId) throw new NotFoundException('tenantId required');
+    const ticket = await this.prisma.ticket.findFirst({ where: { id, tenantId }, select: { id: true } });
+    if (!ticket) throw new NotFoundException('Ticket not found');
+
+    await this.ticketsAIService.generateAndStoreEmbedding(id, tenantId);
+    return { ok: true };
   }
 }

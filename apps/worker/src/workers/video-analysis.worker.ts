@@ -1,5 +1,6 @@
 import { Processor, WorkerHost, OnWorkerEvent, InjectQueue } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Job, Queue } from 'bullmq';
 import { Prisma } from '@prisma/client';
 import { QUEUE_NAMES } from '../queues';
@@ -76,6 +77,7 @@ export class VideoAnalysisWorker extends WorkerHost {
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,
     private readonly meilisearch: MeilisearchService,
+    private readonly configService: ConfigService,
     @InjectQueue('dead-letter')
     private readonly deadLetterQueue: Queue,
   ) {
@@ -203,6 +205,11 @@ export class VideoAnalysisWorker extends WorkerHost {
           this.logger.warn(`Failed to store embedding for ticket ${ticketId}: ${getErrorMessage(embeddingError)}`);
         }
       }
+
+      // Step 7c: Regenerate enriched embedding via API (includes aiSummary + keywords)
+      this.regenerateTicketEmbedding(ticketId, tenantId).catch((err) => {
+        this.logger.warn(`Failed to regenerate enriched embedding for ${ticketId}: ${getErrorMessage(err)}`);
+      });
 
       // Step 8: Index in Meilisearch
       this.logger.log('Step 8: Indexing in Meilisearch');
@@ -499,5 +506,60 @@ export class VideoAnalysisWorker extends WorkerHost {
     const delays: number[] = [60 * 1000, 5 * 60 * 1000, 15 * 60 * 1000, 60 * 60 * 1000];
     const index = Math.max(0, Math.min(attemptsMade, delays.length - 1));
     return delays[index]!;
+  }
+
+  /**
+   * Build a minimal HS256 JWT for worker→API internal calls.
+   */
+  private buildServiceJwt(jwtSecret: string): string {
+    const crypto = require('crypto');
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const now = Math.floor(Date.now() / 1000);
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: 'worker-service',
+        role: 'system',
+        tenantId: 'system',
+        iat: now,
+        exp: now + 300,
+      }),
+    ).toString('base64url');
+
+    const data = `${header}.${payload}`;
+    const signature = crypto
+      .createHmac('sha256', jwtSecret)
+      .update(data)
+      .digest('base64url');
+
+    return `${data}.${signature}`;
+  }
+
+  /**
+   * Regenerate enriched embedding via API after video analysis.
+   * Uses title + description + aiSummary + keywords for a richer vector.
+   * Fire-and-forget — failures are logged but don't fail the job.
+   */
+  private async regenerateTicketEmbedding(ticketId: string, tenantId: string): Promise<void> {
+    const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
+    const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
+    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+
+    if (!internalSecret || !jwtSecret) return;
+
+    const serviceJwt = this.buildServiceJwt(jwtSecret);
+    const response = await fetch(`${apiUrl}/api/tickets/${ticketId}/generate-embedding`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-internal-secret': internalSecret,
+        Authorization: `Bearer ${serviceJwt}`,
+      },
+      body: JSON.stringify({ tenantId }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      this.logger.warn(`generate-embedding API call failed for ${ticketId}: ${response.status} ${body}`);
+    }
   }
 }

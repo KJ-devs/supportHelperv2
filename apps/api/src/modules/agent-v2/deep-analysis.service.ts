@@ -5,8 +5,9 @@ import { CodeInvestigationService } from './code-investigation.service';
 import { AgenticLoopService, AgenticLoopOptions, AgenticLoopResult } from './agentic-loop.service';
 import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface';
 import { DiagnosisService, Diagnosis } from './diagnosis.service';
+import { TicketsAIService } from '../tickets/tickets-ai.service';
 import { AGENT_TOOLS } from './agent-tools';
-import { AgentHandoffContext, N1Analysis, DecisionTraceEntry } from '@support-helper/shared';
+import { AgentHandoffContext, N1Analysis, DecisionTraceEntry, SimilarTicketContext } from '@support-helper/shared';
 import { TicketsGateway } from '../tickets/tickets.gateway';
 
 interface MediaVisualCues {
@@ -47,6 +48,7 @@ export class DeepAnalysisService {
     private readonly diagnosisService: DiagnosisService,
     private readonly eventEmitter: EventEmitter2,
     @Optional() private readonly ticketsGateway: TicketsGateway,
+    @Optional() private readonly ticketsAiService: TicketsAIService,
   ) {}
 
   async analyze(ticketId: string, tenantId: string): Promise<Diagnosis | null> {
@@ -99,7 +101,17 @@ export class DeepAnalysisService {
     const videoContext = this.extractVideoContext(ticket);
     const visualCues = this.extractAllVisualCues(ticket);
 
-    const systemPrompt = this.buildAgentSystemPrompt(ticket, repoStructure, videoContext, visualCues);
+    // Find similar resolved tickets for context-aware analysis
+    let similarTickets: SimilarTicketContext[] = [];
+    if (this.ticketsAiService) {
+      try {
+        similarTickets = await this.ticketsAiService.findSimilar(ticketId, tenantId, 3);
+      } catch {
+        // Non-blocking — proceed without similar ticket context
+      }
+    }
+
+    const systemPrompt = this.buildAgentSystemPrompt(ticket, repoStructure, videoContext, visualCues, similarTickets);
 
     const userPrompt = `A new ticket has been submitted. Please investigate the codebase to find the root cause.
 
@@ -593,6 +605,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
     repoStructure: string,
     videoContext?: string[],
     visualCues?: MediaVisualCues,
+    similarTickets?: SimilarTicketContext[],
   ): string {
     let prompt = `You are an expert software engineer acting as an AI support agent.
 You have full access to the codebase through your tools.
@@ -665,6 +678,44 @@ update_diagnosis alone is not the end — it is the decision point that leads to
         prompt += `\nUI components visible: ${visualCues.components.join(', ')}`;
       }
       prompt += '\n\nUse search_code() with these error messages and component names to find related source files.';
+    }
+
+    if (similarTickets && similarTickets.length > 0) {
+      const maxSimilarity = Math.max(...similarTickets.map((t) => t.similarity));
+      const topTicket = similarTickets[0];
+
+      if (maxSimilarity > 0.90 && topTicket.diagnosis) {
+        // Fast path: nearly identical ticket already resolved
+        const resolvedDate = topTicket.resolvedAt?.slice(0, 10) ?? 'unknown';
+        const affectedFiles = topTicket.diagnosis.affectedFiles?.map((f) => `\`${f}\``).join(', ') ?? 'see diagnosis';
+        prompt += `\n\n## ⚡ FAST PATH — Identical Issue Found
+A nearly identical ticket was already resolved (similarity: ${Math.round(maxSimilarity * 100)}%):
+- Ticket: "${topTicket.title || 'Untitled'}" (resolved ${resolvedDate})
+- Root cause: ${topTicket.diagnosis.rootCause}
+- Fix applied: ${topTicket.diagnosis.proposedFix || 'see diagnosis'}
+- Files modified: ${affectedFiles}${topTicket.diagnosis.prUrl ? `\n- PR: ${topTicket.diagnosis.prUrl}` : ''}
+
+INSTRUCTION: If the codebase has not changed since the previous resolution, apply the SAME fix directly.
+Skip Phase 1 investigation and go directly to Phase 3 (create_branch + edit_file + create_pull_request).`;
+      } else {
+        // Reference mode: show similar tickets for context
+        const relevant = similarTickets.filter((t) => t.similarity >= 0.60);
+        if (relevant.length > 0) {
+          prompt += '\n\n## 📚 REFERENCE — Similar Past Issues';
+          for (const t of relevant) {
+            const pct = Math.round(t.similarity * 100);
+            const resolvedDate = t.resolvedAt?.slice(0, 10) ?? 'unknown';
+            prompt += `\n\n### [similarity: ${pct}%] "${t.title || 'Untitled'}" — resolved ${resolvedDate}`;
+            if (t.diagnosis) {
+              prompt += `\n- Root cause: ${t.diagnosis.rootCause}`;
+              if (t.diagnosis.proposedFix) {
+                prompt += `\n- Previous fix: ${t.diagnosis.proposedFix}`;
+              }
+            }
+          }
+          prompt += '\n\nINSTRUCTION: Use these as a starting point. Verify if the root cause still applies, check if the previous fix can be improved, then proceed with your analysis.';
+        }
+      }
     }
 
     return prompt;

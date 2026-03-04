@@ -4,6 +4,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
 import { TriageClassificationService } from './triage-classification.service';
 import { TriageRouterService } from './triage-router.service';
+import { TicketsAIService } from '../tickets/tickets-ai.service';
 import {
   TriageContext,
   TriageResult,
@@ -26,6 +27,7 @@ export class TriageService {
     private readonly aiService: AIService,
     private readonly classificationService: TriageClassificationService,
     private readonly routerService: TriageRouterService,
+    private readonly ticketsAiService: TicketsAIService,
   ) {}
 
   /**
@@ -132,6 +134,9 @@ export class TriageService {
         reasoning: classification.reasoning,
         needsReview: route.needsReview,
       });
+
+      // Fire-and-forget: generate ticket embedding with enriched context post-classification
+      this.ticketsAiService.generateAndStoreEmbedding(ticketId, tenantId).catch(() => {});
 
       // Propagate triage decision into AgentHandoffContext on the session
       await this.updateSessionHandoffContext(ticketId, tenantId, {
@@ -366,44 +371,15 @@ export class TriageService {
   }
 
   /**
-   * Find similar tickets using text search (pgvector embedding search
-   * would be ideal but requires the ticket to have an embedding first).
+   * Find similar tickets using pgvector similarity search.
+   * Falls back to keyword search if no embedding is available.
    */
   private async findSimilarTickets(
     ticket: { id: string; title: string | null; description: string | null; tenantId: string },
     tenantId: string,
   ): Promise<TriageContext['similarTickets']> {
-    const searchText = ticket.title || ticket.description;
-    if (!searchText) return [];
-
     try {
-      // Simple text-based search for now; pgvector can be added later
-      const similar = await this.prisma.ticket.findMany({
-        where: {
-          tenantId,
-          id: { not: ticket.id },
-          status: { in: ['resolved', 'closed'] },
-          OR: [
-            { title: { contains: searchText.slice(0, 50), mode: 'insensitive' } },
-          ],
-        },
-        select: {
-          id: true,
-          title: true,
-          type: true,
-          status: true,
-        },
-        take: 3,
-        orderBy: { createdAt: 'desc' },
-      });
-
-      return similar.map((t) => ({
-        id: t.id,
-        title: t.title,
-        type: t.type,
-        resolution: t.status === 'resolved' ? 'resolved' : null,
-        similarity: 0.5, // approximate
-      }));
+      return await this.ticketsAiService.findSimilar(ticket.id, tenantId, 5);
     } catch {
       return [];
     }

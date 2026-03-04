@@ -298,12 +298,24 @@ describe('TicketsController', () => {
         {
           id: 'ticket-456',
           title: 'Login form broken',
+          aiSummary: null,
+          keywords: [],
+          type: 'bug',
+          severity: 'high',
+          status: 'resolved',
           similarity: 0.92,
+          resolvedAt: null,
         },
         {
           id: 'ticket-789',
           title: 'Cannot authenticate',
+          aiSummary: null,
+          keywords: [],
+          type: 'bug',
+          severity: 'medium',
+          status: 'resolved',
           similarity: 0.85,
+          resolvedAt: null,
         },
       ];
 
