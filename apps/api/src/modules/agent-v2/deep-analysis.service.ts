@@ -6,6 +6,7 @@ import { AgenticLoopService, AgenticLoopOptions, AgenticLoopResult } from './age
 import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface';
 import { DiagnosisService, Diagnosis } from './diagnosis.service';
 import { AGENT_TOOLS } from './agent-tools';
+import { AgentHandoffContext, N1Analysis, DecisionTraceEntry } from '@support-helper/shared';
 
 interface MediaVisualCues {
   errors: string[];
@@ -155,6 +156,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
       // Save initial analysis summary as an AgentMessage for display in the session
       if (finalDiagnosis) {
         await this.saveInitialAnalysisMessage(ticketId, finalDiagnosis);
+        await this.updateSessionN1Analysis(ticketId, tenantId, finalDiagnosis);
       }
 
       // Mark ticket as analyzed
@@ -380,6 +382,67 @@ Start by identifying which parts of the codebase are likely involved, then read 
       toolsUsed: result.toolCallLog.map((t) => t.name),
       diagnosis: updatedDiagnosis || existingDiagnosis,
     };
+  }
+
+  /**
+   * Write n1Analysis into the AgentHandoffContext stored in AgentSession.agentState.
+   * Appends a decisionTrace entry so the N1 step is fully auditable.
+   */
+  private async updateSessionN1Analysis(
+    ticketId: string,
+    tenantId: string,
+    diagnosis: Diagnosis,
+  ): Promise<void> {
+    const session = await this.prisma.agentSession.findFirst({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      this.logger.debug(
+        `No AgentSession found for ticket ${ticketId} — skipping N1 context update`,
+      );
+      return;
+    }
+
+    const existing = (session.agentState ?? {}) as Partial<AgentHandoffContext>;
+    const timestamp = new Date().toISOString();
+
+    const n1Analysis: N1Analysis = {
+      summary: diagnosis.rootCause ?? 'Root cause identified',
+      rootCause: diagnosis.rootCause ?? '',
+      affectedComponents: diagnosis.affectedFiles?.map((f) => f.filePath) ?? [],
+      requiresCodeChange: (diagnosis.affectedFiles?.length ?? 0) > 0,
+      escalationReason: diagnosis.confidence < 0.5 ? 'Low confidence — human review recommended' : undefined,
+      timestamp,
+    };
+
+    const traceEntry: DecisionTraceEntry = {
+      agent: 'n1',
+      action: `deep analysis completed (confidence=${Math.round(diagnosis.confidence * 100)}%)`,
+      rationale: diagnosis.suggestedFix
+        ? `Suggested fix: ${diagnosis.suggestedFix.slice(0, 200)}`
+        : 'No specific fix suggested',
+      timestamp,
+    };
+
+    const updated: AgentHandoffContext = {
+      ticketId,
+      tenantId,
+      triageDecision: existing.triageDecision,
+      n1Analysis,
+      n2Plan: existing.n2Plan,
+      decisionTrace: [...(existing.decisionTrace ?? []), traceEntry],
+    };
+
+    await this.prisma.agentSession.update({
+      where: { id: session.id },
+      data: { agentState: updated as unknown as object },
+    });
+
+    this.logger.log(
+      `Updated AgentHandoffContext for session ${session.id}: n1Analysis written`,
+    );
   }
 
   private async loadTicketWithContext(

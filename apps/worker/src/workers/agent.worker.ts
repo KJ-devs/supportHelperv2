@@ -536,16 +536,25 @@ export class AgentWorker extends WorkerHost {
         diagnosis: unknown;
       };
 
-      // If session exists, update it based on API result
+      // If session exists, update status while preserving AgentHandoffContext
+      // (the API's DeepAnalysisService already wrote n1Analysis into agentState)
       if (sessionId) {
         const nextStatus = result.diagnosisFound ? 'proposing' : 'escalated';
+        const session = await this.prisma.agentSession.findUnique({
+          where: { id: sessionId },
+          select: { agentState: true },
+        });
+        const existingState = (session?.agentState ?? {}) as Record<string, unknown>;
+
         await this.prisma.agentSession.update({
           where: { id: sessionId },
           data: {
             status: nextStatus,
+            // Merge handoff-level status into the existing AgentHandoffContext
             agentState: JSON.parse(JSON.stringify({
-              step: 'analysis_complete',
-              diagnosisFound: result.diagnosisFound,
+              ...existingState,
+              _step: 'n1_complete',
+              _diagnosisFound: result.diagnosisFound,
             })),
           },
         }).catch((err: unknown) => {

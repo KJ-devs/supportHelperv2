@@ -346,6 +346,17 @@ After completing a US, append a summary here then `/clear` the context.
 - **Remaining**: None
 - **Date**: 2026-03-04
 
+## [US-AGENT-03] #252 Propager AgentHandoffContext dans le pipeline agentique — DONE ✅
+- **Files**:
+  - MOD: `apps/api/src/modules/agent/agent.service.ts` — `startSession()` initializes `AgentHandoffContext` with empty `decisionTrace[]`
+  - MOD: `apps/api/src/modules/triage/triage.service.ts` — `runTriage()` writes `triageDecision` + decisionTrace entry via `updateSessionHandoffContext()`
+  - MOD: `apps/api/src/modules/agent-v2/deep-analysis.service.ts` — `analyze()` writes `n1Analysis` + decisionTrace entry via `updateSessionN1Analysis()`
+  - MOD: `apps/worker/src/workers/agent.worker.ts` — `handleAnalyzeTicket()` preserves existing agentState when updating session status
+- **Changes**: Full AgentHandoffContext propagation through Triage → N1 (DeepAnalysis) → N2. Each step enriches its section and appends a DecisionTraceEntry. AgentSession.agentState is a valid AgentHandoffContext JSON after each pipeline stage.
+- **Decisions**: `TriageAction` (internal) mapped to shared `TriageRoute` via `mapActionToTriageRoute()`. `feature_request` → `feature`. Triage no-ops gracefully if no session exists. `as unknown as object` cast avoids Prisma import in deep-analysis.
+- **Remaining**: rien
+- **Date**: 2026-03-04
+
 ## [US-AGENT-02] #251 Définir AgentHandoffContext dans packages/shared — DONE ✅
 - **Files**: `packages/shared/src/types/agent-context.ts` (NEW), `packages/shared/src/index.ts`
 - **Changes**: Interface `AgentHandoffContext` + sous-types créés et exportés (`TriageType`, `TriageSeverity`, `TriageRoute`, `AgentRole`, `N2Complexity`, `DecisionTraceEntry`, `TriageDecision`, `N1Analysis`, `N2Plan`)

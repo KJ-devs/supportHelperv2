@@ -8,6 +8,14 @@ import {
   TriageContext,
   TriageResult,
 } from './interfaces/triage.interfaces';
+import {
+  AgentHandoffContext,
+  TriageDecision,
+  TriageRoute as TriageRouteType,
+  TriageType,
+  TriageSeverity,
+  DecisionTraceEntry,
+} from '@support-helper/shared';
 
 @Injectable()
 export class TriageService {
@@ -125,6 +133,16 @@ export class TriageService {
         needsReview: route.needsReview,
       });
 
+      // Propagate triage decision into AgentHandoffContext on the session
+      await this.updateSessionHandoffContext(ticketId, tenantId, {
+        type: (classification.type === 'feature_request' ? 'feature' : classification.type) as TriageType,
+        severity: classification.severity as TriageSeverity,
+        confidence: classification.typeConfidence,
+        routedTo: this.mapActionToTriageRoute(route.action),
+        reasoning: classification.reasoning,
+        timestamp: new Date().toISOString(),
+      });
+
       this.logger.log(
         `Triage complete for ticket ${ticketId}: ` +
           `type=${classification.type} (${classification.typeConfidence}), ` +
@@ -161,6 +179,69 @@ export class TriageService {
         error: message,
       };
     }
+  }
+
+  /**
+   * Map TriageAction (internal router values) to AgentHandoffContext TriageRoute (shared type).
+   */
+  private mapActionToTriageRoute(action: string): TriageRouteType {
+    switch (action) {
+      case 'deep_analysis':
+        return 'deep-analysis';
+      case 'auto_answer':
+        return 'auto-answer';
+      default:
+        return 'escalate';
+    }
+  }
+
+  /**
+   * Write the triage decision into the AgentHandoffContext stored in AgentSession.agentState.
+   * Appends a decisionTrace entry for full auditability.
+   */
+  private async updateSessionHandoffContext(
+    ticketId: string,
+    tenantId: string,
+    triageDecision: TriageDecision,
+  ): Promise<void> {
+    const session = await this.prisma.agentSession.findFirst({
+      where: { ticketId, ticket: { tenantId } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!session) {
+      // No session yet — triage may have been triggered before a session was created
+      this.logger.debug(
+        `No AgentSession found for ticket ${ticketId} — skipping handoff context update`,
+      );
+      return;
+    }
+
+    const existing = (session.agentState ?? {}) as Partial<AgentHandoffContext>;
+    const traceEntry: DecisionTraceEntry = {
+      agent: 'triage',
+      action: `classified as ${triageDecision.type}, routed to ${triageDecision.routedTo}`,
+      rationale: triageDecision.reasoning,
+      timestamp: triageDecision.timestamp,
+    };
+
+    const updated: AgentHandoffContext = {
+      ticketId,
+      tenantId,
+      triageDecision,
+      n1Analysis: existing.n1Analysis,
+      n2Plan: existing.n2Plan,
+      decisionTrace: [...(existing.decisionTrace ?? []), traceEntry],
+    };
+
+    await this.prisma.agentSession.update({
+      where: { id: session.id },
+      data: { agentState: updated as unknown as Prisma.InputJsonValue },
+    });
+
+    this.logger.log(
+      `Updated AgentHandoffContext for session ${session.id}: triageDecision written`,
+    );
   }
 
   /**

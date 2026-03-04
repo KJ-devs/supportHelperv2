@@ -7,6 +7,7 @@ import { AIService } from '../../ai/ai.service';
 import { AgentGateway } from './agent.gateway';
 import { TicketsGateway } from '../tickets/tickets.gateway';
 import { NotificationService } from '../notifications/notification.service';
+import { AgentHandoffContext } from '@support-helper/shared';
 
 export enum AgentState {
   ANALYZING = 'analyzing',
@@ -72,15 +73,18 @@ export class AgentService {
       throw new NotFoundException('Ticket not found');
     }
 
-    // Create agent session
+    // Create agent session with a structured AgentHandoffContext
+    const initialContext: AgentHandoffContext = {
+      ticketId,
+      tenantId,
+      decisionTrace: [],
+    };
+
     const session = await this.prisma.agentSession.create({
       data: {
         ticketId,
         status: AgentState.ANALYZING,
-        agentState: {
-          step: 'initial_analysis',
-          context: {},
-        },
+        agentState: initialContext as unknown as Prisma.InputJsonValue,
       },
     });
 
