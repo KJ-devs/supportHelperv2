@@ -21,6 +21,14 @@ export interface TicketEvent {
   timestamp: string;
 }
 
+export interface AgentEscalatedToN2Event {
+  event: 'agent:escalated-to-n2';
+  ticketId: string;
+  sessionId: string;
+  n1Summary: string;
+  timestamp: string;
+}
+
 interface UseTicketSocketReturn {
   isConnected: boolean;
   lastEvent: TicketEvent | null;
@@ -29,17 +37,23 @@ interface UseTicketSocketReturn {
 
 export function useTicketSocket(
   onEvent?: (event: TicketEvent) => void,
+  onAgentEscalatedToN2?: (event: AgentEscalatedToN2Event) => void,
 ): UseTicketSocketReturn {
   const socketRef = useRef<Socket | null>(null);
   const onEventRef = useRef(onEvent);
+  const onAgentEscalatedToN2Ref = useRef(onAgentEscalatedToN2);
   const [isConnected, setIsConnected] = useState(false);
   const [lastEvent, setLastEvent] = useState<TicketEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Keep callback ref up-to-date without re-triggering effect
+  // Keep callback refs up-to-date without re-triggering effect
   useEffect(() => {
     onEventRef.current = onEvent;
   }, [onEvent]);
+
+  useEffect(() => {
+    onAgentEscalatedToN2Ref.current = onAgentEscalatedToN2;
+  }, [onAgentEscalatedToN2]);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -96,6 +110,10 @@ export function useTicketSocket(
     socket.on('ticket:deleted', handleEvent);
     socket.on('ticket:ai-analysis-completed', handleEvent);
     socket.on('ticket:bulk-updated', handleEvent);
+
+    socket.on('agent:escalated-to-n2', (data: AgentEscalatedToN2Event) => {
+      onAgentEscalatedToN2Ref.current?.(data);
+    });
 
     return () => {
       socket.disconnect();

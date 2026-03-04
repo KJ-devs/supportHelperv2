@@ -8,6 +8,7 @@ import { GithubModule } from '../github/github.module';
 import { CodebaseIndexModule } from '../codebase-index/codebase-index.module';
 import { AuthModule } from '../../auth/auth.module';
 import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
+import { TicketsModule } from '../tickets/tickets.module';
 
 import { CodeInvestigationService } from './code-investigation.service';
 import { ToolExecutorService } from './tool-executor.service';
@@ -26,6 +27,7 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
     AuthModule,
     forwardRef(() => GithubModule),
     forwardRef(() => CodebaseIndexModule),
+    forwardRef(() => TicketsModule),
     BullModule.registerQueue({
       name: 'deep-analysis',
       defaultJobOptions: {

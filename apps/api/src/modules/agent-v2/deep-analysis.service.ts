@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CodeInvestigationService } from './code-investigation.service';
@@ -7,6 +7,7 @@ import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface
 import { DiagnosisService, Diagnosis } from './diagnosis.service';
 import { AGENT_TOOLS } from './agent-tools';
 import { AgentHandoffContext, N1Analysis, DecisionTraceEntry } from '@support-helper/shared';
+import { TicketsGateway } from '../tickets/tickets.gateway';
 
 interface MediaVisualCues {
   errors: string[];
@@ -45,6 +46,7 @@ export class DeepAnalysisService {
     private readonly agenticLoop: AgenticLoopService,
     private readonly diagnosisService: DiagnosisService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional() private readonly ticketsGateway: TicketsGateway,
   ) {}
 
   async analyze(ticketId: string, tenantId: string): Promise<Diagnosis | null> {
@@ -443,6 +445,19 @@ Start by identifying which parts of the codebase are likely involved, then read 
     this.logger.log(
       `Updated AgentHandoffContext for session ${session.id}: n1Analysis written`,
     );
+
+    // Notify dashboard in real-time that N1 has completed and N2 is starting
+    if (this.ticketsGateway) {
+      this.ticketsGateway.emitEscalatedToN2(tenantId, {
+        ticketId,
+        sessionId: session.id,
+        n1Summary: n1Analysis.summary.slice(0, 300),
+        timestamp,
+      });
+      this.logger.log(
+        `Emitted agent:escalated-to-n2 for ticket ${ticketId} (session ${session.id})`,
+      );
+    }
   }
 
   private async loadTicketWithContext(

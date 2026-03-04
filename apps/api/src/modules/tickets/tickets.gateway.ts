@@ -159,6 +159,19 @@ export class TicketsGateway
       });
   }
 
+  /**
+   * Emitted when N1 (DeepAnalysis) completes and the ticket is handed off to N2 (generate-action-plan).
+   * Used by the dashboard timeline to display real-time pipeline progress.
+   */
+  emitEscalatedToN2(tenantId: string, data: { ticketId: string; sessionId: string; n1Summary: string; timestamp: string }) {
+    this.server
+      .to(this.tenantRoom(tenantId))
+      .emit('agent:escalated-to-n2', {
+        event: 'agent:escalated-to-n2',
+        ...data,
+      });
+  }
+
   // ----------------------------------------------------------------
   // Helpers
   // ----------------------------------------------------------------

@@ -18,6 +18,7 @@ import { AgentSection } from '@/components/agent-chat/AgentSection';
 import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button, ConfirmModal, useToast } from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react';
+import { useTicketSocket, type AgentEscalatedToN2Event } from '@/hooks/useTicketSocket';
 
 // --- Collapsible section header ---
 
@@ -74,6 +75,9 @@ export default function TicketDetailPage() {
   const [contextOpen, setContextOpen] = useState(true);
   const [recordingOpen, setRecordingOpen] = useState(true);
 
+  // N1→N2 escalation notification (state only — hook is set up below after fetchDiagnosis)
+  const [n2Notification, setN2Notification] = useState<AgentEscalatedToN2Event | null>(null);
+
   const fetchTicket = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -106,6 +110,16 @@ export default function TicketDetailPage() {
       fetchDiagnosis();
     }
   }, [ticketId, authLoading, fetchTicket, fetchDiagnosis]);
+
+  const handleAgentEscalatedToN2 = useCallback((event: AgentEscalatedToN2Event) => {
+    if (event.ticketId === ticketId) {
+      setN2Notification(event);
+      // Refresh diagnosis after N1 completes so the panel shows new data
+      fetchDiagnosis();
+    }
+  }, [ticketId, fetchDiagnosis]);
+
+  useTicketSocket(undefined, handleAgentEscalatedToN2);
 
   const fetchMediaUrl = async (mediaId: string) => {
     if (mediaUrls[mediaId] || loadingUrls[mediaId]) return;
@@ -194,6 +208,35 @@ export default function TicketDetailPage() {
               <Button variant="secondary" size="sm" onClick={fetchTicket}>
                 Retry
               </Button>
+            </div>
+          )}
+
+          {/* ── N1→N2 ESCALATION NOTIFICATION ── */}
+          {n2Notification && (
+            <div className="mb-4 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
+                  AI Agent: N1 analysis complete — N2 action planning started
+                </p>
+                {n2Notification.n1Summary && (
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
+                    {n2Notification.n1Summary}
+                  </p>
+                )}
+                <p className="text-xs text-blue-500 dark:text-blue-500 mt-1">
+                  {new Date(n2Notification.timestamp).toLocaleTimeString()}
+                </p>
+              </div>
+              <button
+                onClick={() => setN2Notification(null)}
+                className="flex-shrink-0 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 text-xs"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
             </div>
           )}
 

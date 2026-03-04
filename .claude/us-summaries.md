@@ -346,6 +346,19 @@ After completing a US, append a summary here then `/clear` the context.
 - **Remaining**: None
 - **Date**: 2026-03-04
 
+## [US-AGENT-06] #255 Escalade N1→N2 avec contexte riche et event WebSocket — DONE ✅
+- **Files**:
+  - MOD: `apps/api/src/modules/tickets/tickets.gateway.ts` — added `emitEscalatedToN2()` method emitting `agent:escalated-to-n2` event
+  - MOD: `apps/api/src/modules/agent-v2/deep-analysis.service.ts` — inject `@Optional() TicketsGateway`, call `emitEscalatedToN2()` in `updateSessionN1Analysis()` after persisting
+  - MOD: `apps/api/src/modules/agent-v2/agent-v2.module.ts` — import `forwardRef(() => TicketsModule)` to enable TicketsGateway injection
+  - MOD: `apps/worker/src/workers/agent.worker.ts` — `handleGenerateActionPlan()` reads `n1Analysis` from session's `agentState` and injects into the AI user prompt, skipping re-analysis
+  - MOD: `apps/dashboard/hooks/useTicketSocket.ts` — added `AgentEscalatedToN2Event` type + `onAgentEscalatedToN2` optional callback
+  - MOD: `apps/dashboard/app/dashboard/tickets/[id]/page.tsx` — listen to `agent:escalated-to-n2` and show dismissible blue notification banner in left pane
+- **Changes**: N1→N2 escalation now propagates the full N1 analysis context. WebSocket event `agent:escalated-to-n2` emitted with ticketId, sessionId, n1Summary, timestamp when N1 completes. Dashboard shows real-time notification with N1 summary and auto-refreshes diagnosis panel. N2 action plan prompt includes N1 root cause + affected components to avoid duplicate investigation.
+- **Decisions**: `@Optional()` injection for TicketsGateway (graceful degradation). `forwardRef()` for circular module dependency. Notification is dismissible (×) and triggers diagnosis refresh. N1 summary truncated to 300 chars in event payload.
+- **Remaining**: rien
+- **Date**: 2026-03-04
+
 ## [US-AGENT-03] #252 Propager AgentHandoffContext dans le pipeline agentique — DONE ✅
 - **Files**:
   - MOD: `apps/api/src/modules/agent/agent.service.ts` — `startSession()` initializes `AgentHandoffContext` with empty `decisionTrace[]`

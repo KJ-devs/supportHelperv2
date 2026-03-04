@@ -1233,6 +1233,24 @@ Keep responses concise but thorough.`,
     const systemPrompt = this.buildActionPlanSystemPrompt();
     let userPrompt = this.buildActionPlanUserPrompt(ticket, repoTree, relevantCode);
 
+    // Inject N1 analysis from AgentHandoffContext if available — avoids re-analysis of work N1 already did
+    const agentSession = await this.prisma.agentSession.findFirst({
+      where: { ticketId },
+      orderBy: { createdAt: 'desc' },
+      select: { agentState: true },
+    });
+    const handoffCtx = (agentSession?.agentState ?? {}) as Record<string, unknown>;
+    const n1Analysis = handoffCtx['n1Analysis'] as Record<string, unknown> | undefined;
+    if (n1Analysis) {
+      userPrompt += `\n\n## N1 Analysis (already completed — do NOT repeat this investigation)
+**Root Cause:** ${String(n1Analysis['rootCause'] ?? 'unknown')}
+**Summary:** ${String(n1Analysis['summary'] ?? '')}
+**Affected Components:** ${Array.isArray(n1Analysis['affectedComponents']) ? (n1Analysis['affectedComponents'] as string[]).join(', ') : 'none identified'}
+**Requires Code Change:** ${String(n1Analysis['requiresCodeChange'] ?? 'unknown')}
+Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagnosing the root cause.`;
+      this.logger.log(`Injected N1 analysis into action plan prompt for ticket ${ticketId}`);
+    }
+
     // If this is a re-iteration after rejection, inject the feedback
     if (agentTask.rejectionReason && agentTask.retryCount > 0) {
       userPrompt += `\n\n---\n**IMPORTANT: PREVIOUS PLAN WAS REJECTED (iteration ${agentTask.retryCount}/${3})**\nReviewer feedback: "${agentTask.rejectionReason}"\n\nPlease revise the action plan to address the reviewer's concerns. Do NOT repeat the same plan.`;
