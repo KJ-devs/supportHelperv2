@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../auth/decorators/roles.decorator';
 import { UserRole } from '../../users/dto/update-user.dto';
-import { QueueMonitorService } from '../agent/queue-monitor.service';
+import { QueueMonitorService } from './queue-monitor.service';
 
 @ApiTags('Admin')
 @ApiBearerAuth()

@@ -18,7 +18,7 @@ import { AIModule } from '../../ai/ai.module';
 import { AuthModule } from '../../auth/auth.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { NotificationModule } from '../notifications/notification.module';
-import { WsJwtGuard } from '../agent/ws-jwt.guard';
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 
 @Module({
   imports: [
@@ -52,8 +52,33 @@ import { WsJwtGuard } from '../agent/ws-jwt.guard';
       name: 'triage',
     }),
   ],
-  controllers: [TicketsController, SdkTicketsController, TicketTrackingController, TicketReopenController, TicketMessagesController],
-  providers: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, WsJwtGuard, TicketMessagesService],
-  exports: [TicketsService, TicketsSearchService, TicketsAIService, TicketTimelineService, ResolutionSummaryService, AutoResponseService, TicketsGateway, TicketMessagesService],
+  controllers: [
+    TicketsController,
+    SdkTicketsController,
+    TicketTrackingController,
+    TicketReopenController,
+    TicketMessagesController,
+  ],
+  providers: [
+    TicketsService,
+    TicketsSearchService,
+    TicketsAIService,
+    TicketTimelineService,
+    ResolutionSummaryService,
+    AutoResponseService,
+    TicketsGateway,
+    WsJwtGuard,
+    TicketMessagesService,
+  ],
+  exports: [
+    TicketsService,
+    TicketsSearchService,
+    TicketsAIService,
+    TicketTimelineService,
+    ResolutionSummaryService,
+    AutoResponseService,
+    TicketsGateway,
+    TicketMessagesService,
+  ],
 })
 export class TicketsModule {}

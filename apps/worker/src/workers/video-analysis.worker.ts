@@ -8,7 +8,6 @@ import { VideoAnalysisJobData, VideoAnalysisResult } from '../queues/queue.types
 import { FFmpegService } from '../services/ffmpeg.service';
 import { OCRService } from '../services/ocr.service';
 import { OpenAIService } from '../services/openai.service';
-import { YoloService } from '../services/yolo.service';
 import { S3Service } from '../services/s3.service';
 import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
@@ -73,13 +72,12 @@ export class VideoAnalysisWorker extends WorkerHost {
     private readonly ffmpegService: FFmpegService,
     private readonly ocrService: OCRService,
     private readonly openaiService: OpenAIService,
-    private readonly yoloService: YoloService,
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,
     private readonly meilisearch: MeilisearchService,
     private readonly configService: ConfigService,
     @InjectQueue('dead-letter')
-    private readonly deadLetterQueue: Queue,
+    private readonly deadLetterQueue: Queue
   ) {
     super();
   }
@@ -133,27 +131,15 @@ export class VideoAnalysisWorker extends WorkerHost {
         await job.updateProgress(50);
       }
 
-      // Step 4: YOLO UI detection
-      let uiDetections: any[] = [];
-      if (!options?.skipYolo) {
-        this.logger.log('Step 4: Running YOLO UI detection');
-        uiDetections = await this.yoloService.detectBatch(framesToProcess);
-        await job.updateProgress(65);
-      }
-
-      // Step 5: AI Vision analysis (multi-tenant, supports Anthropic + OpenAI)
+      // Step 4: AI Vision analysis (multi-tenant, supports Anthropic + OpenAI)
       let visionAnalysis = null;
       if (!options?.skipVision) {
-        this.logger.log('Step 5: Running AI Vision analysis');
+        this.logger.log('Step 4: Running AI Vision analysis');
         const fs = await import('fs/promises');
-        const frameBuffers = await Promise.all(
-          framesToProcess.map((fp) => fs.readFile(fp)),
-        );
-        const analysis = await this.openaiService.analyzeVideo(
-          frameBuffers,
-          tenantId,
-          { ocrText: ocrResults?.totalText, uiDetections },
-        );
+        const frameBuffers = await Promise.all(framesToProcess.map(fp => fs.readFile(fp)));
+        const analysis = await this.openaiService.analyzeVideo(frameBuffers, tenantId, {
+          ocrText: ocrResults?.totalText,
+        });
         // Map VideoAnalysis → legacy visionAnalysis shape used by downstream code
         if (analysis) {
           visionAnalysis = {
@@ -167,20 +153,19 @@ export class VideoAnalysisWorker extends WorkerHost {
         await job.updateProgress(80);
       }
 
-      // Step 6: Generate embeddings
-      this.logger.log('Step 6: Generating embeddings');
+      // Step 5: Generate embeddings
+      this.logger.log('Step 5: Generating embeddings');
       const textForEmbedding = this.buildEmbeddingText(ocrResults?.totalText, visionAnalysis);
       const embeddings = await this.openaiService.generateEmbedding(textForEmbedding);
       await job.updateProgress(90);
 
-      // Step 7: Update ticket in database
-      this.logger.log('Step 7: Updating ticket in database');
+      // Step 6: Update ticket in database
+      this.logger.log('Step 6: Updating ticket in database');
       await this.updateTicket(ticketId, {
         aiSummary: visionAnalysis?.summary,
         aiAnalysis: {
           ocr: ocrResults,
           vision: visionAnalysis,
-          uiDetections: uiDetections.slice(0, 100), // Limit stored detections
           metadata: keyframeResult.metadata,
         },
         keywords: visionAnalysis?.uiElements || [],
@@ -202,17 +187,21 @@ export class VideoAnalysisWorker extends WorkerHost {
             WHERE id = ${ticketId}
           `;
         } catch (embeddingError) {
-          this.logger.warn(`Failed to store embedding for ticket ${ticketId}: ${getErrorMessage(embeddingError)}`);
+          this.logger.warn(
+            `Failed to store embedding for ticket ${ticketId}: ${getErrorMessage(embeddingError)}`
+          );
         }
       }
 
       // Step 7c: Regenerate enriched embedding via API (includes aiSummary + keywords)
-      this.regenerateTicketEmbedding(ticketId, tenantId).catch((err) => {
-        this.logger.warn(`Failed to regenerate enriched embedding for ${ticketId}: ${getErrorMessage(err)}`);
+      this.regenerateTicketEmbedding(ticketId, tenantId).catch(err => {
+        this.logger.warn(
+          `Failed to regenerate enriched embedding for ${ticketId}: ${getErrorMessage(err)}`
+        );
       });
 
-      // Step 8: Index in Meilisearch
-      this.logger.log('Step 8: Indexing in Meilisearch');
+      // Step 7: Index in Meilisearch
+      this.logger.log('Step 7: Indexing in Meilisearch');
       await this.indexTicket(ticketId, tenantId, {
         ocrText: ocrResults?.totalText,
         summary: visionAnalysis?.summary,
@@ -252,7 +241,10 @@ export class VideoAnalysisWorker extends WorkerHost {
 
       return result;
     } catch (error) {
-      this.logger.error(`Video analysis failed for ${mediaId}: ${getErrorMessage(error)}`, getErrorStack(error));
+      this.logger.error(
+        `Video analysis failed for ${mediaId}: ${getErrorMessage(error)}`,
+        getErrorStack(error)
+      );
 
       // Update media status to failed
       await this.updateMediaStatus(mediaId, 'failed', getErrorMessage(error));
@@ -326,7 +318,11 @@ export class VideoAnalysisWorker extends WorkerHost {
    * Save extracted visual cues to media.metadata for use by DeepAnalysisService
    */
   private async saveVisualCues(mediaId: string, visualCues: VisualCues): Promise<void> {
-    if (visualCues.errors.length === 0 && visualCues.urls.length === 0 && visualCues.components.length === 0) {
+    if (
+      visualCues.errors.length === 0 &&
+      visualCues.urls.length === 0 &&
+      visualCues.components.length === 0
+    ) {
       return;
     }
 
@@ -336,7 +332,9 @@ export class VideoAnalysisWorker extends WorkerHost {
     });
 
     const existingMetadata =
-      existing?.metadata && typeof existing.metadata === 'object' && !Array.isArray(existing.metadata)
+      existing?.metadata &&
+      typeof existing.metadata === 'object' &&
+      !Array.isArray(existing.metadata)
         ? (existing.metadata as Record<string, unknown>)
         : {};
 
@@ -443,7 +441,9 @@ export class VideoAnalysisWorker extends WorkerHost {
 
   @OnWorkerEvent('active')
   onActive(job: Job<VideoAnalysisJobData>) {
-    this.logger.log(`Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+    this.logger.log(
+      `Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`
+    );
   }
 
   @OnWorkerEvent('completed')
@@ -465,7 +465,7 @@ export class VideoAnalysisWorker extends WorkerHost {
 
     this.logger.error(
       `Job ${job.id} failed (attempt ${attemptsMade}/${maxAttempts}): ${getErrorMessage(error)}`,
-      getErrorStack(error),
+      getErrorStack(error)
     );
 
     // If this was the last attempt, move to dead letter queue
@@ -487,11 +487,15 @@ export class VideoAnalysisWorker extends WorkerHost {
           removeOnComplete: {
             age: 90 * 24 * 60 * 60, // 90 days
           },
-        },
+        }
       );
 
       // Update media status to failed with retry information
-      await this.updateMediaStatus(mediaId, 'failed', `Failed after ${attemptsMade} retries: ${error.message}`);
+      await this.updateMediaStatus(
+        mediaId,
+        'failed',
+        `Failed after ${attemptsMade} retries: ${error.message}`
+      );
     } else {
       // Job will be retried
       const nextDelay = this.getNextRetryDelay(attemptsMade);
@@ -522,14 +526,11 @@ export class VideoAnalysisWorker extends WorkerHost {
         tenantId: 'system',
         iat: now,
         exp: now + 300,
-      }),
+      })
     ).toString('base64url');
 
     const data = `${header}.${payload}`;
-    const signature = crypto
-      .createHmac('sha256', jwtSecret)
-      .update(data)
-      .digest('base64url');
+    const signature = crypto.createHmac('sha256', jwtSecret).update(data).digest('base64url');
 
     return `${data}.${signature}`;
   }
@@ -559,7 +560,9 @@ export class VideoAnalysisWorker extends WorkerHost {
 
     if (!response.ok) {
       const body = await response.text();
-      this.logger.warn(`generate-embedding API call failed for ${ticketId}: ${response.status} ${body}`);
+      this.logger.warn(
+        `generate-embedding API call failed for ${ticketId}: ${response.status} ${body}`
+      );
     }
   }
 }

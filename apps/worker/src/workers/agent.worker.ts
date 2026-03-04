@@ -7,19 +7,14 @@ import { createDecipheriv } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { QUEUE_NAMES } from '../queues';
-import {
-  AgentJobData,
-  AgentResult,
-  FunctionCallResult,
-} from '../queues/queue.types';
+import { AgentJobData, AgentResult } from '../queues/queue.types';
 import { OpenAIService } from '../services/openai.service';
 import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
-import { AgentService } from '../services/agent.service';
+import { buildServiceJwt } from '../utils/jwt.utils';
 import { GitAutomationService } from '../services/git-automation.service';
 import { PullRequestService } from '../services/pull-request.service';
-
 
 /** Typed representation of the action plan stored in agentTask.actionPlan (Prisma JSON) */
 interface ActionPlan {
@@ -93,42 +88,15 @@ export class AgentWorker extends WorkerHost {
     private readonly openaiService: OpenAIService,
     private readonly prisma: PrismaService,
     private readonly meilisearch: MeilisearchService,
-    private readonly agentService: AgentService,
     private readonly configService: ConfigService,
     private readonly gitAutomationService: GitAutomationService,
     private readonly pullRequestService: PullRequestService,
     @InjectQueue('dead-letter')
     private readonly deadLetterQueue: Queue,
     @InjectQueue(QUEUE_NAMES.AGENT_ORCHESTRATION)
-    private readonly agentQueue: Queue,
+    private readonly agentQueue: Queue
   ) {
     super();
-  }
-
-  /**
-   * Build a minimal HS256 JWT for worker→API internal calls.
-   */
-  private buildServiceJwt(jwtSecret: string): string {
-    const crypto = require('crypto');
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const now = Math.floor(Date.now() / 1000);
-    const payload = Buffer.from(
-      JSON.stringify({
-        sub: 'worker-service',
-        role: 'system',
-        tenantId: 'system',
-        iat: now,
-        exp: now + 300,
-      }),
-    ).toString('base64url');
-
-    const data = `${header}.${payload}`;
-    const signature = crypto
-      .createHmac('sha256', jwtSecret)
-      .update(data)
-      .digest('base64url');
-
-    return `${data}.${signature}`;
   }
 
   /**
@@ -141,18 +109,6 @@ export class AgentWorker extends WorkerHost {
 
     try {
       switch (type) {
-        case 'start-session':
-          return await this.handleStartSession(job);
-
-        case 'process-message':
-          return await this.handleProcessMessage(job);
-
-        case 'process-user-message':
-          return await this.handleProcessUserMessage(job);
-
-        case 'auto-escalate-timeout':
-          return await this.handleAutoEscalateTimeout(job);
-
         case 'analyze-ticket':
           return await this.handleAnalyzeTicket(job);
 
@@ -161,9 +117,6 @@ export class AgentWorker extends WorkerHost {
 
         case 'suggest-solution':
           return await this.handleSuggestSolution(job);
-
-        case 'auto-respond':
-          return await this.handleAutoRespond(job);
 
         case 'escalate-ticket':
           return await this.handleEscalateTicket(job);
@@ -201,284 +154,6 @@ export class AgentWorker extends WorkerHost {
   }
 
   /**
-   * Start a new agent session with full state machine processing
-   * This is the main entry point for Phase 4 Agent Processing
-   */
-  private async handleStartSession(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId } = job.data;
-
-    this.logger.log(`Starting agent session for ticket ${ticketId}`);
-    await job.updateProgress(10);
-
-    try {
-      // Start the agent session - this triggers the full state machine
-      const session = await this.agentService.startSession(ticketId, tenantId);
-
-      await job.updateProgress(100);
-
-      return {
-        success: true,
-        type: 'start-session',
-        ticketId,
-        response: `Agent session ${session.id} started in state ${session.state}`,
-        metadata: {
-          sessionId: session.id,
-          state: session.state,
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Failed to start agent session: ${getErrorMessage(error)}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Process an incoming user message in an existing session
-   */
-  private async handleProcessMessage(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, sessionId, context } = job.data;
-
-    if (!sessionId) {
-      throw new Error('sessionId is required for process-message');
-    }
-
-    const message = context?.message;
-    const channel = context?.channel || 'chat';
-
-    if (!message) {
-      throw new Error('context.message is required for process-message');
-    }
-
-    this.logger.log(`Processing message for session ${sessionId}`);
-    await job.updateProgress(10);
-
-    try {
-      // Handle the user message - this will trigger state transitions
-      await this.agentService.handleUserMessage(sessionId, message, channel);
-
-      await job.updateProgress(80);
-
-      // Get updated session status
-      const status = await this.agentService.getSessionStatus(sessionId);
-
-      await job.updateProgress(100);
-
-      return {
-        success: true,
-        type: 'process-message',
-        ticketId,
-        response: `Message processed, session in state ${status.state}`,
-        metadata: {
-          sessionId,
-          state: status.state,
-          confidence: status.confidence,
-          attempts: status.attempts,
-        },
-      };
-    } catch (error) {
-      this.logger.error(`Failed to process message: ${getErrorMessage(error)}`);
-      throw error;
-    }
-  }
-
-  /**
-   * Handle a user message queued directly (standalone worker flow).
-   *
-   * NOTE: The primary user-message flow goes through the API's
-   * AgentService.sendMessage() which processes in-process to retain access to
-   * the WebSocket gateway.  This handler is a fallback for jobs queued
-   * directly to the worker (e.g. from external integrations or retries).
-   *
-   * The user message is assumed to already exist in the DB (created by the API).
-   * This handler only generates the AI response and updates the session state.
-   */
-  private async handleProcessUserMessage(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, sessionId, context } = job.data;
-
-    if (!sessionId) {
-      throw new Error('sessionId is required for process-user-message');
-    }
-
-    const message = context?.message;
-    if (!message) {
-      throw new Error('context.message is required for process-user-message');
-    }
-
-    this.logger.log(`Processing user message for session ${sessionId}`);
-    await job.updateProgress(10);
-
-    // Get session with ticket and existing messages (user message already saved by API)
-    const session = await this.prisma.agentSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        ticket: true,
-        messages: { orderBy: { createdAt: 'asc' } },
-      },
-    });
-
-    if (!session) {
-      throw new Error(`Session ${sessionId} not found`);
-    }
-
-    await job.updateProgress(20);
-
-    // Build conversation context from existing messages
-    const conversationContext = session.messages
-      .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
-      .join('\n');
-
-    // Generate AI response using the agent's function calling capabilities
-    const result = await this.agentService.runWithFunctionCalling({
-      systemPrompt: `You are a helpful support agent. Respond to the user's latest message based on the ticket context and conversation history.`,
-      userPrompt: `Ticket: ${session.ticket.title}\nDescription: ${session.ticket.description}\n\nConversation:\n${conversationContext}\n\nUser: ${message}\n\nAgent:`,
-      tenantId,
-      ticket: session.ticket,
-    });
-
-    await job.updateProgress(70);
-
-    // Save agent response
-    await this.prisma.agentMessage.create({
-      data: {
-        sessionId,
-        role: 'agent',
-        content: result.finalContent,
-        channel: 'web',
-      },
-    });
-
-    // Determine next state from response content
-    const lower = result.finalContent.toLowerCase();
-    let nextState = 'waiting';
-    if (
-      lower.includes('could you') ||
-      lower.includes('can you provide') ||
-      lower.includes('need more') ||
-      lower.includes('more details') ||
-      lower.includes('more information')
-    ) {
-      nextState = 'needs_info';
-    } else if (
-      lower.includes('solution') ||
-      lower.includes('to resolve') ||
-      lower.includes('you can fix')
-    ) {
-      nextState = 'proposing';
-    }
-
-    // Update session state
-    await this.prisma.agentSession.update({
-      where: { id: sessionId },
-      data: { status: nextState },
-    });
-
-    await job.updateProgress(100);
-
-    return {
-      success: true,
-      type: 'process-user-message',
-      ticketId,
-      response: `User message processed, session in state ${nextState}`,
-      metadata: {
-        sessionId,
-        state: nextState,
-      },
-    };
-  }
-
-  /**
-   * Auto-escalate a session that has been in NEEDS_INFO for 24 hours without a reply.
-   */
-  private async handleAutoEscalateTimeout(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, sessionId } = job.data;
-
-    if (!sessionId) {
-      throw new Error('sessionId is required for auto-escalate-timeout');
-    }
-
-    this.logger.log(`Checking auto-escalate timeout for session ${sessionId}`);
-    await job.updateProgress(10);
-
-    // Only escalate if session is still in NEEDS_INFO
-    const session = await this.prisma.agentSession.findUnique({
-      where: { id: sessionId },
-      include: { ticket: true },
-    });
-
-    if (!session) {
-      this.logger.warn(`Session ${sessionId} not found for auto-escalate — skipping`);
-      return {
-        success: true,
-        type: 'auto-escalate-timeout',
-        ticketId,
-        response: 'Session not found — skipped',
-      };
-    }
-
-    if (session.status !== 'needs_info') {
-      this.logger.log(
-        `Session ${sessionId} is in state "${session.status}" — no escalation needed`,
-      );
-      return {
-        success: true,
-        type: 'auto-escalate-timeout',
-        ticketId,
-        response: `Session already in state "${session.status}" — skipped`,
-      };
-    }
-
-    await job.updateProgress(30);
-
-    // Find an available support agent for the tenant
-    const supportAgent = await this.prisma.user.findFirst({
-      where: {
-        tenantId,
-        role: { in: ['admin', 'support'] },
-      },
-      select: { id: true, email: true, name: true },
-    });
-
-    // Update session to ESCALATED
-    await this.prisma.agentSession.update({
-      where: { id: sessionId },
-      data: {
-        status: 'escalated',
-        escalatedTo: supportAgent?.id,
-        escalationReason: 'No user response after 24 hours',
-      },
-    });
-
-    await job.updateProgress(60);
-
-    // Update ticket status
-    await this.prisma.ticket.update({
-      where: { id: ticketId },
-      data: {
-        status: 'escalated',
-        assignedTo: supportAgent?.id,
-        assignedAt: supportAgent ? new Date() : undefined,
-      },
-    });
-
-    await job.updateProgress(100);
-
-    this.logger.log(
-      `Session ${sessionId} auto-escalated after 24h timeout (ticket ${ticketId})`,
-    );
-
-    return {
-      success: true,
-      type: 'auto-escalate-timeout',
-      ticketId,
-      escalated: true,
-      response: 'Session auto-escalated after 24h without user response',
-      metadata: {
-        sessionId,
-      },
-    };
-  }
-
-  /**
    * Analyze ticket with AI — delegates to the API's DeepAnalysisService
    * via internal HTTP call (same pattern as DeepAnalysisWorker).
    *
@@ -497,7 +172,9 @@ export class AgentWorker extends WorkerHost {
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
 
     if (!internalSecret || !jwtSecret) {
-      this.logger.error('INTERNAL_API_SECRET or JWT_SECRET not configured — cannot delegate to API');
+      this.logger.error(
+        'INTERNAL_API_SECRET or JWT_SECRET not configured — cannot delegate to API'
+      );
       return {
         success: false,
         type: 'analyze-ticket',
@@ -506,7 +183,7 @@ export class AgentWorker extends WorkerHost {
       };
     }
 
-    const serviceJwt = this.buildServiceJwt(jwtSecret);
+    const serviceJwt = buildServiceJwt(jwtSecret);
     const endpoint = `${apiUrl}/api/agent/v2/internal/analyze`;
 
     this.logger.log(`Delegating analyze-ticket for ${ticketId} to API: ${endpoint}`);
@@ -546,28 +223,30 @@ export class AgentWorker extends WorkerHost {
         });
         const existingState = (session?.agentState ?? {}) as Record<string, unknown>;
 
-        await this.prisma.agentSession.update({
-          where: { id: sessionId },
-          data: {
-            status: nextStatus,
-            // Merge handoff-level status into the existing AgentHandoffContext
-            agentState: JSON.parse(JSON.stringify({
-              ...existingState,
-              _step: 'n1_complete',
-              _diagnosisFound: result.diagnosisFound,
-            })),
-          },
-        }).catch((err: unknown) => {
-          this.logger.warn(
-            `Could not update AgentSession ${sessionId}: ${getErrorMessage(err)}`,
-          );
-        });
+        await this.prisma.agentSession
+          .update({
+            where: { id: sessionId },
+            data: {
+              status: nextStatus,
+              // Merge handoff-level status into the existing AgentHandoffContext
+              agentState: JSON.parse(
+                JSON.stringify({
+                  ...existingState,
+                  _step: 'n1_complete',
+                  _diagnosisFound: result.diagnosisFound,
+                })
+              ),
+            },
+          })
+          .catch((err: unknown) => {
+            this.logger.warn(`Could not update AgentSession ${sessionId}: ${getErrorMessage(err)}`);
+          });
       }
 
       await job.updateProgress(100);
 
       this.logger.log(
-        `Ticket ${ticketId} analyzed via API: diagnosisFound=${result.diagnosisFound}`,
+        `Ticket ${ticketId} analyzed via API: diagnosisFound=${result.diagnosisFound}`
       );
 
       return {
@@ -748,102 +427,6 @@ Please suggest a solution based on how similar issues were resolved.`,
   }
 
   /**
-   * Generate automatic response
-   */
-  private async handleAutoRespond(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { ticketId, tenantId, context } = job.data;
-
-    this.logger.log(`Generating auto-response for ticket ${ticketId}`);
-    await job.updateProgress(10);
-
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
-      include: {
-        application: true,
-        reporter: true,
-      },
-    });
-
-    if (!ticket) {
-      throw new Error(`Ticket ${ticketId} not found`);
-    }
-
-    await job.updateProgress(30);
-
-    // Build conversation history
-    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-      {
-        role: 'system',
-        content: `You are a helpful support assistant for ${ticket.application?.name || 'the application'}. 
-Respond professionally and helpfully to user issues.
-If you cannot solve the issue, acknowledge it and let them know a human will follow up.
-Keep responses concise but thorough.`,
-      },
-    ];
-
-    // Add context messages if provided
-    if (context?.previousMessages) {
-      messages.push(...context.previousMessages);
-    }
-
-    // Add current ticket as user message
-    messages.push({
-      role: 'user',
-      content: `Issue: ${ticket.title}\n\nDetails: ${ticket.description || 'No additional details provided.'}\n\nAI Analysis: ${ticket.aiSummary || 'Analysis pending.'}`,
-    });
-
-    await job.updateProgress(50);
-
-    // Build system and user prompts from the constructed messages
-    const systemMsg = messages.find(m => m.role === 'system')?.content ?? '';
-    const userMsgs = messages.filter(m => m.role !== 'system');
-    const userPrompt = userMsgs.map(m => `${m.role}: ${m.content}`).join('\n\n');
-
-    // Run multi-turn function calling loop via AgentService
-    const loopResult = await this.agentService.runWithFunctionCalling({
-      systemPrompt: systemMsg,
-      userPrompt,
-      tenantId,
-      ticket,
-      maxTokens: 1024,
-    });
-
-    this.logger.log(
-      `auto-respond loop: ${loopResult.iterations} iterations, ` +
-      `${loopResult.toolCallLog.length} tool calls executed`
-    );
-
-    // Collect tool call results for the job result metadata
-    const functionCalls: FunctionCallResult[] = loopResult.toolCallLog.map(tc => ({
-      name: tc.name,
-      arguments: {},
-      result: tc.result,
-    }));
-
-    const response = { content: loopResult.finalContent };
-
-    await job.updateProgress(80);
-
-    // Store agent session
-    const sessionId = job.data.sessionId || `session-${Date.now()}`;
-    await this.storeAgentSession(ticketId, sessionId, {
-      type: 'auto-respond',
-      response: response.content,
-      functionCalls,
-    });
-
-    await job.updateProgress(100);
-
-    return {
-      success: true,
-      type: 'auto-respond',
-      ticketId,
-      response: response.content,
-      functionCalls,
-    };
-  }
-
-  /**
    * Escalate ticket to human
    */
   private async handleEscalateTicket(job: Job<AgentJobData>): Promise<AgentResult> {
@@ -940,7 +523,8 @@ Keep responses concise but thorough.`,
     if (ticket.aiAnalysis) promptParts.push(`AI Analysis: ${JSON.stringify(ticket.aiAnalysis)}`);
     if (ticket.severity) promptParts.push(`Severity: ${ticket.severity}`);
     if (ticket.type) promptParts.push(`Type: ${ticket.type}`);
-    if (ticket.reproductionSteps) promptParts.push(`Reproduction Steps: ${JSON.stringify(ticket.reproductionSteps)}`);
+    if (ticket.reproductionSteps)
+      promptParts.push(`Reproduction Steps: ${JSON.stringify(ticket.reproductionSteps)}`);
     if (ticket.keywords?.length) promptParts.push(`Keywords: ${ticket.keywords.join(', ')}`);
 
     if (ticket.agentSessions?.[0]?.messages?.length) {
@@ -965,7 +549,7 @@ Keep responses concise but thorough.`,
       '- labels: Suggested GitHub labels',
       '- priority: "low" | "medium" | "high" | "critical"',
       '',
-      'Respond ONLY with valid JSON.',
+      'Respond ONLY with valid JSON.'
     );
 
     await job.updateProgress(30);
@@ -975,7 +559,8 @@ Keep responses concise but thorough.`,
       messages: [
         {
           role: 'system',
-          content: 'You are an expert product manager who transforms bug reports into well-structured User Stories. Always respond with valid JSON.',
+          content:
+            'You are an expert product manager who transforms bug reports into well-structured User Stories. Always respond with valid JSON.',
         },
         {
           role: 'user',
@@ -1002,7 +587,9 @@ Keep responses concise but thorough.`,
       userStory = {
         title: parsed.title || 'As a user, I want this issue resolved',
         description: parsed.description || '',
-        acceptanceCriteria: Array.isArray(parsed.acceptanceCriteria) ? parsed.acceptanceCriteria : [],
+        acceptanceCriteria: Array.isArray(parsed.acceptanceCriteria)
+          ? parsed.acceptanceCriteria
+          : [],
         technicalNotes: parsed.technicalNotes || '',
         labels: Array.isArray(parsed.labels) ? parsed.labels : [],
         priority: parsed.priority || 'medium',
@@ -1041,9 +628,13 @@ Keep responses concise but thorough.`,
       `**Ticket ID**: \`${ticketId.slice(0, 8)}\``,
       ticket.type ? `**Type**: ${ticket.type}` : null,
       ticket.severity ? `**Severity**: ${ticket.severity}` : null,
-    ].filter(Boolean).join(' | ');
+    ]
+      .filter(Boolean)
+      .join(' | ');
 
-    bodySections.push(`## Original Ticket Context\n\n${metadata}\n\n---\n*Generated from Support Helper ticket as User Story*`);
+    bodySections.push(
+      `## Original Ticket Context\n\n${metadata}\n\n---\n*Generated from Support Helper ticket as User Story*`
+    );
 
     const issueBody = bodySections.join('\n\n');
 
@@ -1092,7 +683,7 @@ Keep responses concise but thorough.`,
     await job.updateProgress(100);
 
     this.logger.log(
-      `Created User Story issue #${issue.number} for ticket ${ticketId} in ${options.repository}`,
+      `Created User Story issue #${issue.number} for ticket ${ticketId} in ${options.repository}`
     );
 
     return {
@@ -1163,10 +754,15 @@ Keep responses concise but thorough.`,
     }
 
     const { ticket } = agentTask;
-    const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
+    const githubConfig =
+      ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+      ticket.application?.githubConfigs?.[0];
 
     if (!githubConfig) {
-      await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application. Link a repository first.');
+      await this.setAgentTaskError(
+        agentTaskId,
+        'No GitHub configuration found for this application. Link a repository first.'
+      );
       throw new Error('No GitHub configuration found for application');
     }
 
@@ -1183,7 +779,9 @@ Keep responses concise but thorough.`,
     });
 
     if (!indexStatus || indexStatus.status !== 'indexed') {
-      this.logger.warn(`Codebase not indexed for application ${applicationId}, continuing with limited context`);
+      this.logger.warn(
+        `Codebase not indexed for application ${applicationId}, continuing with limited context`
+      );
       await this.appendAgentTaskLog(agentTaskId, {
         step: 'codebase_index_warning',
         message: 'Codebase not fully indexed. Analysis may be less accurate.',
@@ -1206,7 +804,7 @@ Keep responses concise but thorough.`,
       tenantId,
       Number(githubConfig.installation.installationId),
       githubConfig.owner,
-      githubConfig.repo,
+      githubConfig.repo
     );
     await this.appendAgentTaskLog(agentTaskId, {
       step: 'repo_tree',
@@ -1218,7 +816,10 @@ Keep responses concise but thorough.`,
     // 6. Get AI config for the tenant (provider-agnostic)
     const aiProviderConfig = await this.getDecryptedAiConfig(tenantId);
     if (!aiProviderConfig) {
-      await this.setAgentTaskError(agentTaskId, 'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.');
+      await this.setAgentTaskError(
+        agentTaskId,
+        'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.'
+      );
       throw new Error('No AI provider configured');
     }
 
@@ -1261,13 +862,20 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
       });
     }
 
-    this.logger.log(`Calling ${aiProviderConfig.provider} (${aiProviderConfig.model}) for action plan generation`);
+    this.logger.log(
+      `Calling ${aiProviderConfig.provider} (${aiProviderConfig.model}) for action plan generation`
+    );
     await this.appendAgentTaskLog(agentTaskId, {
       step: 'calling_ai',
       message: `Sending analysis request to ${aiProviderConfig.provider}`,
     });
 
-    const responseText = await this.callAiCompletion(aiProviderConfig, systemPrompt, userPrompt, 4096);
+    const responseText = await this.callAiCompletion(
+      aiProviderConfig,
+      systemPrompt,
+      userPrompt,
+      4096
+    );
 
     await job.updateProgress(80);
 
@@ -1313,7 +921,8 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
 
       await this.appendAgentTaskLog(agentTaskId, {
         step: 'completed',
-        message: 'Action plan generated and auto-approved (auto mode). Proceeding to code generation.',
+        message:
+          'Action plan generated and auto-approved (auto mode). Proceeding to code generation.',
       });
 
       // Auto-queue code generation
@@ -1330,7 +939,7 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
           priority: 5,
           attempts: 3,
           backoff: { type: 'exponential', delay: 30000 },
-        },
+        }
       );
 
       this.logger.log(`Action plan auto-approved for task ${agentTaskId}, code generation queued`);
@@ -1338,7 +947,9 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
 
     await job.updateProgress(100);
 
-    this.logger.log(`Action plan ready for agent task ${agentTaskId}: ${actionPlan.files.length} files`);
+    this.logger.log(
+      `Action plan ready for agent task ${agentTaskId}: ${actionPlan.files.length} files`
+    );
 
     return {
       success: true,
@@ -1409,17 +1020,25 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
       }
 
       const { ticket } = agentTask;
-      const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
+      const githubConfig =
+        ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+        ticket.application?.githubConfigs?.[0];
 
       if (!githubConfig) {
-        await this.setAgentTaskError(agentTaskId, 'No GitHub configuration found for this application.');
+        await this.setAgentTaskError(
+          agentTaskId,
+          'No GitHub configuration found for this application.'
+        );
         throw new Error('No GitHub configuration found for application');
       }
 
       // 3. Get action plan from agentTask
       const actionPlan = agentTask.actionPlan as unknown as ActionPlan | null;
       if (!actionPlan?.files?.length) {
-        await this.setAgentTaskError(agentTaskId, 'No action plan files found. Generate an action plan first.');
+        await this.setAgentTaskError(
+          agentTaskId,
+          'No action plan files found. Generate an action plan first.'
+        );
         throw new Error('No action plan files found');
       }
 
@@ -1440,7 +1059,10 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
       });
 
       if (!connection?.accessToken) {
-        await this.setAgentTaskError(agentTaskId, 'No GitHub access token found. Reconnect GitHub.');
+        await this.setAgentTaskError(
+          agentTaskId,
+          'No GitHub access token found. Reconnect GitHub.'
+        );
         throw new Error('No GitHub access token found');
       }
 
@@ -1449,7 +1071,10 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
       // 5. Get AI config (provider-agnostic)
       const aiProviderConfig = await this.getDecryptedAiConfig(tenantId);
       if (!aiProviderConfig) {
-        await this.setAgentTaskError(agentTaskId, 'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.');
+        await this.setAgentTaskError(
+          agentTaskId,
+          'No AI provider configured for this tenant. Configure one at Dashboard > Settings > AI.'
+        );
         throw new Error('No AI provider configured');
       }
 
@@ -1462,7 +1087,7 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
 
       // 6. Generate code for each file
       const sortedFiles = [...actionPlan.files].sort(
-        (a: any, b: any) => (a.order || 0) - (b.order || 0),
+        (a: any, b: any) => (a.order || 0) - (b.order || 0)
       );
       const generatedFiles: Array<{
         filePath: string;
@@ -1528,14 +1153,27 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
         });
 
         // Build prompt and call AI provider, including CI error context for retries
-        const userPrompt = this.buildCodeGenUserPrompt(file, currentContent, codeContext, actionPlan, agentTask.ciErrorLog);
+        const userPrompt = this.buildCodeGenUserPrompt(
+          file,
+          currentContent,
+          codeContext,
+          actionPlan,
+          agentTask.ciErrorLog
+        );
 
         apiCallCount++;
-        this.logger.log(`Calling ${aiProviderConfig.provider} for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`);
+        this.logger.log(
+          `Calling ${aiProviderConfig.provider} for file ${file.filePath} (${apiCallCount}/${maxApiCalls})`
+        );
 
         let generatedCode: string;
         try {
-          const responseText = await this.callAiCompletion(aiProviderConfig, systemPrompt, userPrompt, 8192);
+          const responseText = await this.callAiCompletion(
+            aiProviderConfig,
+            systemPrompt,
+            userPrompt,
+            8192
+          );
           generatedCode = this.extractCodeFromResponse(responseText);
         } catch (error) {
           this.logger.warn(`No response for ${file.filePath}: ${getErrorMessage(error)}, skipping`);
@@ -1585,7 +1223,7 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
         await this.appendAgentTaskLog(agentTaskId, {
           step: 'awaiting_code_review',
           message: 'Code generated. Waiting for human review before pushing.',
-          generatedFiles: generatedFiles.map((f) => ({
+          generatedFiles: generatedFiles.map(f => ({
             filePath: f.filePath,
             operation: f.operation,
             contentLength: f.content.length,
@@ -1594,26 +1232,27 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
 
         // Store generated files in a dedicated JSON field within execution log
         // The push-code handler will re-generate or use the same job data
-        const currentLog = (
-          (
+        const currentLog =
+          ((
             await this.prisma.agentTask.findUnique({
               where: { id: agentTaskId },
               select: { executionLog: true },
             })
-          )?.executionLog as ExecutionLogEntry[] | null
-        ) || [];
+          )?.executionLog as ExecutionLogEntry[] | null) || [];
 
         await this.prisma.agentTask.update({
           where: { id: agentTaskId },
           data: {
-            executionLog: JSON.parse(JSON.stringify([
-              ...currentLog,
-              {
-                step: 'generated_files_snapshot',
-                timestamp: new Date().toISOString(),
-                files: generatedFiles,
-              },
-            ])),
+            executionLog: JSON.parse(
+              JSON.stringify([
+                ...currentLog,
+                {
+                  step: 'generated_files_snapshot',
+                  timestamp: new Date().toISOString(),
+                  files: generatedFiles,
+                },
+              ])
+            ),
           },
         });
 
@@ -1705,7 +1344,7 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
           testingStrategy: actionPlan.testingStrategy,
           files: actionPlan.files || [],
         },
-        generatedFiles: generatedFiles.map((f) => ({
+        generatedFiles: generatedFiles.map(f => ({
           filePath: f.filePath,
           operation: f.operation,
         })),
@@ -1739,7 +1378,9 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
 
       await job.updateProgress(100);
 
-      this.logger.log(`PR #${prResult.prNumber} ${prResult.created ? 'created' : 'updated'} for agent task ${agentTaskId}: ${prResult.prUrl}`);
+      this.logger.log(
+        `PR #${prResult.prNumber} ${prResult.created ? 'created' : 'updated'} for agent task ${agentTaskId}: ${prResult.prUrl}`
+      );
 
       return {
         success: true,
@@ -1794,8 +1435,18 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     file: { filePath: string; operation: string; description: string; changeType: string },
     currentContent: string,
     codeContext: Array<{ filePath: string; content: string; language: string; distance: number }>,
-    actionPlan: { summary: string; rootCause: string; files: Array<{ filePath: string; operation: string; description: string; changeType: string }>; testingStrategy?: string },
-    ciErrorLog?: string | null,
+    actionPlan: {
+      summary: string;
+      rootCause: string;
+      files: Array<{
+        filePath: string;
+        operation: string;
+        description: string;
+        changeType: string;
+      }>;
+      testingStrategy?: string;
+    },
+    ciErrorLog?: string | null
   ): string {
     const parts: string[] = [];
 
@@ -1851,7 +1502,9 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     parts.push('');
     parts.push('## Instructions');
     if (file.operation === 'modify') {
-      parts.push('Generate the COMPLETE modified file content. Include ALL original code that should remain unchanged, plus your modifications.');
+      parts.push(
+        'Generate the COMPLETE modified file content. Include ALL original code that should remain unchanged, plus your modifications.'
+      );
     } else {
       parts.push('Generate the COMPLETE new file content.');
     }
@@ -1918,7 +1571,9 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       }
 
       const { ticket } = agentTask;
-      const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
+      const githubConfig =
+        ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+        ticket.application?.githubConfigs?.[0];
 
       if (!githubConfig) {
         throw new Error('No GitHub configuration found');
@@ -1928,7 +1583,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       const executionLog = (agentTask.executionLog as ExecutionLogEntry[] | null) || [];
       const snapshot = executionLog
         .reverse()
-        .find((entry) => entry.step === 'generated_files_snapshot');
+        .find(entry => entry.step === 'generated_files_snapshot');
 
       if (!snapshot?.files?.length) {
         throw new Error('No generated files snapshot found in execution log');
@@ -2021,7 +1676,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
           testingStrategy: actionPlan?.testingStrategy,
           files: actionPlan?.files || [],
         },
-        generatedFiles: generatedFiles.map((f) => ({
+        generatedFiles: generatedFiles.map(f => ({
           filePath: f.filePath,
           operation: f.operation,
         })),
@@ -2055,7 +1710,9 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
 
       await job.updateProgress(100);
 
-      this.logger.log(`PR #${prResult.prNumber} created for task ${agentTaskId}: ${prResult.prUrl}`);
+      this.logger.log(
+        `PR #${prResult.prNumber} created for task ${agentTaskId}: ${prResult.prUrl}`
+      );
 
       return {
         success: true,
@@ -2086,7 +1743,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
    */
   private async searchCodebaseEmbeddings(
     applicationId: string,
-    ticket: { title: string | null; description: string | null; aiSummary: string | null },
+    ticket: { title: string | null; description: string | null; aiSummary: string | null }
   ): Promise<Array<{ filePath: string; content: string; language: string; distance: number }>> {
     // Build query from ticket content
     const queryParts = [ticket.title, ticket.description, ticket.aiSummary].filter(Boolean);
@@ -2112,10 +1769,10 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
          ORDER BY distance
          LIMIT 10`,
         embeddingStr,
-        applicationId,
+        applicationId
       );
 
-      return results.map((row) => ({
+      return results.map(row => ({
         filePath: row.file_path,
         content: row.content,
         language: row.language,
@@ -2134,7 +1791,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     tenantId: string,
     installationId: number,
     owner: string,
-    repo: string,
+    repo: string
   ): Promise<string[]> {
     try {
       // Get GitHub access token
@@ -2160,8 +1817,8 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       });
 
       return data.tree
-        .filter((item) => item.type === 'blob' && item.path)
-        .map((item) => item.path!)
+        .filter(item => item.type === 'blob' && item.path)
+        .map(item => item.path!)
         .slice(0, 200);
     } catch (error) {
       this.logger.warn(`Failed to get repo tree for ${owner}/${repo}: ${getErrorMessage(error)}`);
@@ -2218,10 +1875,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
         const decipher = createDecipheriv('aes-256-gcm', key, iv);
         decipher.setAuthTag(authTag);
 
-        const decrypted = Buffer.concat([
-          decipher.update(ciphertext),
-          decipher.final(),
-        ]);
+        const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
 
         apiKey = decrypted.toString('utf8');
       } catch (error) {
@@ -2245,7 +1899,7 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     config: { provider: string; apiKey: string; model: string },
     systemPrompt: string,
     userPrompt: string,
-    maxTokens: number,
+    maxTokens: number
   ): Promise<string> {
     if (config.provider === 'openai') {
       const openai = new OpenAI({ apiKey: config.apiKey });
@@ -2271,9 +1925,9 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
       messages: [{ role: 'user', content: userPrompt }],
     });
 
-    const textBlock = response.content.find(
-      (block: { type: string }) => block.type === 'text',
-    ) as { type: 'text'; text: string } | undefined;
+    const textBlock = response.content.find((block: { type: string }) => block.type === 'text') as
+      | { type: 'text'; text: string }
+      | undefined;
 
     if (!textBlock) throw new Error('Anthropic returned empty response');
     return textBlock.text;
@@ -2328,7 +1982,7 @@ Rules:
   private buildActionPlanUserPrompt(
     ticket: any,
     repoTree: string[],
-    relevantCode: Array<{ filePath: string; content: string; language: string; distance: number }>,
+    relevantCode: Array<{ filePath: string; content: string; language: string; distance: number }>
   ): string {
     const parts: string[] = [];
 
@@ -2344,15 +1998,17 @@ Rules:
       parts.push(`\n**AI Summary:**\n${ticket.aiSummary}`);
     }
     if (ticket.aiAnalysis) {
-      const analysisStr = typeof ticket.aiAnalysis === 'string'
-        ? ticket.aiAnalysis
-        : JSON.stringify(ticket.aiAnalysis, null, 2);
+      const analysisStr =
+        typeof ticket.aiAnalysis === 'string'
+          ? ticket.aiAnalysis
+          : JSON.stringify(ticket.aiAnalysis, null, 2);
       parts.push(`\n**AI Analysis:**\n${analysisStr}`);
     }
     if (ticket.reproductionSteps) {
-      const stepsStr = typeof ticket.reproductionSteps === 'string'
-        ? ticket.reproductionSteps
-        : JSON.stringify(ticket.reproductionSteps, null, 2);
+      const stepsStr =
+        typeof ticket.reproductionSteps === 'string'
+          ? ticket.reproductionSteps
+          : JSON.stringify(ticket.reproductionSteps, null, 2);
       parts.push(`\n**Reproduction Steps:**\n${stepsStr}`);
     }
 
@@ -2380,7 +2036,10 @@ Rules:
   private truncateCodeSnippet(content: string, maxLines: number): string {
     const lines = content.split('\n');
     if (lines.length <= maxLines) return content;
-    return lines.slice(0, maxLines).join('\n') + `\n// ... truncated (${lines.length - maxLines} more lines)`;
+    return (
+      lines.slice(0, maxLines).join('\n') +
+      `\n// ... truncated (${lines.length - maxLines} more lines)`
+    );
   }
 
   private parseActionPlanResponse(text: string): {
@@ -2443,7 +2102,7 @@ Rules:
    */
   private async shouldWaitForReview(
     applicationId: string,
-    phase: 'plan' | 'code',
+    phase: 'plan' | 'code'
   ): Promise<boolean> {
     try {
       const config = await this.prisma.projectGithubConfig.findFirst({
@@ -2468,7 +2127,7 @@ Rules:
       return false; // auto mode or review_plan with code phase
     } catch (error) {
       this.logger.warn(
-        `Failed to check validation mode for app ${applicationId}: ${getErrorMessage(error)}`,
+        `Failed to check validation mode for app ${applicationId}: ${getErrorMessage(error)}`
       );
       return false; // Fail open to auto mode
     }
@@ -2602,9 +2261,7 @@ Rules:
         id: { not: ticketId },
         status: { in: ['resolved', 'closed'] },
         type: 'question',
-        OR: [
-          { title: { contains: searchText.slice(0, 50), mode: 'insensitive' } },
-        ],
+        OR: [{ title: { contains: searchText.slice(0, 50), mode: 'insensitive' } }],
       },
       select: { title: true, description: true, aiSummary: true },
       take: 3,
@@ -2624,7 +2281,8 @@ Rules:
           orderBy: { updatedAt: 'desc' },
         });
         if (embeddings.length > 0) {
-          codeContext = '\n\n## Relevant Code Context\n' +
+          codeContext =
+            '\n\n## Relevant Code Context\n' +
             embeddings.map(e => `### ${e.filePath}\n${e.content.slice(0, 500)}`).join('\n\n');
         }
       } catch {
@@ -2635,12 +2293,16 @@ Rules:
     await job.updateProgress(60);
 
     // Build prompt and generate answer
-    const similarContext = similarTickets.length > 0
-      ? '\n\n## Similar Resolved Questions\n' +
-        similarTickets.map(t =>
-          `- Q: "${t.title}"\n  A: ${t.aiSummary || t.description?.slice(0, 200) || 'No summary'}`
-        ).join('\n')
-      : '';
+    const similarContext =
+      similarTickets.length > 0
+        ? '\n\n## Similar Resolved Questions\n' +
+          similarTickets
+            .map(
+              t =>
+                `- Q: "${t.title}"\n  A: ${t.aiSummary || t.description?.slice(0, 200) || 'No summary'}`
+            )
+            .join('\n')
+        : '';
 
     const systemPrompt = `You are a helpful technical support agent. A user has asked a question about their application. Based on the codebase documentation and similar resolved tickets provided below, generate a clear, actionable answer.
 
@@ -2668,7 +2330,8 @@ Please answer this question.`;
       answer = chatResult.content || 'No response generated.';
     } catch (error) {
       this.logger.error(`Auto-answer AI call failed: ${getErrorMessage(error)}`);
-      answer = 'I was unable to generate an automatic answer. A human support agent will review your question.';
+      answer =
+        'I was unable to generate an automatic answer. A human support agent will review your question.';
     }
 
     await job.updateProgress(80);
@@ -2759,7 +2422,8 @@ Please answer this question.`;
           orderBy: { updatedAt: 'desc' },
         });
         if (embeddings.length > 0) {
-          codeContext = '\n\n## Current Codebase Structure\n' +
+          codeContext =
+            '\n\n## Current Codebase Structure\n' +
             embeddings.map(e => `- ${e.filePath} (${e.language || 'unknown'})`).join('\n');
         }
       } catch {
@@ -2828,7 +2492,8 @@ Generate a technical proposal for this feature request.`;
       }
     } catch (error) {
       this.logger.error(`Proposal generation AI call failed: ${getErrorMessage(error)}`);
-      proposalText = 'Unable to generate an automatic proposal. A human will review this feature request.';
+      proposalText =
+        'Unable to generate an automatic proposal. A human will review this feature request.';
     }
 
     await job.updateProgress(80);
@@ -2842,11 +2507,13 @@ Generate a technical proposal for this feature request.`;
           ? `## Technical Proposal\n\n**Summary:** ${proposalData.summary || ''}\n\n**Approach:** ${proposalData.approach || ''}\n\n**Complexity:** ${proposalData.estimatedComplexity || 'unknown'}\n\n**Affected Areas:** ${(proposalData.affectedAreas || []).join(', ')}\n\n**Risks:** ${(proposalData.risks || []).join(', ')}`
           : proposalText,
         sender: 'triage-agent',
-        metadata: JSON.parse(JSON.stringify({
-          handler: 'generate-proposal',
-          proposal: proposalData,
-          hasCodeContext: codeContext.length > 0,
-        })),
+        metadata: JSON.parse(
+          JSON.stringify({
+            handler: 'generate-proposal',
+            proposal: proposalData,
+            hasCodeContext: codeContext.length > 0,
+          })
+        ),
       },
     });
 
@@ -2882,7 +2549,9 @@ Generate a technical proposal for this feature request.`;
 
   @OnWorkerEvent('active')
   onActive(job: Job<AgentJobData>) {
-    this.logger.log(`Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`);
+    this.logger.log(
+      `Job ${job.id} started processing (attempt ${job.attemptsMade + 1}/${job.opts.attempts})`
+    );
   }
 
   @OnWorkerEvent('completed')
@@ -2902,7 +2571,7 @@ Generate a technical proposal for this feature request.`;
 
     this.logger.error(
       `Job ${job.id} failed (attempt ${attemptsMade}/${maxAttempts}): ${getErrorMessage(error)}`,
-      getErrorStack(error),
+      getErrorStack(error)
     );
 
     // If this was the last attempt, move to dead letter queue
@@ -2924,7 +2593,7 @@ Generate a technical proposal for this feature request.`;
           removeOnComplete: {
             age: 90 * 24 * 60 * 60, // 90 days
           },
-        },
+        }
       );
     } else {
       const nextDelay = this.getNextRetryDelay(attemptsMade);

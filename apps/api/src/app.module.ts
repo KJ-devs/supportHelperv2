@@ -42,8 +42,6 @@ import { MediaModule } from './modules/media/media.module';
 // AI & Automation
 import { AIModule } from './ai/ai.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
-import { AgentModule } from './modules/agent/agent.module';
-
 // Integrations
 import { GithubModule } from './modules/github/github.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
@@ -199,7 +197,6 @@ import { AdminModule } from './modules/admin/admin.module';
     // AI & Automation
     AIModule,
     AiConfigModule,
-    AgentModule,
 
     // Integrations
     GithubModule,

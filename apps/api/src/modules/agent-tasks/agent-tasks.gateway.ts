@@ -12,7 +12,7 @@ import {
 import { Logger, UseGuards } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
-import { WsJwtGuard } from '../agent/ws-jwt.guard';
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import {
   getWebSocketCorsConfig,
   WS_PING_INTERVAL,
@@ -33,9 +33,7 @@ interface WsUser {
   pingTimeout: WS_PING_TIMEOUT,
 })
 @UseGuards(WsJwtGuard)
-export class AgentTasksGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class AgentTasksGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server: Server;
 
@@ -49,7 +47,7 @@ export class AgentTasksGateway
     const user = client.data.user as WsUser | undefined;
     if (user) {
       this.logger.log(
-        `Client connected: ${client.id} (user: ${user.userId}, tenant: ${user.tenantId})`,
+        `Client connected: ${client.id} (user: ${user.userId}, tenant: ${user.tenantId})`
       );
     } else {
       this.logger.log(`Client connected: ${client.id} (unauthenticated)`);
@@ -63,10 +61,7 @@ export class AgentTasksGateway
   // ── Client message handlers ──────────────────────────────
 
   @SubscribeMessage('tenant:join')
-  async handleJoinTenant(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() _data: unknown,
-  ) {
+  async handleJoinTenant(@ConnectedSocket() client: Socket, @MessageBody() _data: unknown) {
     const user = client.data.user as WsUser;
     if (!user?.tenantId) {
       throw new WsException('Tenant ID not found in authentication token');
@@ -81,10 +76,7 @@ export class AgentTasksGateway
   }
 
   @SubscribeMessage('task:join')
-  async handleJoinTask(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { taskId: string },
-  ) {
+  async handleJoinTask(@ConnectedSocket() client: Socket, @MessageBody() data: { taskId: string }) {
     if (!data?.taskId) {
       throw new WsException('taskId is required');
     }
@@ -101,7 +93,7 @@ export class AgentTasksGateway
   @SubscribeMessage('task:leave')
   async handleLeaveTask(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { taskId: string },
+    @MessageBody() data: { taskId: string }
   ) {
     if (!data?.taskId) {
       throw new WsException('taskId is required');
@@ -143,11 +135,7 @@ export class AgentTasksGateway
   }
 
   @OnEvent('agent-task:plan-ready')
-  handlePlanReady(event: {
-    taskId: string;
-    plan: unknown;
-    iteration?: number;
-  }) {
+  handlePlanReady(event: { taskId: string; plan: unknown; iteration?: number }) {
     this.server.to(this.taskRoomName(event.taskId)).emit('task:plan-ready', {
       taskId: event.taskId,
       plan: event.plan,
@@ -157,11 +145,7 @@ export class AgentTasksGateway
   }
 
   @OnEvent('agent-task:code-ready')
-  handleCodeReady(event: {
-    taskId: string;
-    filesCount: number;
-    complexity?: string;
-  }) {
+  handleCodeReady(event: { taskId: string; filesCount: number; complexity?: string }) {
     this.server.to(this.taskRoomName(event.taskId)).emit('task:code-ready', {
       taskId: event.taskId,
       filesCount: event.filesCount,
@@ -171,12 +155,7 @@ export class AgentTasksGateway
   }
 
   @OnEvent('agent-task:pr-created')
-  handlePrCreated(event: {
-    taskId: string;
-    prNumber: number;
-    prUrl: string;
-    branchName: string;
-  }) {
+  handlePrCreated(event: { taskId: string; prNumber: number; prUrl: string; branchName: string }) {
     this.server.to(this.taskRoomName(event.taskId)).emit('task:pr-created', {
       taskId: event.taskId,
       prNumber: event.prNumber,
@@ -203,10 +182,7 @@ export class AgentTasksGateway
   }
 
   @OnEvent('agent-task:error')
-  handleError(event: {
-    taskId: string;
-    error: string;
-  }) {
+  handleError(event: { taskId: string; error: string }) {
     this.server.to(this.taskRoomName(event.taskId)).emit('task:error', {
       taskId: event.taskId,
       error: event.error,
@@ -216,7 +192,12 @@ export class AgentTasksGateway
 
   // ── Server-side emit helpers (for injection into services) ──
 
-  emitStatusChanged(taskId: string, previousStatus: string, newStatus: string, metadata?: Record<string, unknown>) {
+  emitStatusChanged(
+    taskId: string,
+    previousStatus: string,
+    newStatus: string,
+    metadata?: Record<string, unknown>
+  ) {
     this.server.to(this.taskRoomName(taskId)).emit('task:status-changed', {
       taskId,
       previousStatus,

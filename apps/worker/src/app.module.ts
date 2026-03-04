@@ -12,7 +12,6 @@ import anthropicConfig from './config/anthropic.config';
 import ffmpegConfig from './config/ffmpeg.config';
 import ocrConfig from './config/ocr.config';
 import openaiConfig from './config/openai.config';
-import yoloConfig from './config/yolo.config';
 import queueConfig from './config/queue.config';
 
 /**
@@ -39,7 +38,7 @@ import queueConfig from './config/queue.config';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
-      load: [anthropicConfig, ffmpegConfig, ocrConfig, openaiConfig, yoloConfig, queueConfig],
+      load: [anthropicConfig, ffmpegConfig, ocrConfig, openaiConfig, queueConfig],
     }),
 
     // Logging

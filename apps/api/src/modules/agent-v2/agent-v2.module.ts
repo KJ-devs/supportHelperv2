@@ -17,7 +17,7 @@ import { DiagnosisService } from './diagnosis.service';
 import { DeepAnalysisService } from './deep-analysis.service';
 import { AgentV2Controller } from './agent-v2.controller';
 import { AgentV2Gateway } from './agent-v2.gateway';
-import { WsJwtGuard } from '../agent/ws-jwt.guard';
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 
 @Module({
   imports: [

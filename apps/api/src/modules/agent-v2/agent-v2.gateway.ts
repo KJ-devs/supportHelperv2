@@ -12,7 +12,7 @@ import {
 import { Logger, UseGuards } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Server, Socket } from 'socket.io';
-import { WsJwtGuard } from '../agent/ws-jwt.guard';
+import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 import { DeepAnalysisService } from './deep-analysis.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import {

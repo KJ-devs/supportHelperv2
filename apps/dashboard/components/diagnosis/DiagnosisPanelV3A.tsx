@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Bot, ChevronUp, ChevronDown } from 'lucide-react';
-import type { Diagnosis, AffectedFile } from './DiagnosisPanel';
+import type { Diagnosis, AffectedFile } from '@/lib/api/agent-v2';
 
 export type { Diagnosis };
 
@@ -124,16 +124,12 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
           AI Diagnosis
         </p>
         <button
-          onClick={() => setIsExpanded((v) => !v)}
+          onClick={() => setIsExpanded(v => !v)}
           className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors"
           aria-label={isExpanded ? 'Collapse diagnosis' : 'Expand diagnosis'}
         >
           <span className="text-[10px]">{isExpanded ? 'collapse' : 'expand'}</span>
-          {isExpanded ? (
-            <ChevronUp className="w-3 h-3" />
-          ) : (
-            <ChevronDown className="w-3 h-3" />
-          )}
+          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
 
