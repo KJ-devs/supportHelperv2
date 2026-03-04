@@ -87,6 +87,9 @@ import { TriageModule } from './modules/triage/triage.module';
 // N1 Triage (Level 1 rapid assessment before deep analysis)
 import { N1TriageModule } from './modules/n1-triage/n1-triage.module';
 
+// Ticket Relations (duplicate/similar/related linking)
+import { TicketRelationsModule } from './modules/ticket-relations/ticket-relations.module';
+
 // Billing (Stripe subscriptions)
 import { BillingModule } from './modules/billing/billing.module';
 
@@ -240,6 +243,9 @@ import { AdminModule } from './modules/admin/admin.module';
 
     // N1 Triage (Level 1 rapid assessment before deep analysis)
     N1TriageModule,
+
+    // Ticket Relations (duplicate/similar/related linking)
+    TicketRelationsModule,
 
     // Billing (Stripe subscriptions)
     BillingModule,
