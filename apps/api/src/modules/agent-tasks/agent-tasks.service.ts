@@ -99,6 +99,7 @@ export class AgentTasksService {
     // Emit WebSocket event for real-time UI updates
     this.eventEmitter.emit('agent-task:status-changed', {
       taskId: id,
+      tenantId: previous?.tenantId,
       previousStatus: previous?.status,
       newStatus: status,
     });

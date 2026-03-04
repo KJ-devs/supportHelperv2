@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { agentTasksApi } from '@/lib/api/agent-tasks';
 import type {
@@ -15,6 +15,7 @@ import { Pagination } from '@/components/tickets/Pagination';
 import { AgentTaskMetrics } from './components/AgentTaskMetrics';
 import { AgentTaskTable } from './components/AgentTaskTable';
 import { AgentTaskFiltersBar } from './components/AgentTaskFilters';
+import { useAgentTasksRealtime } from '@/hooks/useAgentTasksRealtime';
 
 export default function AgentTasksPage() {
   const { isLoading: authLoading } = useRequireAuth();
@@ -24,6 +25,7 @@ export default function AgentTasksPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [statsLoading, setStatsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const [filters, setFilters] = useState<AgentTaskFilters>({
     page: 1,
@@ -37,23 +39,30 @@ export default function AgentTasksPage() {
     totalPages: 0,
   });
 
-  const fetchTasks = useCallback(async () => {
+  // Keep a ref to filters so the WebSocket callback always uses the latest value
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
+  const fetchTasks = useCallback(async (currentFilters?: AgentTaskFilters) => {
     try {
       setIsLoading(true);
       setError(null);
-      const response: PaginatedResponse<AgentTask> = await agentTasksApi.getTasks(filters);
+      const response: PaginatedResponse<AgentTask> = await agentTasksApi.getTasks(
+        currentFilters ?? filtersRef.current,
+      );
       setTasks(response.data);
       setPagination({
         ...response.pagination,
         page: response.pagination.page + 1,
       });
+      setLastUpdated(new Date());
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Error loading agent tasks');
       console.error('Error fetching agent tasks:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   const fetchStats = useCallback(async () => {
     try {
@@ -73,6 +82,14 @@ export default function AgentTasksPage() {
       fetchStats();
     }
   }, [authLoading, fetchTasks, fetchStats]);
+
+  // Real-time WebSocket updates — refetch tasks and stats when any task changes
+  const handleRealtimeUpdate = useCallback(() => {
+    fetchTasks();
+    fetchStats();
+  }, [fetchTasks, fetchStats]);
+
+  useAgentTasksRealtime(handleRealtimeUpdate);
 
   const handleFiltersChange = (newFilters: AgentTaskFilters) => {
     setFilters({ ...newFilters });
@@ -126,9 +143,24 @@ export default function AgentTasksPage() {
                 Monitor and manage AI agent analysis tasks
               </p>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => { fetchTasks(); fetchStats(); }}>
-              Refresh
-            </Button>
+            <div className="flex items-center gap-3">
+              {/* Real-time status indicator */}
+              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+                </span>
+                <span>Live</span>
+                {lastUpdated && (
+                  <span className="ml-1 text-gray-400 dark:text-gray-500">
+                    · updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { fetchTasks(); fetchStats(); }}>
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -178,7 +210,7 @@ export default function AgentTasksPage() {
                 <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
                 <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={fetchTasks} className="ml-auto">
+              <Button variant="ghost" size="sm" onClick={() => fetchTasks()} className="ml-auto">
                 Retry
               </Button>
             </div>

@@ -62,6 +62,24 @@ export class AgentTasksGateway
 
   // ── Client message handlers ──────────────────────────────
 
+  @SubscribeMessage('tenant:join')
+  async handleJoinTenant(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() _data: unknown,
+  ) {
+    const user = client.data.user as WsUser;
+    if (!user?.tenantId) {
+      throw new WsException('Tenant ID not found in authentication token');
+    }
+
+    const room = this.tenantRoomName(user.tenantId);
+    await client.join(room);
+
+    this.logger.log(`User ${user.userId} joined tenant room ${user.tenantId}`);
+
+    return { event: 'tenant:joined', data: { tenantId: user.tenantId } };
+  }
+
   @SubscribeMessage('task:join')
   async handleJoinTask(
     @ConnectedSocket() client: Socket,
@@ -103,17 +121,25 @@ export class AgentTasksGateway
   @OnEvent('agent-task:status-changed')
   handleStatusChanged(event: {
     taskId: string;
+    tenantId?: string;
     previousStatus: string;
     newStatus: string;
     metadata?: Record<string, unknown>;
   }) {
-    this.server.to(this.taskRoomName(event.taskId)).emit('task:status-changed', {
+    const payload = {
       taskId: event.taskId,
       previousStatus: event.previousStatus,
       newStatus: event.newStatus,
       metadata: event.metadata,
       timestamp: new Date().toISOString(),
-    });
+    };
+
+    this.server.to(this.taskRoomName(event.taskId)).emit('task:status-changed', payload);
+
+    // Also broadcast to tenant room so the list page updates in real time
+    if (event.tenantId) {
+      this.server.to(this.tenantRoomName(event.tenantId)).emit('task:status-changed', payload);
+    }
   }
 
   @OnEvent('agent-task:plan-ready')
@@ -247,5 +273,9 @@ export class AgentTasksGateway
 
   private taskRoomName(taskId: string): string {
     return `agent-task:${taskId}`;
+  }
+
+  private tenantRoomName(tenantId: string): string {
+    return `agent-tenant:${tenantId}`;
   }
 }

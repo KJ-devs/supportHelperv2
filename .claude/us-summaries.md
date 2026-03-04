@@ -334,6 +334,18 @@ After completing a US, append a summary here then `/clear` the context.
 - **Changes**: Full public-facing website. Landing page with "AI-Powered Bug Resolution" hero, 4-step how-it-works, 6-feature grid, social proof. Pricing page with Free ($0), Pro ($49), Enterprise ($199) tiers, feature comparison table, 5-item FAQ. Responsive, dark-mode ready.
 - **Date**: 2026-03-01
 
+## [US-AGENT-01] #250 Fix temps réel page Agent Tasks — DONE ✅
+- **Files**:
+  - NEW: `apps/dashboard/hooks/useAgentTasksRealtime.ts`
+  - MOD: `apps/dashboard/app/dashboard/agent-tasks/page.tsx`
+  - MOD: `apps/api/src/modules/agent-tasks/agent-tasks.gateway.ts`
+  - MOD: `apps/api/src/modules/agent-tasks/agent-tasks.service.ts`
+- **Changes**: Created `useAgentTasksRealtime` hook connecting to `/agent-tasks` WS namespace with JWT auth. Added `tenant:join` handler + `tenantRoomName()` to `AgentTasksGateway`. `updateStatus()` now includes `tenantId` in event payload for tenant-room broadcast. `agent-tasks/page.tsx` uses hook for auto-refresh + shows pulsing "Live" indicator with last-updated timestamp.
+- **Decisions**: Tenant-broadcast room pattern (same as TicketsGateway). `onUpdate` callback decouples hook from state management.
+- **Events WebSocket**: `task:status-changed`, `task:plan-ready`, `task:code-ready`, `task:pr-created`, `task:ci-status`, `task:error`
+- **Remaining**: None
+- **Date**: 2026-03-04
+
 ## [US-AGENT-02] #251 Définir AgentHandoffContext dans packages/shared — DONE ✅
 - **Files**: `packages/shared/src/types/agent-context.ts` (NEW), `packages/shared/src/index.ts`
 - **Changes**: Interface `AgentHandoffContext` + sous-types créés et exportés (`TriageType`, `TriageSeverity`, `TriageRoute`, `AgentRole`, `N2Complexity`, `DecisionTraceEntry`, `TriageDecision`, `N1Analysis`, `N2Plan`)
