@@ -333,3 +333,11 @@ After completing a US, append a summary here then `/clear` the context.
   - Various config files restored: `package.json`, `next.config.ts`, `tailwind.config.ts`, `tsconfig.json`
 - **Changes**: Full public-facing website. Landing page with "AI-Powered Bug Resolution" hero, 4-step how-it-works, 6-feature grid, social proof. Pricing page with Free ($0), Pro ($49), Enterprise ($199) tiers, feature comparison table, 5-item FAQ. Responsive, dark-mode ready.
 - **Date**: 2026-03-01
+
+## [US-AGENT-02] #251 Définir AgentHandoffContext dans packages/shared — DONE ✅
+- **Files**: `packages/shared/src/types/agent-context.ts` (NEW), `packages/shared/src/index.ts`
+- **Changes**: Interface `AgentHandoffContext` + sous-types créés et exportés (`TriageType`, `TriageSeverity`, `TriageRoute`, `AgentRole`, `N2Complexity`, `DecisionTraceEntry`, `TriageDecision`, `N1Analysis`, `N2Plan`)
+- **Decisions**: Types helper pour meilleure lisibilité. No circular deps — pure type definitions, no imports from other shared files.
+- **Export**: `import { AgentHandoffContext } from '@support-helper/shared'`
+- **Remaining**: rien
+- **Date**: 2026-03-04

@@ -3,6 +3,7 @@ export * from './types/ticket';
 export * from './types/user';
 export * from './types/tenant';
 export * from './types/media';
+export * from './types/agent-context';
 
 // Constants
 export * from './constants/ticket-status';
