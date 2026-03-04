@@ -346,6 +346,19 @@ After completing a US, append a summary here then `/clear` the context.
 - **Remaining**: None
 - **Date**: 2026-03-04
 
+## [US-AGENT-04] #253 Priorisation dynamique des jobs BullMQ par sévérité — DONE ✅
+- **Files**:
+  - MOD: `apps/api/src/modules/tickets/tickets.service.ts` — added `severityToBullMQPriority()` helper + pass priority to `enqueueTriage()`
+  - MOD: `apps/api/src/modules/triage/triage-router.service.ts` — added `severityToBullMQPriority()` helper, lookup ticket severity before `deepAnalysisQueue.add()`, pass priority
+  - MOD: `apps/api/src/modules/media/media.service.ts` — added `severityToBullMQPriority()` helper, pass severity to `enqueueVideoAnalysis()`, use priority in queue options
+  - MOD: `apps/worker/src/workers/triage.worker.ts` — added BullMQ `limiter: { max: 100, duration: 60000 }` (pro plan ceiling, 100 jobs/min)
+  - MOD: `apps/worker/src/workers/deep-analysis.worker.ts` — added BullMQ `limiter: { max: 20, duration: 60000 }` (free plan ceiling, 20 jobs/min)
+  - MOD: `apps/worker/src/queues/queues.module.ts` — added comments documenting rate limiter intent
+- **Changes**: Priority mapping: critical=1, high=2, medium=5, low=10 (BullMQ: lower = higher priority). Applied to triage, deep-analysis, and video-analysis job enqueues. Worker rate limiters added at `@Processor` level.
+- **Decisions**: `severityToBullMQPriority()` copied to 3 services (media, tickets, triage-router) rather than shared util to keep each service self-contained. Rate limiter on worker (not queue registration) as that's the correct BullMQ pattern. Per-tenant key limiting would require BullMQ Pro — implemented global ceiling instead.
+- **Remaining**: None
+- **Date**: 2026-03-04
+
 ## [US-AGENT-06] #255 Escalade N1→N2 avec contexte riche et event WebSocket — DONE ✅
 - **Files**:
   - MOD: `apps/api/src/modules/tickets/tickets.gateway.ts` — added `emitEscalatedToN2()` method emitting `agent:escalated-to-n2` event

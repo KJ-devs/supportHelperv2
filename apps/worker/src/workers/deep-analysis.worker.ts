@@ -16,8 +16,16 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
  *
  * Concurrency: 5
  * Retry: 3 attempts with exponential backoff (30s base)
+ * Rate limiter: 20 jobs/minute (free plan ceiling; pro = 100/min via triage priority).
+ * Jobs are dequeued in priority order: critical(1) > high(2) > medium(5) > low(10).
  */
-@Processor(QUEUE_NAMES.DEEP_ANALYSIS, { concurrency: 5 })
+@Processor(QUEUE_NAMES.DEEP_ANALYSIS, {
+  concurrency: 5,
+  limiter: {
+    max: 20,
+    duration: 60000, // 20 jobs per minute (free plan ceiling)
+  },
+})
 export class DeepAnalysisWorker extends WorkerHost {
   private readonly logger = new Logger(DeepAnalysisWorker.name);
 

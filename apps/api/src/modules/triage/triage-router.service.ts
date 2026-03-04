@@ -9,6 +9,17 @@ const CONFIDENCE_THRESHOLDS = {
   MANUAL_TRIAGE: 0.5,
 };
 
+/** Maps ticket severity to BullMQ priority (lower = higher priority). */
+function severityToBullMQPriority(severity: string | null | undefined): number {
+  switch (severity) {
+    case 'critical': return 1;
+    case 'high':     return 2;
+    case 'medium':   return 5;
+    case 'low':      return 10;
+    default:         return 5;
+  }
+}
+
 @Injectable()
 export class TriageRouterService {
   private readonly logger = new Logger(TriageRouterService.name);
@@ -89,11 +100,18 @@ export class TriageRouterService {
       };
     }
 
-    // Enqueue deep analysis (existing pipeline)
+    // Enqueue deep analysis with severity-based priority
+    const ticket = await this.prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { severity: true },
+    });
+    const priority = severityToBullMQPriority(ticket?.severity);
+
     await this.deepAnalysisQueue.add(
       'analyze',
       { ticketId, tenantId, applicationId },
       {
+        priority,
         attempts: 3,
         backoff: { type: 'exponential', delay: 30000 },
         delay: 5000,
@@ -101,6 +119,8 @@ export class TriageRouterService {
         removeOnFail: 100,
       },
     );
+
+    this.logger.log(`Ticket ${ticketId}: deep analysis enqueued with priority ${priority} (severity: ${ticket?.severity ?? 'unknown'})`);
 
     await this.prisma.ticket.update({
       where: { id: ticketId },

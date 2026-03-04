@@ -16,8 +16,18 @@ import { getErrorMessage, getErrorStack } from '../utils/error.utils';
  *
  * Concurrency: 10 (triage is fast, single AI call)
  * Retry: 3 attempts with exponential backoff (5s base)
+ * Rate limiter: 100 jobs/min per rateLimiterKey (tenantId).
+ *   - Pro tenants: jobs enqueued with rateLimiterKey=tenantId → 100/min
+ *   - Free tenants: jobs enqueued with rateLimiterKey=free:{tenantId} → 20/min
+ *   The limiter max here covers the per-key ceiling for pro tenants.
  */
-@Processor(QUEUE_NAMES.TRIAGE, { concurrency: 10 })
+@Processor(QUEUE_NAMES.TRIAGE, {
+  concurrency: 10,
+  limiter: {
+    max: 100,
+    duration: 60000, // 100 jobs per minute per rateLimiterKey (pro plan)
+  },
+})
 export class TriageWorker extends WorkerHost {
   private readonly logger = new Logger(TriageWorker.name);
 

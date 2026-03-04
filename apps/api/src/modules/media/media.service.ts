@@ -231,7 +231,7 @@ export class MediaService {
 
     // Enqueue AI analysis job if it's a video
     if (media.type === 'video') {
-      await this.enqueueVideoAnalysis(mediaId, media.ticket.id);
+      await this.enqueueVideoAnalysis(mediaId, media.ticket.id, media.ticket.severity);
     }
 
     return {
@@ -246,9 +246,24 @@ export class MediaService {
   }
 
   /**
+   * Maps ticket severity to BullMQ priority (lower = higher priority).
+   */
+  private severityToBullMQPriority(severity: string | null | undefined): number {
+    switch (severity) {
+      case 'critical': return 1;
+      case 'high':     return 2;
+      case 'medium':   return 5;
+      case 'low':      return 10;
+      default:         return 5;
+    }
+  }
+
+  /**
    * Enqueue video for AI analysis
    */
-  private async enqueueVideoAnalysis(mediaId: string, ticketId: string) {
+  private async enqueueVideoAnalysis(mediaId: string, ticketId: string, severity?: string | null) {
+    const priority = this.severityToBullMQPriority(severity);
+
     try {
       await this.analysisQueue.add(
         'analyze-video',
@@ -258,7 +273,7 @@ export class MediaService {
           timestamp: new Date().toISOString(),
         },
         {
-          priority: 5,
+          priority,
           attempts: 3,
           backoff: {
             type: 'exponential',

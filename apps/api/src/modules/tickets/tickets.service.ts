@@ -771,16 +771,35 @@ export class TicketsService {
   }
 
   /**
+   * Maps ticket severity to BullMQ priority.
+   * Lower number = higher priority in BullMQ.
+   */
+  private severityToBullMQPriority(severity: string | null): number {
+    switch (severity) {
+      case 'critical': return 1;
+      case 'high':     return 2;
+      case 'medium':   return 5;
+      case 'low':      return 10;
+      default:         return 5; // default to medium priority
+    }
+  }
+
+  /**
    * Enqueue triage job for automatic classification and routing.
    * The triage agent classifies the ticket and routes it to the appropriate handler
    * (deep-analysis for bugs, auto-answer for questions, proposal for feature requests).
+   * Priority is computed from ticket severity (critical=1, high=2, medium=5, low=10).
+   * Rate limiting (pro: 100/min, free: 20/min) is enforced on the worker via BullMQ limiter config.
    */
   private async enqueueTriage(
     ticketId: string,
     tenantId: string,
     applicationId: string,
     source: 'dashboard' | 'sdk' | 'manual' = 'dashboard',
+    severity?: string | null,
   ): Promise<void> {
+    const priority = this.severityToBullMQPriority(severity ?? null);
+
     await this.triageQueue.add(
       'triage',
       {
@@ -790,7 +809,7 @@ export class TicketsService {
         source,
       },
       {
-        priority: 3,
+        priority,
         delay: 3000, // Short delay to let the ticket settle
         attempts: 3,
         backoff: {
@@ -802,7 +821,7 @@ export class TicketsService {
       },
     );
 
-    this.logger.debug(`Enqueued triage for ticket ${ticketId} (source: ${source})`);
+    this.logger.debug(`Enqueued triage for ticket ${ticketId} (source: ${source}, priority: ${priority})`);
   }
 
   /**

@@ -129,6 +129,9 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
     }),
 
     // Deep Analysis Queue (US-3.2)
+    // Rate limiter: pro tenants = 100 jobs/min, free tenants = 20 jobs/min.
+    // Per-tenant limiting is enforced via job.opts.rateLimiterKey at enqueue time.
+    // Queue-level limiter provides a global ceiling.
     BullModule.registerQueue({
       name: QUEUE_NAMES.DEEP_ANALYSIS,
       defaultJobOptions: {
@@ -143,6 +146,7 @@ export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
     }),
 
     // Triage Queue (Automatic ticket classification & routing)
+    // Rate limiter: pro = 100 jobs/min, free = 20 jobs/min per tenant key.
     BullModule.registerQueue({
       name: QUEUE_NAMES.TRIAGE,
       defaultJobOptions: {
