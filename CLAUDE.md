@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Initial Setup
+
 ```bash
 pnpm install                    # Install all dependencies
 cp .env.example .env.local      # Configure environment
@@ -18,6 +19,7 @@ pnpm db:seed                    # Seed test data
 ```
 
 ### Development
+
 ```bash
 pnpm dev                        # Start all services (API :3001, Dashboard :3000, Web :3002)
 pnpm build                      # Build all packages
@@ -27,6 +29,7 @@ pnpm format                     # Format code with Prettier
 ```
 
 ### Database
+
 ```bash
 pnpm db:migrate                 # Create and apply migrations (Prisma)
 pnpm db:generate                # Generate Prisma client for API + Worker
@@ -35,6 +38,7 @@ pnpm db:seed                    # Seed database with test data
 ```
 
 ### Package-Specific Commands
+
 ```bash
 pnpm --filter @support-helper/api [command]
 pnpm --filter @support-helper/dashboard [command]
@@ -46,20 +50,43 @@ pnpm --filter @support-helper/sdk-web build:cdn
 ```
 
 ### Testing
+
+**IMPORTANT: Resource Management**
+
+- **NEVER run `pnpm test` globally** — it launches all test suites in parallel and consumes all available RAM
+- **Always test one package at a time**, sequentially
+- **Limit Jest workers** to avoid memory exhaustion: use `--maxWorkers=2`
+- If `pnpm dev` is running, it already uses ~4 GB RAM (3 heavy node processes). Consider whether tests can coexist.
+
+**Preferred test commands (use these instead of `pnpm test`):**
+
 ```bash
-pnpm test                       # Run all tests
-pnpm --filter @support-helper/api test              # Jest
-pnpm --filter @support-helper/api test:e2e          # Jest E2E
-pnpm --filter @support-helper/dashboard test        # Vitest
+# API tests (Jest) — always limit workers
+pnpm --filter @support-helper/api test -- --maxWorkers=2
+
+# Worker tests (Jest)
+pnpm --filter @support-helper/worker test -- --maxWorkers=2
+
+# Dashboard tests (Vitest) — lighter, less RAM-hungry
+pnpm --filter @support-helper/dashboard test
+
+# Run only tests related to changed files (fastest, preferred for verification)
+cd apps/api && npx jest --maxWorkers=2 --no-coverage --changedSince=HEAD~1
+cd apps/dashboard && npx vitest run --no-coverage --changed
+
+# Target specific test files
+cd apps/api && npx jest --maxWorkers=1 --no-coverage <pattern>
 ```
 
 **Test frameworks by package:**
+
 - API + Worker: **Jest** (`*.spec.ts`)
 - Dashboard: **Vitest** (`*.test.ts`)
 
 ## Architecture
 
 ### Monorepo Structure
+
 - **apps/api/** - NestJS backend with Prisma ORM (`@support-helper/api`)
 - **apps/dashboard/** - Next.js 14 internal dashboard, App Router (`@support-helper/dashboard`)
 - **apps/worker/** - BullMQ job processor: video analysis, GitHub sync, search indexing (`@support-helper/worker`)
@@ -70,6 +97,7 @@ pnpm --filter @support-helper/dashboard test        # Vitest
 ### Backend (NestJS) - apps/api/src/
 
 **Root-level modules (`src/`):**
+
 - **auth/** - JWT authentication, login/register endpoints
 - **users/** - User management
 - **tenants/** - Multi-tenant isolation
@@ -82,6 +110,7 @@ pnpm --filter @support-helper/dashboard test        # Vitest
 - **prisma/** - PrismaService provider
 
 **Nested modules (`src/modules/`):**
+
 - **tickets/** - Ticket CRUD, includes SDK endpoint at `/api/sdk/tickets`
 - **media/** - S3/MinIO file uploads with pre-signed URLs
 - **agent/** - AI agent conversation management
@@ -92,6 +121,7 @@ pnpm --filter @support-helper/dashboard test        # Vitest
 - **auth/** - Additional auth strategies and middleware (guards, decorators)
 
 **Key Patterns:**
+
 - NestJS modules with dependency injection
 - All services scoped to tenant (multi-tenant via `tenantId`)
 - Authentication: JWT for dashboard users, SDK key (`x-sdk-key` header) for SDK clients
@@ -104,6 +134,7 @@ pnpm --filter @support-helper/dashboard test        # Vitest
 Schema at `apps/api/prisma/schema.prisma`. Worker shares the same schema via `../api/prisma/schema.prisma`.
 
 **Core Models:**
+
 - **Tenant** - Top-level isolation boundary
 - **User** - Dashboard users (linked to tenant)
 - **Application** - Each app gets an SDK key
@@ -153,6 +184,7 @@ Schema at `apps/api/prisma/schema.prisma`. Worker shares the same schema via `..
 ### Adding New Features
 
 **NestJS Modules:**
+
 ```bash
 cd apps/api
 nest generate module feature-name
@@ -161,6 +193,7 @@ nest generate controller feature-name
 ```
 
 **Database Changes:**
+
 1. Edit `apps/api/prisma/schema.prisma`
 2. Run `pnpm db:migrate` to create migration
 3. Run `pnpm db:generate` to update Prisma client (generates for both API and Worker)
@@ -169,6 +202,7 @@ nest generate controller feature-name
 ### Multi-Tenant Considerations
 
 All data access must be tenant-scoped:
+
 - API routes check user's `tenantId` from JWT
 - SDK endpoints lookup tenant via SDK key
 - Database queries always filter by `tenantId`
@@ -210,21 +244,21 @@ All data access must be tenant-scoped:
 
 Key variables (see `.env.example` for full list):
 
-| Variable | Purpose |
-|----------|---------|
-| `DATABASE_URL` | PostgreSQL connection string |
-| `REDIS_URL` | Redis connection |
-| `JWT_SECRET` / `JWT_REFRESH_SECRET` | JWT signing secrets (generate with `openssl rand -hex 32`) |
-| `OPENAI_API_KEY` | OpenAI API key |
-| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | MinIO/S3 config |
-| `MEILISEARCH_HOST`, `MEILISEARCH_MASTER_KEY` | Full-text search |
-| `INTEGRATION_ENCRYPTION_KEY` | Encrypts third-party integration credentials |
-| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | GitHub OAuth |
-| `SENTRY_DSN` | Error tracking |
-| `POSTHOG_API_KEY` | Product analytics |
-| `BETTERSTACK_SOURCE_TOKEN` | Log aggregation |
-| `API_PORT` | API port (default 3001) |
-| `DASHBOARD_URL` | CORS origin for dashboard |
+| Variable                                                     | Purpose                                                    |
+| ------------------------------------------------------------ | ---------------------------------------------------------- |
+| `DATABASE_URL`                                               | PostgreSQL connection string                               |
+| `REDIS_URL`                                                  | Redis connection                                           |
+| `JWT_SECRET` / `JWT_REFRESH_SECRET`                          | JWT signing secrets (generate with `openssl rand -hex 32`) |
+| `OPENAI_API_KEY`                                             | OpenAI API key                                             |
+| `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` | MinIO/S3 config                                            |
+| `MEILISEARCH_HOST`, `MEILISEARCH_MASTER_KEY`                 | Full-text search                                           |
+| `INTEGRATION_ENCRYPTION_KEY`                                 | Encrypts third-party integration credentials               |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`                   | GitHub OAuth                                               |
+| `SENTRY_DSN`                                                 | Error tracking                                             |
+| `POSTHOG_API_KEY`                                            | Product analytics                                          |
+| `BETTERSTACK_SOURCE_TOKEN`                                   | Log aggregation                                            |
+| `API_PORT`                                                   | API port (default 3001)                                    |
+| `DASHBOARD_URL`                                              | CORS origin for dashboard                                  |
 
 ## User Story Workflow (MANDATORY — AUTOMATIC CYCLE)
 
@@ -248,18 +282,21 @@ Claude works **one US at a time** in a strict cycle. This cycle is **fully autom
 ```
 
 ### 1. Before starting a US
+
 - Read `.claude/us-summaries.md` to get context from ALL previously completed US
 - Read the GitHub issue to understand acceptance criteria
 - Announce which US you are starting: "Starting [US-AI-XX] Title"
 
 ### 2. While working on a US
+
 - Focus **exclusively** on that US — do not mix changes from other US
 - Check each acceptance criterion as you complete it
 - If blocked, note the blocker and move to the next US
 
 ### 3. After completing a US (ALL steps mandatory, in order)
+
 1. Run `pnpm build` and ensure **0 errors**
-2. Run relevant tests (`pnpm test` or package-specific)
+2. Run relevant tests **one package at a time** (see Testing section — never `pnpm test` globally)
 3. Update the GitHub issue checkboxes (`- [x]`) via `gh issue edit`
 4. Append a summary to `.claude/us-summaries.md` (format below)
 5. **Commit and push** all changes to `main`
@@ -269,8 +306,10 @@ Claude works **one US at a time** in a strict cycle. This cycle is **fully autom
 9. **Immediately start the next US** — do NOT wait for user input
 
 ### 4. Summary file format
+
 ```markdown
 ## [US-AI-XX] #NNN Title — DONE ✅
+
 - **Files**: list of created/modified files
 - **Changes**: what was implemented
 - **Decisions**: any architectural choices made
@@ -279,7 +318,9 @@ Claude works **one US at a time** in a strict cycle. This cycle is **fully autom
 ```
 
 ### 5. US execution order
+
 Follow the order defined in the Epic issue. Respect dependencies:
+
 - Phase 1 US are done first (US-AI-01 through US-AI-06)
 - Phase 2 depends on Phase 1 completion
 - Phase 3 depends on Phase 2 completion
@@ -288,6 +329,7 @@ Follow the order defined in the Epic issue. Respect dependencies:
 - Check dependency notes in each US ("Dépend de: ...")
 
 ### 6. When to stop the cycle
+
 - All US in the Epic are completed
 - A US is blocked and cannot proceed (note the blocker, ask the user)
 - The user explicitly asks to stop
@@ -328,10 +370,12 @@ When working as part of an automated agent team, the following rules apply **in 
 ## Pre-Commit Checklist (MANDATORY)
 
 Before pushing to `main`, you **MUST**:
+
 1. Run `pnpm build` and ensure **all packages build successfully** (0 errors)
 2. Fix any build or runtime errors **before** committing
 
 **Git workflow:**
+
 - **Push directly to `main`** — no feature branches, no PRs
 - Commit and push all changes directly on the `main` branch
 - Remote name: `supportHelperv2`

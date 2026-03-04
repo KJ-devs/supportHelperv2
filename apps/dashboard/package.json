@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
-    "test:demo": "npx playwright test --config playwright.demo.config.ts"
+    "test:demo": "npx playwright test --config playwright.demo.config.ts",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed"
   },
   "dependencies": {
     "@sentry/nextjs": "^8.44.0",
