@@ -7,9 +7,10 @@ import { getAuthToken } from '@/lib/api/client';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 /**
- * Connects to the /agent-tasks WebSocket namespace and listens for
- * tenant-wide task status changes. Calls the provided onUpdate callback
- * whenever a task event is received so the caller can refetch data.
+ * Connects to the /tickets WebSocket namespace and listens for
+ * tenant-wide events that affect agent task state. Calls the provided
+ * onUpdate callback whenever a relevant event is received so the caller
+ * can refetch data.
  */
 export function useAgentTasksRealtime(onUpdate: () => void) {
   const onUpdateRef = useRef(onUpdate);
@@ -19,7 +20,7 @@ export function useAgentTasksRealtime(onUpdate: () => void) {
     const token = getAuthToken();
     if (!token) return;
 
-    const socket: Socket = io(`${API_URL}/agent-tasks`, {
+    const socket: Socket = io(`${API_URL}/tickets`, {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
@@ -29,23 +30,26 @@ export function useAgentTasksRealtime(onUpdate: () => void) {
     });
 
     socket.on('connect', () => {
-      // Join the tenant broadcast room so we receive updates for all tasks
-      socket.emit('tenant:join');
+      // Join the tenant broadcast room (tenantId is derived from JWT server-side)
+      socket.emit('join-tenant', {});
+    });
+
+    socket.on('connect_error', () => {
+      console.warn('[useAgentTasksRealtime] WebSocket connection error');
     });
 
     const handleUpdate = () => {
       onUpdateRef.current();
     };
 
-    // Listen for all task lifecycle events that could affect the list
-    socket.on('task:status-changed', handleUpdate);
-    socket.on('task:plan-ready', handleUpdate);
-    socket.on('task:code-ready', handleUpdate);
-    socket.on('task:pr-created', handleUpdate);
-    socket.on('task:ci-status', handleUpdate);
-    socket.on('task:error', handleUpdate);
+    // Listen for events that signal agent task state changes
+    socket.on('ticket:updated', handleUpdate);
+    socket.on('ticket:ai-analysis-completed', handleUpdate);
+    socket.on('agent:escalated-to-n2', handleUpdate);
+    socket.on('ticket:escalated', handleUpdate);
 
     return () => {
+      socket.emit('leave-tenant', {});
       socket.disconnect();
     };
   }, []);
