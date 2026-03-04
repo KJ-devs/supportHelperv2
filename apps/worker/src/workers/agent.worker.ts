@@ -169,7 +169,9 @@ export class AgentWorker extends WorkerHost {
 
     const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
     const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtSecret =
+      this.configService.get<string>('WORKER_JWT_SECRET') ??
+      this.configService.get<string>('JWT_SECRET');
 
     if (!internalSecret || !jwtSecret) {
       this.logger.error(

@@ -11,10 +11,27 @@ import {
   ToolResultBlock,
 } from '../../ai/providers/tool-capable-provider.interface';
 import { RepoContext } from './code-investigation.service';
+import { encodingForModel } from 'js-tiktoken';
 
-/** Approximate token count: 1 token ≈ 4 characters */
+/** Shared encoder instance (cl100k_base covers Claude & GPT-4 models) */
+const encoder = encodingForModel('gpt-4o');
+
+/** Read-only tools that are safe to retry on transient failure */
+const RETRYABLE_TOOLS: ReadonlySet<string> = new Set([
+  'read_file',
+  'list_directory',
+  'search_code',
+  'search_codebase_semantic',
+  'get_repo_structure',
+  'get_file_history',
+  'get_file_blame',
+  'get_ticket_details',
+  'search_similar_tickets',
+]);
+
+/** Count tokens using cl100k_base tokenizer (accurate for Claude & GPT-4 models) */
 export function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
+  return encoder.encode(text).length;
 }
 
 /** Estimate tokens for a full message (string or ContentBlock[]) */
@@ -47,7 +64,7 @@ const SLIDING_WINDOW_SIZE = 6;
  */
 export function truncateToolResults(msg: AgentMessage): AgentMessage {
   if (typeof msg.content === 'string' || !Array.isArray(msg.content)) return msg;
-  const blocks = msg.content.map((block) => {
+  const blocks = msg.content.map(block => {
     if (block.type === 'tool_result' && block.content.length > TOOL_RESULT_MAX_CHARS) {
       return {
         ...block,
@@ -89,9 +106,7 @@ function summarizeMessage(msg: AgentMessage): string {
  */
 function containsUpdateDiagnosis(msg: AgentMessage): boolean {
   if (typeof msg.content === 'string') return false;
-  return msg.content.some(
-    (block) => block.type === 'tool_use' && block.name === 'update_diagnosis',
-  );
+  return msg.content.some(block => block.type === 'tool_use' && block.name === 'update_diagnosis');
 }
 
 /**
@@ -107,13 +122,14 @@ function containsUpdateDiagnosis(msg: AgentMessage): boolean {
 export function pruneMessages(
   messages: AgentMessage[],
   maxTokens: number,
-  systemPromptTokens: number,
+  systemPromptTokens: number
 ): { pruned: AgentMessage[]; prunedCount: number; tokensSaved: number } {
   // First pass: truncate all tool results
   const truncated = messages.map(truncateToolResults);
 
   // Check if we're within budget
-  const totalTokens = systemPromptTokens + truncated.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
+  const totalTokens =
+    systemPromptTokens + truncated.reduce((sum, m) => sum + estimateMessageTokens(m), 0);
   if (totalTokens <= maxTokens) {
     return { pruned: truncated, prunedCount: 0, tokensSaved: 0 };
   }
@@ -198,7 +214,7 @@ export class AgenticLoopService {
     private readonly toolExecutor: ToolExecutorService,
     private readonly providerFactory: ToolCapableProviderFactory,
     private readonly aiConfigService: AiConfigService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async run(options: AgenticLoopOptions): Promise<AgenticLoopResult> {
@@ -254,11 +270,11 @@ export class AgenticLoopService {
       const { pruned, prunedCount, tokensSaved } = pruneMessages(
         messages,
         maxContextTokens,
-        systemPromptTokens,
+        systemPromptTokens
       );
       if (prunedCount > 0) {
         this.logger.log(
-          `Context pruning: removed ${prunedCount} messages, saved ~${tokensSaved} tokens (iteration ${iterations})`,
+          `Context pruning: removed ${prunedCount} messages, saved ~${tokensSaved} tokens (iteration ${iterations})`
         );
         messages.length = 0;
         messages.push(...pruned);
@@ -279,7 +295,7 @@ export class AgenticLoopService {
         const errorMsg = err instanceof Error ? err.message : 'Unknown provider error';
         this.logger.error(
           `provider.chat() failed on iteration ${iterations}: ${errorMsg}`,
-          err instanceof Error ? err.stack : undefined,
+          err instanceof Error ? err.stack : undefined
         );
         finalContent = `Analysis interrupted: AI provider error — ${errorMsg}`;
         break;
@@ -290,7 +306,7 @@ export class AgenticLoopService {
 
       // If no tool calls, we have the final response
       if (turn.toolUseBlocks.length === 0 || turn.stopReason === 'end_turn') {
-        finalContent = turn.textBlocks.map((b) => b.text).join('\n');
+        finalContent = turn.textBlocks.map(b => b.text).join('\n');
         break;
       }
 
@@ -318,11 +334,29 @@ export class AgenticLoopService {
           result = await this.toolExecutor.execute(
             toolUse.name as ToolName,
             toolUse.input,
-            executionContext,
+            executionContext
           );
         } catch (err) {
-          error = err instanceof Error ? err.message : 'Unknown error';
-          result = { error };
+          // Retry once for read-only tools on transient failure
+          if (RETRYABLE_TOOLS.has(toolUse.name)) {
+            this.logger.warn(
+              `Tool "${toolUse.name}" failed, retrying in 1s: ${err instanceof Error ? err.message : 'Unknown error'}`
+            );
+            await new Promise(r => setTimeout(r, 1000));
+            try {
+              result = await this.toolExecutor.execute(
+                toolUse.name as ToolName,
+                toolUse.input,
+                executionContext
+              );
+            } catch (retryErr) {
+              error = retryErr instanceof Error ? retryErr.message : 'Unknown error';
+              result = { error };
+            }
+          } else {
+            error = err instanceof Error ? err.message : 'Unknown error';
+            result = { error };
+          }
         }
 
         const durationMs = Date.now() - startTime;
@@ -357,7 +391,7 @@ export class AgenticLoopService {
     }
 
     this.logger.log(
-      `Agentic loop completed: ${iterations} iterations, ${toolCallLog.length} tool calls`,
+      `Agentic loop completed: ${iterations} iterations, ${toolCallLog.length} tool calls`
     );
 
     this.eventEmitter.emit('agent:complete', { ticketId, sessionId, finalContent });

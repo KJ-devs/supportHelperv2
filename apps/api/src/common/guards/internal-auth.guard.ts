@@ -34,7 +34,7 @@ export class InternalAuthGuard implements CanActivate {
 
   constructor(
     private readonly configService: ConfigService,
-    private readonly jwtService: JwtService,
+    private readonly jwtService: JwtService
   ) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -64,15 +64,19 @@ export class InternalAuthGuard implements CanActivate {
 
     const token = authHeader.slice('Bearer '.length);
 
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    // Prefer WORKER_JWT_SECRET (dedicated worker key); fall back to JWT_SECRET
+    const workerJwtSecret = this.configService.get<string>('WORKER_JWT_SECRET');
+    const jwtSecret = workerJwtSecret || this.configService.get<string>('JWT_SECRET');
     if (!jwtSecret) {
-      this.logger.error('JWT_SECRET is not configured');
+      this.logger.error('Neither WORKER_JWT_SECRET nor JWT_SECRET is configured');
       throw new UnauthorizedException('JWT configuration error');
     }
 
     try {
       this.jwtService.verify(token, { secret: jwtSecret });
     } catch {
+      // If using WORKER_JWT_SECRET and it fails, don't try JWT_SECRET as fallback
+      // to avoid weakening the separation
       this.logger.warn('Internal request rejected: JWT verification failed');
       throw new UnauthorizedException('Invalid service account token');
     }

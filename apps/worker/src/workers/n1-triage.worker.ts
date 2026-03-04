@@ -2,10 +2,10 @@ import { Processor, WorkerHost, OnWorkerEvent } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
-import * as crypto from 'crypto';
 import { QUEUE_NAMES } from '../queues';
 import { N1TriageJobData, N1TriageResult } from '../queues/queue.types';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+import { buildServiceJwt } from '../utils/jwt.utils';
 
 /**
  * N1TriageWorker
@@ -27,28 +27,6 @@ export class N1TriageWorker extends WorkerHost {
     super();
   }
 
-  private buildServiceJwt(jwtSecret: string): string {
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const now = Math.floor(Date.now() / 1000);
-    const payload = Buffer.from(
-      JSON.stringify({
-        sub: 'worker-service',
-        role: 'system',
-        tenantId: 'system',
-        iat: now,
-        exp: now + 300,
-      }),
-    ).toString('base64url');
-
-    const data = `${header}.${payload}`;
-    const signature = crypto
-      .createHmac('sha256', jwtSecret)
-      .update(data)
-      .digest('base64url');
-
-    return `${data}.${signature}`;
-  }
-
   async process(job: Job<N1TriageJobData>): Promise<N1TriageResult> {
     const { ticketId, tenantId, applicationId } = job.data;
     const startTime = Date.now();
@@ -58,7 +36,9 @@ export class N1TriageWorker extends WorkerHost {
 
     const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
     const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtSecret =
+      this.configService.get<string>('WORKER_JWT_SECRET') ??
+      this.configService.get<string>('JWT_SECRET');
 
     if (!internalSecret) {
       this.logger.error('INTERNAL_API_SECRET is not configured');
@@ -82,7 +62,7 @@ export class N1TriageWorker extends WorkerHost {
       };
     }
 
-    const serviceJwt = this.buildServiceJwt(jwtSecret);
+    const serviceJwt = buildServiceJwt(jwtSecret);
     const endpoint = `${apiUrl}/api/n1-triage/internal/assess`;
 
     this.logger.log(`Delegating N1 triage for ticket ${ticketId} to API: ${endpoint}`);
@@ -115,7 +95,7 @@ export class N1TriageWorker extends WorkerHost {
       await job.updateProgress(100);
 
       this.logger.log(
-        `N1 triage complete for ticket ${ticketId}: decision=${result.decision || 'unknown'}`,
+        `N1 triage complete for ticket ${ticketId}: decision=${result.decision || 'unknown'}`
       );
 
       return {
@@ -141,14 +121,14 @@ export class N1TriageWorker extends WorkerHost {
   @OnWorkerEvent('active')
   onActive(job: Job<N1TriageJobData>) {
     this.logger.log(
-      `N1 triage job ${job.id} started for ticket ${job.data.ticketId} (attempt ${job.attemptsMade + 1})`,
+      `N1 triage job ${job.id} started for ticket ${job.data.ticketId} (attempt ${job.attemptsMade + 1})`
     );
   }
 
   @OnWorkerEvent('completed')
   onCompleted(job: Job<N1TriageJobData>, result: N1TriageResult) {
     this.logger.log(
-      `N1 triage job ${job.id} completed for ticket ${job.data.ticketId}: decision=${result.decision || 'none'} (${result.duration}ms)`,
+      `N1 triage job ${job.id} completed for ticket ${job.data.ticketId}: decision=${result.decision || 'none'} (${result.duration}ms)`
     );
   }
 
@@ -160,7 +140,7 @@ export class N1TriageWorker extends WorkerHost {
     }
     this.logger.error(
       `N1 triage job ${job.id} failed for ticket ${job.data.ticketId}: ${getErrorMessage(error)}`,
-      getErrorStack(error),
+      getErrorStack(error)
     );
   }
 }

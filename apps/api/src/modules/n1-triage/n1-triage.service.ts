@@ -108,9 +108,6 @@ const N1_OUTPUT_SCHEMA = {
   required: ['decision', 'confidence', 'reasoning', 'userResponse'],
 };
 
-const MAX_VIDEO_WAIT_MS = 90_000;
-const VIDEO_POLL_INTERVAL_MS = 3_000;
-
 @Injectable()
 export class N1TriageService {
   private readonly logger = new Logger(N1TriageService.name);
@@ -119,40 +116,37 @@ export class N1TriageService {
     private readonly prisma: PrismaService,
     private readonly aiService: AIService,
     private readonly ticketRelationsService: TicketRelationsService,
-    @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue,
+    @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue
   ) {}
 
   async assess(
     ticketId: string,
     tenantId: string,
-    applicationId: string,
+    applicationId: string
   ): Promise<{ success: boolean; decision: string | null; error?: string }> {
     const startTime = Date.now();
     this.logger.log(`N1 assessment starting for ticket ${ticketId}`);
 
     try {
-      // Step 1: Wait for video analysis to complete
-      await this.waitForVideoAnalysis(ticketId);
-
-      // Step 2: Build N1 context
+      // Step 1: Build N1 context
       const context = await this.buildN1Context(ticketId, tenantId);
       if (!context) {
         throw new NotFoundException(`Ticket ${ticketId} not found`);
       }
 
-      // Step 3: Find similar tickets
+      // Step 2: Find similar tickets
       const similarTickets = await this.findSimilarTickets(ticketId, tenantId);
       context.similarTickets = similarTickets;
 
-      // Step 4: Run AI assessment
+      // Step 3: Run AI assessment
       const assessment = await this.runAssessment(context);
 
-      // Step 5: Execute decision
+      // Step 4: Execute decision
       await this.executeDecision(ticketId, tenantId, applicationId, assessment);
 
       const duration = Date.now() - startTime;
       this.logger.log(
-        `N1 assessment complete for ticket ${ticketId}: decision=${assessment.decision}, confidence=${assessment.confidence} (${duration}ms)`,
+        `N1 assessment complete for ticket ${ticketId}: decision=${assessment.decision}, confidence=${assessment.confidence} (${duration}ms)`
       );
 
       return { success: true, decision: assessment.decision };
@@ -175,65 +169,9 @@ export class N1TriageService {
   }
 
   /**
-   * Wait for video analysis to complete (max 90s with 3s polling).
-   * If no media or already completed, returns immediately.
-   */
-  private async waitForVideoAnalysis(ticketId: string): Promise<void> {
-    const media = await this.prisma.media.findMany({
-      where: { ticketId },
-      select: { id: true, processingStatus: true },
-    });
-
-    if (media.length === 0) {
-      this.logger.debug(`No media for ticket ${ticketId}, skipping video wait`);
-      return;
-    }
-
-    const pendingMedia = media.filter(
-      (m) => m.processingStatus === 'pending' || m.processingStatus === 'processing',
-    );
-
-    if (pendingMedia.length === 0) {
-      this.logger.debug(`All media already processed for ticket ${ticketId}`);
-      return;
-    }
-
-    this.logger.log(
-      `Waiting for ${pendingMedia.length} media item(s) to finish processing for ticket ${ticketId}`,
-    );
-
-    const deadline = Date.now() + MAX_VIDEO_WAIT_MS;
-
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, VIDEO_POLL_INTERVAL_MS));
-
-      const current = await this.prisma.media.findMany({
-        where: { ticketId, id: { in: pendingMedia.map((m) => m.id) } },
-        select: { id: true, processingStatus: true },
-      });
-
-      const stillPending = current.filter(
-        (m) => m.processingStatus === 'pending' || m.processingStatus === 'processing',
-      );
-
-      if (stillPending.length === 0) {
-        this.logger.log(`All media processing complete for ticket ${ticketId}`);
-        return;
-      }
-    }
-
-    this.logger.warn(
-      `Video analysis timeout (${MAX_VIDEO_WAIT_MS}ms) for ticket ${ticketId} — proceeding with available data`,
-    );
-  }
-
-  /**
    * Build context for the N1 assessment from ticket data + media analysis.
    */
-  private async buildN1Context(
-    ticketId: string,
-    tenantId: string,
-  ): Promise<N1Context | null> {
+  private async buildN1Context(ticketId: string, tenantId: string): Promise<N1Context | null> {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
       include: {
@@ -254,10 +192,8 @@ export class N1TriageService {
 
     // Extract OCR text
     const ocrTexts = ticket.media
-      .flatMap((m) =>
-        m.videoEvents
-          .filter((e) => e.ocrText)
-          .map((e) => `[${e.timestampMs ?? 0}ms] ${e.ocrText}`),
+      .flatMap(m =>
+        m.videoEvents.filter(e => e.ocrText).map(e => `[${e.timestampMs ?? 0}ms] ${e.ocrText}`)
       )
       .filter(Boolean);
 
@@ -300,7 +236,7 @@ export class N1TriageService {
   private async findSimilarTickets(
     ticketId: string,
     tenantId: string,
-    limit: number = 5,
+    limit: number = 5
   ): Promise<N1Context['similarTickets']> {
     try {
       const similar = await this.prisma.$queryRaw<
@@ -315,21 +251,24 @@ export class N1TriageService {
           similarity: number;
         }>
       >`
+        WITH ref AS (
+          SELECT embedding FROM tickets WHERE id = ${ticketId} LIMIT 1
+        )
         SELECT
-          id, title, status, type, severity,
-          ai_summary, diagnosis,
-          1 - (embedding <-> (SELECT embedding FROM tickets WHERE id = ${ticketId})) as similarity
-        FROM tickets
+          t.id, t.title, t.status, t.type, t.severity,
+          t.ai_summary, t.diagnosis,
+          1 - (t.embedding <-> ref.embedding) as similarity
+        FROM tickets t, ref
         WHERE
-          "tenantId" = ${tenantId}
-          AND id != ${ticketId}
-          AND embedding IS NOT NULL
-          AND status IN ('resolved', 'closed', 'analyzed', 'fix_proposed', 'merged')
-        ORDER BY embedding <-> (SELECT embedding FROM tickets WHERE id = ${ticketId})
+          t."tenantId" = ${tenantId}
+          AND t.id != ${ticketId}
+          AND t.embedding IS NOT NULL
+          AND t.status IN ('resolved', 'closed', 'analyzed', 'fix_proposed', 'merged')
+        ORDER BY t.embedding <-> ref.embedding
         LIMIT ${limit}
       `;
 
-      return similar.map((t) => ({
+      return similar.map(t => ({
         id: t.id,
         title: t.title,
         status: t.status,
@@ -341,7 +280,7 @@ export class N1TriageService {
       }));
     } catch (error) {
       this.logger.warn(
-        `Vector search failed for ticket ${ticketId}, falling back to keywords: ${(error as Error).message}`,
+        `Vector search failed for ticket ${ticketId}, falling back to keywords: ${(error as Error).message}`
       );
       return this.findSimilarByKeywords(ticketId, tenantId, limit);
     }
@@ -350,7 +289,7 @@ export class N1TriageService {
   private async findSimilarByKeywords(
     ticketId: string,
     tenantId: string,
-    limit: number,
+    limit: number
   ): Promise<N1Context['similarTickets']> {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId },
@@ -384,7 +323,7 @@ export class N1TriageService {
       },
     });
 
-    return results.map((t) => ({ ...t, similarity: 0.5 }));
+    return results.map(t => ({ ...t, similarity: 0.5 }));
   }
 
   /**
@@ -413,7 +352,7 @@ export class N1TriageService {
           systemPrompt: N1_SYSTEM_PROMPT,
           temperature: 0.1,
           maxTokens: 1024,
-        },
+        }
       );
 
       return result;
@@ -440,7 +379,9 @@ export class N1TriageService {
       parts.push(`AI Video Summary: ${context.ticket.aiSummary}`);
     }
 
-    parts.push(`Type: ${context.ticket.type || 'unknown'} (confidence: ${context.ticket.typeConfidence ?? 'N/A'})`);
+    parts.push(
+      `Type: ${context.ticket.type || 'unknown'} (confidence: ${context.ticket.typeConfidence ?? 'N/A'})`
+    );
     parts.push(`Severity: ${context.ticket.severity || 'unknown'}`);
 
     if (context.ocrTexts.length > 0) {
@@ -462,7 +403,9 @@ export class N1TriageService {
       parts.push('\n## SIMILAR RESOLVED TICKETS');
       for (const t of context.similarTickets) {
         const diag = t.diagnosis as { rootCause?: string; suggestedFix?: string } | null;
-        parts.push(`- [${t.id}] "${t.title}" (status: ${t.status}, similarity: ${Math.round(t.similarity * 100)}%)`);
+        parts.push(
+          `- [${t.id}] "${t.title}" (status: ${t.status}, similarity: ${Math.round(t.similarity * 100)}%)`
+        );
         if (t.aiSummary) parts.push(`  Summary: ${t.aiSummary}`);
         if (diag?.rootCause) parts.push(`  Root cause: ${diag.rootCause}`);
         if (diag?.suggestedFix) parts.push(`  Fix: ${diag.suggestedFix}`);
@@ -484,7 +427,7 @@ export class N1TriageService {
     ticketId: string,
     tenantId: string,
     applicationId: string,
-    assessment: N1Assessment,
+    assessment: N1Assessment
   ): Promise<void> {
     // Save N1 assessment on ticket
     await this.prisma.ticket.update({
@@ -497,15 +440,11 @@ export class N1TriageService {
     });
 
     // Create ticket relations from assessment (duplicate/similar links)
-    await this.ticketRelationsService.createFromN1Assessment(
-      ticketId,
-      tenantId,
-      {
-        duplicateTicketId: assessment.duplicateTicketId,
-        similarTicketIds: assessment.similarTicketIds,
-        confidence: assessment.confidence,
-      },
-    );
+    await this.ticketRelationsService.createFromN1Assessment(ticketId, tenantId, {
+      duplicateTicketId: assessment.duplicateTicketId,
+      similarTicketIds: assessment.similarTicketIds,
+      confidence: assessment.confidence,
+    });
 
     // Record timeline event
     await this.prisma.ticketEvent.create({
@@ -540,7 +479,7 @@ export class N1TriageService {
           data: { status: 'closed' },
         });
         this.logger.log(
-          `Ticket ${ticketId}: N1 closed as duplicate of ${assessment.duplicateTicketId}`,
+          `Ticket ${ticketId}: N1 closed as duplicate of ${assessment.duplicateTicketId}`
         );
         break;
 
@@ -562,7 +501,7 @@ export class N1TriageService {
             backoff: { type: 'exponential', delay: 30000 },
             removeOnComplete: 50,
             removeOnFail: 100,
-          },
+          }
         );
         await this.prisma.ticket.update({
           where: { id: ticketId },
@@ -576,10 +515,7 @@ export class N1TriageService {
   /**
    * Save the N1 assessment as a visible message in the ticket's agent session.
    */
-  private async saveN1Message(
-    ticketId: string,
-    assessment: N1Assessment,
-  ): Promise<void> {
+  private async saveN1Message(ticketId: string, assessment: N1Assessment): Promise<void> {
     // Find or create an agent session for this ticket
     let session = await this.prisma.agentSession.findFirst({
       where: { ticketId },
@@ -661,10 +597,7 @@ export class N1TriageService {
   /**
    * Override N1 decision — force escalation to N2.
    */
-  async overrideDecision(
-    ticketId: string,
-    tenantId: string,
-  ): Promise<void> {
+  async overrideDecision(ticketId: string, tenantId: string): Promise<void> {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
       select: { id: true, applicationId: true, n1Decision: true },
@@ -690,7 +623,7 @@ export class N1TriageService {
         backoff: { type: 'exponential', delay: 30000 },
         removeOnComplete: 50,
         removeOnFail: 100,
-      },
+      }
     );
 
     await this.prisma.ticket.update({

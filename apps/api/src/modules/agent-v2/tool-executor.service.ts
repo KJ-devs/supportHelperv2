@@ -5,6 +5,29 @@ import { CodeInvestigationService, RepoContext } from './code-investigation.serv
 import { CodebaseSearchService } from '../codebase-index/services/codebase-search.service';
 import { ToolName } from './agent-tools';
 
+/** File paths the agent is never allowed to write to */
+const DENIED_PATH_PATTERNS = [
+  /^\.github\/workflows\//,
+  /^\.github\/actions\//,
+  /^package\.json$/,
+  /^package-lock\.json$/,
+  /^pnpm-lock\.yaml$/,
+  /^\.env/,
+  /^Dockerfile/,
+  /^docker-compose/,
+  /^\.eslintrc/,
+  /^tsconfig\.json$/,
+  /^turbo\.json$/,
+  /^\.prettierrc/,
+  /^jest\.config/,
+  /^vitest\.config/,
+];
+
+function isPathDenied(filePath: string): boolean {
+  const normalized = filePath.replace(/\\/g, '/').replace(/^\/+/, '');
+  return DENIED_PATH_PATTERNS.some(pattern => pattern.test(normalized));
+}
+
 export interface ToolExecutionContext {
   repoCtx: RepoContext | null;
   ticket: {
@@ -259,6 +282,9 @@ export class ToolExecutorService {
       }
 
       case 'write_file': {
+        if (isPathDenied(input.file_path as string)) {
+          return { error: `Writing to "${input.file_path}" is not allowed (protected path)` };
+        }
         const ctx = await this.resolveRepoContext(input, context);
         if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.writeFile(
@@ -271,6 +297,9 @@ export class ToolExecutorService {
       }
 
       case 'edit_file': {
+        if (isPathDenied(input.file_path as string)) {
+          return { error: `Editing "${input.file_path}" is not allowed (protected path)` };
+        }
         const ctx = await this.resolveRepoContext(input, context);
         if (!ctx) return { error: NO_REPO_ERROR };
         return this.codeInvestigation.editFile(
@@ -341,23 +370,17 @@ export class ToolExecutorService {
       ai_summary: string | null;
       distance: number;
     }> = await this.prisma.$queryRaw`
+      WITH ref AS (
+        SELECT embedding FROM tickets WHERE id = ${ticketId}::uuid LIMIT 1
+      )
       SELECT t.id, t.title, t.status, t.ai_summary,
-             t.embedding <=> (
-               SELECT embedding FROM tickets WHERE id = ${ticketId}::uuid LIMIT 1
-             ) AS distance
-      FROM tickets t
+             t.embedding <=> ref.embedding AS distance
+      FROM tickets t, ref
       WHERE t.tenant_id = ${tenantId}::uuid
         AND t.id != ${ticketId}::uuid
         AND t.embedding IS NOT NULL
         AND (t.status = 'resolved' OR t.status = 'closed')
-      ORDER BY t.embedding <=> (
-        SELECT e FROM (
-          SELECT embedding AS e FROM tickets
-          WHERE tenant_id = ${tenantId}::uuid
-            AND title ILIKE ${'%' + query.substring(0, 50) + '%'}
-          LIMIT 1
-        ) sub
-      )
+      ORDER BY t.embedding <=> ref.embedding
       LIMIT ${limit}
     `;
 

@@ -12,6 +12,7 @@ import { S3Service } from '../services/s3.service';
 import { PrismaService } from '../services/prisma.service';
 import { MeilisearchService } from '../services/meilisearch.service';
 import { getErrorMessage, getErrorStack } from '../utils/error.utils';
+import { buildServiceJwt } from '../utils/jwt.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
 // VISUAL CUES EXTRACTION
@@ -513,29 +514,6 @@ export class VideoAnalysisWorker extends WorkerHost {
   }
 
   /**
-   * Build a minimal HS256 JWT for worker→API internal calls.
-   */
-  private buildServiceJwt(jwtSecret: string): string {
-    const crypto = require('crypto');
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const now = Math.floor(Date.now() / 1000);
-    const payload = Buffer.from(
-      JSON.stringify({
-        sub: 'worker-service',
-        role: 'system',
-        tenantId: 'system',
-        iat: now,
-        exp: now + 300,
-      })
-    ).toString('base64url');
-
-    const data = `${header}.${payload}`;
-    const signature = crypto.createHmac('sha256', jwtSecret).update(data).digest('base64url');
-
-    return `${data}.${signature}`;
-  }
-
-  /**
    * Regenerate enriched embedding via API after video analysis.
    * Uses title + description + aiSummary + keywords for a richer vector.
    * Fire-and-forget — failures are logged but don't fail the job.
@@ -543,11 +521,13 @@ export class VideoAnalysisWorker extends WorkerHost {
   private async regenerateTicketEmbedding(ticketId: string, tenantId: string): Promise<void> {
     const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
     const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
-    const jwtSecret = this.configService.get<string>('JWT_SECRET');
+    const jwtSecret =
+      this.configService.get<string>('WORKER_JWT_SECRET') ??
+      this.configService.get<string>('JWT_SECRET');
 
     if (!internalSecret || !jwtSecret) return;
 
-    const serviceJwt = this.buildServiceJwt(jwtSecret);
+    const serviceJwt = buildServiceJwt(jwtSecret);
     const response = await fetch(`${apiUrl}/api/tickets/${ticketId}/generate-embedding`, {
       method: 'POST',
       headers: {
