@@ -35,6 +35,20 @@ export function RepoSelector({
     applications.length > 0 ? applications[0]!.id : ''
   );
 
+  // Sync selectedAppId when applications prop changes (e.g. loaded after mount)
+  useEffect(() => {
+    if (!selectedAppId && applications.length > 0) {
+      setSelectedAppId(applications[0]!.id);
+    }
+  }, [applications, selectedAppId]);
+
+  // Sync selectedInstallationId when installations prop changes
+  useEffect(() => {
+    if (selectedInstallationId === null && installations.length > 0) {
+      setSelectedInstallationId(installations[0]!.installationId);
+    }
+  }, [installations, selectedInstallationId]);
+
   // Per-application GitHub config
   const [appConfigs, setAppConfigs] = useState<Record<string, GitHubAppConfig>>({});
   const [configLoading, setConfigLoading] = useState(false);

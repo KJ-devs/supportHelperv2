@@ -33,7 +33,7 @@ const THEMES = ['auto', 'light', 'dark'] as const;
 export default function SdkDemoPage() {
   const { isLoading: authLoading } = useRequireAuth();
 
-  const [sdkKey, setSdkKey] = useState('sk_GojA7oEFJRpK0Dj22VsO2LyO913baczo');
+  const [sdkKey, setSdkKey] = useState('sk_QikJnO4KPxjGv7UuBVxbPOLAUOSDt1Jl');
   const [apiUrl, setApiUrl] = useState('http://localhost:3001');
   const [position, setPosition] = useState<string>('bottom-right');
   const [primaryColor, setPrimaryColor] = useState('#6366f1');

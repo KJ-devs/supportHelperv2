@@ -13,6 +13,7 @@ import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
 import { ConnectionStatus } from '@/components/layout/ConnectionStatus';
 import { SkipLink } from '@/components/ui/SkipLink';
+import { SdkWidget } from '@/components/layout/SdkWidget';
 import { useTicketSocket } from '@/hooks/useTicketSocket';
 import { Sheet } from '@/components/ui/Sheet';
 import {
@@ -247,6 +248,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           {children}
         </main>
       </div>
+
+      {/* SDK Bug Report Widget — persistent on all pages */}
+      <SdkWidget />
 
       {/* Mobile Overlay */}
       {sidebarOpen && isMobile && (

@@ -115,6 +115,12 @@ function buildQueryString(filters: AgentTaskFilters): string {
 }
 
 export const agentTasksApi = {
+  async triggerAnalysis(ticketId: string): Promise<AgentTask> {
+    return apiRequest<AgentTask>(`/api/v1/agent-tasks/tickets/${ticketId}/analyze`, {
+      method: 'POST',
+    });
+  },
+
   async getTasks(filters: AgentTaskFilters = {}): Promise<PaginatedResponse<AgentTask>> {
     const queryString = buildQueryString(filters);
     const endpoint = `/api/v1/agent-tasks${queryString ? `?${queryString}` : ''}`;
