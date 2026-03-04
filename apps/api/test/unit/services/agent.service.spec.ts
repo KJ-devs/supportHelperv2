@@ -37,8 +37,9 @@ describe('AgentService', () => {
     ticketId: 'ticket-123',
     status: AgentState.ANALYZING,
     agentState: {
-      step: 'initial_analysis',
-      context: {},
+      ticketId: 'ticket-123',
+      tenantId: 'tenant-123',
+      decisionTrace: [],
     },
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -174,8 +175,9 @@ describe('AgentService', () => {
           ticketId: 'ticket-123',
           status: AgentState.ANALYZING,
           agentState: {
-            step: 'initial_analysis',
-            context: {},
+            ticketId: 'ticket-123',
+            tenantId: 'tenant-123',
+            decisionTrace: [],
           },
         },
       });

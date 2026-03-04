@@ -108,8 +108,9 @@ describe('GithubAppService', () => {
       const token = service.generateAppJwt();
       const decoded = jwt.decode(token) as jwt.JwtPayload;
 
-      expect(decoded.exp).toBeGreaterThanOrEqual(nowSec + 597);
-      expect(decoded.exp).toBeLessThanOrEqual(nowSec + 603);
+      // iat is backdated ~60s for clock drift, exp = iat + 600 ≈ now + 540
+      expect(decoded.exp).toBeGreaterThanOrEqual(nowSec + 535);
+      expect(decoded.exp).toBeLessThanOrEqual(nowSec + 545);
     });
 
     it('should produce a token verifiable with the matching public key', () => {
