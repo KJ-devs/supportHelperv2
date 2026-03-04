@@ -171,6 +171,7 @@ export class ToolExecutorService {
         return this.searchSimilarTickets(
           input.query as string,
           context.tenantId,
+          context.ticket.id,
           (input.limit as number | undefined) ?? 5,
         );
       }
@@ -315,6 +316,7 @@ export class ToolExecutorService {
   private async searchSimilarTickets(
     query: string,
     tenantId: string,
+    ticketId: string,
     limit: number,
   ): Promise<unknown> {
     // Use pgvector to search similar tickets by embedding
@@ -327,10 +329,11 @@ export class ToolExecutorService {
     }> = await this.prisma.$queryRaw`
       SELECT t.id, t.title, t.status, t.ai_summary,
              t.embedding <=> (
-               SELECT embedding FROM tickets WHERE id = ${tenantId}::uuid LIMIT 1
+               SELECT embedding FROM tickets WHERE id = ${ticketId}::uuid LIMIT 1
              ) AS distance
       FROM tickets t
       WHERE t.tenant_id = ${tenantId}::uuid
+        AND t.id != ${ticketId}::uuid
         AND t.embedding IS NOT NULL
         AND (t.status = 'resolved' OR t.status = 'closed')
       ORDER BY t.embedding <=> (

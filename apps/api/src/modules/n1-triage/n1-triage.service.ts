@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
+import { TicketRelationsService } from '../ticket-relations/ticket-relations.service';
 
 interface N1Assessment {
   decision: 'no_fix_needed' | 'duplicate' | 'escalate_n2';
@@ -117,6 +118,7 @@ export class N1TriageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AIService,
+    private readonly ticketRelationsService: TicketRelationsService,
     @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue,
   ) {}
 
@@ -493,6 +495,17 @@ export class N1TriageService {
         n1AssessedAt: new Date(),
       },
     });
+
+    // Create ticket relations from assessment (duplicate/similar links)
+    await this.ticketRelationsService.createFromN1Assessment(
+      ticketId,
+      tenantId,
+      {
+        duplicateTicketId: assessment.duplicateTicketId,
+        similarTicketIds: assessment.similarTicketIds,
+        confidence: assessment.confidence,
+      },
+    );
 
     // Record timeline event
     await this.prisma.ticketEvent.create({
