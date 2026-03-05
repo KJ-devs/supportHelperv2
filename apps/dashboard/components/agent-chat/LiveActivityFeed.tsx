@@ -66,7 +66,7 @@ export function LiveActivityFeed({ activities, isActive, currentAction }: LiveAc
 
       <div className="max-h-[200px] overflow-y-auto px-3 py-2 space-y-1.5">
         {activities.map(item => {
-          const styles = TYPE_STYLES[item.type];
+          const styles = TYPE_STYLES[item.type] ?? TYPE_STYLES['activity'];
           const isError = item.hasError;
           const dotClass = isError ? 'bg-red-500' : styles.dot;
           const textClass = isError ? 'text-red-400' : styles.text;
