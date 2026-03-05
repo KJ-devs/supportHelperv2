@@ -454,6 +454,8 @@ model AgentSession {
   toolCallLog       Json?     @map("tool_call_log") @db.JsonB
   agentLevel        String?   @map("agent_level") @db.VarChar(50)
   modelUsed         String?   @map("model_used") @db.VarChar(100)
+  agentMode         String    @default("autonomous") @map("agent_mode") @db.VarChar(20)
+  checkpointState   String    @default("none") @map("checkpoint_state") @db.VarChar(50)
   createdAt         DateTime  @default(now()) @map("created_at")
 
   ticket    Ticket         @relation(fields: [ticketId], references: [id])

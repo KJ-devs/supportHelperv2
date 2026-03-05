@@ -277,6 +277,21 @@ export class AgentV2Gateway implements OnGatewayInit, OnGatewayConnection, OnGat
     this.server.to(this.sessionRoomName(data.sessionId)).emit('agent:activity', data);
   }
 
+  @OnEvent('agent.checkpoint')
+  handleAgentCheckpoint(data: {
+    sessionId: string;
+    checkpointType: string;
+    summary: string;
+    proposedNextSteps?: string[];
+    proposedChanges?: string[];
+    message: string;
+  }) {
+    this.server.to(this.sessionRoomName(data.sessionId)).emit('agent:checkpoint', {
+      ...data,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   @OnEvent('agent:complete')
   handleAgentCompleteEvent(event: { ticketId?: string; sessionId?: string; finalContent: string }) {
     if (!event.sessionId) return;

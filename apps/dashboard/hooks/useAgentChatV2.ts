@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { getAuthToken } from '@/lib/api/client';
+import { getAuthToken, apiRequest } from '@/lib/api/client';
 import {
   createAgentSession,
   getTicketSession,
@@ -11,6 +11,7 @@ import {
   type AgentMessageRecord,
 } from '@/lib/api/agent-v2';
 import type { ActivityItem } from '@/components/agent-chat/LiveActivityFeed';
+import type { CheckpointData } from '@/components/agent-chat/CheckpointPanel';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -31,6 +32,11 @@ interface UseAgentChatV2Return {
   activities: ActivityItem[];
   preferredModel: string;
   setPreferredModel: (model: string) => void;
+  agentMode: 'autonomous' | 'guided';
+  setAgentMode: (mode: 'autonomous' | 'guided') => void;
+  currentCheckpoint: CheckpointData | null;
+  approveCheckpoint: (guidance?: string) => Promise<void>;
+  requestPR: (instructions?: string) => Promise<void>;
 }
 
 export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
@@ -47,6 +53,8 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
   const [preferredModel, setPreferredModel] = useState<string>('auto');
   const [currentAction, setCurrentAction] = useState<string | null>(null);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [agentMode, setAgentMode] = useState<'autonomous' | 'guided'>('autonomous');
+  const [currentCheckpoint, setCurrentCheckpoint] = useState<CheckpointData | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const autoAnalysisTriggered = useRef(false);
@@ -82,7 +90,8 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
         } else {
           const newSession = await createAgentSession(
             ticketId,
-            preferredModel !== 'auto' ? preferredModel : undefined
+            preferredModel !== 'auto' ? preferredModel : undefined,
+            agentMode
           );
           if (cancelled) return;
           resolvedSessionId = newSession.sessionId;
@@ -244,6 +253,21 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
       ]);
     });
 
+    // agent:checkpoint → show checkpoint panel + add to activity feed
+    socket.on('agent:checkpoint', (data: CheckpointData & { sessionId: string }) => {
+      setCurrentCheckpoint(data);
+      setActivities(prev => [
+        ...prev.slice(-50),
+        {
+          id: `cp-${Date.now()}-${Math.random()}`,
+          timestamp: new Date(),
+          type: 'tool_result',
+          message: data.message,
+          agentLevel: undefined,
+        },
+      ]);
+    });
+
     return () => {
       socket.disconnect();
       socketRef.current = null;
@@ -285,6 +309,24 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
   // Keep sendMessageRef in sync so the auto-analysis effect can call it without a stale closure
   sendMessageRef.current = sendMessage;
 
+  const approveCheckpoint = useCallback(async (guidance?: string) => {
+    if (!sessionIdRef.current) return;
+    await apiRequest(`/api/agent/v2/sessions/${sessionIdRef.current}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ guidance }),
+    });
+    setCurrentCheckpoint(null);
+  }, []);
+
+  const requestPR = useCallback(async (instructions?: string) => {
+    if (!sessionIdRef.current) return;
+    await apiRequest(`/api/agent/v2/sessions/${sessionIdRef.current}/request-pr`, {
+      method: 'POST',
+      body: JSON.stringify({ instructions }),
+    });
+    setCurrentCheckpoint(null);
+  }, []);
+
   // Auto-analysis on first launch for new sessions with no messages
   useEffect(() => {
     if (
@@ -319,5 +361,10 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
     activities,
     preferredModel,
     setPreferredModel,
+    agentMode,
+    setAgentMode,
+    currentCheckpoint,
+    approveCheckpoint,
+    requestPR,
   };
 }

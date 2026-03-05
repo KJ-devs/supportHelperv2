@@ -194,6 +194,8 @@ export interface AgenticLoopOptions {
   sessionId?: string;
   /** Max context tokens before pruning triggers (default: 50000) */
   maxContextTokens?: number;
+  /** Skip guided-mode checkpoints (used when resuming after approval) */
+  skipCheckpoints?: boolean;
 }
 
 export interface AgenticLoopResult {
@@ -295,6 +297,7 @@ export class AgenticLoopService {
       ticketId,
       sessionId,
       maxContextTokens = this.DEFAULT_MAX_CONTEXT_TOKENS,
+      skipCheckpoints = false,
     } = options;
 
     const [provider, config] = await Promise.all([
@@ -323,6 +326,7 @@ export class AgenticLoopService {
     const allToolsUsed: string[] = [];
     let currentLevel: 'N1' | 'N2' = 'N1';
     let currentModel = 'claude-haiku-4-5-20251001';
+    let checkpointHit = false;
 
     // Emit start activity
     if (sessionId) {
@@ -336,7 +340,7 @@ export class AgenticLoopService {
       );
     }
 
-    while (iterations < maxIterations) {
+    while (!checkpointHit && iterations < maxIterations) {
       if (Date.now() > deadline) {
         this.logger.warn(`Agentic loop timed out after ${iterations} iterations`);
         break;
@@ -442,6 +446,41 @@ export class AgenticLoopService {
 
         allToolsUsed.push(toolUse.name);
 
+        // Guided mode: intercept create_pull_request before execution
+        if (!skipCheckpoints && sessionId && toolUse.name === 'create_pull_request') {
+          const guidedSession = await this.prisma.agentSession.findUnique({
+            where: { id: sessionId },
+            select: { agentMode: true, checkpointState: true },
+          });
+
+          if (guidedSession?.agentMode === 'guided') {
+            await this.prisma.agentSession.update({
+              where: { id: sessionId },
+              data: { checkpointState: 'waiting_pr_approval' },
+            });
+
+            const toolInput = toolUse.input as Record<string, unknown>;
+            const proposedChanges = (toolInput['files'] as string[] | undefined) ?? [];
+
+            this.eventEmitter.emit('agent.checkpoint', {
+              sessionId,
+              checkpointType: 'pr_ready',
+              summary:
+                'Investigation complete. The agent has identified the fix and is ready to create a pull request.',
+              proposedChanges,
+              message: 'Ready to create a pull request. Awaiting developer approval.',
+            });
+
+            this.logger.log(`Guided mode: paused at PR checkpoint for session ${sessionId}`);
+
+            finalContent = 'Guided mode: ready to create a pull request. Awaiting your approval.';
+            checkpointHit = true;
+            break;
+          }
+        }
+
+        if (checkpointHit) break;
+
         this.eventEmitter.emit('agent:tool_call', {
           ticketId,
           sessionId,
@@ -521,6 +560,52 @@ export class AgenticLoopService {
 
       // Add tool results back to the conversation
       messages.push({ role: 'user', content: toolResultBlocks });
+
+      // Guided mode: after update_diagnosis, pause for analysis approval (first time only)
+      if (!skipCheckpoints && sessionId) {
+        const hasUpdateDiagnosis = turn.toolUseBlocks.some(t => t.name === 'update_diagnosis');
+        if (hasUpdateDiagnosis) {
+          const guidedSession = await this.prisma.agentSession.findUnique({
+            where: { id: sessionId },
+            select: { agentMode: true, checkpointState: true },
+          });
+
+          if (guidedSession?.agentMode === 'guided' && guidedSession.checkpointState === 'none') {
+            await this.prisma.agentSession.update({
+              where: { id: sessionId },
+              data: { checkpointState: 'waiting_analysis_approval' },
+            });
+
+            // Extract diagnosis summary from the tool call input
+            const diagCall = turn.toolUseBlocks.find(t => t.name === 'update_diagnosis');
+            const diagInput = diagCall?.input as Record<string, unknown> | undefined;
+            const diagnosisSummary =
+              (diagInput?.['rootCause'] as string | undefined) ??
+              (diagInput?.['summary'] as string | undefined) ??
+              'Analysis complete';
+
+            this.eventEmitter.emit('agent.checkpoint', {
+              sessionId,
+              checkpointType: 'analysis_complete',
+              summary: diagnosisSummary,
+              proposedNextSteps: [
+                'Deep code investigation',
+                'Search for similar tickets',
+                'Propose a fix',
+              ],
+              message:
+                'Analysis complete. Awaiting developer approval to proceed with investigation.',
+            });
+
+            this.logger.log(`Guided mode: paused at analysis checkpoint for session ${sessionId}`);
+
+            finalContent =
+              'Guided mode: initial analysis complete. Awaiting your approval to proceed with deep investigation.';
+            checkpointHit = true;
+            break;
+          }
+        }
+      }
     }
 
     this.logger.log(

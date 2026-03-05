@@ -26,11 +26,16 @@ export interface AgentMessageRecord {
 
 export async function createAgentSession(
   ticketId: string,
-  preferredModel?: string
+  preferredModel?: string,
+  agentMode?: 'autonomous' | 'guided'
 ): Promise<{ sessionId: string; status: string }> {
   return apiRequest<{ sessionId: string; status: string }>(`/api/agent/v2/sessions`, {
     method: 'POST',
-    body: JSON.stringify({ ticketId, ...(preferredModel ? { preferredModel } : {}) }),
+    body: JSON.stringify({
+      ticketId,
+      ...(preferredModel ? { preferredModel } : {}),
+      ...(agentMode ? { agentMode } : {}),
+    }),
   });
 }
 

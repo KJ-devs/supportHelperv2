@@ -272,7 +272,8 @@ Start by identifying which parts of the codebase are likely involved, then read 
     sessionId: string,
     message: string,
     tenantId: string,
-    userId: string
+    userId: string,
+    skipCheckpoints = false
   ): Promise<{
     content: string;
     toolsUsed: string[];
@@ -357,6 +358,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
       timeoutMs: 2 * 60 * 1000,
       ticketId: ticket.id,
       sessionId,
+      skipCheckpoints,
     };
 
     const result = await this.agenticLoop.run(loopOptions);
@@ -440,6 +442,60 @@ Start by identifying which parts of the codebase are likely involved, then read 
       toolsUsed: result.toolCallLog.map(t => t.name),
       diagnosis: updatedDiagnosis || existingDiagnosis,
     };
+  }
+
+  async approveCheckpoint(sessionId: string, tenantId: string, guidance?: string): Promise<void> {
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: sessionId, ticket: { tenantId } },
+      include: {
+        ticket: {
+          include: {
+            media: {
+              select: {
+                metadata: true,
+                videoEvents: { where: { ocrText: { not: null } }, orderBy: { timestampMs: 'asc' } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session ${sessionId} not found`);
+    }
+
+    await this.prisma.agentSession.update({
+      where: { id: sessionId },
+      data: { checkpointState: 'approved' },
+    });
+
+    const approvalMessage = guidance
+      ? `Developer approved. Additional guidance: ${guidance}. Please proceed with deep code investigation and propose a fix.`
+      : 'Developer approved your analysis. Please proceed with deep code investigation and propose a fix.';
+
+    await this.handleUserMessage(sessionId, approvalMessage, tenantId, 'system', true);
+  }
+
+  async requestPR(sessionId: string, tenantId: string, instructions?: string): Promise<void> {
+    const session = await this.prisma.agentSession.findFirst({
+      where: { id: sessionId, ticket: { tenantId } },
+    });
+
+    if (!session) {
+      throw new NotFoundException(`Session ${sessionId} not found`);
+    }
+
+    await this.prisma.agentSession.update({
+      where: { id: sessionId },
+      data: { checkpointState: 'approved' },
+    });
+
+    const prMessage = instructions
+      ? `Developer approves the PR. Instructions: ${instructions}. Please create the pull request now.`
+      : 'Developer approves. Please create the pull request now.';
+
+    await this.handleUserMessage(sessionId, prMessage, tenantId, 'system', true);
   }
 
   /**

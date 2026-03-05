@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Body,
-  Param,
-  UseGuards,
-  NotFoundException,
-} from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards, NotFoundException } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -15,7 +7,7 @@ import {
   ApiParam,
   ApiExcludeEndpoint,
 } from '@nestjs/swagger';
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsIn } from 'class-validator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
@@ -29,6 +21,22 @@ class CreateSessionDto {
   @IsString()
   @IsNotEmpty()
   ticketId: string;
+
+  @IsOptional()
+  @IsIn(['autonomous', 'guided'])
+  agentMode?: 'autonomous' | 'guided';
+}
+
+class ApproveCheckpointDto {
+  @IsOptional()
+  @IsString()
+  guidance?: string;
+}
+
+class RequestPRDto {
+  @IsOptional()
+  @IsString()
+  instructions?: string;
 }
 
 class SendMessageDto {
@@ -61,17 +69,14 @@ export class AgentV2Controller {
   constructor(
     private readonly deepAnalysis: DeepAnalysisService,
     private readonly diagnosisService: DiagnosisService,
-    private readonly prisma: PrismaService,
+    private readonly prisma: PrismaService
   ) {}
 
   @Post('sessions')
   @ApiOperation({ summary: 'Create a new agent V2 session for a ticket' })
   @ApiResponse({ status: 201, description: 'Session created' })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
-  async createSession(
-    @CurrentTenant() tenantId: string,
-    @Body() dto: CreateSessionDto,
-  ) {
+  async createSession(@CurrentTenant() tenantId: string, @Body() dto: CreateSessionDto) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: dto.ticketId, tenantId },
     });
@@ -85,10 +90,11 @@ export class AgentV2Controller {
         ticketId: dto.ticketId,
         status: 'analyzing',
         agentState: { version: 'v2', step: 'initial' },
+        agentMode: dto.agentMode ?? 'autonomous',
       },
     });
 
-    return { sessionId: session.id, status: session.status };
+    return { sessionId: session.id, status: session.status, agentMode: session.agentMode };
   }
 
   @Post('sessions/:sessionId/messages')
@@ -99,7 +105,7 @@ export class AgentV2Controller {
     @CurrentTenant() tenantId: string,
     @CurrentUser('userId') userId: string,
     @Param('sessionId') sessionId: string,
-    @Body() dto: SendMessageDto,
+    @Body() dto: SendMessageDto
   ) {
     return this.deepAnalysis.handleUserMessage(sessionId, dto.content, tenantId, userId);
   }
@@ -107,10 +113,7 @@ export class AgentV2Controller {
   @Get('sessions/:sessionId')
   @ApiOperation({ summary: 'Get session info and diagnosis' })
   @ApiParam({ name: 'sessionId', type: String })
-  async getSession(
-    @CurrentTenant() tenantId: string,
-    @Param('sessionId') sessionId: string,
-  ) {
+  async getSession(@CurrentTenant() tenantId: string, @Param('sessionId') sessionId: string) {
     const session = await this.prisma.agentSession.findFirst({
       where: { id: sessionId, ticket: { tenantId } },
       include: { ticket: { select: { id: true, title: true, diagnosis: true } } },
@@ -126,10 +129,7 @@ export class AgentV2Controller {
   @Get('sessions/:sessionId/messages')
   @ApiOperation({ summary: 'Get all messages for a session' })
   @ApiParam({ name: 'sessionId', type: String })
-  async getMessages(
-    @CurrentTenant() tenantId: string,
-    @Param('sessionId') sessionId: string,
-  ) {
+  async getMessages(@CurrentTenant() tenantId: string, @Param('sessionId') sessionId: string) {
     const session = await this.prisma.agentSession.findFirst({
       where: { id: sessionId, ticket: { tenantId } },
     });
@@ -143,7 +143,7 @@ export class AgentV2Controller {
       orderBy: { createdAt: 'asc' },
     });
 
-    return messages.map((msg) => {
+    return messages.map(msg => {
       const meta = msg.metadata as Record<string, unknown> | null;
       return {
         ...msg,
@@ -157,10 +157,7 @@ export class AgentV2Controller {
   @ApiParam({ name: 'ticketId', type: String })
   @ApiResponse({ status: 200, description: 'Session found' })
   @ApiResponse({ status: 404, description: 'No session found for this ticket' })
-  async getTicketSession(
-    @CurrentTenant() tenantId: string,
-    @Param('ticketId') ticketId: string,
-  ) {
+  async getTicketSession(@CurrentTenant() tenantId: string, @Param('ticketId') ticketId: string) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
     });
@@ -184,10 +181,7 @@ export class AgentV2Controller {
   @Get('tickets/:ticketId/diagnosis')
   @ApiOperation({ summary: 'Get the AI diagnosis for a ticket' })
   @ApiParam({ name: 'ticketId', type: String })
-  async getDiagnosis(
-    @CurrentTenant() tenantId: string,
-    @Param('ticketId') ticketId: string,
-  ) {
+  async getDiagnosis(@CurrentTenant() tenantId: string, @Param('ticketId') ticketId: string) {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
       select: { id: true, diagnosis: true, diagnosisUpdatedAt: true },
@@ -202,6 +196,32 @@ export class AgentV2Controller {
       diagnosis: ticket.diagnosis,
       updatedAt: ticket.diagnosisUpdatedAt,
     };
+  }
+
+  @Post('sessions/:sessionId/approve')
+  @ApiOperation({ summary: 'Approve checkpoint and proceed with investigation (guided mode)' })
+  @ApiParam({ name: 'sessionId', type: String })
+  @ApiResponse({ status: 201, description: 'Checkpoint approved, investigation continues' })
+  async approveCheckpoint(
+    @CurrentTenant() tenantId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: ApproveCheckpointDto
+  ) {
+    await this.deepAnalysis.approveCheckpoint(sessionId, tenantId, body.guidance);
+    return { sessionId, approved: true };
+  }
+
+  @Post('sessions/:sessionId/request-pr')
+  @ApiOperation({ summary: 'Request PR creation (guided mode — after investigation)' })
+  @ApiParam({ name: 'sessionId', type: String })
+  @ApiResponse({ status: 201, description: 'PR creation approved' })
+  async requestPR(
+    @CurrentTenant() tenantId: string,
+    @Param('sessionId') sessionId: string,
+    @Body() body: RequestPRDto
+  ) {
+    await this.deepAnalysis.requestPR(sessionId, tenantId, body.instructions);
+    return { sessionId, prRequested: true };
   }
 
   /**

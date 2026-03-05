@@ -9,6 +9,8 @@ import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { AgentLevelBadge } from './AgentLevelBadge';
 import { LiveActivityFeed } from './LiveActivityFeed';
 import { ModelSelector } from './ModelSelector';
+import { AgentModeSelector } from './AgentModeSelector';
+import { CheckpointPanel } from './CheckpointPanel';
 
 type ActiveTab = 'chat' | 'logs';
 
@@ -106,6 +108,11 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
     activities,
     preferredModel,
     setPreferredModel,
+    agentMode,
+    setAgentMode,
+    currentCheckpoint,
+    approveCheckpoint,
+    requestPR,
   } = useAgentChatV2(ticketId);
 
   const lastUserMessageRef = useRef<string | null>(null);
@@ -224,8 +231,13 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
           </button>
         ))}
 
-        {/* Model selector + agent level badge + session indicator */}
+        {/* Model selector + mode selector + agent level badge + session indicator */}
         <div className="ml-auto flex items-center gap-3">
+          <AgentModeSelector
+            value={agentMode}
+            onChange={setAgentMode}
+            disabled={isAgentThinking || !!sessionId}
+          />
           <ModelSelector
             value={preferredModel}
             onChange={setPreferredModel}
@@ -246,6 +258,19 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
       {/* CHAT TAB */}
       {activeTab === 'chat' && (
         <>
+          {/* Checkpoint panel — shown above the message list when agent pauses */}
+          {currentCheckpoint && (
+            <div className="flex-shrink-0 pt-3">
+              <CheckpointPanel
+                checkpoint={currentCheckpoint}
+                onApprove={approveCheckpoint}
+                onRequestPR={requestPR}
+                onGuide={sendMessage}
+                isLoading={isAgentThinking}
+              />
+            </div>
+          )}
+
           <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
             {/* Loading state */}
             {isLoading && (

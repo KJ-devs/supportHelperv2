@@ -333,6 +333,8 @@ export const AgentSessionSchema = z.object({
   escalationReason: z.string().nullable(),
   agentLevel: z.string().max(50).nullable(),
   modelUsed: z.string().max(100).nullable(),
+  agentMode: z.string().max(20).default('autonomous'),
+  checkpointState: z.string().max(50).default('none'),
   createdAt: z.date(),
 });
 
