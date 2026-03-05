@@ -29,7 +29,7 @@ export class AgentTasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ticketTimeline: TicketTimelineService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async create(ticketId: string, tenantId: string, applicationId: string) {
@@ -46,12 +46,9 @@ export class AgentTasksService {
 
     this.logger.log(`Created agent task ${task.id} for ticket ${ticketId}`);
 
-    await this.ticketTimeline.recordEvent(
-      ticketId,
-      tenantId,
-      'agent_analysis_started',
-      { agentTaskId: task.id },
-    );
+    await this.ticketTimeline.recordEvent(ticketId, tenantId, 'agent_analysis_started', {
+      agentTaskId: task.id,
+    });
 
     return task;
   }
@@ -113,7 +110,7 @@ export class AgentTasksService {
           data: { status: ticketStatus },
         });
         this.logger.log(
-          `Synced ticket ${previous.ticketId} status to '${ticketStatus}' (from task status '${status}')`,
+          `Synced ticket ${previous.ticketId} status to '${ticketStatus}' (from task status '${status}')`
         );
       }
     }
@@ -132,12 +129,9 @@ export class AgentTasksService {
 
     this.logger.log(`Set action plan for agent task ${id}`);
 
-    await this.ticketTimeline.recordEvent(
-      task.ticketId,
-      task.tenantId,
-      'agent_plan_ready',
-      { agentTaskId: id },
-    );
+    await this.ticketTimeline.recordEvent(task.ticketId, task.tenantId, 'agent_plan_ready', {
+      agentTaskId: id,
+    });
 
     return task;
   }
@@ -150,12 +144,9 @@ export class AgentTasksService {
 
     this.logger.log(`Approved agent task ${id}`);
 
-    await this.ticketTimeline.recordEvent(
-      task.ticketId,
-      task.tenantId,
-      'agent_plan_approved',
-      { agentTaskId: id },
-    );
+    await this.ticketTimeline.recordEvent(task.ticketId, task.tenantId, 'agent_plan_approved', {
+      agentTaskId: id,
+    });
 
     return task;
   }
@@ -177,7 +168,7 @@ export class AgentTasksService {
   async appendLog(id: string, entry: Prisma.InputJsonObject) {
     const task = await this.prisma.agentTask.findUnique({
       where: { id },
-      select: { executionLog: true },
+      select: { executionLog: true, tenantId: true },
     });
 
     if (!task) {
@@ -185,15 +176,21 @@ export class AgentTasksService {
     }
 
     const currentLog = (task.executionLog as Prisma.JsonArray) || [];
-    const updatedLog = [
-      ...currentLog,
-      { ...entry, timestamp: new Date().toISOString() },
-    ];
+    const enrichedEntry = { ...entry, timestamp: new Date().toISOString() };
+    const updatedLog = [...currentLog, enrichedEntry];
 
-    return this.prisma.agentTask.update({
+    const updated = await this.prisma.agentTask.update({
       where: { id },
       data: { executionLog: updatedLog },
     });
+
+    this.eventEmitter.emit('agent-task:log-appended', {
+      taskId: id,
+      tenantId: task.tenantId,
+      entry: enrichedEntry,
+    });
+
+    return updated;
   }
 
   async findAll(
@@ -207,7 +204,7 @@ export class AgentTasksService {
       search?: string;
       page: number;
       limit: number;
-    },
+    }
   ) {
     const where: Prisma.AgentTaskWhereInput = { tenantId };
 
@@ -279,35 +276,30 @@ export class AgentTasksService {
     });
 
     const totalTasks = tasks.length;
-    const inProgress = tasks.filter((t) =>
-      !['completed', 'failed', 'expired'].includes(t.status),
+    const inProgress = tasks.filter(
+      t => !['completed', 'failed', 'expired'].includes(t.status)
     ).length;
-    const completedTasks = tasks.filter((t) => t.status === 'completed');
-    const failedCount = tasks.filter((t) => t.status === 'failed').length;
+    const completedTasks = tasks.filter(t => t.status === 'completed');
+    const failedCount = tasks.filter(t => t.status === 'failed').length;
 
-    const finishedTasks = tasks.filter((t) =>
-      ['completed', 'failed'].includes(t.status),
-    );
+    const finishedTasks = tasks.filter(t => ['completed', 'failed'].includes(t.status));
     const successRate =
       finishedTasks.length > 0
         ? Math.round((completedTasks.length / finishedTasks.length) * 100)
         : 0;
 
     // Calculate average resolution time in minutes
-    const completedWithTimes = completedTasks.filter(
-      (t) => t.startedAt && t.completedAt,
-    );
+    const completedWithTimes = completedTasks.filter(t => t.startedAt && t.completedAt);
     const avgResolutionTime =
       completedWithTimes.length > 0
         ? Math.round(
             completedWithTimes.reduce((sum, t) => {
               const duration =
-                new Date(t.completedAt!).getTime() -
-                new Date(t.startedAt!).getTime();
+                new Date(t.completedAt!).getTime() - new Date(t.startedAt!).getTime();
               return sum + duration;
             }, 0) /
               completedWithTimes.length /
-              60000,
+              60000
           )
         : 0;
 
@@ -355,12 +347,9 @@ export class AgentTasksService {
 
     this.logger.log(`Retried agent task ${id}`);
 
-    await this.ticketTimeline.recordEvent(
-      task.ticketId,
-      task.tenantId,
-      'agent_task_retried',
-      { agentTaskId: id },
-    );
+    await this.ticketTimeline.recordEvent(task.ticketId, task.tenantId, 'agent_task_retried', {
+      agentTaskId: id,
+    });
 
     return task;
   }
@@ -393,12 +382,9 @@ export class AgentTasksService {
 
     this.logger.log(`Cancelled agent task ${id}`);
 
-    await this.ticketTimeline.recordEvent(
-      task.ticketId,
-      task.tenantId,
-      'agent_task_cancelled',
-      { agentTaskId: id },
-    );
+    await this.ticketTimeline.recordEvent(task.ticketId, task.tenantId, 'agent_task_cancelled', {
+      agentTaskId: id,
+    });
 
     return task;
   }

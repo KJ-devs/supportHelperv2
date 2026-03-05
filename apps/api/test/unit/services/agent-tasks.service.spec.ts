@@ -9,6 +9,7 @@ describe('AgentTasksService', () => {
   let service: AgentTasksService;
   let prisma: PrismaService;
   let ticketTimeline: TicketTimelineService;
+  let eventEmitter: EventEmitter2;
 
   const mockPrismaService = {
     agentTask: {
@@ -49,6 +50,7 @@ describe('AgentTasksService', () => {
     service = module.get<AgentTasksService>(AgentTasksService);
     prisma = module.get<PrismaService>(PrismaService);
     ticketTimeline = module.get<TicketTimelineService>(TicketTimelineService);
+    eventEmitter = module.get<EventEmitter2>(EventEmitter2);
   });
 
   afterEach(() => {
@@ -85,7 +87,7 @@ describe('AgentTasksService', () => {
         ticketId,
         tenantId,
         'agent_analysis_started',
-        { agentTaskId: task.id },
+        { agentTaskId: task.id }
       );
     });
   });
@@ -210,7 +212,7 @@ describe('AgentTasksService', () => {
         'ticket-123',
         tenantId,
         'agent_plan_ready',
-        { agentTaskId: 'task-123' },
+        { agentTaskId: 'task-123' }
       );
     });
   });
@@ -237,7 +239,7 @@ describe('AgentTasksService', () => {
         'ticket-123',
         tenantId,
         'agent_plan_approved',
-        { agentTaskId: 'task-123' },
+        { agentTaskId: 'task-123' }
       );
     });
   });
@@ -289,10 +291,38 @@ describe('AgentTasksService', () => {
       });
     });
 
+    it('should emit agent-task:log-appended event after writing to DB', async () => {
+      const existingTask = { executionLog: [], tenantId: 'tenant-123' };
+      const updatedTask = {
+        executionLog: [{ step: 'analyze', timestamp: '2026-01-01T00:00:00.000Z' }],
+      };
+      const entry = { step: 'analyze', message: 'Analyzing code' };
+
+      mockPrismaService.agentTask.findUnique.mockResolvedValue(existingTask);
+      mockPrismaService.agentTask.update.mockResolvedValue(updatedTask);
+
+      await service.appendLog('task-123', entry);
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'agent-task:log-appended',
+        expect.objectContaining({
+          taskId: 'task-123',
+          tenantId: 'tenant-123',
+          entry: expect.objectContaining({
+            step: 'analyze',
+            message: 'Analyzing code',
+            timestamp: expect.any(String),
+          }),
+        })
+      );
+    });
+
     it('should throw NotFoundException when task not found', async () => {
       mockPrismaService.agentTask.findUnique.mockResolvedValue(null);
 
-      await expect(service.appendLog('not-found', { step: 'test' })).rejects.toThrow(NotFoundException);
+      await expect(service.appendLog('not-found', { step: 'test' })).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 
@@ -403,9 +433,7 @@ describe('AgentTasksService', () => {
           status: 'failed',
           error: 'Cancelled by user',
           completedAt: expect.any(Date),
-          executionLog: expect.arrayContaining([
-            expect.objectContaining({ step: 'cancelled' }),
-          ]),
+          executionLog: expect.arrayContaining([expect.objectContaining({ step: 'cancelled' })]),
         }),
         include: { ticket: true },
       });

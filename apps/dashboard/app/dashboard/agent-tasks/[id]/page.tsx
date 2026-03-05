@@ -1,15 +1,19 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useRequireAuth } from '@/lib/auth';
 import { agentTasksApi } from '@/lib/api/agent-tasks';
-import type { AgentTask } from '@/lib/api/agent-tasks';
+import type { AgentTask, ExecutionLogEntry } from '@/lib/api/agent-tasks';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Button } from '@/components/ui';
 import { AgentTaskStatusBadge } from '../components/AgentTaskStatusBadge';
-import { AgentTaskDetail } from '../components/AgentTaskDetail';
+import { AgentTaskDetail, isInProgress, isTerminal } from '../components/AgentTaskDetail';
+import { useAgentTaskSocket } from '@/hooks/useAgentTaskSocket';
+import type { ActionPlan } from '@/lib/api/agent-tasks';
+
+const POLLING_INTERVAL_MS = 3000;
 
 export default function AgentTaskDetailPage() {
   const params = useParams();
@@ -20,6 +24,7 @@ export default function AgentTaskDetailPage() {
   const [task, setTask] = useState<AgentTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchTask = useCallback(async () => {
     try {
@@ -35,11 +40,89 @@ export default function AgentTaskDetailPage() {
     }
   }, [taskId]);
 
+  // Silently refresh (no loading state) for polling / WS-triggered refetch
+  const silentRefetch = useCallback(async () => {
+    try {
+      const data = await agentTasksApi.getTask(taskId);
+      setTask(data);
+    } catch (err: unknown) {
+      console.error('Error silently refetching agent task:', err);
+    }
+  }, [taskId]);
+
   useEffect(() => {
     if (!authLoading && taskId) {
       fetchTask();
     }
   }, [taskId, authLoading, fetchTask]);
+
+  // Polling fallback: active when task is in-progress, stopped when terminal
+  useEffect(() => {
+    if (!task) return;
+
+    if (isInProgress(task.status)) {
+      if (!pollingRef.current) {
+        pollingRef.current = setInterval(silentRefetch, POLLING_INTERVAL_MS);
+      }
+    } else {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    }
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [task?.status, silentRefetch]);
+
+  // WebSocket handlers
+  const handleStatusChange = useCallback(
+    (_taskId: string, _newStatus: string) => {
+      silentRefetch();
+    },
+    [silentRefetch],
+  );
+
+  const handleLogAppended = useCallback((entry: ExecutionLogEntry) => {
+    setTask((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        executionLog: [...(prev.executionLog ?? []), entry],
+      };
+    });
+  }, []);
+
+  const handlePlanReady = useCallback((plan: unknown) => {
+    setTask((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        actionPlan: plan as ActionPlan,
+      };
+    });
+  }, []);
+
+  const handleWsError = useCallback((errorMessage: string) => {
+    console.error('[AgentTaskDetailPage] WS error:', errorMessage);
+    setTask((prev) => {
+      if (!prev) return prev;
+      return { ...prev, error: errorMessage };
+    });
+  }, []);
+
+  const { isConnected } = useAgentTaskSocket(taskId ?? null, {
+    onStatusChange: handleStatusChange,
+    onLogAppended: handleLogAppended,
+    onPlanReady: handlePlanReady,
+    onError: handleWsError,
+  });
+
+  const isLive = isConnected || (task ? isInProgress(task.status) : false);
 
   const handleRetry = async () => {
     if (!task) return;
@@ -105,11 +188,20 @@ export default function AgentTaskDetailPage() {
                 Agent Task Detail
               </h1>
               {task && <AgentTaskStatusBadge status={task.status} />}
+              {!isConnected && task && !isTerminal(task.status) && (
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400"
+                  title="WebSocket disconnected — using polling fallback"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                  Offline
+                </span>
+              )}
             </div>
 
             {task && (
               <div className="flex space-x-2">
-                <Button variant="ghost" size="sm" onClick={fetchTask}>
+                <Button variant="ghost" size="sm" onClick={silentRefetch}>
                   Refresh
                 </Button>
                 {task.status === 'plan_pending_review' && (
@@ -137,7 +229,7 @@ export default function AgentTaskDetailPage() {
                     Retry
                   </Button>
                 )}
-                {!['completed', 'failed', 'expired'].includes(task.status) && (
+                {!isTerminal(task.status) && (
                   <Button variant="danger" size="sm" onClick={handleCancel}>
                     Cancel
                   </Button>
@@ -166,7 +258,7 @@ export default function AgentTaskDetailPage() {
         )}
 
         {/* Content */}
-        {task && !error && <AgentTaskDetail task={task} />}
+        {task && !error && <AgentTaskDetail task={task} isLive={isLive} />}
       </div>
     </DashboardLayout>
   );

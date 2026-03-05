@@ -340,93 +340,24 @@ export default function TicketDetailPage() {
                     onToggle={() => setContextOpen((v) => !v)}
                   />
                   {contextOpen && (
-                    <div className="grid grid-cols-3 gap-2">
-                      {Object.entries(ticket.userContext).map(([key, value]) => (
-                        <div
-                          key={key}
-                          className="bg-gray-100 dark:bg-gray-800 rounded px-2 py-1"
-                        >
-                          <span className="text-xs text-gray-500 dark:text-gray-400 capitalize">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}:{' '}
-                          </span>
-                          <span className="text-xs font-medium text-gray-700 dark:text-gray-200 break-all">
-                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ── RECORDING ── */}
-              {ticket.media && ticket.media.length > 0 && (
-                <div className="mb-6">
-                  <SectionHeader
-                    label="Recording"
-                    open={recordingOpen}
-                    onToggle={() => setRecordingOpen((v) => !v)}
-                  />
-                  {recordingOpen && (
-                    <div className="space-y-4">
-                      {ticket.media.map((media) => {
-                        const filename =
-                          media.metadata?.originalFilename ||
-                          media.storageKey.split('/').pop() ||
-                          'video';
-                        const isVideo =
-                          media.type === 'video' || media.mimeType?.startsWith('video/');
-                        const fileSize =
-                          typeof media.fileSize === 'bigint'
-                            ? Number(media.fileSize)
-                            : media.fileSize || 0;
-
-                        if (media.processingStatus === 'completed' && isVideo) {
-                          return (
-                            <div key={media.id}>
-                              {mediaUrls[media.id] ? (
-                                <VideoPlayer
-                                  src={mediaUrls[media.id]!}
-                                  title={filename}
-                                  mimeType={media.mimeType ?? undefined}
-                                  onError={(err) => console.error('Video error:', err)}
-                                />
-                              ) : (
-                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center bg-gray-50 dark:bg-gray-800">
-                                  {loadingUrls[media.id] ? (
-                                    <div className="space-y-2">
-                                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                                      <p className="text-sm text-gray-500">Loading video...</p>
-                                    </div>
-                                  ) : (
-                                    <Button
-                                      variant="primary"
-                                      size="sm"
-                                      onClick={() => fetchMediaUrl(media.id)}
-                                    >
-                                      Load Video
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
-
+                    <div className="grid grid-cols-2 gap-2">
+                      {Object.entries(ticket.userContext).map(([key, value]) => {
+                        const displayValue =
+                          typeof value === 'object' ? JSON.stringify(value) : String(value);
                         return (
                           <div
-                            key={media.id}
-                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center justify-between"
+                            key={key}
+                            className="bg-gray-100 dark:bg-gray-800 rounded px-3 py-2"
                           >
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                {filename}
-                              </p>
-                              <p className="text-xs text-gray-400">
-                                {media.type} · {(fileSize / 1024 / 1024).toFixed(2)} MB ·{' '}
-                                {media.processingStatus}
-                              </p>
-                            </div>
+                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">
+                              {key.replace(/([A-Z])/g, ' $1').trim()}
+                            </p>
+                            <p
+                              className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate"
+                              title={displayValue}
+                            >
+                              {displayValue}
+                            </p>
                           </div>
                         );
                       })}
@@ -434,6 +365,99 @@ export default function TicketDetailPage() {
                   )}
                 </div>
               )}
+
+              {/* ── RECORDING ── */}
+              <div className="mb-6">
+                <SectionHeader
+                  label="Recording"
+                  open={recordingOpen}
+                  onToggle={() => setRecordingOpen((v) => !v)}
+                />
+                {recordingOpen && (!ticket.media || ticket.media.length === 0) && (
+                  <div className="flex flex-col items-center justify-center py-8 gap-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                    <svg
+                      className="w-8 h-8 text-gray-300 dark:text-gray-600"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.5}
+                        d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
+                      />
+                    </svg>
+                    <p className="text-sm text-gray-400 dark:text-gray-500">No recording attached</p>
+                  </div>
+                )}
+                {recordingOpen && ticket.media && ticket.media.length > 0 && (
+                  <div className="space-y-4">
+                    {ticket.media.map((media) => {
+                      const filename =
+                        media.metadata?.originalFilename ||
+                        media.storageKey.split('/').pop() ||
+                        'video';
+                      const isVideo =
+                        media.type === 'video' || media.mimeType?.startsWith('video/');
+                      const fileSize =
+                        typeof media.fileSize === 'bigint'
+                          ? Number(media.fileSize)
+                          : media.fileSize || 0;
+
+                      if (media.processingStatus === 'completed' && isVideo) {
+                        return (
+                          <div key={media.id}>
+                            {mediaUrls[media.id] ? (
+                              <VideoPlayer
+                                src={mediaUrls[media.id]!}
+                                title={filename}
+                                mimeType={media.mimeType ?? undefined}
+                                onError={(err) => console.error('Video error:', err)}
+                              />
+                            ) : (
+                              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center bg-gray-50 dark:bg-gray-800">
+                                {loadingUrls[media.id] ? (
+                                  <div className="space-y-2">
+                                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                                    <p className="text-sm text-gray-500">Loading video...</p>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
+                                    onClick={() => fetchMediaUrl(media.id)}
+                                  >
+                                    Load Video
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={media.id}
+                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center justify-between"
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              {filename}
+                            </p>
+                            <p className="text-xs text-gray-400">
+                              {media.type} · {(fileSize / 1024 / 1024).toFixed(2)} MB ·{' '}
+                              {media.processingStatus}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
             </>
           )}

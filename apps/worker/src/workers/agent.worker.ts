@@ -103,7 +103,7 @@ export class AgentWorker extends WorkerHost {
    * Main processor method - routes to specific handlers based on job type
    */
   async process(job: Job<AgentJobData>): Promise<AgentResult> {
-    const { type, ticketId } = job.data;
+    const { type } = job.data;
 
     this.logger.log(`Processing agent job ${job.id} of type: ${type}`);
 
@@ -144,12 +144,8 @@ export class AgentWorker extends WorkerHost {
       }
     } catch (error) {
       this.logger.error(`Agent job failed: ${getErrorMessage(error)}`, getErrorStack(error));
-      return {
-        success: false,
-        type,
-        ticketId: ticketId || '',
-        error: getErrorMessage(error),
-      };
+      // Re-throw so BullMQ marks the job as failed, triggers retries and onFailed
+      throw error;
     }
   }
 
@@ -872,17 +868,26 @@ Use this N1 context to build the action plan. Focus on HOW to fix, not re-diagno
       message: `Sending analysis request to ${aiProviderConfig.provider}`,
     });
 
-    const responseText = await this.callAiCompletion(
-      aiProviderConfig,
-      systemPrompt,
-      userPrompt,
-      4096
-    );
+    let responseText: string;
+    try {
+      responseText = await this.callAiCompletion(aiProviderConfig, systemPrompt, userPrompt, 4096);
+    } catch (error) {
+      const msg = `AI completion failed: ${getErrorMessage(error)}`;
+      await this.setAgentTaskError(agentTaskId, msg);
+      throw new Error(msg);
+    }
 
     await job.updateProgress(80);
 
     // 8. Parse action plan from response
-    const actionPlan = this.parseActionPlanResponse(responseText);
+    let actionPlan: ReturnType<typeof this.parseActionPlanResponse>;
+    try {
+      actionPlan = this.parseActionPlanResponse(responseText);
+    } catch (error) {
+      const msg = `Failed to parse AI response: ${getErrorMessage(error)}`;
+      await this.setAgentTaskError(agentTaskId, msg);
+      throw new Error(msg);
+    }
 
     await this.appendAgentTaskLog(agentTaskId, {
       step: 'plan_parsed',
@@ -1901,38 +1906,52 @@ Your job is to generate the COMPLETE file content for the specified file. Follow
     config: { provider: string; apiKey: string; model: string },
     systemPrompt: string,
     userPrompt: string,
-    maxTokens: number
+    maxTokens: number,
+    timeoutMs = 90_000
   ): Promise<string> {
-    if (config.provider === 'openai') {
-      const openai = new OpenAI({ apiKey: config.apiKey });
-      const response = await openai.chat.completions.create({
-        model: config.model,
-        max_tokens: maxTokens,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt },
-        ],
-      });
-      const content = response.choices[0]?.message?.content;
-      if (!content) throw new Error('OpenAI returned empty response');
-      return content;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      if (config.provider === 'openai') {
+        const openai = new OpenAI({ apiKey: config.apiKey });
+        const response = await openai.chat.completions.create(
+          {
+            model: config.model,
+            max_tokens: maxTokens,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userPrompt },
+            ],
+          },
+          { signal: controller.signal }
+        );
+        const content = response.choices[0]?.message?.content;
+        if (!content) throw new Error('OpenAI returned empty response');
+        return content;
+      }
+
+      // Default: Anthropic
+      const anthropic = new Anthropic({ apiKey: config.apiKey });
+      const response = await anthropic.messages.create(
+        {
+          model: config.model,
+          max_tokens: maxTokens,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        },
+        { signal: controller.signal }
+      );
+
+      const textBlock = response.content.find(
+        (block: { type: string }) => block.type === 'text'
+      ) as { type: 'text'; text: string } | undefined;
+
+      if (!textBlock) throw new Error('Anthropic returned empty response');
+      return textBlock.text;
+    } finally {
+      clearTimeout(timer);
     }
-
-    // Default: Anthropic
-    const anthropic = new Anthropic({ apiKey: config.apiKey });
-    const response = await anthropic.messages.create({
-      model: config.model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    });
-
-    const textBlock = response.content.find((block: { type: string }) => block.type === 'text') as
-      | { type: 'text'; text: string }
-      | undefined;
-
-    if (!textBlock) throw new Error('Anthropic returned empty response');
-    return textBlock.text;
   }
 
   private buildActionPlanSystemPrompt(): string {
@@ -2137,8 +2156,54 @@ Rules:
 
   /**
    * Append a log entry to an agent task's execution log.
+   *
+   * Calls the API's internal endpoint so that:
+   * 1. The DB write happens through AgentTasksService.appendLog()
+   * 2. An 'agent-task:log-appended' EventEmitter event is fired
+   * 3. AgentTasksGateway broadcasts 'task:log-appended' to all WS subscribers
+   *
+   * Falls back to direct Prisma write if internal auth env vars are missing
+   * (e.g., local dev without INTERNAL_API_SECRET configured).
    */
   private async appendAgentTaskLog(agentTaskId: string, entry: Record<string, any>): Promise<void> {
+    const apiUrl = this.configService.get<string>('API_URL') ?? 'http://localhost:3001';
+    const internalSecret = this.configService.get<string>('INTERNAL_API_SECRET');
+    const jwtSecret =
+      this.configService.get<string>('WORKER_JWT_SECRET') ??
+      this.configService.get<string>('JWT_SECRET');
+
+    if (internalSecret && jwtSecret) {
+      try {
+        const serviceJwt = buildServiceJwt(jwtSecret);
+        const endpoint = `${apiUrl}/api/v1/agent-tasks/internal/${agentTaskId}/log`;
+
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-internal-secret': internalSecret,
+            Authorization: `Bearer ${serviceJwt}`,
+          },
+          body: JSON.stringify(entry),
+        });
+
+        if (!response.ok) {
+          const body = await response.text();
+          this.logger.warn(
+            `appendAgentTaskLog API call failed (${response.status}): ${body} — falling back to direct Prisma write`
+          );
+          // Fall through to Prisma fallback below
+        } else {
+          return;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `appendAgentTaskLog API call error: ${getErrorMessage(error)} — falling back to direct Prisma write`
+        );
+      }
+    }
+
+    // Fallback: write directly to Prisma (no WS event will be emitted)
     try {
       const task = await this.prisma.agentTask.findUnique({
         where: { id: agentTaskId },
@@ -2576,9 +2641,18 @@ Generate a technical proposal for this feature request.`;
       getErrorStack(error)
     );
 
-    // If this was the last attempt, move to dead letter queue
+    // If this was the last attempt, mark agentTask as failed and move to dead letter queue
     if (attemptsMade >= maxAttempts) {
       this.logger.error(`Job ${job.id} exceeded max retries - moving to dead letter queue`);
+
+      // Mark the agentTask as failed so the dashboard shows the correct status
+      const agentTaskId = job.data.agentTaskId;
+      if (agentTaskId) {
+        await this.setAgentTaskError(
+          agentTaskId,
+          `Job failed after ${maxAttempts} attempts: ${error.message}`
+        );
+      }
 
       await this.deadLetterQueue.add(
         'failed-agent-orchestration',

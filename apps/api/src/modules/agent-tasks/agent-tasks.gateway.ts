@@ -181,6 +181,15 @@ export class AgentTasksGateway implements OnGatewayInit, OnGatewayConnection, On
     });
   }
 
+  @OnEvent('agent-task:log-appended')
+  handleLogAppended(event: { taskId: string; tenantId?: string; entry: Record<string, unknown> }) {
+    this.server.to(this.taskRoomName(event.taskId)).emit('task:log-appended', {
+      taskId: event.taskId,
+      entry: event.entry,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   @OnEvent('agent-task:error')
   handleError(event: { taskId: string; error: string }) {
     this.server.to(this.taskRoomName(event.taskId)).emit('task:error', {

@@ -2,9 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import { AgentTasksController } from '../../../src/modules/agent-tasks/agent-tasks.controller';
 import { AgentTasksService } from '../../../src/modules/agent-tasks/agent-tasks.service';
 import { ValidationModeService } from '../../../src/modules/agent-tasks/services/validation-mode.service';
+import { InternalAuthGuard } from '../../../src/common/guards/internal-auth.guard';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 
 describe('AgentTasksController', () => {
@@ -63,6 +66,15 @@ describe('AgentTasksController', () => {
           provide: getQueueToken('agent-orchestration'),
           useValue: mockAgentQueue,
         },
+        {
+          provide: JwtService,
+          useValue: { verify: jest.fn().mockReturnValue({}) },
+        },
+        {
+          provide: ConfigService,
+          useValue: { get: jest.fn().mockReturnValue('test-secret') },
+        },
+        InternalAuthGuard,
       ],
     }).compile();
 
@@ -100,15 +112,19 @@ describe('AgentTasksController', () => {
         expect.objectContaining({
           priority: 5,
           attempts: 3,
-        }),
+        })
       );
     });
 
     it('should throw NotFoundException when ticket not found', async () => {
       mockPrismaService.ticket.findFirst.mockResolvedValue(null);
 
-      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow(NotFoundException);
-      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow('Ticket not-found not found');
+      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow(
+        NotFoundException
+      );
+      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow(
+        'Ticket not-found not found'
+      );
     });
 
     it('should throw BadRequestException when ticket has no application', async () => {
@@ -117,9 +133,11 @@ describe('AgentTasksController', () => {
 
       mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
 
-      await expect(controller.analyzeTicket(tenantId, ticketId)).rejects.toThrow(BadRequestException);
       await expect(controller.analyzeTicket(tenantId, ticketId)).rejects.toThrow(
-        'Ticket has no linked application',
+        BadRequestException
+      );
+      await expect(controller.analyzeTicket(tenantId, ticketId)).rejects.toThrow(
+        'Ticket has no linked application'
       );
     });
   });
@@ -195,14 +213,19 @@ describe('AgentTasksController', () => {
       const result = await controller.approve(tenantId, userId, taskId, dto);
 
       expect(result).toEqual(approvedTask);
-      expect(validationModeService.approveTask).toHaveBeenCalledWith(taskId, tenantId, 'plan', userId);
+      expect(validationModeService.approveTask).toHaveBeenCalledWith(
+        taskId,
+        tenantId,
+        'plan',
+        userId
+      );
       expect(agentQueue.add).toHaveBeenCalledWith(
         'generate-code',
         expect.objectContaining({
           type: 'generate-code',
           agentTaskId: taskId,
         }),
-        expect.anything(),
+        expect.anything()
       );
     });
 
@@ -228,7 +251,7 @@ describe('AgentTasksController', () => {
           type: 'push-code',
           agentTaskId: taskId,
         }),
-        expect.anything(),
+        expect.anything()
       );
     });
   });
@@ -250,7 +273,7 @@ describe('AgentTasksController', () => {
         'plan',
         userId,
         'Incorrect approach',
-        undefined,
+        undefined
       );
     });
   });
@@ -279,7 +302,7 @@ describe('AgentTasksController', () => {
         expect.objectContaining({
           agentTaskId: taskId,
         }),
-        expect.anything(),
+        expect.anything()
       );
     });
 
@@ -290,7 +313,7 @@ describe('AgentTasksController', () => {
 
       await expect(controller.retry(tenantId, 'task-456')).rejects.toThrow(BadRequestException);
       await expect(controller.retry(tenantId, 'task-456')).rejects.toThrow(
-        "Cannot retry task in 'analyzing' status",
+        "Cannot retry task in 'analyzing' status"
       );
     });
   });
@@ -316,7 +339,9 @@ describe('AgentTasksController', () => {
       mockAgentTasksService.findById.mockResolvedValue(task);
 
       await expect(controller.cancel(tenantId, 'task-456')).rejects.toThrow(BadRequestException);
-      await expect(controller.cancel(tenantId, 'task-456')).rejects.toThrow('already in a terminal state');
+      await expect(controller.cancel(tenantId, 'task-456')).rejects.toThrow(
+        'already in a terminal state'
+      );
     });
   });
 
@@ -341,7 +366,9 @@ describe('AgentTasksController', () => {
     it('should throw NotFoundException when ticket not found', async () => {
       mockPrismaService.ticket.findFirst.mockResolvedValue(null);
 
-      await expect(controller.findByTicketId(tenantId, 'not-found')).rejects.toThrow(NotFoundException);
+      await expect(controller.findByTicketId(tenantId, 'not-found')).rejects.toThrow(
+        NotFoundException
+      );
     });
   });
 
@@ -355,7 +382,17 @@ describe('AgentTasksController', () => {
       mockAgentTasksService.findAll.mockResolvedValue(result);
 
       expect(
-        await controller.findAll(tenantId, 'failed', 'app-123', 'critical', undefined, undefined, undefined, '0', '20'),
+        await controller.findAll(
+          tenantId,
+          'failed',
+          'app-123',
+          'critical',
+          undefined,
+          undefined,
+          undefined,
+          '0',
+          '20'
+        )
       ).toEqual(result);
       expect(agentTasksService.findAll).toHaveBeenCalledWith(tenantId, {
         status: 'failed',

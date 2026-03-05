@@ -13,15 +13,17 @@ interface DiagnosisPanelV3AProps {
 
 // --- Confidence dot color ---
 
-function confidenceColor(confidence: number): string {
+function confidenceColor(confidence: number | undefined | null): string {
+  if (typeof confidence !== 'number' || isNaN(confidence)) return 'text-gray-400';
   const normalized = confidence > 1 ? confidence / 100 : confidence;
   if (normalized >= 0.8) return 'text-green-400';
   if (normalized >= 0.5) return 'text-yellow-400';
   return 'text-red-400';
 }
 
-function confidencePercent(confidence: number): number {
-  return Math.round(confidence > 1 ? confidence : confidence * 100);
+function confidencePercent(confidence: number | undefined | null): string {
+  if (typeof confidence !== 'number' || isNaN(confidence)) return '--';
+  return String(Math.round(confidence > 1 ? confidence : confidence * 100));
 }
 
 // --- File row ---
@@ -137,7 +139,9 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
       {!isExpanded && (
         <div className="flex items-center gap-2">
           <span className={`text-base leading-none ${dotColor}`}>●</span>
-          <span className="text-sm text-gray-200">{percent}% confident</span>
+          <span className="text-sm text-gray-200">
+            {percent === '--' ? '--' : `${percent}%`} confident
+          </span>
         </div>
       )}
 
@@ -147,7 +151,9 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
           {/* Confidence row */}
           <div className="flex items-center gap-2">
             <span className={`text-lg leading-none ${dotColor}`}>●</span>
-            <span className="text-sm text-gray-200">{percent}% confident</span>
+            <span className="text-sm text-gray-200">
+              {percent === '--' ? '--' : `${percent}%`} confident
+            </span>
             <span className="text-xs text-gray-500">in root cause</span>
           </div>
 

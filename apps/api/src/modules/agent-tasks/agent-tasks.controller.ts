@@ -18,10 +18,13 @@ import {
   ApiResponse,
   ApiParam,
   ApiQuery,
+  ApiExcludeEndpoint,
 } from '@nestjs/swagger';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
+import { InternalRoute } from '../../common/decorators/internal-route.decorator';
 import { CurrentTenant } from '../../common/decorators/current-tenant.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AgentTasksService } from './agent-tasks.service';
@@ -40,20 +43,21 @@ export class AgentTasksController {
     private readonly validationModeService: ValidationModeService,
     private readonly prisma: PrismaService,
     @InjectQueue('agent-orchestration')
-    private readonly agentQueue: Queue,
+    private readonly agentQueue: Queue
   ) {}
 
   @Post('tickets/:ticketId/analyze')
   @HttpCode(HttpStatus.ACCEPTED)
   @ApiOperation({ summary: 'Trigger code analysis for a ticket' })
   @ApiParam({ name: 'ticketId', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 202, description: 'Agent task created and queued', type: AgentTaskResponseDto })
+  @ApiResponse({
+    status: 202,
+    description: 'Agent task created and queued',
+    type: AgentTaskResponseDto,
+  })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
   @ApiResponse({ status: 400, description: 'Ticket has no linked application' })
-  async analyzeTicket(
-    @CurrentTenant() tenantId: string,
-    @Param('ticketId') ticketId: string,
-  ) {
+  async analyzeTicket(@CurrentTenant() tenantId: string, @Param('ticketId') ticketId: string) {
     // Verify ticket exists and belongs to the tenant
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
@@ -66,16 +70,12 @@ export class AgentTasksController {
 
     if (!ticket.applicationId) {
       throw new BadRequestException(
-        'Ticket has no linked application. An application with a GitHub repository is required for code analysis.',
+        'Ticket has no linked application. An application with a GitHub repository is required for code analysis.'
       );
     }
 
     // Create the agent task
-    const task = await this.agentTasksService.create(
-      ticketId,
-      tenantId,
-      ticket.applicationId,
-    );
+    const task = await this.agentTasksService.create(ticketId, tenantId, ticket.applicationId);
 
     // Queue the job
     await this.agentQueue.add(
@@ -94,7 +94,7 @@ export class AgentTasksController {
           type: 'exponential',
           delay: 30000,
         },
-      },
+      }
     );
 
     return task;
@@ -103,9 +103,7 @@ export class AgentTasksController {
   @Get('pending-reviews')
   @ApiOperation({ summary: 'List tasks pending review for current tenant' })
   @ApiResponse({ status: 200, description: 'List of tasks pending review' })
-  async listPendingReviews(
-    @CurrentTenant() tenantId: string,
-  ) {
+  async listPendingReviews(@CurrentTenant() tenantId: string) {
     return this.validationModeService.listPendingReviews(tenantId);
   }
 
@@ -121,10 +119,7 @@ export class AgentTasksController {
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Agent task details', type: AgentTaskResponseDto })
   @ApiResponse({ status: 404, description: 'Agent task not found' })
-  async findById(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async findById(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     const task = await this.agentTasksService.findById(id);
 
     if (task.tenantId !== tenantId) {
@@ -145,13 +140,13 @@ export class AgentTasksController {
     @CurrentTenant() tenantId: string,
     @CurrentUser('userId') userId: string,
     @Param('id') id: string,
-    @Body() dto: ApproveTaskDto,
+    @Body() dto: ApproveTaskDto
   ) {
     const approvedTask = await this.validationModeService.approveTask(
       id,
       tenantId,
       dto.phase,
-      userId,
+      userId
     );
 
     // After plan approval, queue code generation
@@ -172,7 +167,7 @@ export class AgentTasksController {
             type: 'exponential',
             delay: 30000,
           },
-        },
+        }
       );
     }
 
@@ -194,7 +189,7 @@ export class AgentTasksController {
             type: 'exponential',
             delay: 30000,
           },
-        },
+        }
       );
     }
 
@@ -212,7 +207,7 @@ export class AgentTasksController {
     @CurrentTenant() tenantId: string,
     @CurrentUser('userId') userId: string,
     @Param('id') id: string,
-    @Body() dto: RejectTaskDto,
+    @Body() dto: RejectTaskDto
   ) {
     return this.validationModeService.rejectTask(
       id,
@@ -220,7 +215,7 @@ export class AgentTasksController {
       dto.phase,
       userId,
       dto.reason,
-      dto.iterate,
+      dto.iterate
     );
   }
 
@@ -228,13 +223,14 @@ export class AgentTasksController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Retry a failed agent task' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Task retried successfully', type: AgentTaskResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Task retried successfully',
+    type: AgentTaskResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Task cannot be retried' })
   @ApiResponse({ status: 404, description: 'Agent task not found' })
-  async retry(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async retry(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     const task = await this.agentTasksService.findById(id);
 
     if (task.tenantId !== tenantId) {
@@ -243,7 +239,7 @@ export class AgentTasksController {
 
     if (!['failed', 'expired'].includes(task.status)) {
       throw new BadRequestException(
-        `Cannot retry task in '${task.status}' status. Task must be in 'failed' or 'expired' status.`,
+        `Cannot retry task in '${task.status}' status. Task must be in 'failed' or 'expired' status.`
       );
     }
 
@@ -263,7 +259,7 @@ export class AgentTasksController {
         priority: 3,
         attempts: 3,
         backoff: { type: 'exponential', delay: 30000 },
-      },
+      }
     );
 
     return retriedTask;
@@ -273,13 +269,14 @@ export class AgentTasksController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancel an in-progress agent task' })
   @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Task cancelled successfully', type: AgentTaskResponseDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Task cancelled successfully',
+    type: AgentTaskResponseDto,
+  })
   @ApiResponse({ status: 400, description: 'Task cannot be cancelled' })
   @ApiResponse({ status: 404, description: 'Agent task not found' })
-  async cancel(
-    @CurrentTenant() tenantId: string,
-    @Param('id') id: string,
-  ) {
+  async cancel(@CurrentTenant() tenantId: string, @Param('id') id: string) {
     const task = await this.agentTasksService.findById(id);
 
     if (task.tenantId !== tenantId) {
@@ -289,7 +286,7 @@ export class AgentTasksController {
     const terminalStatuses = ['completed', 'failed', 'expired'];
     if (terminalStatuses.includes(task.status)) {
       throw new BadRequestException(
-        `Cannot cancel task in '${task.status}' status. Task is already in a terminal state.`,
+        `Cannot cancel task in '${task.status}' status. Task is already in a terminal state.`
       );
     }
 
@@ -301,10 +298,7 @@ export class AgentTasksController {
   @ApiParam({ name: 'ticketId', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'List of agent tasks', type: [AgentTaskResponseDto] })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
-  async findByTicketId(
-    @CurrentTenant() tenantId: string,
-    @Param('ticketId') ticketId: string,
-  ) {
+  async findByTicketId(@CurrentTenant() tenantId: string, @Param('ticketId') ticketId: string) {
     // Verify ticket exists and belongs to tenant
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
@@ -316,6 +310,23 @@ export class AgentTasksController {
     }
 
     return this.agentTasksService.findByTicketId(ticketId);
+  }
+
+  /**
+   * Internal endpoint called by the worker process to append a log entry and
+   * emit a real-time WebSocket event. Protected by InternalAuthGuard.
+   */
+  @Post('internal/:id/log')
+  @HttpCode(HttpStatus.OK)
+  @InternalRoute()
+  @UseGuards(InternalAuthGuard)
+  @ApiExcludeEndpoint()
+  async internalAppendLog(@Param('id') id: string, @Body() entry: Record<string, unknown>) {
+    await this.agentTasksService.appendLog(
+      id,
+      entry as Parameters<typeof this.agentTasksService.appendLog>[1]
+    );
+    return { appended: true };
   }
 
   @Get()
@@ -338,7 +349,7 @@ export class AgentTasksController {
     @Query('dateTo') dateTo?: string,
     @Query('search') search?: string,
     @Query('page') page?: string,
-    @Query('limit') limit?: string,
+    @Query('limit') limit?: string
   ) {
     return this.agentTasksService.findAll(tenantId, {
       status,
