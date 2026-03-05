@@ -59,7 +59,10 @@ interface SeverityBadgeProps {
   showIcon?: boolean;
 }
 
-const severityConfig: Record<TicketSeverity, { label: string; variant: BadgeVariant; icon: string }> = {
+const severityConfig: Record<
+  TicketSeverity,
+  { label: string; variant: BadgeVariant; icon: string }
+> = {
   critical: { label: 'Critique', variant: 'danger', icon: '🔴' },
   high: { label: 'Élevée', variant: 'warning', icon: '🟠' },
   medium: { label: 'Moyenne', variant: 'info', icon: '🟡' },
@@ -67,7 +70,11 @@ const severityConfig: Record<TicketSeverity, { label: string; variant: BadgeVari
 };
 
 export function SeverityBadge({ severity, showIcon = true }: SeverityBadgeProps) {
-  const config = severityConfig[severity];
+  const config = severityConfig[severity] ?? {
+    label: severity,
+    variant: 'default' as BadgeVariant,
+    icon: '❓',
+  };
   return (
     <Badge variant={config.variant}>
       {showIcon && <span className="mr-1">{config.icon}</span>}
@@ -91,7 +98,7 @@ const typeConfig: Record<TicketType, { label: string; icon: string }> = {
 };
 
 export function TypeBadge({ type }: TypeBadgeProps) {
-  const config = typeConfig[type];
+  const config = typeConfig[type] ?? { label: type, icon: '📝' };
   return (
     <Badge variant="default">
       <span className="mr-1">{config.icon}</span>
