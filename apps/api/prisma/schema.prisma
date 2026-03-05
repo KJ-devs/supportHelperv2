@@ -452,6 +452,8 @@ model AgentSession {
   escalationReason  String?   @map("escalation_reason") @db.Text
   anthropicMessages Json?     @map("anthropic_messages") @db.JsonB
   toolCallLog       Json?     @map("tool_call_log") @db.JsonB
+  agentLevel        String?   @map("agent_level") @db.VarChar(50)
+  modelUsed         String?   @map("model_used") @db.VarChar(100)
   createdAt         DateTime  @default(now()) @map("created_at")
 
   ticket    Ticket         @relation(fields: [ticketId], references: [id])

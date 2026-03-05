@@ -203,12 +203,16 @@ export class AgentV2Gateway implements OnGatewayInit, OnGatewayConnection, OnGat
     sessionId?: string;
     toolName: string;
     input: Record<string, unknown>;
+    agentLevel?: string;
+    model?: string;
   }) {
     if (!event.sessionId) return;
     this.server.to(this.sessionRoomName(event.sessionId)).emit('agent:tool_call', {
       sessionId: event.sessionId,
       toolName: event.toolName,
       input: event.input,
+      agentLevel: event.agentLevel,
+      model: event.model,
       timestamp: new Date().toISOString(),
     });
   }
@@ -232,14 +236,45 @@ export class AgentV2Gateway implements OnGatewayInit, OnGatewayConnection, OnGat
   }
 
   @OnEvent('agent:thinking')
-  handleAgentThinkingEvent(event: { ticketId?: string; sessionId?: string; iteration: number }) {
+  handleAgentThinkingEvent(event: {
+    ticketId?: string;
+    sessionId?: string;
+    iteration: number;
+    agentLevel?: string;
+    model?: string;
+  }) {
     if (!event.sessionId) return;
     this.server.to(this.sessionRoomName(event.sessionId)).emit('agent:thinking', {
       sessionId: event.sessionId,
       iteration: event.iteration,
       isThinking: true,
+      agentLevel: event.agentLevel,
+      model: event.model,
       timestamp: new Date().toISOString(),
     });
+  }
+
+  @OnEvent('agent.level_changed')
+  handleAgentLevelChanged(data: {
+    sessionId: string;
+    level: string;
+    model: string;
+    reason: string;
+  }) {
+    this.server.to(this.sessionRoomName(data.sessionId)).emit('agent:level_changed', data);
+  }
+
+  @OnEvent('agent.activity')
+  handleAgentActivity(data: {
+    sessionId: string;
+    agentLevel: string;
+    model: string;
+    currentAction: string;
+    toolName?: string;
+    iteration: number;
+    timestamp: Date;
+  }) {
+    this.server.to(this.sessionRoomName(data.sessionId)).emit('agent:activity', data);
   }
 
   @OnEvent('agent:complete')

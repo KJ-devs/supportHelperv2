@@ -6,6 +6,9 @@ import { useAgentChatV2 } from '@/hooks/useAgentChatV2';
 import { MarkdownRenderer } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
 import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
+import { AgentLevelBadge } from './AgentLevelBadge';
+import { LiveActivityFeed } from './LiveActivityFeed';
+import { ModelSelector } from './ModelSelector';
 
 type ActiveTab = 'chat' | 'logs';
 
@@ -88,8 +91,22 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { messages, sessionId, isLoading, isAgentThinking, sendMessage, error, setError, reinitialize } =
-    useAgentChatV2(ticketId);
+  const {
+    messages,
+    sessionId,
+    isLoading,
+    isAgentThinking,
+    sendMessage,
+    error,
+    setError,
+    reinitialize,
+    agentLevel,
+    modelUsed,
+    currentAction,
+    activities,
+    preferredModel,
+    setPreferredModel,
+  } = useAgentChatV2(ticketId);
 
   const lastUserMessageRef = useRef<string | null>(null);
   const toast = useToast();
@@ -192,7 +209,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
     <div className="flex flex-col flex-1 min-h-0">
       {/* Tab bar with icons */}
       <div className="flex items-center px-4 border-b border-gray-800 flex-shrink-0">
-        {tabs.map((tab) => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -207,13 +224,23 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
           </button>
         ))}
 
-        {/* Session indicator */}
-        {sessionId && (
-          <div className="ml-auto flex items-center gap-1.5" title={`Session: ${sessionId}`}>
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="text-xs text-gray-500">Session active</span>
-          </div>
-        )}
+        {/* Model selector + agent level badge + session indicator */}
+        <div className="ml-auto flex items-center gap-3">
+          <ModelSelector
+            value={preferredModel}
+            onChange={setPreferredModel}
+            disabled={isAgentThinking || !!sessionId}
+          />
+          {agentLevel && (
+            <AgentLevelBadge level={agentLevel} model={modelUsed} isActive={isAgentThinking} />
+          )}
+          {sessionId && !agentLevel && (
+            <div className="flex items-center gap-1.5" title={`Session: ${sessionId}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="text-xs text-gray-500">Session active</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* CHAT TAB */}
@@ -226,6 +253,16 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
                 <span className="text-sm">Initializing session...</span>
               </div>
+            )}
+
+            {/* Live Activity Feed — shown when agent is active or has activity */}
+            {!isLoading && (activities.length > 0 || isAgentThinking) && (
+              <LiveActivityFeed
+                activities={activities}
+                isActive={isAgentThinking}
+                agentLevel={agentLevel}
+                currentAction={currentAction}
+              />
             )}
 
             {/* Error */}
@@ -261,7 +298,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             )}
 
             {/* Messages with timestamps */}
-            {messages.map((msg) => (
+            {messages.map(msg => (
               <div
                 key={msg.id}
                 className={`flex mb-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -313,7 +350,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
               <textarea
                 ref={textareaRef}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={e => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onInput={handleInput}
                 placeholder="Ask the agent..."
@@ -340,7 +377,6 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
       {/* LOGS TAB — AI investigation + ticket events */}
       {activeTab === 'logs' && (
         <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
-
           {/* ── AI Investigation log ── */}
           <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-2">
             AI Investigation
@@ -391,7 +427,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
 
             {eventsLoading && ticketEvents.length === 0 && (
               <div className="space-y-2 animate-pulse">
-                {[1, 2, 3].map((i) => (
+                {[1, 2, 3].map(i => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-gray-700 flex-shrink-0" />
                     <div className="h-2.5 bg-gray-800 rounded flex-1" />
@@ -407,7 +443,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
 
             {ticketEvents.length > 0 && (
               <div className="space-y-0">
-                {ticketEvents.map((evt) => {
+                {ticketEvents.map(evt => {
                   const dotColor = EVENT_DOT[evt.eventType] ?? 'bg-gray-500';
                   const label = EVENT_LABELS[evt.eventType] ?? evt.eventType.replace(/_/g, ' ');
                   const isFailed = evt.status === 'failed';
@@ -419,13 +455,19 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
                     >
                       {isInProgress ? (
                         <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75`} />
-                          <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotColor}`} />
+                          <span
+                            className={`animate-ping absolute inline-flex h-full w-full rounded-full ${dotColor} opacity-75`}
+                          />
+                          <span
+                            className={`relative inline-flex rounded-full h-1.5 w-1.5 ${dotColor}`}
+                          />
                         </span>
                       ) : (
                         <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
                       )}
-                      <span className={`text-xs flex-1 truncate ${isFailed ? 'text-red-400' : isInProgress ? 'text-blue-400' : 'text-gray-400'}`}>
+                      <span
+                        className={`text-xs flex-1 truncate ${isFailed ? 'text-red-400' : isInProgress ? 'text-blue-400' : 'text-gray-400'}`}
+                      >
                         {label}
                       </span>
                       <span className="text-[10px] font-mono text-gray-600 flex-shrink-0">

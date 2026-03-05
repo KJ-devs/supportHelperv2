@@ -110,12 +110,8 @@ export const TicketSeveritySchema = z.enum(['critical', 'high', 'medium', 'low']
 
 // Helper to transform Decimal to number (exported for reuse)
 export const decimalSchema = z
-  .union([
-    z.instanceof(Decimal),
-    z.number(),
-    z.string().transform((val) => new Decimal(val)),
-  ])
-  .transform((val) => {
+  .union([z.instanceof(Decimal), z.number(), z.string().transform(val => new Decimal(val))])
+  .transform(val => {
     if (val instanceof Decimal) {
       return val;
     }
@@ -127,18 +123,21 @@ const confidenceSchema = z
   .union([
     z.instanceof(Decimal),
     z.number().min(0).max(1),
-    z.string().transform((val) => new Decimal(val)),
+    z.string().transform(val => new Decimal(val)),
   ])
-  .transform((val) => {
+  .transform(val => {
     if (val instanceof Decimal) {
       return val;
     }
     return new Decimal(val);
   })
-  .refine((val) => {
-    const num = val instanceof Decimal ? parseFloat(val.toString()) : val;
-    return num >= 0 && num <= 1;
-  }, { message: 'Confidence must be between 0 and 1' });
+  .refine(
+    val => {
+      const num = val instanceof Decimal ? parseFloat(val.toString()) : val;
+      return num >= 0 && num <= 1;
+    },
+    { message: 'Confidence must be between 0 and 1' }
+  );
 
 export const TicketSchema = z.object({
   id: z.string().uuid(),
@@ -184,12 +183,7 @@ export const UpdateTicketSchema = CreateTicketSchema.partial();
 // MEDIA SCHEMAS
 // ═══════════════════════════════════════════════════════════════════════
 
-export const MediaProcessingStatusSchema = z.enum([
-  'pending',
-  'processing',
-  'completed',
-  'failed',
-]);
+export const MediaProcessingStatusSchema = z.enum(['pending', 'processing', 'completed', 'failed']);
 
 export const MediaSchema = z.object({
   id: z.string().uuid(),
@@ -337,6 +331,8 @@ export const AgentSessionSchema = z.object({
   lastActionAt: z.date(),
   escalatedTo: z.string().uuid().nullable(),
   escalationReason: z.string().nullable(),
+  agentLevel: z.string().max(50).nullable(),
+  modelUsed: z.string().max(100).nullable(),
   createdAt: z.date(),
 });
 

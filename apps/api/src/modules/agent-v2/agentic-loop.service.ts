@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { PrismaService } from '../../prisma/prisma.service';
 import { ToolCallResult, ToolName } from './agent-tools';
 import { ToolExecutorService, ToolExecutionContext } from './tool-executor.service';
 import { ToolCapableProviderFactory } from '../ai-config/tool-capable-provider.factory';
@@ -214,8 +215,70 @@ export class AgenticLoopService {
     private readonly toolExecutor: ToolExecutorService,
     private readonly providerFactory: ToolCapableProviderFactory,
     private readonly aiConfigService: AiConfigService,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService
   ) {}
+
+  private selectModel(
+    toolsUsed: string[],
+    iterationCount: number
+  ): { model: string; level: 'N1' | 'N2' } {
+    const N2_TOOLS = [
+      'edit_file',
+      'write_file',
+      'create_pull_request',
+      'create_branch',
+      'get_file_blame',
+      'get_file_history',
+    ];
+    const isN2 = iterationCount > 8 || toolsUsed.some(t => N2_TOOLS.includes(t));
+    return isN2
+      ? { model: 'claude-sonnet-4-6', level: 'N2' }
+      : { model: 'claude-haiku-4-5-20251001', level: 'N1' };
+  }
+
+  private emitActivity(
+    sessionId: string,
+    currentAction: string,
+    agentLevel: 'N1' | 'N2',
+    model: string,
+    toolName?: string,
+    iteration?: number
+  ) {
+    this.eventEmitter.emit('agent.activity', {
+      sessionId,
+      agentLevel,
+      model,
+      currentAction,
+      toolName,
+      iteration: iteration ?? 0,
+      timestamp: new Date(),
+    });
+  }
+
+  private toolToAction(toolName: string, input: Record<string, unknown>): string {
+    switch (toolName) {
+      case 'read_file':
+        return `Reading file ${(input['path'] as string | undefined) ?? ''}`;
+      case 'search_code':
+        return 'Searching codebase...';
+      case 'search_codebase_semantic':
+        return 'Searching codebase...';
+      case 'list_directory':
+        return 'Exploring directory...';
+      case 'search_similar_tickets':
+        return 'Searching similar tickets...';
+      case 'update_diagnosis':
+        return 'Updating diagnosis...';
+      case 'edit_file':
+      case 'write_file':
+        return 'Writing code...';
+      case 'create_pull_request':
+        return 'Creating pull request...';
+      default:
+        return 'Processing...';
+    }
+  }
 
   async run(options: AgenticLoopOptions): Promise<AgenticLoopResult> {
     const {
@@ -257,6 +320,21 @@ export class AgenticLoopService {
     let finalContent = '';
     const deadline = Date.now() + timeoutMs;
     const systemPromptTokens = estimateTokens(systemPrompt);
+    const allToolsUsed: string[] = [];
+    let currentLevel: 'N1' | 'N2' = 'N1';
+    let currentModel = 'claude-haiku-4-5-20251001';
+
+    // Emit start activity
+    if (sessionId) {
+      this.emitActivity(
+        sessionId,
+        'Analyzing ticket description...',
+        currentLevel,
+        currentModel,
+        undefined,
+        0
+      );
+    }
 
     while (iterations < maxIterations) {
       if (Date.now() > deadline) {
@@ -265,6 +343,39 @@ export class AgenticLoopService {
       }
 
       iterations++;
+
+      // Determine model/level based on tools used so far and iteration count
+      const { model: selectedModel, level: selectedLevel } = this.selectModel(
+        allToolsUsed,
+        iterations
+      );
+      if (selectedLevel !== currentLevel && sessionId) {
+        const prevLevel = currentLevel;
+        currentLevel = selectedLevel;
+        currentModel = selectedModel;
+        // Persist level/model to DB if we have a sessionId
+        try {
+          await this.prisma.agentSession.updateMany({
+            where: { id: sessionId },
+            data: { agentLevel: currentLevel, modelUsed: currentModel },
+          });
+        } catch {
+          // Non-blocking — best effort persistence
+        }
+        this.logger.log(
+          `Agent level upgraded: ${prevLevel} → ${currentLevel} (model: ${currentModel}) at iteration ${iterations}`
+        );
+        this.eventEmitter.emit('agent.level_changed', {
+          sessionId,
+          level: currentLevel,
+          model: currentModel,
+          reason:
+            iterations > 8 ? 'Extended investigation required' : 'Deep code investigation required',
+        });
+      } else {
+        currentModel = selectedModel;
+        currentLevel = selectedLevel;
+      }
 
       // Context pruning: trim messages if they exceed the token budget
       const { pruned, prunedCount, tokensSaved } = pruneMessages(
@@ -280,7 +391,13 @@ export class AgenticLoopService {
         messages.push(...pruned);
       }
 
-      this.eventEmitter.emit('agent:thinking', { ticketId, sessionId, iteration: iterations });
+      this.eventEmitter.emit('agent:thinking', {
+        ticketId,
+        sessionId,
+        iteration: iterations,
+        agentLevel: currentLevel,
+        model: currentModel,
+      });
 
       let turn: Awaited<ReturnType<typeof provider.chat>>;
       try {
@@ -323,12 +440,28 @@ export class AgenticLoopService {
         let result: unknown;
         let error: string | undefined;
 
+        allToolsUsed.push(toolUse.name);
+
         this.eventEmitter.emit('agent:tool_call', {
           ticketId,
           sessionId,
           toolName: toolUse.name,
           input: toolUse.input,
+          agentLevel: currentLevel,
+          model: currentModel,
         });
+
+        if (sessionId) {
+          const action = this.toolToAction(toolUse.name, toolUse.input as Record<string, unknown>);
+          this.emitActivity(
+            sessionId,
+            action,
+            currentLevel,
+            currentModel,
+            toolUse.name,
+            iterations
+          );
+        }
 
         try {
           result = await this.toolExecutor.execute(
@@ -393,6 +526,17 @@ export class AgenticLoopService {
     this.logger.log(
       `Agentic loop completed: ${iterations} iterations, ${toolCallLog.length} tool calls`
     );
+
+    if (sessionId) {
+      this.emitActivity(
+        sessionId,
+        'Analysis complete',
+        currentLevel,
+        currentModel,
+        undefined,
+        iterations
+      );
+    }
 
     this.eventEmitter.emit('agent:complete', { ticketId, sessionId, finalContent });
 

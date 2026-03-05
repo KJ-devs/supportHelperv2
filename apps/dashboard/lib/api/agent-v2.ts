@@ -26,41 +26,37 @@ export interface AgentMessageRecord {
 
 export async function createAgentSession(
   ticketId: string,
+  preferredModel?: string
 ): Promise<{ sessionId: string; status: string }> {
-  return apiRequest<{ sessionId: string; status: string }>(
-    `/api/agent/v2/sessions`,
-    {
-      method: 'POST',
-      body: JSON.stringify({ ticketId }),
-    },
-  );
+  return apiRequest<{ sessionId: string; status: string }>(`/api/agent/v2/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({ ticketId, ...(preferredModel ? { preferredModel } : {}) }),
+  });
 }
 
 export async function sendAgentMessage(
   sessionId: string,
-  content: string,
+  content: string
 ): Promise<{ content: string; toolsUsed: string[] }> {
   return apiRequest<{ content: string; toolsUsed: string[] }>(
     `/api/agent/v2/sessions/${sessionId}/messages`,
     {
       method: 'POST',
       body: JSON.stringify({ content }),
-    },
+    }
   );
 }
 
 export async function getAgentMessages(sessionId: string): Promise<AgentMessageRecord[]> {
-  return apiRequest<AgentMessageRecord[]>(
-    `/api/agent/v2/sessions/${sessionId}/messages`,
-  );
+  return apiRequest<AgentMessageRecord[]>(`/api/agent/v2/sessions/${sessionId}/messages`);
 }
 
 export async function getTicketSession(
-  ticketId: string,
+  ticketId: string
 ): Promise<{ sessionId: string; status: string } | null> {
   try {
     return await apiRequest<{ sessionId: string; status: string }>(
-      `/api/agent/v2/tickets/${ticketId}/session`,
+      `/api/agent/v2/tickets/${ticketId}/session`
     );
   } catch (err) {
     if (err instanceof ApiError && err.statusCode === 404) {
