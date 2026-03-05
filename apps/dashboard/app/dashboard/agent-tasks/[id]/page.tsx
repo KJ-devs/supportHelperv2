@@ -57,10 +57,11 @@ export default function AgentTaskDetailPage() {
   }, [taskId, authLoading, fetchTask]);
 
   // Polling fallback: active when task is in-progress, stopped when terminal
+  const taskStatus = task?.status ?? null;
   useEffect(() => {
-    if (!task) return;
+    if (!taskStatus) return;
 
-    if (isInProgress(task.status)) {
+    if (isInProgress(taskStatus)) {
       if (!pollingRef.current) {
         pollingRef.current = setInterval(silentRefetch, POLLING_INTERVAL_MS);
       }
@@ -77,18 +78,18 @@ export default function AgentTaskDetailPage() {
         pollingRef.current = null;
       }
     };
-  }, [task?.status, silentRefetch]);
+  }, [taskStatus, silentRefetch]);
 
   // WebSocket handlers
   const handleStatusChange = useCallback(
     (_taskId: string, _newStatus: string) => {
       silentRefetch();
     },
-    [silentRefetch],
+    [silentRefetch]
   );
 
   const handleLogAppended = useCallback((entry: ExecutionLogEntry) => {
-    setTask((prev) => {
+    setTask(prev => {
       if (!prev) return prev;
       return {
         ...prev,
@@ -98,7 +99,7 @@ export default function AgentTaskDetailPage() {
   }, []);
 
   const handlePlanReady = useCallback((plan: unknown) => {
-    setTask((prev) => {
+    setTask(prev => {
       if (!prev) return prev;
       return {
         ...prev,
@@ -109,7 +110,7 @@ export default function AgentTaskDetailPage() {
 
   const handleWsError = useCallback((errorMessage: string) => {
     console.error('[AgentTaskDetailPage] WS error:', errorMessage);
-    setTask((prev) => {
+    setTask(prev => {
       if (!prev) return prev;
       return { ...prev, error: errorMessage };
     });
