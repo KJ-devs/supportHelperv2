@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import type { AgentTask, ActionPlan, ExecutionLogEntry } from '@/lib/api/agent-tasks';
+import type { AgentTask, ActionPlan } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
+import { AgentTaskLogs } from './AgentTaskLogs';
 import { SeverityBadge } from '@/components/ui';
 
 interface AgentTaskDetailProps {
@@ -35,20 +36,6 @@ function isInProgress(status: string): boolean {
 
 function isTerminal(status: string): boolean {
   return TERMINAL_STATUSES.includes(status);
-}
-
-function logStepColor(step: string): string {
-  if (step.startsWith('analysis_') || step === 'analysis') return 'text-cyan-400';
-  if (step.startsWith('plan_') || step === 'plan') return 'text-blue-400';
-  if (
-    step.startsWith('code_') ||
-    step.startsWith('generate_') ||
-    step === 'code' ||
-    step === 'generate'
-  )
-    return 'text-purple-400';
-  if (step === 'error') return 'text-red-400';
-  return 'text-gray-400';
 }
 
 function formatDate(dateStr: string | null): string {
@@ -112,12 +99,26 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
 
       {/* Task Info Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <InfoItem label="Status" value={<AgentTaskStatusBadge status={task.status} />} />
+        <InfoItem
+          label="Status"
+          value={
+            <div data-testid="agent-task-status-badge">
+              <AgentTaskStatusBadge status={task.status} />
+            </div>
+          }
+        />
         <InfoItem label="Application" value={task.application?.name || '-'} />
         <InfoItem label="Created" value={formatDate(task.createdAt)} />
         <InfoItem label="Started" value={formatDate(task.startedAt)} />
         <InfoItem label="Completed" value={formatDate(task.completedAt)} />
-        <InfoItem label="Duration" value={formatDuration(task.startedAt, task.completedAt)} />
+        <InfoItem
+          label="Duration"
+          value={
+            <span data-testid="agent-task-duration">
+              {formatDuration(task.startedAt, task.completedAt)}
+            </span>
+          }
+        />
         <InfoItem label="Retry Count" value={String(task.retryCount)} />
         {task.branchName && <InfoItem label="Branch" value={task.branchName} />}
       </div>
@@ -141,7 +142,10 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
 
       {/* Error */}
       {task.error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+        <div
+          data-testid="agent-task-error"
+          className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
+        >
           <h4 className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">Error</h4>
           <pre className="text-sm text-red-700 dark:text-red-400 whitespace-pre-wrap font-mono">
             {task.error}
@@ -160,6 +164,26 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
           </pre>
         </div>
       )}
+
+      {/* Execution Logs (inline terminal) */}
+      <div className="mt-6">
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Logs</h3>
+          {isLive && isInProgress(task.status) && (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs text-green-500 font-medium">Live</span>
+            </span>
+          )}
+        </div>
+        <div className="h-64 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
+          <AgentTaskLogs
+            taskId={task.id}
+            isActive={isLive && isInProgress(task.status)}
+            initialLogs={task.executionLog ?? []}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -290,65 +314,6 @@ function PlanTab({ plan }: { plan: ActionPlan | null }) {
   );
 }
 
-// ---- Tab: Execution Logs ----
-function LogsTab({ logs, isLive }: { logs: ExecutionLogEntry[]; isLive?: boolean }) {
-  const bottomRef = useRef<HTMLDivElement>(null);
-
-  // Auto-scroll to bottom when new logs arrive
-  useEffect(() => {
-    if (logs.length > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [logs.length]);
-
-  if (!logs || logs.length === 0) {
-    if (isLive) {
-      return (
-        <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-500 dark:text-gray-400">
-          <span className="relative flex h-3 w-3">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-3 w-3 bg-blue-500" />
-          </span>
-          <span className="text-sm">Waiting for first logs...</span>
-        </div>
-      );
-    }
-    return (
-      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        No execution logs yet.
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
-      {logs.map((entry, idx) => (
-        <div
-          key={idx}
-          className="flex items-start gap-3 bg-gray-50 dark:bg-gray-800 rounded-lg p-3 font-mono text-sm"
-        >
-          <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap mt-0.5">
-            {entry.timestamp
-              ? new Date(entry.timestamp).toLocaleTimeString('en-US', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })
-              : '-'}
-          </span>
-          <span
-            className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-700 ${logStepColor(entry.step)}`}
-          >
-            {entry.step}
-          </span>
-          <span className="text-gray-900 dark:text-gray-100 flex-1">{entry.message}</span>
-        </div>
-      ))}
-      <div ref={bottomRef} />
-    </div>
-  );
-}
-
 // ---- Tab: Timeline ----
 function TimelineTab({ task }: { task: AgentTask }) {
   const statusOrder: { status: string; label: string }[] = [
@@ -377,7 +342,11 @@ function TimelineTab({ task }: { task: AgentTask }) {
           const isFutureOrSkipped = idx > currentIdx || isFailed;
 
           return (
-            <div key={step.status} className="flex items-start gap-4 relative">
+            <div
+              key={step.status}
+              data-testid={`timeline-step-${step.status}`}
+              className="flex items-start gap-4 relative"
+            >
               {/* Connector line */}
               {idx < statusOrder.length - 1 && (
                 <div
@@ -478,6 +447,7 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
           {tabs.map(tab => (
             <button
               key={tab.id}
+              data-testid={`agent-task-tab-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 ${
                 activeTab === tab.id
@@ -487,7 +457,10 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
             >
               {tab.label}
               {tab.id === 'logs' && isLive && !isTerminal(task.status) && (
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white animate-pulse">
+                <span
+                  data-testid="agent-task-live-badge"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white animate-pulse"
+                >
                   LIVE
                 </span>
               )}
@@ -501,7 +474,13 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
         {activeTab === 'overview' && <OverviewTab task={task} isLive={isLive} />}
         {activeTab === 'plan' && <PlanTab plan={task.actionPlan} />}
         {activeTab === 'logs' && (
-          <LogsTab logs={task.executionLog} isLive={isLive && !isTerminal(task.status)} />
+          <div className="h-[520px] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
+            <AgentTaskLogs
+              taskId={task.id}
+              isActive={isLive && !isTerminal(task.status)}
+              initialLogs={task.executionLog ?? []}
+            />
+          </div>
         )}
         {activeTab === 'timeline' && <TimelineTab task={task} />}
       </div>

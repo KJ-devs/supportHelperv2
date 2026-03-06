@@ -402,3 +402,10 @@ After completing a US, append a summary here then `/clear` the context.
 - **Export**: `import { AgentHandoffContext } from '@support-helper/shared'`
 - **Remaining**: rien
 - **Date**: 2026-03-04
+
+## [US-E2E-01] #269 Add data-testid to agent-task detail — DONE ✅
+- **Files**: `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskDetail.tsx`, `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskLogs.tsx`
+- **Changes**: Ajout de 8 data-testid pour Playwright (agent-task-status-badge, agent-task-duration, agent-task-logs-terminal, agent-task-tab-{id}, agent-task-live-badge, timeline-step-{status}, agent-task-error). data-testid sur wrappers existants sans changement DOM structurel.
+- **Decisions**: agent-task-logs-terminal placé sur les deux branches de retour (early return + main return) pour garantir sa présence dans tous les états
+- **Remaining**: rien
+- **Date**: 2026-03-06
