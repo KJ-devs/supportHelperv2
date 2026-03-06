@@ -160,7 +160,7 @@ export default function DashboardPage() {
           <KpiCard
             icon={<TicketIcon className="w-6 h-6" aria-hidden="true" />}
             label="Tickets ouverts"
-            value={openTickets * 1000000}
+            value={openTickets}
             subtitle={stats ? `${stats.total} au total` : 'Chargement...'}
             borderColor="border-blue-500"
           />
