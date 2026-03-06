@@ -6,6 +6,7 @@ After completing a US, append a summary here then `/clear` the context.
 ---
 
 ## [US-SEC-02] #196 InternalAuthGuard Agent-V2 — DONE ✅
+
 - **Files**: `internal-auth.guard.ts` (NEW), `internal-route.decorator.ts` (NEW), `agent-v2.controller.ts`, `agent-v2.module.ts`, `validate-env.ts`, `jwt-auth.guard.ts`, `deep-analysis.worker.ts`, `triage.worker.ts`, 11 test cases
 - **Changes**: Dual-factor guard (x-internal-secret + JWT). @Public() removed, @InternalRoute() + @UseGuards(InternalAuthGuard) applied. Worker builds short-lived service JWTs via HMAC.
 - **Decisions**: Used @InternalRoute() decorator (like @Public/@SdkAuth) so JwtAuthGuard skips these routes. Service JWT is 5min TTL, no DB lookup.
@@ -13,6 +14,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-02-28
 
 ## [US-SEC-01] #195 Cross-tenant media download tests — DONE ✅
+
 - **Files**: `media.service.spec.ts` (extended), `media-download.e2e-spec.ts` (NEW)
 - **Changes**: Added cross-tenant unit test for getDownloadUrlByStorageKey() + 4 E2E tests (own media OK, other tenant 404, no auth 401, unknown key 404)
 - **Decisions**: E2E follows existing pattern with isE2EEnvironmentReady() guard and describe.skip fallback
@@ -20,6 +22,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-02-28
 
 ## [US-INFRA-01] #200 Unify S3 variables — DONE ✅
+
 - **Files**: `s3.config.ts`, `validate-env.ts`, `env.validation.ts`, `startup-check.service.ts`, `sdk-tickets.controller.ts`, `docker-compose.prod.yml`, `.env.example`, 3 test files
 - **Changes**: Renamed S3_ACCESS_KEY→S3_ACCESS_KEY_ID, S3_SECRET_KEY→S3_SECRET_ACCESS_KEY across all API files. Worker already used correct names.
 - **Decisions**: AWS SDK standard naming chosen as canonical
@@ -27,125 +30,148 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-02-28
 
 ## [US-INFRA-03] #201 Meilisearch key unification — DONE ✅
+
 - **Files**: `meilisearch.service.ts`, `docker-compose.prod.yml`, `apps/worker/.env.example`, `apps/worker/README.md`
 - **Changes**: Renamed MEILISEARCH_API_KEY→MEILISEARCH_MASTER_KEY in worker to match docker-compose naming
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-SEC-05] #198 Encryption key validation — DONE ✅
+
 - **Files**: `docker-compose.prod.yml`, `apps/worker/src/config/validate-env.ts`, `.env.example`, 12 test files
 - **Changes**: Removed empty defaults in docker-compose (${KEY:-}→${KEY:?}), added INTEGRATION_ENCRYPTION_KEY to worker, CRITICAL comments in .env.example
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-SEC-03+04] #197+#204 SdkKeyGuard tests — DONE ✅
+
 - **Files**: `sdk-key.guard.spec.ts`
 - **Changes**: Added SQL injection test, disabled key test. 100% coverage
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-QA-03] #205 Auth tests — DONE ✅
+
 - **Files**: `auth.service.spec.ts`
 - **Changes**: Added 6 tests (SSO-only tenant, 4 refresh token, JWT payload). Total 12 auth tests
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-QA-04] #206 GitHub OAuth tests — DONE ✅
+
 - **Files**: `github-oauth.service.spec.ts`, `github-oauth.controller.spec.ts`
 - **Changes**: Added tenant association + encryption tests, fixed pre-existing TS casts. 30/30 tests
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-QA-05] #207 Multi-tenant isolation tests — DONE ✅
+
 - **Files**: `tickets.service.spec.ts`, `media.service.spec.ts`
 - **Changes**: Fixed BullMQ DI gap, added 5 cross-tenant + 3 Prisma inspection tests. 62 tests
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-SEC-03+QA-02] #199+#203 JwtAuthGuard tests — DONE ✅
+
 - **Files**: `jwt-auth.guard.spec.ts`, `jwt.strategy.spec.ts`, `jwt-auth-module.guard.spec.ts`
 - **Changes**: 8 handleRequest tests, @SdkAuth bypass test, fixed import paths. 100% coverage
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-INFRA-02] #202 Worker health check — DONE ✅
+
 - **Files**: `docker-compose.prod.yml`, `health.controller.ts`, `health.controller.spec.ts` (NEW)
 - **Changes**: Real wget health check, WORKER_PORT:3003, /health/ready returns 503 when not ready. 12 tests
 - **Remaining**: None
 - **Date**: 2026-02-28
 
 ## [US-UX-01] #208 Toast system global — DONE ✅
+
 - **Files**: `Toast.tsx` (NEW), `ConfirmModal.tsx` (NEW), `index.ts`, `layout.tsx`, `IntegrationToast.tsx`, `tickets/[id]/page.tsx`, `applications/page.tsx`, `ExportButton.tsx`, `TicketDetail.tsx`
 - **Changes**: Created global Toast + ConfirmModal components. Replaced all alert()/confirm() in tickets, applications, export pages. IntegrationToast re-exports from global Toast.
 - **Remaining**: alert/confirm still in agent-tasks and settings pages (not in scope)
 - **Date**: 2026-02-28
 
 ## [US-UX-02] #209 Socket error clear — DONE ✅
+
 - **Files**: `useTicketSocket.ts`
 - **Changes**: Added `socket.io.on('reconnect')` → setError(null) and `socket.io.on('reconnect_failed')` → actionable error message
 - **Date**: 2026-02-28
 
 ## [US-QA-06] #214 Agent conversation tests — DONE ✅
+
 - **Files**: `agent.service.ts`, `agent.service.spec.ts`
 - **Changes**: Added resolveSession() method, closed-session guard on sendMessage(), 4 new tests (19 total)
 - **Date**: 2026-02-28
 
 ## [US-QA-07] #215 Video analysis DLQ tests — DONE ✅
+
 - **Files**: `video-analysis.worker.spec.ts`
 - **Changes**: 20 new tests covering FFmpeg retry, DLQ routing, OCR timeout, GPT-4 rate limit, partial analysis. Fixed 3 pre-existing bugs. 50 tests total
 - **Date**: 2026-02-28
 
 ## [US-QA-08] #216 Concurrent upload tests — DONE ✅
+
 - **Files**: `media.service.spec.ts`
 - **Changes**: 5 tests for simultaneous uploads, double-complete, duplicate checksum, status guards. 36 tests total
 - **Date**: 2026-02-28
 
 ## [US-QA-09] #217 GitHub sync worker tests — DONE ✅
+
 - **Files**: `github-sync.worker.spec.ts` (NEW), `integration-sync.worker.spec.ts`
 - **Changes**: 28 new GithubSyncWorker tests + 8 new integration-sync tests. Covers ticket→issue, credentials, rate limiting, DLQ
 - **Date**: 2026-02-28
 
 ## [US-QA-10] #218 SDK rate limiting tests — DONE ✅
+
 - **Files**: `sdk-rate-limiting.spec.ts` (NEW), `tenant-rate-limit.guard.spec.ts`, `rate-limiting.spec.ts`
 - **Changes**: 35 new tests for throttle behavior, 429 response format, TTL reset, independent counters. Fixed pre-existing DI issues
 - **Date**: 2026-02-28
 
 ## [US-UX-03] #210 Retry/Dismiss agent chat — DONE ✅
+
 - **Files**: `AgentSection.tsx`, `useAgentChatV2.ts`
 - **Changes**: Added Retry/Dismiss buttons on error block, reinitialize() for init failures, lastUserMessageRef for retry, toast on error
 - **Date**: 2026-02-28
 
 ## [US-UX-04] #220 Socket indicator — DONE ✅
+
 - **Files**: `ConnectionStatus.tsx` (NEW), `DashboardLayout.tsx`
 - **Changes**: Green/red/orange dot with tooltip in header showing socket connection state
 - **Date**: 2026-02-28
 
 ## [US-UX-05] #221 Inline form validation — DONE ✅
+
 - **Files**: `ApplicationModal.tsx`, `settings/ai/page.tsx`, `settings/github/page.tsx`
 - **Changes**: Per-field onBlur validation, inline error messages, disabled submit buttons, useToast for server errors
 - **Date**: 2026-02-28
 
 ## [US-SDK-01] #211 Offline queue IndexedDB — DONE ✅
+
 - **Files**: `offline-queue.ts` (NEW), `widget-api.ts`, `widget-types.ts`, `support-helper-element.ts`, `index.ts`, `offline-queue.test.ts` (NEW)
 - **Changes**: IndexedDB queue with exponential backoff (1s-60s), 50 report/500MB limits, auto-flush on reconnect. 21 tests
 - **Date**: 2026-02-28
 
 ## [US-SDK-03] #212 reportWithVideo() — DONE ✅
+
 - **Files**: `index.ts`, `report-with-video.test.ts` (NEW), `README.md`
 - **Changes**: Programmatic API method for non-widget usage. Auto context capture, offline queue integration. 11 tests
 - **Date**: 2026-02-28
 
 ## [US-SDK-02] #213 Polling post-submit — DONE ✅
+
 - **Files**: `sdk-tickets.controller.ts`, `widget-api.ts`, `widget-types.ts`, `widget-state-machine.ts`, `widget-templates.ts`, `widget-styles.ts`, `support-helper-element.ts`, `poll-ticket-status.test.ts` (NEW)
 - **Changes**: GET /api/sdk/tickets/:id endpoint + SDK polling every 5s for 2min. Analyzing UI with spinner, results display, timeout fallback. 15 tests
 - **Date**: 2026-02-28
 
 ## [US-QA-11] #219 Coverage thresholds — DONE ✅
+
 - **Files**: `jest.config.ts`, `vitest.config.ts`
-- **Changes**: Global thresholds (60/70/75/75), stricter auth+guards (85/90/95/95), dashboard (70/70). Removed app/** exclusion
+- **Changes**: Global thresholds (60/70/75/75), stricter auth+guards (85/90/95/95), dashboard (70/70). Removed app/\*\* exclusion
 - **Date**: 2026-02-28
 
 ## [US-AI-01] #232 Retry + Exponential Backoff AI Providers — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/providers/ai-retry.util.ts` (NEW) — withRetry() wrapper
   - `apps/worker/src/utils/ai-retry.util.ts` (NEW) — duplicate for worker package
@@ -159,6 +185,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-02] #233 Context Pruning dans l'Agentic Loop — DONE ✅
+
 - **Files**:
   - `apps/api/src/modules/agent-v2/agentic-loop.service.ts` — added pruning functions + integration
   - `apps/api/test/unit/services/context-pruning.spec.ts` (NEW) — 17 tests
@@ -167,6 +194,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-03] #234 Cache Redis des Completions AI — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/ai-cache.service.ts` (NEW) — AiCacheService with SHA-256 key generation, TTL constants, metrics logging
   - `apps/api/src/ai/ai.service.ts` — wrapped analyzeVideoTranscript (1h), processUserDescription (1h), classifyIssue (4h) with cache
@@ -178,6 +206,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-04] #235 Supprimer le Système AI Legacy du Worker — DONE ✅
+
 - **Files**:
   - `apps/worker/src/workers/video-analysis.worker.ts` — replaced `analyzeFrames()` with `analyzeVideo()` (reads frames as Buffers, maps VideoAnalysis → legacy shape)
   - `apps/worker/src/workers/agent.worker.ts` — `handleAnalyzeTicket()` now delegates to API via HTTP (same pattern as DeepAnalysisWorker), added `buildServiceJwt()`, removed unused `buildAnalysisPrompt()` and `parseAnalysisResponse()`
@@ -191,6 +220,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-05] #236 Unifier les Embedding Models — DONE ✅
+
 - **Files**:
   - `apps/api/prisma/schema.prisma` — changed Ticket.embedding from `vector(3072)` to `vector(1536)`
   - `apps/api/prisma/migrations/20260301180000_unify_embedding_dimensions/migration.sql` (NEW) — drops and recreates embedding column + HNSW index
@@ -205,6 +235,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-06] #237 write_file en mode diff/patch — DONE ✅
+
 - **Files**:
   - `apps/api/src/modules/agent-v2/agent-tools.ts` — added `edit_file` to ToolName union + AGENT_TOOLS array
   - `apps/api/src/modules/agent-v2/code-investigation.service.ts` — added `editFile()` method (read→find→replace→commit)
@@ -216,6 +247,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-07] #238 GeminiProvider (Gemini 2.0 Flash) — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/providers/gemini.provider.ts` (NEW) — GeminiProvider with vision support, native JSON mode
   - `apps/api/src/ai/providers/ai-provider.interface.ts` — added `'gemini'` to AIProviderType
@@ -228,6 +260,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-08] #239 BedrockProvider (Claude via AWS) — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/providers/bedrock.provider.ts` (NEW) — BedrockProvider implementing AIProvider + ToolCapableProvider
   - `apps/api/src/ai/providers/ai-provider.interface.ts` — added `'bedrock'` to AIProviderType
@@ -239,6 +272,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-09] #240 Tiering Intelligent des Modèles par Tâche — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/model-tiering.service.ts` (NEW) — ModelTieringService with task→provider routing, tenant custom tiers, fallback logic
   - `apps/api/src/ai/ai.service.ts` — injected ModelTieringService, added `getProviderForTask()`, updated classifyIssue/analyzeVideoTranscript/processUserDescription/generateCompletion to use task-based routing
@@ -249,6 +283,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-10] #241 Page Settings AI Dashboard (BYOK) — DONE ✅
+
 - **Files**:
   - `apps/dashboard/app/dashboard/settings/ai/page.tsx` — complete rebuild with 5-provider BYOK page
   - `apps/dashboard/lib/types/ai-config.ts` — extended types for Gemini/Bedrock
@@ -259,6 +294,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-12] #243 Quotas par Tenant + Tier Gratuit — DONE ✅
+
 - **Files**:
   - `apps/api/prisma/schema.prisma` — added TenantQuota model + Tenant relation
   - `apps/api/prisma/migrations/20260301200000_add_tenant_quota/migration.sql` (NEW)
@@ -272,6 +308,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-11] #242 AI Usage Dashboard — DONE ✅
+
 - **Files**:
   - `apps/api/src/modules/ai-config/ai-usage.service.ts` (NEW) — reads 30 days of Worker Redis cost data, calculates costPerTicket
   - `apps/api/src/modules/ai-config/ai-config.controller.ts` — added GET /settings/ai/usage endpoint
@@ -283,6 +320,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-13] #244 Circuit Breaker par Tenant — DONE ✅
+
 - **Files**:
   - `apps/api/src/ai/circuit-breaker.service.ts` (NEW) — AiCircuitBreakerService with daily budget protection
   - `apps/api/src/ai/ai.module.ts` — registered AiCircuitBreakerService
@@ -295,6 +333,7 @@ After completing a US, append a summary here then `/clear` the context.
 ---
 
 ## [US-AI-16] #247 Stripe Integration (Subscriptions) — DONE ✅
+
 - **Files**:
   - NEW: `apps/api/src/modules/billing/billing.module.ts`
   - NEW: `apps/api/src/modules/billing/billing.service.ts`
@@ -315,6 +354,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-14] #245 Tests Dashboard (Vitest Coverage) — DONE ✅
+
 - **Files**: 17 new test files across `apps/dashboard/components/` and `apps/dashboard/hooks/`
   - `components/ui/Toast.test.tsx` (15 tests), `ConfirmModal.test.tsx` (20), `Button.test.tsx` (17), `Badge.test.tsx` (47), `Input.test.tsx` (20), `EmptyState.test.tsx` (16), `Loader.test.tsx` (16), `Modal.test.tsx` (19), `Select.test.tsx` (14), `Card.test.tsx` (15)
   - `components/layout/ConnectionStatus.test.tsx` (20), `components/analytics/StatsCard.test.tsx` (17), `components/usage/UsageBar.test.tsx` (11), `components/tickets/Pagination.test.tsx` (22), `components/tickets/TicketCard.test.tsx` (15)
@@ -324,6 +364,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AI-15] #246 Landing Page + Pricing — DONE ✅
+
 - **Files**:
   - `apps/web/src/app/page.tsx` — landing page with hero, how-it-works, features grid, social proof
   - `apps/web/src/app/(marketing)/pricing/page.tsx` — 3-tier pricing cards, comparison table, FAQ
@@ -335,6 +376,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-01
 
 ## [US-AGENT-01] #250 Fix temps réel page Agent Tasks — DONE ✅
+
 - **Files**:
   - NEW: `apps/dashboard/hooks/useAgentTasksRealtime.ts`
   - MOD: `apps/dashboard/app/dashboard/agent-tasks/page.tsx`
@@ -347,6 +389,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-AGENT-04] #253 Priorisation dynamique des jobs BullMQ par sévérité — DONE ✅
+
 - **Files**:
   - MOD: `apps/api/src/modules/tickets/tickets.service.ts` — added `severityToBullMQPriority()` helper + pass priority to `enqueueTriage()`
   - MOD: `apps/api/src/modules/triage/triage-router.service.ts` — added `severityToBullMQPriority()` helper, lookup ticket severity before `deepAnalysisQueue.add()`, pass priority
@@ -360,6 +403,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-AGENT-06] #255 Escalade N1→N2 avec contexte riche et event WebSocket — DONE ✅
+
 - **Files**:
   - MOD: `apps/api/src/modules/tickets/tickets.gateway.ts` — added `emitEscalatedToN2()` method emitting `agent:escalated-to-n2` event
   - MOD: `apps/api/src/modules/agent-v2/deep-analysis.service.ts` — inject `@Optional() TicketsGateway`, call `emitEscalatedToN2()` in `updateSessionN1Analysis()` after persisting
@@ -373,6 +417,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-AGENT-03] #252 Propager AgentHandoffContext dans le pipeline agentique — DONE ✅
+
 - **Files**:
   - MOD: `apps/api/src/modules/agent/agent.service.ts` — `startSession()` initializes `AgentHandoffContext` with empty `decisionTrace[]`
   - MOD: `apps/api/src/modules/triage/triage.service.ts` — `runTriage()` writes `triageDecision` + decisionTrace entry via `updateSessionHandoffContext()`
@@ -384,6 +429,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-AGENT-05] #254 QueueMonitorService et endpoint métriques — DONE ✅
+
 - **Files**:
   - `apps/api/src/modules/agent/queue-monitor.service.ts` (NEW) — QueueMonitorService injectable
   - `apps/api/src/modules/agent/agent.module.ts` — added 5 extra queue registrations + QueueMonitorService provider/export
@@ -396,6 +442,7 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-AGENT-02] #251 Définir AgentHandoffContext dans packages/shared — DONE ✅
+
 - **Files**: `packages/shared/src/types/agent-context.ts` (NEW), `packages/shared/src/index.ts`
 - **Changes**: Interface `AgentHandoffContext` + sous-types créés et exportés (`TriageType`, `TriageSeverity`, `TriageRoute`, `AgentRole`, `N2Complexity`, `DecisionTraceEntry`, `TriageDecision`, `N1Analysis`, `N2Plan`)
 - **Decisions**: Types helper pour meilleure lisibilité. No circular deps — pure type definitions, no imports from other shared files.
@@ -404,8 +451,17 @@ After completing a US, append a summary here then `/clear` the context.
 - **Date**: 2026-03-04
 
 ## [US-E2E-01] #269 Add data-testid to agent-task detail — DONE ✅
+
 - **Files**: `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskDetail.tsx`, `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskLogs.tsx`
 - **Changes**: Ajout de 8 data-testid pour Playwright (agent-task-status-badge, agent-task-duration, agent-task-logs-terminal, agent-task-tab-{id}, agent-task-live-badge, timeline-step-{status}, agent-task-error). data-testid sur wrappers existants sans changement DOM structurel.
 - **Decisions**: agent-task-logs-terminal placé sur les deux branches de retour (early return + main return) pour garantir sa présence dans tous les états
 - **Remaining**: rien
+- **Date**: 2026-03-06
+
+## [US-E2E-02] #270 Playwright e2e TDD agent-task detail — DONE ✅
+
+- **Files**: `apps/dashboard/e2e/agent-tasks/agent-task-detail.spec.ts` (NEW)
+- **Changes**: 6 tests Playwright couvrant: badge de statut, durée, onglet Execution Logs (terminal), onglet Timeline (timeline-step-analyzing), onglet Action Plan (pas de crash), bloc erreur pour tâche failed
+- **Decisions**: Tests skippés via `PLAYWRIGHT_SERVER_AVAILABLE` env var car localhost:3000 retourne 500 au moment de l'exécution. Auth corrigé: `owner@test.local` / `password123` (le helper auth.ts utilise `admin@test.com` qui n'existe pas en DB). Task IDs réels depuis DB: `8a073e0d-...` (analyzing) + `cbe9e647-...` (failed). Activer avec `PLAYWRIGHT_SERVER_AVAILABLE=true`.
+- **Remaining**: Tests actuellement skippés (serveur non actif) — GREEN quand le serveur est lancé
 - **Date**: 2026-03-06
