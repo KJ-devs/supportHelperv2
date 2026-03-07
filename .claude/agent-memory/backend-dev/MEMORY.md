@@ -3,16 +3,19 @@
 ## Project Architecture
 
 ### Controller Locations
+
 - Core modules (auth, tenants, users, applications): `apps/api/src/{module}/`
 - Feature modules (tickets, media, agent, analytics, github, integrations, feedback): `apps/api/src/modules/{module}/`
 - Health: `apps/api/src/health/`
 
 ### Module Registration
+
 - GithubModule is COMMENTED OUT in `app.module.ts` line 120
 - AuthModule is at `src/auth/` (NOT `src/modules/auth/`)
 - FeedbackModule registered in app.module.ts
 
 ### Guard Patterns
+
 - Dashboard endpoints: `@UseGuards(JwtAuthGuard)` + `@ApiBearerAuth()`
 - SDK endpoints: `@SdkAuth()` + `@UseGuards(SdkKeyGuard)` + `@ApiSecurity('sdk-key')`
 - Public endpoints: `@Public()` decorator
@@ -20,6 +23,7 @@
 - Newer controllers use `@CurrentTenant()` decorator
 
 ### DTO Validation Patterns
+
 - Tickets module: Zod schemas + DTOs via `ZodValidationPipe`
 - Integrations module: Same Zod pattern
 - Media module: Same Zod pattern
@@ -31,6 +35,7 @@
 - Feedback module: class-validator DTOs (CreateFeedbackDto, UpdateFeedbackDto)
 
 ### Security Fixes Applied (Remediation Sprint)
+
 - Users controller: RBAC checks (owner/admin only for role changes, create, delete)
 - Media download: Tenant verification via media table lookup before presigned URL
 - ApplicationsService.getStats: Added tenantId filter to all ticket count queries
@@ -39,6 +44,7 @@
 - Legacy duplicate controllers removed (github.controller.ts, github-webhook.controller.ts, modules/auth/auth.controller.ts)
 
 ### GitHub Integration
+
 - Config location: `src/config/github.config.ts`
 - OAuth service: `src/modules/github/services/github-oauth.service.ts`
 - App service: `src/modules/github/services/github-app.service.ts` (JWT auth, installation tokens)
@@ -60,10 +66,11 @@
 - Anti-loop sync: `setSyncOrigin(ticketId, 'github'|'platform')` / `isSyncFromGithub()` / `isSyncFromPlatform()` via CacheService
 
 ### Shared Package (@support-helper/shared)
+
 - Location: `packages/shared/`
 - Strict mode enabled via `tsconfig.base.json` inheritance
 - NO `any` types, NO `@ts-ignore`, NO `@ts-nocheck` -- all strict rules enforced
-- Test files (*.spec.ts, *.test.ts) excluded from build via tsconfig
+- Test files (_.spec.ts, _.test.ts) excluded from build via tsconfig
 - Exports: types (Ticket, User, Tenant, Media), constants (severity, ticket-status), utils (validation, encryption)
 - Encryption utils: `encryptAES256GCM`, `decryptAES256GCM`, `parseEncryptionKey` -- AES-256-GCM shared between API and Worker
 - Used by: API, Worker, SDK, Dashboard, Web
@@ -71,7 +78,8 @@
 - Tests: `pnpm --filter @support-helper/shared test` (vitest, 57 tests)
 
 ### Testing
-- Test framework: Jest for API (*.spec.ts files)
+
+- Test framework: Jest for API (\*.spec.ts files)
 - Test command: `pnpm --filter @support-helper/api test`
 - 745 total tests: 725 passed, 20 skipped, 0 failed (as of 2026-02-14)
 - Tests located in `apps/api/test/unit/` and `apps/api/test/integration/` directories
@@ -83,6 +91,7 @@
 - GitHub service tests need GithubAppService mock: `{ getInstallationOctokit: jest.fn(), isEnabled: jest.fn().mockReturnValue(false) }`
 
 ### Key Notes
+
 - `modules/auth/` directory still exists with guards, strategies, middleware -- used by feature modules
 - Build command: `pnpm --filter @support-helper/api build`
 - bcrypt is available for password hashing
@@ -98,7 +107,9 @@
 - Shared package (`@support-helper/shared`) is built and available
 
 ### Multi-Tenant Security Audit (Phase 6 - 2026-02-10)
+
 All services verified to filter by tenantId:
+
 - ApplicationsService: ALL queries filter by tenantId ✅
 - TicketsService: ALL queries filter by tenantId ✅
 - UsersService: ALL queries filter by tenantId ✅
@@ -109,6 +120,7 @@ All services verified to filter by tenantId:
 - IntegrationsService: ALL queries filter by tenantId ✅
 
 All controllers have appropriate guards:
+
 - Dashboard controllers: @UseGuards(JwtAuthGuard) + @ApiBearerAuth() ✅
 - SDK controllers: @SdkAuth() + @UseGuards(SdkKeyGuard) + @ApiSecurity('sdk-key') ✅
 - Public controllers: @Public() decorator (auth, health probes, OAuth callbacks, webhooks) ✅
@@ -116,20 +128,24 @@ All controllers have appropriate guards:
 - Health sensitive endpoints (/full, /db, /redis, etc.): @UseGuards(JwtAuthGuard) ✅
 
 ### Integration Providers (2026-02-12)
+
 Location: `apps/api/src/modules/integrations/providers/`
 
 **Discord Provider:**
+
 - `syncTicket()` adds `?wait=true` to webhook URL to receive message ID in response (data.id)
 - `updateTicket()` uses PATCH on `/webhooks/{webhook.id}/{webhook.token}/messages/{externalId}`
 - `deleteTicket()` uses DELETE on same endpoint, ignores 404 status
 
 **Slack Provider:**
+
 - Uses `@slack/web-api` WebClient
 - `externalId` = message timestamp (ts)
 - `updateTicket()` uses `chat.update` API
 - `deleteTicket()` uses `chat.delete` API
 
 **Notion Provider:**
+
 - Uses `@notionhq/client` Client
 - `externalId` = page ID
 - `updateTicket()` uses `pages.update` API
@@ -138,6 +154,7 @@ Location: `apps/api/src/modules/integrations/providers/`
 Worker checks `'deleteTicket' in provider` before calling, so adding method is sufficient.
 
 ### Agent Conversation (Issue #175)
+
 - API agent service: `apps/api/src/modules/agent/agent.service.ts`
 - API agent gateway: `apps/api/src/modules/agent/agent.gateway.ts`
 - Worker agent worker: `apps/worker/src/workers/agent.worker.ts`
@@ -153,6 +170,7 @@ Worker checks `'deleteTicket' in provider` before calling, so adding method is s
 - `TicketsGateway` and `NotificationService` are `@Optional()` in `AgentService` constructor
 
 ### Agent-V2 Architecture
+
 - Module: `apps/api/src/modules/agent-v2/`
 - Services: `DeepAnalysisService`, `AgenticLoopService`, `DiagnosisService`, `CodeInvestigationService`, `ToolExecutorService`
 - Gateway: `AgentV2Gateway` (WebSocket)
@@ -162,11 +180,22 @@ Worker checks `'deleteTicket' in provider` before calling, so adding method is s
 - Env var `INTERNAL_API_SECRET` required for worker→API internal calls; `API_URL` defaults to `http://localhost:3001`
 - Visual cues flow: VideoAnalysisWorker extracts cues after OCR → saves to `media.metadata.visualCues` → DeepAnalysisService reads and appends to system prompt
 
+### Agent Task Stuck at 'analyzing' (Bug Pattern)
+
+- Root cause: `handleGenerateActionPlan` in `apps/worker/src/workers/agent.worker.ts` had no global try/catch.
+- Any unexpected error after `status: 'analyzing'` was set (line ~721) left the task permanently stuck.
+- Fix: Wrapped the full body in a try/catch that calls `setAgentTaskError` only if status is still `analyzing`.
+- Secondary fix: `onFailed` now marks task as `failed` on intermediate retry attempts too (not just last attempt), preventing "stuck analyzing" during retry delay windows.
+- BullMQ v5 `JobsOptions` has NO `timeout` field — do not add `timeout` to job add options.
+- Worker-level timeout must be set via `lockDuration` in `@Processor()` options if needed.
+
 ### CacheService.del Pattern
+
 - `del(key: string)` deletes a single key — no wildcard support
 - For multi-key invalidation, iterate over known keys explicitly
 
 ### Stripe Billing Integration (US-AI-16)
+
 - Module: `apps/api/src/modules/billing/`
 - Stripe SDK version: v20.4.0, API version: `2026-02-25.clover` (NOT '2024-12-18.acacia')
 - `rawBody: true` must be set in `NestFactory.create()` for Stripe webhook signature verification

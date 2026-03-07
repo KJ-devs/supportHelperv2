@@ -1,6 +1,15 @@
 # QA Engineer Memory - Support Helper Platform
 
+## Playwright E2E — Critical Infrastructure Note
+
+- **NEVER run Playwright against the Next.js dev server (HMR mode)** — the dev server recompiles so fast that `main-app.js?v=X` returns 404 by the time the browser requests it (server already at v=X+N). React never hydrates, form submits fire as native browser submits → login fails.
+- **Always run Playwright against `next start` (production build)** — requires `pnpm build` first, then `npx next start -p 3010` on a free port.
+- **Production server Sentry issue**: if `.next/server/webpack-runtime.js` throws `Cannot find module './vendor-chunks/@sentry+core@8.55.0.js'`, the build is stale/incomplete — run `pnpm build` fresh before `next start`.
+- **Auth helper**: `apps/dashboard/e2e/helpers/auth.ts` uses `pressSequentially` (not `fill`) to trigger React onChange on controlled inputs. Correct pattern for this codebase.
+- **Auth login form**: uses `id="email"` and `id="password"` (no `name` attribute). The login doesn't use next-auth, uses custom JWT with localStorage. After submit, redirects to `/dashboard` via `router.push`.
+
 ## Test Architecture
+
 - API tests use Jest with `@nestjs/testing` module
 - SDK tests use Vitest with browser mocks (jsdom)
 - Dashboard tests use Vitest + @testing-library/react (unit tests) and Playwright (e2e)
@@ -10,12 +19,14 @@
 - E2E tests conditionally skip based on environment variables (TEST_DATABASE_URL, TEST_REDIS_URL, TEST_S3_ENDPOINT)
 
 ## Critical: Jest Config Discovery
+
 - Jest `projects` config OVERRIDES top-level `testMatch`
 - Only `test/unit/**` and `test/integration/**` are discovered by Jest
 - Colocated tests in `src/**/*.spec.ts` are NOT picked up by the current jest.config.ts
 - Always put API tests under `apps/api/test/unit/` for them to run
 
 ## Test File Locations
+
 - **Discovered** unit tests: `apps/api/test/unit/` (guards/, controllers/, services/)
 - Colocated tests in src/ are NOT discovered (jest projects config override)
 - External unit tests: `apps/api/test/unit/`
@@ -30,6 +41,7 @@
 - Web app tests: `apps/web/tests/`
 
 ## Mock Patterns
+
 - PrismaService: mock object with `jest.fn()` for each Prisma model method, `$executeRaw` returns number (affected rows)
 - ConfigService: mock with `get: jest.fn()` returning config values
 - External libs (OpenAI, Octokit, ffmpeg, AWS SDK, BullMQ, ioredis): `jest.mock()` at module level
@@ -49,6 +61,7 @@
 - NestJS Logger: spy on `Logger.prototype` methods in beforeEach, reuse spies across tests (don't recreate per test)
 
 ## Known Gaps (as of 2026-02-18)
+
 - ai/ai.service.ts has ZERO tests
 - SDK widget element and state machine have ZERO tests
 - Worker services mostly untested (openai.service is tested)
@@ -58,6 +71,7 @@
 - VideoAnalysisWorker: FULLY TESTED (50 tests, 30 pre-existing + 20 US-215 additions) - NOT a gap
 
 ## Tests Added (2026-02-28 US-215 VideoAnalysis Retry/DLQ)
+
 - VideoAnalysisWorker -> `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` (20 new tests, 50 total)
 - Fixed pre-existing bugs: `as unknown` cast → `as unknown as Job<T>` (TS2322), missing `media.findUnique` mock, wrong `media.update` call count (2→3, saveVisualCues adds extra call)
 - New tests: AC1 FFmpeg retry no DLQ, AC2 DLQ payload on attempt 4/4, AC3 OCR timeout media status, AC4 GPT-4 rate limit retryability, AC5 partial analysis no DB write, AC6 full DLQ payload structure
@@ -69,6 +83,7 @@
 - OpenAI service test gotcha: `openai.service.spec.ts` routes to OpenAI path (not Anthropic) when `openaiConfig.apiKey` is set in mock but no `ANTHROPIC_API_KEY` env var. Mock must include `chat.completions.create` for analyzeVideo/classifyTicket tests. `RATE_LIMIT = 10000` (not 50) — tests must use actual constant value.
 
 ## Tests Added (2026-02-08 remediation)
+
 - Auth guards: jwt-auth, sdk-key (common), tenant, roles -> `test/unit/guards/`
 - SDK tickets controller -> `test/unit/controllers/sdk-tickets.controller.spec.ts`
 - Users controller (with RBAC) -> `test/unit/controllers/users.controller.spec.ts`
@@ -76,12 +91,14 @@
 - Total: 82 tests across 7 files, all passing
 
 ## Tests Added (2026-02-09 VideoPlayer)
+
 - VideoPlayer component -> `apps/dashboard/components/media/__tests__/VideoPlayer.test.tsx`
 - Coverage: 21 tests covering MediaError handling, UI state, error recovery, console logging
 - Setup: Added vitest config and test setup with MediaError mock for dashboard app
 - All tests passing
 
 ## Tests Added (2026-02-12 Integration Sync)
+
 - IntegrationsSyncService -> `apps/api/test/unit/services/integrations-sync.service.spec.ts`
 - IntegrationSyncWorker -> `apps/worker/src/workers/__tests__/integration-sync.worker.spec.ts`
 - Coverage: 36 tests total (19 API + 17 worker)
@@ -90,6 +107,7 @@
 - All tests passing
 
 ## Tests Added (2026-02-13 Environment Validation)
+
 - API env validation -> `apps/api/test/unit/config/validate-env.spec.ts` (23 tests)
 - Worker env validation -> `apps/worker/src/config/__tests__/validate-env.spec.ts` (11 tests)
 - Coverage: 34 tests total covering missing vars, invalid values, valid configs, error messages, edge cases
@@ -99,6 +117,7 @@
 - All tests passing - validation is production-ready
 
 ## Tests Added (2026-02-14 Agent & Auth Modules)
+
 - AgentService -> `apps/api/test/unit/services/agent.service.spec.ts` (9 tests)
 - AuthService (modules/auth) -> `apps/api/test/unit/services/auth-module.service.spec.ts` (17 tests)
 - Coverage: 26 tests total covering session management, message handling, authentication flows
@@ -107,6 +126,7 @@
 - All tests passing
 
 ## Tests Added (2026-02-14 Tickets Module)
+
 - TicketsService -> `apps/api/test/unit/services/tickets.service.spec.ts` (25 tests)
 - TicketsController -> `apps/api/test/unit/controllers/tickets.controller.spec.ts` (17 tests)
 - Coverage: 42 tests total covering CRUD operations, filtering, pagination, stats, search integration
@@ -117,6 +137,7 @@
 - All tests passing
 
 ## Tests Added (2026-02-14 Media Module)
+
 - S3Service -> `apps/api/test/unit/services/s3.service.spec.ts` (16 tests)
 - MediaService -> `apps/api/test/unit/services/media.service.spec.ts` (29 tests)
 - MediaController -> `apps/api/test/unit/controllers/media.controller.spec.ts` (20 tests)
@@ -130,6 +151,7 @@
 - All 65 tests passing
 
 ## Tests Added (2026-02-14 Analytics, Health, Integrations Services)
+
 - AnalyticsService -> `apps/api/test/unit/services/analytics.service.spec.ts` (16 tests)
 - HealthService -> `apps/api/test/unit/services/health.service.spec.ts` (24 tests)
 - IntegrationsService -> `apps/api/test/unit/services/integrations.service.spec.ts` (30 tests)
@@ -142,6 +164,7 @@
 - All 70 tests passing
 
 ## Tests Added (2026-02-14 Logger, Auth Strategies & Guards)
+
 - LoggerService -> `apps/api/test/unit/services/logger.service.spec.ts` (31 tests)
 - JwtStrategy (modules/auth) -> `apps/api/test/unit/auth/jwt.strategy.spec.ts` (9 tests, +2 constructor tests 2026-02-28)
 - ApiKeyStrategy -> `apps/api/test/unit/auth/api-key.strategy.spec.ts` (7 tests)
@@ -156,6 +179,7 @@
 - All tests passing, jwt-auth.guard.ts coverage: 100% statements/branches/functions/lines
 
 ## Tests Added (2026-02-14 Interceptors, Filters, Middleware)
+
 - GithubWebhookProcessor -> `apps/api/test/unit/services/github-webhook.processor.spec.ts` (11 tests)
 - HttpExceptionFilter -> `apps/api/test/unit/common/http-exception.filter.spec.ts` (13 tests)
 - LoggingInterceptor -> `apps/api/test/unit/common/logging.interceptor.spec.ts` (10 tests)
@@ -172,6 +196,7 @@
 - All 67 tests passing
 
 ## Tests Added (2026-02-18 VideoAnalysis Worker - Issue #121)
+
 - VideoAnalysisWorker -> `apps/worker/src/workers/__tests__/video-analysis.worker.spec.ts` (30 tests)
 - Coverage: 96.87% statements, 92.1% branches, 88.88% functions, 96.82% lines
 - Tests pass in ~6 seconds (well within 30s limit)
@@ -184,6 +209,7 @@
 - The file already existed with full coverage - no changes needed
 
 ## Tests Added (2026-02-17 Integration Providers E2E)
+
 - Integration providers E2E -> `apps/api/test/integration/integrations-e2e.spec.ts` (35 tests)
 - Coverage: Jira, Slack, HubSpot, Discord providers with full CRUD lifecycle
 - Jira tests (6): connection, create/update issues, pull tickets, rate limiting
@@ -200,6 +226,7 @@
 - All 35 tests passing (skip gracefully without TEST_DATABASE_URL)
 
 ## Tests Added (2026-02-28 Multi-Tenant Isolation US-QA-05)
+
 - tickets.service.spec.ts: fixed missing `deep-analysis` and `triage` queue providers (all 25 pre-existing tests were failing)
 - tickets.service.spec.ts: added 5 cross-tenant negative tests (findOne/findAll/update isolation + 3-test Prisma query inspection block)
 - media.service.spec.ts: added 1 cross-tenant negative test for findByTicket
@@ -208,11 +235,13 @@
 - Gotcha: TicketsService now injects 3 queues (github, deep-analysis, triage) — all 3 must be provided in TestingModule or ALL tests in the suite fail with DI error
 
 ## Tests Added (2026-02-28 US-217 GitHub Sync Full Flow)
+
 - GithubSyncWorker -> `apps/worker/src/workers/__tests__/github-sync.worker.spec.ts` (28 new tests)
 - Extended IntegrationSyncWorker -> `apps/worker/src/workers/__tests__/integration-sync.worker.spec.ts` (+8 tests, 27 total)
 - See `github-sync-tests.md` for patterns and gotchas
 
 ## Tests Added (2026-02-28 US-218 SDK Rate Limiting)
+
 - Fixed `test/unit/guards/tenant-rate-limit.guard.spec.ts`: added missing DI providers (THROTTLER_OPTIONS, ThrottlerStorage, Reflector), fixed prisma mock type cast, added 5 more tests (12 total)
 - Fixed `test/integration/rate-limiting.spec.ts`: `as unknown as jest.Mocked<Redis>` (not just `as unknown`)
 - New `test/unit/rate-limiting/sdk-rate-limiting.spec.ts` (35 tests): covers all 5 ACs
@@ -226,13 +255,16 @@
   - SDK rate-limit tests need `application.findUnique` in the PrismaService mock (SdkKeyGuard uses it) OR the ThrottlerGuard fires first as APP_GUARD before SdkKeyGuard
 
 ## Known Gaps (updated 2026-02-28)
+
 - tenant-rate-limit.guard.spec.ts: NOW TESTED (12 tests)
 
 ## Auth Test Duplication Issue
+
 - Auth controller tests exist in BOTH `apps/api/src/modules/auth/auth.controller.spec.ts` AND `apps/api/test/unit/controllers/auth.controller.spec.ts`
 - The colocated version is more comprehensive (8 tests vs 3 tests)
 
 ## Gotchas
+
 - agent.service.spec.ts uses `setTimeout` for async processing - fragile pattern
 - E2E tests use `isE2EEnvironmentReady()` and `describe.skip` for conditional execution
 - Integration tests require env vars: TEST_DATABASE_URL, TEST_REDIS_URL, TEST_S3_ENDPOINT
@@ -244,6 +276,7 @@
 - **Worker tests location**: Worker tests can be colocated in `__tests__/` subdirectories within `apps/worker/src/workers/`
 
 ## Test Suite Repair Patterns (2026-02-28)
+
 - See `test-repair-patterns.md` for full patterns for fixing tests when source code evolves
 - ESM @octokit/rest mock MUST go before imports (jest hoisting only works at start of file for ts-jest)
 - Mutable arrays passed to mock fns — jest.mock.calls[0][0] reflects POST-mutation state
