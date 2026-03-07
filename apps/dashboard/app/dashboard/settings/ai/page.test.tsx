@@ -32,7 +32,7 @@ vi.mock('@/components/layout/DashboardLayout', () => ({
 }));
 
 // Mock useToast from ui components
-vi.mock('@/components/ui', async (importOriginal) => {
+vi.mock('@/components/ui', async importOriginal => {
   const actual = await importOriginal<typeof import('@/components/ui')>();
   return {
     ...actual,
@@ -81,15 +81,15 @@ describe('AiSettingsPage', () => {
   it('renders the page title after loading', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      // Use getAllByText since "AI Configuration" appears in breadcrumb AND h1
-      expect(screen.getAllByText('AI Configuration').length).toBeGreaterThan(0);
+      // Use getAllByText since "Configuration IA" appears in breadcrumb AND h1
+      expect(screen.getAllByText('Configuration IA').length).toBeGreaterThan(0);
     });
   });
 
   it('shows "Using platform default" when not configured', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Using platform default')).toBeInTheDocument();
+      expect(screen.getByText('Utilisation du défaut plateforme')).toBeInTheDocument();
     });
   });
 
@@ -97,8 +97,8 @@ describe('AiSettingsPage', () => {
     vi.mocked(aiConfigApi.getConfig).mockResolvedValue(mockConfigConfigured);
     render(<AiSettingsPage />);
     await waitFor(() => {
-      // The banner shows "Connected — Anthropic"
-      const connectedText = screen.getByText(/Connected — Anthropic/i);
+      // The banner shows "Connecté — Anthropic"
+      const connectedText = screen.getByText(/Connecté — Anthropic/i);
       expect(connectedText).toBeInTheDocument();
     });
   });
@@ -117,14 +117,14 @@ describe('AiSettingsPage', () => {
   it('shows API Key field for Anthropic by default', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('API Key')).toBeInTheDocument();
+      expect(screen.getByText('Clé API')).toBeInTheDocument();
     });
   });
 
   it('shows Model selector for Anthropic', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Model')).toBeInTheDocument();
+      expect(screen.getByText('Modèle')).toBeInTheDocument();
     });
   });
 
@@ -136,14 +136,14 @@ describe('AiSettingsPage', () => {
 
     // Find and click the Ollama provider button (it's in the provider grid)
     const allButtons = screen.getAllByRole('button');
-    const ollamaButton = allButtons.find((btn) =>
-      btn.textContent?.includes('Ollama (Local)') && btn.textContent?.includes('Run open-source')
+    const ollamaButton = allButtons.find(
+      btn => btn.textContent?.includes('Ollama (Local)') && btn.textContent?.includes('open-source')
     );
     expect(ollamaButton).toBeTruthy();
     fireEvent.click(ollamaButton!);
 
     await waitFor(() => {
-      expect(screen.getByText('Endpoint URL')).toBeInTheDocument();
+      expect(screen.getByText("URL de l'endpoint")).toBeInTheDocument();
     });
   });
 
@@ -154,14 +154,14 @@ describe('AiSettingsPage', () => {
     });
 
     const allButtons = screen.getAllByRole('button');
-    const bedrockButton = allButtons.find((btn) =>
-      btn.textContent?.includes('AWS Bedrock') && btn.textContent?.includes('Claude models via AWS')
+    const bedrockButton = allButtons.find(
+      btn => btn.textContent?.includes('AWS Bedrock') && btn.textContent?.includes('AWS')
     );
     expect(bedrockButton).toBeTruthy();
     fireEvent.click(bedrockButton!);
 
     await waitFor(() => {
-      expect(screen.getByText('AWS Region')).toBeInTheDocument();
+      expect(screen.getByText('Région AWS')).toBeInTheDocument();
     });
   });
 
@@ -172,26 +172,26 @@ describe('AiSettingsPage', () => {
     });
 
     const allButtons = screen.getAllByRole('button');
-    const bedrockButton = allButtons.find((btn) =>
-      btn.textContent?.includes('AWS Bedrock') && btn.textContent?.includes('Claude models via AWS')
+    const bedrockButton = allButtons.find(
+      btn => btn.textContent?.includes('AWS Bedrock') && btn.textContent?.includes('AWS')
     );
     fireEvent.click(bedrockButton!);
 
     await waitFor(() => {
-      expect(screen.queryByText('API Key')).not.toBeInTheDocument();
+      expect(screen.queryByText('Clé API')).not.toBeInTheDocument();
     });
   });
 
   it('toggles API key visibility when show button is clicked', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('API Key')).toBeInTheDocument();
+      expect(screen.getByText('Clé API')).toBeInTheDocument();
     });
 
     const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
     expect(passwordInput).toBeInTheDocument();
 
-    const toggleBtn = screen.getByRole('button', { name: /show api key/i });
+    const toggleBtn = screen.getByRole('button', { name: /afficher la clé api/i });
     fireEvent.click(toggleBtn);
 
     const textInput = document.querySelector('input[type="text"]');
@@ -201,30 +201,32 @@ describe('AiSettingsPage', () => {
   it('save button is disabled when form is invalid (no API key for provider requiring one)', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /save configuration/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /enregistrer la configuration/i })
+      ).toBeInTheDocument();
     });
 
-    const saveButton = screen.getByRole('button', { name: /save configuration/i });
+    const saveButton = screen.getByRole('button', { name: /enregistrer la configuration/i });
     expect(saveButton).toBeDisabled();
   });
 
   it('enables save button when API key is entered', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('API Key')).toBeInTheDocument();
+      expect(screen.getByText('Clé API')).toBeInTheDocument();
     });
 
     const apiKeyInput = document.querySelector('input[type="password"]') as HTMLInputElement;
     fireEvent.change(apiKeyInput, { target: { value: 'sk-ant-api03-testkey' } });
 
-    const saveButton = screen.getByRole('button', { name: /save configuration/i });
+    const saveButton = screen.getByRole('button', { name: /enregistrer la configuration/i });
     expect(saveButton).not.toBeDisabled();
   });
 
   it('renders Test Connection button', async () => {
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /test connection/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /tester la connexion/i })).toBeInTheDocument();
     });
   });
 
@@ -234,14 +236,14 @@ describe('AiSettingsPage', () => {
 
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /test connection/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /tester la connexion/i })).toBeInTheDocument();
     });
 
-    const testButton = screen.getByRole('button', { name: /test connection/i });
+    const testButton = screen.getByRole('button', { name: /tester la connexion/i });
     fireEvent.click(testButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/Connection successful/i)).toBeInTheDocument();
+      expect(screen.getByText(/Connexion réussie/i)).toBeInTheDocument();
     });
   });
 
@@ -254,10 +256,10 @@ describe('AiSettingsPage', () => {
 
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /test connection/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /tester la connexion/i })).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /test connection/i }));
+    fireEvent.click(screen.getByRole('button', { name: /tester la connexion/i }));
 
     await waitFor(() => {
       expect(screen.getByText('Invalid API key')).toBeInTheDocument();
@@ -269,13 +271,13 @@ describe('AiSettingsPage', () => {
 
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('API Key')).toBeInTheDocument();
+      expect(screen.getByText('Clé API')).toBeInTheDocument();
     });
 
     const apiKeyInput = document.querySelector('input[type="password"]') as HTMLInputElement;
     fireEvent.change(apiKeyInput, { target: { value: 'sk-ant-api03-validkey' } });
 
-    const saveButton = screen.getByRole('button', { name: /save configuration/i });
+    const saveButton = screen.getByRole('button', { name: /enregistrer la configuration/i });
     fireEvent.click(saveButton);
 
     await waitFor(() => {
@@ -293,7 +295,7 @@ describe('AiSettingsPage', () => {
 
     render(<AiSettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Current Configuration')).toBeInTheDocument();
+      expect(screen.getByText('Configuration actuelle')).toBeInTheDocument();
     });
     // Multiple elements may contain model name — verify at least one exists
     expect(screen.getAllByText(/claude-sonnet-4-6/).length).toBeGreaterThan(0);

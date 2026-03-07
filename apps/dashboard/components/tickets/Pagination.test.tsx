@@ -36,45 +36,45 @@ describe('Pagination', () => {
 
   it('renders previous button', () => {
     render(<Pagination currentPage={2} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page précédente/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /précédent/i })).toBeInTheDocument();
   });
 
   it('renders next button', () => {
     render(<Pagination currentPage={2} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page suivante/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /suivant/i })).toBeInTheDocument();
   });
 
   it('previous button is disabled on first page', () => {
     render(<Pagination currentPage={1} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page précédente/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /précédent/i })).toBeDisabled();
   });
 
   it('next button is disabled on last page', () => {
     render(<Pagination currentPage={5} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page suivante/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /suivant/i })).toBeDisabled();
   });
 
   it('previous button is enabled when not on first page', () => {
     render(<Pagination currentPage={3} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page précédente/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /précédent/i })).not.toBeDisabled();
   });
 
   it('next button is enabled when not on last page', () => {
     render(<Pagination currentPage={3} totalPages={5} onPageChange={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /page suivante/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /suivant/i })).not.toBeDisabled();
   });
 
   it('calls onPageChange with currentPage - 1 when previous is clicked', () => {
     const onPageChange = vi.fn();
     render(<Pagination currentPage={3} totalPages={5} onPageChange={onPageChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /page précédente/i }));
+    fireEvent.click(screen.getByRole('button', { name: /précédent/i }));
     expect(onPageChange).toHaveBeenCalledWith(2);
   });
 
   it('calls onPageChange with currentPage + 1 when next is clicked', () => {
     const onPageChange = vi.fn();
     render(<Pagination currentPage={3} totalPages={5} onPageChange={onPageChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /page suivante/i }));
+    fireEvent.click(screen.getByRole('button', { name: /suivant/i }));
     expect(onPageChange).toHaveBeenCalledWith(4);
   });
 

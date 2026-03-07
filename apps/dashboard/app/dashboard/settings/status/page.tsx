@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card } from '@/components/ui';
 import { healthApi, type HealthStatus, type HealthCheck } from '@/lib/api/health';
@@ -28,27 +29,31 @@ function StatusDot({ status }: { status: 'healthy' | 'unhealthy' | 'degraded' })
     degraded: 'bg-yellow-500',
     unhealthy: 'bg-red-500',
   };
-  return (
-    <span className={`inline-block w-3 h-3 rounded-full ${colors[status]}`} />
-  );
+  return <span className={`inline-block w-3 h-3 rounded-full ${colors[status]}`} />;
 }
 
-function OverallBanner({ status }: { status: 'healthy' | 'degraded' | 'unhealthy' }) {
+function OverallBanner({
+  status,
+  t,
+}: {
+  status: 'healthy' | 'degraded' | 'unhealthy';
+  t: ReturnType<typeof useTranslations<'settingsStatus'>>;
+}) {
   const config = {
     healthy: {
       bg: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
       text: 'text-green-800 dark:text-green-300',
-      label: 'All Systems Operational',
+      label: t('bannerHealthy'),
     },
     degraded: {
       bg: 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
       text: 'text-yellow-800 dark:text-yellow-300',
-      label: 'Partial System Outage',
+      label: t('bannerDegraded'),
     },
     unhealthy: {
       bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
       text: 'text-red-800 dark:text-red-300',
-      label: 'Major System Outage',
+      label: t('bannerUnhealthy'),
     },
   };
   const c = config[status];
@@ -62,7 +67,15 @@ function OverallBanner({ status }: { status: 'healthy' | 'degraded' | 'unhealthy
   );
 }
 
-function ServiceRow({ name, check }: { name: string; check: HealthCheck }) {
+function ServiceRow({
+  name,
+  check,
+  t,
+}: {
+  name: string;
+  check: HealthCheck;
+  t: ReturnType<typeof useTranslations<'settingsStatus'>>;
+}) {
   const displayNames: Record<string, string> = {
     postgres: 'PostgreSQL',
     redis: 'Redis',
@@ -91,7 +104,7 @@ function ServiceRow({ name, check }: { name: string; check: HealthCheck }) {
               : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
           }`}
         >
-          {check.status === 'healthy' ? 'Operational' : 'Down'}
+          {check.status === 'healthy' ? t('statusOperational') : t('statusDown')}
         </span>
       </div>
     </div>
@@ -100,6 +113,7 @@ function ServiceRow({ name, check }: { name: string; check: HealthCheck }) {
 
 export default function StatusPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsStatus');
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,11 +126,11 @@ export default function StatusPage() {
       setHealth(data);
       setLastRefresh(new Date());
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch health status');
+      setError(err.message || t('loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -140,27 +154,21 @@ export default function StatusPage() {
               href="/dashboard/settings"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
             <span className="text-sm text-gray-900 dark:text-white font-medium">
-              System Status
+              {t('breadcrumbStatus')}
             </span>
           </div>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                System Status
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Real-time health of all platform services
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
             </div>
             <div className="text-right text-xs text-gray-400 dark:text-gray-500">
-              {lastRefresh && (
-                <p>Last checked: {lastRefresh.toLocaleTimeString()}</p>
-              )}
-              <p>Auto-refreshes every 30s</p>
+              {lastRefresh && <p>{t('lastChecked', { time: lastRefresh.toLocaleTimeString() })}</p>}
+              <p>{t('autoRefresh')}</p>
             </div>
           </div>
         </div>
@@ -173,7 +181,7 @@ export default function StatusPage() {
               onClick={fetchHealth}
               className="mt-2 text-sm font-medium text-red-600 dark:text-red-400 hover:underline"
             >
-              Retry
+              {t('retry')}
             </button>
           </div>
         )}
@@ -182,18 +190,18 @@ export default function StatusPage() {
           <>
             {/* Overall Status Banner */}
             <div className="mb-6">
-              <OverallBanner status={health.status} />
+              <OverallBanner status={health.status} t={t} />
             </div>
 
             {/* Services Grid */}
             <Card>
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Services
+                {t('services')}
               </h2>
               <div>
                 {health.services &&
                   Object.entries(health.services).map(([name, check]) => (
-                    <ServiceRow key={name} name={name} check={check} />
+                    <ServiceRow key={name} name={name} check={check} t={t} />
                   ))}
               </div>
             </Card>
@@ -203,7 +211,7 @@ export default function StatusPage() {
               <Card>
                 <div className="text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    Uptime
+                    {t('uptime')}
                   </p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white font-mono">
                     {formatUptime(health.uptime)}
@@ -213,7 +221,7 @@ export default function StatusPage() {
               <Card>
                 <div className="text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    Version
+                    {t('version')}
                   </p>
                   <p className="text-lg font-semibold text-gray-900 dark:text-white font-mono">
                     {health.version}
@@ -223,16 +231,22 @@ export default function StatusPage() {
               <Card>
                 <div className="text-center">
                   <p className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
-                    Status
+                    {t('status')}
                   </p>
-                  <p className={`text-lg font-semibold capitalize ${
-                    health.status === 'healthy'
-                      ? 'text-green-600 dark:text-green-400'
+                  <p
+                    className={`text-lg font-semibold capitalize ${
+                      health.status === 'healthy'
+                        ? 'text-green-600 dark:text-green-400'
+                        : health.status === 'degraded'
+                          ? 'text-yellow-600 dark:text-yellow-400'
+                          : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {health.status === 'healthy'
+                      ? t('statusHealthy')
                       : health.status === 'degraded'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-red-600 dark:text-red-400'
-                  }`}>
-                    {health.status}
+                        ? t('statusDegraded')
+                        : t('statusUnhealthy')}
                   </p>
                 </div>
               </Card>

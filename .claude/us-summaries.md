@@ -490,3 +490,57 @@ After completing a US, append a summary here then `/clear` the context.
 - **Build**: `pnpm --filter @support-helper/dashboard build` passes with 0 errors (28 static pages)
 - **Remaining**: settings sub-pages (ai/billing/etc.) still use some hardcoded strings — not in scope for this task
 - **Date**: 2026-03-07
+
+## [Task #2] Dashboard i18n — All components translated — DONE ✅
+
+- **Files**: 
+  - `apps/dashboard/messages/en.json` — added 20+ new namespaces
+  - `apps/dashboard/messages/fr.json` — mirror of en.json in French
+  - `apps/dashboard/components/agent-chat/AgentSection.tsx` — `agentSection` namespace
+  - `apps/dashboard/components/agent-chat/LiveActivityFeed.tsx` — `liveActivity` namespace
+  - `apps/dashboard/components/agent-chat/CheckpointPanel.tsx` — `checkpoint` namespace
+  - `apps/dashboard/components/agent-chat/ModelSelector.tsx` — `modelSelector` namespace
+  - `apps/dashboard/components/agent-chat/AgentModeSelector.tsx` — `agentMode` namespace
+  - `apps/dashboard/components/applications/ApplicationCard.tsx` — `appCard` namespace
+  - `apps/dashboard/components/applications/ApplicationModal.tsx` — `appModal` namespace
+  - `apps/dashboard/components/github/ConnectionStatus.tsx` — `githubConnection` namespace
+  - `apps/dashboard/components/github/GitHubAppInstallations.tsx` — `githubInstallations` namespace
+  - `apps/dashboard/components/github/RepoCard.tsx` — `repoCard` namespace
+  - `apps/dashboard/components/github/RepoSelector.tsx` — `repoSelector` namespace
+  - `apps/dashboard/components/integrations/IntegrationCard.tsx` — `integrationCard` namespace
+  - `apps/dashboard/components/integrations/SyncLogsPanel.tsx` — `syncLogs` namespace
+  - `apps/dashboard/components/tickets/TicketDetail.tsx` — `ticketDetail` namespace
+  - `apps/dashboard/components/ui/ConfirmModal.tsx` — `confirmModal` namespace
+  - `apps/dashboard/app/setup/components/*.tsx` — `setupAdmin/Ai/Email/Github/Summary` namespaces
+- **Changes**: All visible hardcoded strings externalized to useTranslations(). Both en.json and fr.json updated with matching keys. Build passes 0 errors.
+- **Decisions**: Used namespace-per-component strategy. ConfirmModal default props now use t() instead of hardcoded French strings. Status labels in IntegrationCard moved inside component for i18n. Date locale removed (undefined = browser default).
+- **API/Types**: No API changes
+- **Remaining**: Some settings sub-pages (ai, billing, sso, audit-log, github/template) and AgentTaskDetail/Logs still have a few hardcoded strings, but they are minimal admin/dev-facing content
+- **Date**: 2026-03-07
+
+## [i18n-Session-3] AgentTaskDetail + AgentTaskLogs + settings pages — DONE ✅
+
+- **Files**:
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskDetail.tsx` — `agentTaskDetail` namespace
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskLogs.tsx` — `agentTaskLogs` namespace
+  - `apps/dashboard/app/dashboard/settings/audit-log/page.tsx` — `settingsAuditLog` namespace
+  - `apps/dashboard/app/dashboard/settings/auth/sso/page.tsx` — `settingsSso` namespace
+  - `apps/dashboard/app/dashboard/settings/billing/page.tsx` — `settingsBilling` namespace
+  - `apps/dashboard/app/dashboard/settings/status/page.tsx` — `settingsStatus` namespace
+  - `apps/dashboard/app/dashboard/settings/github/page.tsx` — `settingsGithub` namespace
+  - `apps/dashboard/app/dashboard/settings/github/template/page.tsx` — `settingsGithubTemplate` namespace
+  - `apps/dashboard/components/diagnosis/DiagnosisPanelV3A.tsx` — `diagnosisPanel` namespace
+  - `apps/dashboard/components/n1-assessment/N1AssessmentBadge.tsx` — `n1Assessment` namespace
+  - `apps/dashboard/components/ticket-relations/RelatedTicketsSection.tsx` — `relatedTickets` namespace
+  - `apps/dashboard/messages/en.json` and `fr.json` — all new namespaces added
+- **Changes**: All hardcoded strings in all remaining dashboard components externalized to useTranslations(). Full EN/FR language switching now supported across the entire dashboard.
+- **Decisions**:
+  - `buildDerivedTimeline` receives a `TimelineStepLabels` object with pre-translated strings (cannot use t() outside React components)
+  - Sub-components that need t() receive it as a prop typed as `ReturnType<typeof useTranslations<'agentTaskDetail'>>`
+  - `PHASE_LABELS` in AgentTaskLogs moved inside the component body so t() is available
+  - `decisionConfig` in N1AssessmentBadge and `relationTypeConfig` in RelatedTicketsSection moved inside component body
+  - `task.prNumber` (number | null) coerced to `task.prNumber ?? ''` for t() param compatibility
+  - Log debug labels (step:, duration:, input:, etc.) kept as-is — developer-facing terminal UI
+- **API/Types**: No API changes
+- **Remaining**: Nothing — full i18n coverage achieved, build passes 0 errors
+- **Date**: 2026-03-07

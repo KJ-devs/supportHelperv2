@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Bot, ChevronUp, ChevronDown } from 'lucide-react';
 import type { Diagnosis, AffectedFile } from '@/lib/api/agent-v2';
 
@@ -73,6 +74,7 @@ function DiagnosisSkeleton() {
 // --- Main component ---
 
 export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3AProps) {
+  const t = useTranslations('diagnosisPanel');
   const [isExpanded, setIsExpanded] = useState(true);
 
   if (isLoading) {
@@ -81,14 +83,14 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
         {/* Header with toggle (skeleton state) */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-[10px] tracking-widest text-gray-500 uppercase font-medium">
-            AI Diagnosis
+            {t('title')}
           </p>
           <button
             disabled
             className="flex items-center gap-1 text-gray-600 opacity-50"
-            aria-label="Toggle diagnosis"
+            aria-label={t('collapseAriaLabel')}
           >
-            <span className="text-[10px] text-gray-600">collapse</span>
+            <span className="text-[10px] text-gray-600">{t('collapse')}</span>
             <ChevronUp className="w-3 h-3" />
           </button>
         </div>
@@ -103,13 +105,13 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
         {/* Header */}
         <div className="flex items-center justify-between mb-3">
           <p className="text-[10px] tracking-widest text-gray-500 uppercase font-medium">
-            AI Diagnosis
+            {t('title')}
           </p>
         </div>
         <div className="flex flex-col items-center justify-center py-6 gap-2">
           <Bot className="w-7 h-7 text-gray-600" aria-hidden="true" />
-          <p className="text-gray-400 text-sm">No diagnosis</p>
-          <p className="text-gray-600 text-xs">Chat below to analyze</p>
+          <p className="text-gray-400 text-sm">{t('noDiagnosis')}</p>
+          <p className="text-gray-600 text-xs">{t('chatToAnalyze')}</p>
         </div>
       </div>
     );
@@ -123,14 +125,14 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
       {/* Header with toggle */}
       <div className="flex items-center justify-between mb-3">
         <p className="text-[10px] tracking-widest text-gray-500 uppercase font-medium">
-          AI Diagnosis
+          {t('title')}
         </p>
         <button
           onClick={() => setIsExpanded(v => !v)}
           className="flex items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors"
-          aria-label={isExpanded ? 'Collapse diagnosis' : 'Expand diagnosis'}
+          aria-label={isExpanded ? t('collapseAriaLabel') : t('expandAriaLabel')}
         >
-          <span className="text-[10px]">{isExpanded ? 'collapse' : 'expand'}</span>
+          <span className="text-[10px]">{isExpanded ? t('collapse') : t('expand')}</span>
           {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
@@ -140,7 +142,7 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
         <div className="flex items-center gap-2">
           <span className={`text-base leading-none ${dotColor}`}>●</span>
           <span className="text-sm text-gray-200">
-            {percent === '--' ? '--' : `${percent}%`} confident
+            {percent === '--' ? '--' : t('confident', { percent })}
           </span>
         </div>
       )}
@@ -152,9 +154,9 @@ export function DiagnosisPanelV3A({ diagnosis, isLoading }: DiagnosisPanelV3APro
           <div className="flex items-center gap-2">
             <span className={`text-lg leading-none ${dotColor}`}>●</span>
             <span className="text-sm text-gray-200">
-              {percent === '--' ? '--' : `${percent}%`} confident
+              {percent === '--' ? '--' : t('confident', { percent })}
             </span>
-            <span className="text-xs text-gray-500">in root cause</span>
+            <span className="text-xs text-gray-500">{t('inRootCause')}</span>
           </div>
 
           {/* Root cause */}

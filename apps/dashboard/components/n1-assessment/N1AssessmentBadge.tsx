@@ -2,21 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { N1Assessment } from '@/lib/types/ticket';
 import { Badge, Button } from '@/components/ui';
 import { n1TriageApi } from '@/lib/api/n1-triage';
 import { ArrowUpRight, CheckCircle, Copy, Shield } from 'lucide-react';
 
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'default';
-
-const decisionConfig: Record<
-  string,
-  { label: string; variant: BadgeVariant; icon: typeof CheckCircle }
-> = {
-  no_fix_needed: { label: 'N1: No Fix Needed', variant: 'success', icon: CheckCircle },
-  duplicate: { label: 'N1: Duplicate', variant: 'warning', icon: Copy },
-  escalate_n2: { label: 'N1: Escalated to N2', variant: 'danger', icon: ArrowUpRight },
-};
 
 interface N1AssessmentBadgeProps {
   assessment: N1Assessment | null | undefined;
@@ -33,10 +25,20 @@ export function N1AssessmentBadge({
   ticketId,
   onOverride,
 }: N1AssessmentBadgeProps) {
+  const t = useTranslations('n1Assessment');
   const [isOverriding, setIsOverriding] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
   if (!decision || !assessment) return null;
+
+  const decisionConfig: Record<
+    string,
+    { label: string; variant: BadgeVariant; icon: typeof CheckCircle }
+  > = {
+    no_fix_needed: { label: t('noFixNeeded'), variant: 'success', icon: CheckCircle },
+    duplicate: { label: t('duplicate'), variant: 'warning', icon: Copy },
+    escalate_n2: { label: t('escalateN2'), variant: 'danger', icon: ArrowUpRight },
+  };
 
   const config = decisionConfig[decision] ?? {
     label: `N1: ${decision}`,
@@ -66,20 +68,18 @@ export function N1AssessmentBadge({
             {config.label}
           </Badge>
           <span className="text-xs text-gray-400">
-            Confidence: {Math.round(assessment.confidence * 100)}%
+            {t('confidence', { percent: Math.round(assessment.confidence * 100) })}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {assessedAt && (
-            <span className="text-xs text-gray-400">
-              {new Date(assessedAt).toLocaleString()}
-            </span>
+            <span className="text-xs text-gray-400">{new Date(assessedAt).toLocaleString()}</span>
           )}
           <button
-            onClick={() => setExpanded((v) => !v)}
+            onClick={() => setExpanded(v => !v)}
             className="text-xs text-blue-500 hover:text-blue-600 dark:text-blue-400"
           >
-            {expanded ? 'Collapse' : 'Details'}
+            {expanded ? t('collapse') : t('details')}
           </button>
         </div>
       </div>
@@ -90,7 +90,7 @@ export function N1AssessmentBadge({
         <div className="mt-3 space-y-2">
           <div>
             <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Reasoning:
+              {t('reasoning')}
             </span>
             <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
               {assessment.reasoning}
@@ -100,7 +100,7 @@ export function N1AssessmentBadge({
           {assessment.duplicateTicketId && (
             <div>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Duplicate of:
+                {t('duplicateOf')}
               </span>
               <Link
                 href={`/dashboard/tickets/${assessment.duplicateTicketId}`}
@@ -114,7 +114,7 @@ export function N1AssessmentBadge({
           {assessment.investigationHints && assessment.investigationHints.length > 0 && (
             <div>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Investigation hints:
+                {t('investigationHints')}
               </span>
               <ul className="text-xs text-gray-600 dark:text-gray-300 mt-0.5 list-disc pl-4">
                 {assessment.investigationHints.map((hint, i) => (
@@ -127,7 +127,7 @@ export function N1AssessmentBadge({
           {assessment.similarTicketIds && assessment.similarTicketIds.length > 0 && (
             <div>
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                Similar tickets:
+                {t('similarTickets')}
               </span>
               <span className="ml-1 space-x-1">
                 {assessment.similarTicketIds.map((id, i) => (
@@ -159,7 +159,7 @@ export function N1AssessmentBadge({
             className="flex items-center gap-1.5"
           >
             <ArrowUpRight className="w-3 h-3" aria-hidden="true" />
-            Forcer escalade N2
+            {t('forceEscalate')}
           </Button>
         </div>
       )}

@@ -139,7 +139,11 @@ describe('useAgentTaskSocket', () => {
     };
 
     act(() => {
-      socketHandlers.get('task:log-appended')?.(entry);
+      socketHandlers.get('task:log-appended')?.({
+        taskId: 'task-1',
+        entry,
+        timestamp: '2026-01-01T00:00:00Z',
+      });
     });
 
     expect(onLogAppended).toHaveBeenCalledWith(entry);

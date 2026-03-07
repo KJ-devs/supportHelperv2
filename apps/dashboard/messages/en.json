@@ -458,6 +458,32 @@
       "cancel": "Cancel"
     }
   },
+  "integrationModal": {
+    "titleEdit": "Edit Integration",
+    "titleNew": "New Integration",
+    "nameLabel": "Integration Name",
+    "namePlaceholder": "My Slack Integration",
+    "typeLabel": "Integration Type",
+    "typePlaceholder": "Select type",
+    "configSection": "Configuration",
+    "optionalSettings": "Optional Settings",
+    "enableLabel": "Enable this integration",
+    "selectFieldPlaceholder": "Select {label}",
+    "nameRequired": "Name is required",
+    "typeRequired": "Type is required",
+    "fieldRequired": "{label} is required",
+    "cancel": "Cancel",
+    "create": "Create Integration",
+    "update": "Update Integration"
+  },
+  "usageHistoryChart": {
+    "title": "Usage History (Last 6 Months)",
+    "noData": "No usage history available",
+    "legendTickets": "Tickets",
+    "legendAgentTasks": "Agent Tasks",
+    "tooltipTickets": "{month}: {count} tickets",
+    "tooltipAgentTasks": "{month}: {count} agent tasks"
+  },
   "github": {
     "title": "GitHub Integration",
     "subtitle": "Connect GitHub to create issues, generate user stories, and sync tickets",
@@ -722,7 +748,11 @@
     "clearEvents": "Clear"
   },
   "page": {
-    "notFound": "Page not found"
+    "notFound": "Page not found",
+    "landingTitle": "Support Helper Dashboard",
+    "landingSubtitle": "AI-powered technical support platform",
+    "login": "Login",
+    "signUp": "Sign Up"
   },
   "setupAdmin": {
     "title": "Create your admin account",
@@ -1610,7 +1640,10 @@
     "statusDown": "Down",
     "bannerHealthy": "All Systems Operational",
     "bannerDegraded": "Partial System Outage",
-    "bannerUnhealthy": "Major System Outage"
+    "bannerUnhealthy": "Major System Outage",
+    "statusHealthy": "Healthy",
+    "statusDegraded": "Degraded",
+    "statusUnhealthy": "Unhealthy"
   },
   "settingsGithub": {
     "breadcrumbSettings": "Settings",
@@ -1807,7 +1840,23 @@
     "stepFailed": "Failed",
     "stepAnalyzing": "Analyzing...",
     "toolCalls": "{count} tool calls",
-    "filesModified": "{count} file(s) modified"
+    "filesModified": "{count} file(s) modified",
+    "backToAgentTasks": "Back to Agent Tasks",
+    "pageTitle": "Agent Task Detail",
+    "refresh": "Refresh",
+    "rejectPlan": "Reject Plan",
+    "approveCode": "Approve Code",
+    "rejectCode": "Reject Code",
+    "retry": "Retry",
+    "backToList": "Back to list",
+    "offline": "Offline",
+    "offlineTooltip": "WebSocket disconnected — using polling fallback",
+    "confirmCancel": "Are you sure you want to cancel this task?",
+    "alertRetryFailed": "Failed to retry task",
+    "alertCancelFailed": "Failed to cancel task",
+    "alertApproveFailed": "Failed to approve task",
+    "alertRejectFailed": "Failed to reject task",
+    "promptRejectReason": "Reason for rejection (optional):"
   },
   "agentTaskLogs": {
     "phaseAll": "All",

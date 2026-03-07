@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { ticketRelationsApi, type TicketRelation } from '@/lib/api/ticket-relations';
 import type { TicketStatus } from '@/lib/types/ticket';
 import { Badge, StatusBadge } from '@/components/ui';
@@ -9,17 +10,12 @@ import { ExternalLink, Link2, Trash2, ChevronDown, ChevronUp } from 'lucide-reac
 
 type BadgeVariant = 'success' | 'warning' | 'danger' | 'info' | 'default';
 
-const relationTypeConfig: Record<string, { label: string; variant: BadgeVariant }> = {
-  duplicate: { label: 'Duplicate', variant: 'warning' },
-  similar: { label: 'Similar', variant: 'info' },
-  related: { label: 'Related', variant: 'default' },
-};
-
 interface RelatedTicketsSectionProps {
   ticketId: string;
 }
 
 export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) {
+  const t = useTranslations('relatedTickets');
   const [relations, setRelations] = useState<TicketRelation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
@@ -45,7 +41,7 @@ export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) 
     try {
       setDeletingId(relationId);
       await ticketRelationsApi.deleteRelation(ticketId, relationId);
-      setRelations((prev) => prev.filter((r) => r.id !== relationId));
+      setRelations(prev => prev.filter(r => r.id !== relationId));
     } catch (err) {
       console.error('Failed to delete relation:', err);
     } finally {
@@ -56,17 +52,21 @@ export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) 
   if (isLoading) return null;
   if (relations.length === 0) return null;
 
+  const relationTypeConfig: Record<string, { label: string; variant: BadgeVariant }> = {
+    duplicate: { label: t('duplicate'), variant: 'warning' },
+    similar: { label: t('similar'), variant: 'info' },
+    related: { label: t('related'), variant: 'default' },
+  };
+
   return (
     <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg mb-6">
       <button
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setExpanded(v => !v)}
         className="flex items-center justify-between w-full px-4 py-3 text-left"
       >
         <div className="flex items-center gap-2">
           <Link2 className="w-4 h-4 text-gray-400" />
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-            Related Tickets
-          </span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{t('title')}</span>
           <span className="text-xs text-gray-400">({relations.length})</span>
         </div>
         {expanded ? (
@@ -78,7 +78,7 @@ export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) 
 
       {expanded && (
         <div className="px-4 pb-3 space-y-2">
-          {relations.map((rel) => {
+          {relations.map(rel => {
             const config = relationTypeConfig[rel.relationType] ?? {
               label: rel.relationType,
               variant: 'default' as BadgeVariant,
@@ -91,9 +91,7 @@ export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) 
                 className="flex items-center gap-3 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 rounded-lg px-3 py-2"
               >
                 {/* Relation type badge */}
-                <Badge variant={config.variant}>
-                  {config.label}
-                </Badge>
+                <Badge variant={config.variant}>{config.label}</Badge>
 
                 {/* Ticket title link */}
                 <Link
@@ -136,16 +134,14 @@ export function RelatedTicketsSection({ ticketId }: RelatedTicketsSectionProps) 
                 )}
 
                 {/* Source badge */}
-                <span className="text-[10px] text-gray-400 uppercase">
-                  {rel.createdBy}
-                </span>
+                <span className="text-[10px] text-gray-400 uppercase">{rel.createdBy}</span>
 
                 {/* Delete */}
                 <button
                   onClick={() => handleDelete(rel.id)}
                   disabled={deletingId === rel.id}
                   className="text-gray-400 hover:text-red-500 transition-colors disabled:opacity-50"
-                  title="Remove relation"
+                  title={t('removeRelation')}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>

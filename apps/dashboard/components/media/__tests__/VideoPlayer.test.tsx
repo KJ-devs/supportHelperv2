@@ -59,9 +59,7 @@ describe('VideoPlayer', () => {
 
       // Look for the play overlay button (has the play icon SVG)
       const buttons = screen.getAllByRole('button');
-      const playOverlayButton = buttons.find(btn =>
-        btn.className.includes('absolute inset-0')
-      );
+      const playOverlayButton = buttons.find(btn => btn.className.includes('absolute inset-0'));
       expect(playOverlayButton).toBeInTheDocument();
     });
   });
@@ -92,10 +90,10 @@ describe('VideoPlayer', () => {
       fireEvent.error(video);
 
       // Verify error message
-      expect(screen.getByText('Video loading was aborted.')).toBeInTheDocument();
+      expect(screen.getByText('La lecture de la vidéo a été interrompue.')).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Video loading was aborted.',
+          message: 'La lecture de la vidéo a été interrompue.',
         })
       );
     });
@@ -121,10 +119,12 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(screen.getByText('A network error occurred while loading the video.')).toBeInTheDocument();
+      expect(
+        screen.getByText("Une erreur réseau s'est produite lors du chargement de la vidéo.")
+      ).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'A network error occurred while loading the video.',
+          message: "Une erreur réseau s'est produite lors du chargement de la vidéo.",
         })
       );
     });
@@ -150,10 +150,10 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(screen.getByText('Video decoding failed. The format may be corrupted.')).toBeInTheDocument();
+      expect(screen.getByText("La vidéo n'a pas pu être décodée.")).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Video decoding failed. The format may be corrupted.',
+          message: "La vidéo n'a pas pu être décodée.",
         })
       );
     });
@@ -179,10 +179,10 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(screen.getByText('Video format is not supported by your browser.')).toBeInTheDocument();
+      expect(screen.getByText("Le format vidéo n'est pas pris en charge.")).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Video format is not supported by your browser.',
+          message: "Le format vidéo n'est pas pris en charge.",
         })
       );
     });
@@ -200,10 +200,10 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(screen.getByText('Unable to load this video.')).toBeInTheDocument();
+      expect(screen.getByText("Une erreur inconnue s'est produite.")).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'Unable to load this video.',
+          message: "Une erreur inconnue s'est produite.",
         })
       );
     });
@@ -229,10 +229,10 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(screen.getByText('An unknown error occurred.')).toBeInTheDocument();
+      expect(screen.getByText("Une erreur inconnue s'est produite.")).toBeInTheDocument();
       expect(mockOnError).toHaveBeenCalledWith(
         expect.objectContaining({
-          message: 'An unknown error occurred.',
+          message: "Une erreur inconnue s'est produite.",
         })
       );
     });
@@ -265,7 +265,9 @@ describe('VideoPlayer', () => {
 
       const errorArg = mockOnError.mock.calls[0]?.[0];
       expect(errorArg).toBeInstanceOf(Error);
-      expect(errorArg?.message).toBe('A network error occurred while loading the video.');
+      expect(errorArg?.message).toBe(
+        "Une erreur réseau s'est produite lors du chargement de la vidéo."
+      );
     });
 
     it('does not throw when onError is not provided', () => {
@@ -288,7 +290,7 @@ describe('VideoPlayer', () => {
       });
 
       expect(() => fireEvent.error(video)).not.toThrow();
-      expect(screen.getByText('Video decoding failed. The format may be corrupted.')).toBeInTheDocument();
+      expect(screen.getByText("La vidéo n'a pas pu être décodée.")).toBeInTheDocument();
     });
   });
 
@@ -315,7 +317,7 @@ describe('VideoPlayer', () => {
       fireEvent.error(video);
 
       // Error overlay should be visible
-      expect(screen.getByText('Video format is not supported by your browser.')).toBeInTheDocument();
+      expect(screen.getByText("Le format vidéo n'est pas pris en charge.")).toBeInTheDocument();
 
       // Check for error icon SVG
       const errorIcon = container.querySelector('svg.text-red-500');
@@ -402,13 +404,15 @@ describe('VideoPlayer', () => {
       fireEvent.error(video);
 
       // Verify error is shown
-      expect(screen.getByText('Video format is not supported by your browser.')).toBeInTheDocument();
+      expect(screen.getByText("Le format vidéo n'est pas pris en charge.")).toBeInTheDocument();
 
       // Simulate new video loading
       fireEvent.loadStart(video);
 
       // Error should be cleared
-      expect(screen.queryByText('Video format is not supported by your browser.')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText("Le format vidéo n'est pas pris en charge.")
+      ).not.toBeInTheDocument();
     });
 
     it('clears error on successful play after error', async () => {
@@ -438,7 +442,9 @@ describe('VideoPlayer', () => {
       fireEvent.error(video);
 
       // Verify error is shown
-      expect(screen.getByText('A network error occurred while loading the video.')).toBeInTheDocument();
+      expect(
+        screen.getByText("Une erreur réseau s'est produite lors du chargement de la vidéo.")
+      ).toBeInTheDocument();
 
       // Find and click play button in controls
       const playButton = screen.getByRole('button', { name: 'Play' });
@@ -474,11 +480,10 @@ describe('VideoPlayer', () => {
 
       fireEvent.error(video);
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        'Video error:',
-        'Video decoding failed. The format may be corrupted.',
-        { code: 3, message: 'Decoding error' }
-      );
+      expect(consoleSpy).toHaveBeenCalledWith('Video error:', "La vidéo n'a pas pu être décodée.", {
+        code: 3,
+        message: 'Decoding error',
+      });
 
       consoleSpy.mockRestore();
     });
@@ -499,7 +504,7 @@ describe('VideoPlayer', () => {
 
       expect(consoleSpy).toHaveBeenCalledWith(
         'Video error:',
-        'Unable to load this video.',
+        "Une erreur inconnue s'est produite.",
         'No media error details'
       );
 

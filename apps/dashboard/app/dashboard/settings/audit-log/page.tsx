@@ -2,46 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Badge, Input, EmptyState } from '@/components/ui';
-import {
-  auditLogsApi,
-  type AuditLog,
-  type AuditLogsFilters,
-} from '@/lib/api/audit-logs';
-
-const ACTION_OPTIONS = [
-  { value: '', label: 'All Actions' },
-  { value: 'login', label: 'Login' },
-  { value: 'logout', label: 'Logout' },
-  { value: 'create', label: 'Create' },
-  { value: 'update', label: 'Update' },
-  { value: 'delete', label: 'Delete' },
-  { value: 'connect_github', label: 'Connect GitHub' },
-  { value: 'disconnect_github', label: 'Disconnect GitHub' },
-  { value: 'configure_ai', label: 'Configure AI' },
-  { value: 'link_repo', label: 'Link Repository' },
-];
-
-const RESOURCE_TYPE_OPTIONS = [
-  { value: '', label: 'All Resources' },
-  { value: 'ticket', label: 'Ticket' },
-  { value: 'user', label: 'User' },
-  { value: 'application', label: 'Application' },
-  { value: 'settings', label: 'Settings' },
-  { value: 'github', label: 'GitHub' },
-  { value: 'integration', label: 'Integration' },
-  { value: 'agent', label: 'Agent' },
-];
-
-const ITEMS_PER_PAGE_OPTIONS = [
-  { value: 25, label: '25 per page' },
-  { value: 50, label: '50 per page' },
-  { value: 100, label: '100 per page' },
-];
+import { auditLogsApi, type AuditLog, type AuditLogsFilters } from '@/lib/api/audit-logs';
 
 export default function AuditLogPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsAuditLog');
 
   // Data state
   const [logs, setLogs] = useState<AuditLog[]>([]);
@@ -79,13 +47,10 @@ export default function AuditLogPage() {
     message: string;
   } | null>(null);
 
-  const showToast = useCallback(
-    (type: 'success' | 'error', message: string) => {
-      setToast({ type, message });
-      setTimeout(() => setToast(null), 5000);
-    },
-    []
-  );
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 5000);
+  }, []);
 
   // Fetch logs
   const fetchLogs = useCallback(async () => {
@@ -100,12 +65,12 @@ export default function AuditLogPage() {
         setIsFeatureUnavailable(true);
         setLogs([]);
       } else {
-        showToast('error', err.message || 'Failed to load audit logs');
+        showToast('error', err.message || t('loadError'));
       }
     } finally {
       setLoading(false);
     }
-  }, [appliedFilters, showToast]);
+  }, [appliedFilters, showToast, t]);
 
   // Initial load
   useEffect(() => {
@@ -122,7 +87,7 @@ export default function AuditLogPage() {
       resourceType: resourceTypeFilter || undefined,
       startDate: startDateFilter || undefined,
       endDate: endDateFilter || undefined,
-      page: 0, // Reset to first page
+      page: 0,
       limit: appliedFilters.limit,
     });
   };
@@ -143,7 +108,7 @@ export default function AuditLogPage() {
   // Pagination handlers
   const handlePreviousPage = () => {
     if (pagination.page > 0) {
-      setAppliedFilters((prev) => ({
+      setAppliedFilters(prev => ({
         ...prev,
         page: pagination.page - 1,
       }));
@@ -152,7 +117,7 @@ export default function AuditLogPage() {
 
   const handleNextPage = () => {
     if (pagination.page < pagination.totalPages - 1) {
-      setAppliedFilters((prev) => ({
+      setAppliedFilters(prev => ({
         ...prev,
         page: pagination.page + 1,
       }));
@@ -160,10 +125,10 @@ export default function AuditLogPage() {
   };
 
   const handleChangeLimit = (limit: number) => {
-    setAppliedFilters((prev) => ({
+    setAppliedFilters(prev => ({
       ...prev,
       limit,
-      page: 0, // Reset to first page
+      page: 0,
     }));
   };
 
@@ -173,7 +138,6 @@ export default function AuditLogPage() {
       setExporting(true);
       const blob = await auditLogsApi.exportLogs(appliedFilters);
 
-      // Create download link
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -183,9 +147,9 @@ export default function AuditLogPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      showToast('success', 'Audit logs exported successfully');
+      showToast('success', t('exportSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to export audit logs');
+      showToast('error', err.message || t('exportError'));
     } finally {
       setExporting(false);
     }
@@ -218,7 +182,7 @@ export default function AuditLogPage() {
   // Format date
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString('fr-FR', {
+    return date.toLocaleString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -227,6 +191,31 @@ export default function AuditLogPage() {
       second: '2-digit',
     });
   };
+
+  const actionOptions = [
+    { value: '', label: t('actionAll') },
+    { value: 'create', label: t('actionCreate') },
+    { value: 'update', label: t('actionUpdate') },
+    { value: 'delete', label: t('actionDelete') },
+    { value: 'login', label: t('actionLogin') },
+    { value: 'logout', label: t('actionLogout') },
+  ];
+
+  const resourceTypeOptions = [
+    { value: '', label: t('resourceAll') },
+    { value: 'ticket', label: t('resourceTicket') },
+    { value: 'user', label: t('resourceUser') },
+    { value: 'application', label: t('resourceApplication') },
+    { value: 'integration', label: t('resourceIntegration') },
+    { value: 'media', label: t('resourceMedia') },
+    { value: 'agent_session', label: t('resourceAgentSession') },
+  ];
+
+  const itemsPerPageOptions = [
+    { value: 25, label: t('perPage25') },
+    { value: 50, label: t('perPage50') },
+    { value: 100, label: t('perPage100') },
+  ];
 
   if (authLoading) {
     return <PageLoader />;
@@ -266,19 +255,15 @@ export default function AuditLogPage() {
                   href="/dashboard/settings"
                   className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                 >
-                  Settings
+                  {t('breadcrumbSettings')}
                 </a>
                 <span className="text-gray-300 dark:text-gray-600">/</span>
                 <span className="text-sm text-gray-900 dark:text-white font-medium">
-                  Audit Logs
+                  {t('title')}
                 </span>
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                Audit Logs
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Track all actions performed on your platform
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
             </div>
             <Button
               onClick={handleExport}
@@ -286,7 +271,7 @@ export default function AuditLogPage() {
               disabled={isFeatureUnavailable || logs.length === 0}
               variant="secondary"
             >
-              Export CSV
+              {t('exportCsv')}
             </Button>
           </div>
         </div>
@@ -311,12 +296,12 @@ export default function AuditLogPage() {
                 </svg>
               </div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                Feature Not Available
+                {t('featureUnavailableTitle')}
               </h3>
               <p className="text-gray-600 dark:text-gray-400 mb-4">
-                Audit logs require a Pro or Enterprise plan. Upgrade to access this feature.
+                {t('featureUnavailableDescription')}
               </p>
-              <Button variant="primary">Upgrade Plan</Button>
+              <Button variant="primary">{t('upgradePlan')}</Button>
             </div>
           </Card>
         )}
@@ -328,18 +313,18 @@ export default function AuditLogPage() {
               {/* Actor Filter */}
               <Input
                 type="text"
-                placeholder="Search by actor ID or name"
+                placeholder={t('actorPlaceholder')}
                 value={actorFilter}
-                onChange={(e) => setActorFilter(e.target.value)}
+                onChange={e => setActorFilter(e.target.value)}
               />
 
               {/* Action Filter */}
               <select
                 value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
+                onChange={e => setActionFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {ACTION_OPTIONS.map((opt) => (
+                {actionOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -349,10 +334,10 @@ export default function AuditLogPage() {
               {/* Resource Type Filter */}
               <select
                 value={resourceTypeFilter}
-                onChange={(e) => setResourceTypeFilter(e.target.value)}
+                onChange={e => setResourceTypeFilter(e.target.value)}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {RESOURCE_TYPE_OPTIONS.map((opt) => (
+                {resourceTypeOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -362,27 +347,27 @@ export default function AuditLogPage() {
               {/* Start Date */}
               <Input
                 type="date"
-                placeholder="Start date"
+                placeholder={t('startDate')}
                 value={startDateFilter}
-                onChange={(e) => setStartDateFilter(e.target.value)}
+                onChange={e => setStartDateFilter(e.target.value)}
               />
 
               {/* End Date */}
               <Input
                 type="date"
-                placeholder="End date"
+                placeholder={t('endDate')}
                 value={endDateFilter}
-                onChange={(e) => setEndDateFilter(e.target.value)}
+                onChange={e => setEndDateFilter(e.target.value)}
               />
             </div>
 
             {/* Filter Actions */}
             <div className="flex gap-3">
               <Button onClick={handleApplyFilters} size="sm">
-                Apply Filters
+                {t('applyFilters')}
               </Button>
               <Button onClick={handleResetFilters} variant="ghost" size="sm">
-                Reset
+                {t('reset')}
               </Button>
             </div>
           </Card>
@@ -394,9 +379,7 @@ export default function AuditLogPage() {
             {loading ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full" />
-                <span className="ml-3 text-sm text-gray-500">
-                  Loading audit logs...
-                </span>
+                <span className="ml-3 text-sm text-gray-500">{t('loading')}</span>
               </div>
             ) : logs.length === 0 ? (
               <EmptyState
@@ -415,8 +398,8 @@ export default function AuditLogPage() {
                     />
                   </svg>
                 }
-                title="No audit logs found"
-                description="Actions will be recorded here automatically. User logins, ticket operations, and settings changes will all appear in this audit trail."
+                title={t('noLogsTitle')}
+                description={t('noLogsDescription')}
               />
             ) : (
               <div className="overflow-x-auto">
@@ -424,27 +407,27 @@ export default function AuditLogPage() {
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-700">
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Timestamp
+                        {t('colTimestamp')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Actor
+                        {t('colActor')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Action
+                        {t('colAction')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Resource
+                        {t('colResource')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        IP Address
+                        {t('colIpAddress')}
                       </th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Details
+                        {t('colDetails')}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {logs.map((log) => (
+                    {logs.map(log => (
                       <tr
                         key={log.id}
                         className="border-b border-gray-200 dark:border-gray-700 even:bg-gray-50 dark:even:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-700/50 transition-colors"
@@ -463,9 +446,7 @@ export default function AuditLogPage() {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <span
-                            className={`font-medium ${getActionColor(log.action)}`}
-                          >
+                          <span className={`font-medium ${getActionColor(log.action)}`}>
                             {log.action}
                           </span>
                         </td>
@@ -488,18 +469,14 @@ export default function AuditLogPage() {
                           {log.details ? (
                             <button
                               onClick={() =>
-                                setExpandedLogId(
-                                  expandedLogId === log.id ? null : log.id
-                                )
+                                setExpandedLogId(expandedLogId === log.id ? null : log.id)
                               }
                               className="text-blue-600 dark:text-blue-400 hover:underline text-xs"
                             >
-                              {expandedLogId === log.id ? 'Hide' : 'Show'}
+                              {expandedLogId === log.id ? t('hide') : t('show')}
                             </button>
                           ) : (
-                            <span className="text-gray-400 dark:text-gray-600 text-xs">
-                              -
-                            </span>
+                            <span className="text-gray-400 dark:text-gray-600 text-xs">-</span>
                           )}
                         </td>
                       </tr>
@@ -511,14 +488,10 @@ export default function AuditLogPage() {
                 {expandedLogId && (
                   <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/30 p-4">
                     <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">
-                      Details
+                      {t('detailsTitle')}
                     </h4>
                     <pre className="text-xs bg-white dark:bg-gray-900 rounded-lg p-3 overflow-x-auto text-gray-900 dark:text-gray-100 font-mono border border-gray-200 dark:border-gray-700">
-                      {JSON.stringify(
-                        logs.find((l) => l.id === expandedLogId)?.details,
-                        null,
-                        2
-                      )}
+                      {JSON.stringify(logs.find(l => l.id === expandedLogId)?.details, null, 2)}
                     </pre>
                   </div>
                 )}
@@ -530,14 +503,14 @@ export default function AuditLogPage() {
               <div className="mt-6 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 pt-4">
                 <div className="flex items-center space-x-2">
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Items per page:
+                    {t('itemsPerPage')}
                   </span>
                   <select
                     value={pagination.limit}
-                    onChange={(e) => handleChangeLimit(Number(e.target.value))}
+                    onChange={e => handleChangeLimit(Number(e.target.value))}
                     className="px-2 py-1 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {ITEMS_PER_PAGE_OPTIONS.map((opt) => (
+                    {itemsPerPageOptions.map(opt => (
                       <option key={opt.value} value={opt.value}>
                         {opt.label}
                       </option>
@@ -547,7 +520,11 @@ export default function AuditLogPage() {
 
                 <div className="flex items-center space-x-4">
                   <span className="text-sm text-gray-600 dark:text-gray-400">
-                    Page {pagination.page + 1} of {pagination.totalPages} ({pagination.total} total)
+                    {t('pageOf', {
+                      page: pagination.page + 1,
+                      totalPages: pagination.totalPages,
+                      total: pagination.total,
+                    })}
                   </span>
                   <div className="flex space-x-2">
                     <Button
@@ -556,7 +533,7 @@ export default function AuditLogPage() {
                       variant="secondary"
                       size="sm"
                     >
-                      Previous
+                      {t('previous')}
                     </Button>
                     <Button
                       onClick={handleNextPage}
@@ -564,7 +541,7 @@ export default function AuditLogPage() {
                       variant="secondary"
                       size="sm"
                     >
-                      Next
+                      {t('next')}
                     </Button>
                   </div>
                 </div>

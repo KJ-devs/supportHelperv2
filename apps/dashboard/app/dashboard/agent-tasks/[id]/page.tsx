@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useRequireAuth } from '@/lib/auth';
 import { agentTasksApi } from '@/lib/api/agent-tasks';
 import type { AgentTask, ExecutionLogEntry } from '@/lib/api/agent-tasks';
@@ -18,6 +19,7 @@ const POLLING_INTERVAL_MS = 3000;
 export default function AgentTaskDetailPage() {
   const params = useParams();
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('agentTaskDetail');
 
   const taskId = params.id as string;
 
@@ -33,12 +35,12 @@ export default function AgentTaskDetailPage() {
       const data = await agentTasksApi.getTask(taskId);
       setTask(data);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error loading agent task');
+      setError(err instanceof Error ? err.message : t('errorTitle'));
       console.error('Error fetching agent task:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, t]);
 
   // Silently refresh (no loading state) for polling / WS-triggered refetch
   const silentRefetch = useCallback(async () => {
@@ -131,18 +133,18 @@ export default function AgentTaskDetailPage() {
       const updated = await agentTasksApi.retryTask(task.id);
       setTask(updated);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to retry task');
+      alert(err instanceof Error ? err.message : t('alertRetryFailed'));
     }
   };
 
   const handleCancel = async () => {
     if (!task) return;
-    if (!confirm('Are you sure you want to cancel this task?')) return;
+    if (!confirm(t('confirmCancel'))) return;
     try {
       const updated = await agentTasksApi.cancelTask(task.id);
       setTask(updated);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to cancel task');
+      alert(err instanceof Error ? err.message : t('alertCancelFailed'));
     }
   };
 
@@ -152,18 +154,18 @@ export default function AgentTaskDetailPage() {
       const updated = await agentTasksApi.approveTask(task.id, phase);
       setTask(updated);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to approve task');
+      alert(err instanceof Error ? err.message : t('alertApproveFailed'));
     }
   };
 
   const handleReject = async (phase: 'plan' | 'code') => {
     if (!task) return;
-    const reason = prompt('Reason for rejection (optional):');
+    const reason = prompt(t('promptRejectReason'));
     try {
       const updated = await agentTasksApi.rejectTask(task.id, phase, reason || undefined);
       setTask(updated);
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to reject task');
+      alert(err instanceof Error ? err.message : t('alertRejectFailed'));
     }
   };
 
@@ -180,22 +182,22 @@ export default function AgentTaskDetailPage() {
             href="/dashboard/agent-tasks"
             className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mb-4"
           >
-            &larr; Back to Agent Tasks
+            &larr; {t('backToAgentTasks')}
           </Link>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                Agent Task Detail
+                {t('pageTitle')}
               </h1>
               {task && <AgentTaskStatusBadge status={task.status} />}
               {!isConnected && task && !isTerminal(task.status) && (
                 <span
                   className="inline-flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400"
-                  title="WebSocket disconnected — using polling fallback"
+                  title={t('offlineTooltip')}
                 >
                   <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-                  Offline
+                  {t('offline')}
                 </span>
               )}
             </div>
@@ -203,36 +205,36 @@ export default function AgentTaskDetailPage() {
             {task && (
               <div className="flex space-x-2">
                 <Button variant="ghost" size="sm" onClick={silentRefetch}>
-                  Refresh
+                  {t('refresh')}
                 </Button>
                 {task.status === 'plan_pending_review' && (
                   <>
                     <Button variant="primary" size="sm" onClick={() => handleApprove('plan')}>
-                      Approve Plan
+                      {t('approvePlan')}
                     </Button>
                     <Button variant="danger" size="sm" onClick={() => handleReject('plan')}>
-                      Reject Plan
+                      {t('rejectPlan')}
                     </Button>
                   </>
                 )}
                 {task.status === 'code_pending_review' && (
                   <>
                     <Button variant="primary" size="sm" onClick={() => handleApprove('code')}>
-                      Approve Code
+                      {t('approveCode')}
                     </Button>
                     <Button variant="danger" size="sm" onClick={() => handleReject('code')}>
-                      Reject Code
+                      {t('rejectCode')}
                     </Button>
                   </>
                 )}
                 {['failed', 'expired'].includes(task.status) && (
                   <Button variant="primary" size="sm" onClick={handleRetry}>
-                    Retry
+                    {t('retry')}
                   </Button>
                 )}
                 {!isTerminal(task.status) && (
                   <Button variant="danger" size="sm" onClick={handleCancel}>
-                    Cancel
+                    {t('cancel')}
                   </Button>
                 )}
               </div>
@@ -243,15 +245,17 @@ export default function AgentTaskDetailPage() {
         {/* Error State */}
         {error && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center">
-            <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">Error</h3>
+            <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">
+              {t('errorTitle')}
+            </h3>
             <p className="text-red-700 dark:text-red-400 mb-4">{error}</p>
             <div className="flex justify-center space-x-2">
               <Button variant="secondary" size="sm" onClick={fetchTask}>
-                Retry
+                {t('retry')}
               </Button>
               <Link href="/dashboard/agent-tasks">
                 <Button variant="ghost" size="sm">
-                  Back to list
+                  {t('backToList')}
                 </Button>
               </Link>
             </div>

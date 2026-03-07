@@ -1,5 +1,41 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
+import frMessages from '../messages/fr.json';
+
+// Mock next-intl — use actual FR messages so tests see real translated strings
+vi.mock('next-intl', () => {
+  function getNestedValue(obj: Record<string, unknown>, path: string): string {
+    return (
+      (path.split('.').reduce<unknown>((acc, key) => {
+        if (acc && typeof acc === 'object') return (acc as Record<string, unknown>)[key];
+        return undefined;
+      }, obj) as string) ?? path
+    );
+  }
+
+  function createTranslator(namespace: string) {
+    return (key: string, params?: Record<string, unknown>): string => {
+      const fullPath = namespace ? `${namespace}.${key}` : key;
+      let value = getNestedValue(frMessages as unknown as Record<string, unknown>, fullPath);
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          value = value.replace(`{${k}}`, String(v));
+        });
+      }
+      return value ?? key;
+    };
+  }
+
+  return {
+    useTranslations: (namespace: string = '') => createTranslator(namespace),
+    useLocale: () => 'fr',
+    useMessages: () => frMessages,
+    NextIntlClientProvider: ({ children }: { children: React.ReactNode }) => children,
+    getTranslations: async (namespace: string = '') => createTranslator(namespace),
+    getLocale: async () => 'fr',
+    getMessages: async () => frMessages,
+  };
+});
 
 // Mock Next.js router
 vi.mock('next/navigation', () => ({

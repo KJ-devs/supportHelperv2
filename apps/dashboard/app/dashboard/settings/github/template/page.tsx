@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button } from '@/components/ui';
 import { applicationsApi } from '@/lib/api/applications';
@@ -23,6 +24,7 @@ export default function GitHubTemplatePage() {
 
 function GitHubTemplatePageContent() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsGithubTemplate');
   const searchParams = useSearchParams();
   const appIdParam = searchParams.get('appId');
 
@@ -42,18 +44,15 @@ function GitHubTemplatePageContent() {
     message: string;
   } | null>(null);
 
-  const showToast = useCallback(
-    (type: 'success' | 'error', message: string) => {
-      setToast({ type, message });
-      setTimeout(() => setToast(null), 5000);
-    },
-    []
-  );
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 5000);
+  }, []);
 
   // Fetch applications
   useEffect(() => {
     if (authLoading) return;
-    applicationsApi.getApplications().then((apps) => {
+    applicationsApi.getApplications().then(apps => {
       setApplications(apps || []);
       if (!selectedAppId && apps && apps.length > 0) {
         setSelectedAppId(apps[0]!.id);
@@ -66,17 +65,16 @@ function GitHubTemplatePageContent() {
     if (!selectedAppId) return;
     try {
       setLoading(true);
-      const data: IssueTemplateResponse =
-        await githubApi.getIssueTemplate(selectedAppId);
+      const data: IssueTemplateResponse = await githubApi.getIssueTemplate(selectedAppId);
       setTemplate(data.template);
       setIsDefault(data.isDefault);
       setPlaceholders(data.placeholders);
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to load template');
+      showToast('error', err.message || t('loadError'));
     } finally {
       setLoading(false);
     }
-  }, [selectedAppId, showToast]);
+  }, [selectedAppId, showToast, t]);
 
   useEffect(() => {
     fetchTemplate();
@@ -87,14 +85,11 @@ function GitHubTemplatePageContent() {
     if (!selectedAppId) return;
     try {
       setSaving(true);
-      const result = await githubApi.updateIssueTemplate(
-        selectedAppId,
-        template
-      );
+      const result = await githubApi.updateIssueTemplate(selectedAppId, template);
       setIsDefault(result.isDefault);
-      showToast('success', 'Template saved successfully');
+      showToast('success', t('saveSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to save template');
+      showToast('error', err.message || t('saveError'));
     } finally {
       setSaving(false);
     }
@@ -105,14 +100,11 @@ function GitHubTemplatePageContent() {
     if (!selectedAppId) return;
     try {
       setPreviewing(true);
-      const result = await githubApi.previewIssueTemplate(
-        selectedAppId,
-        template
-      );
+      const result = await githubApi.previewIssueTemplate(selectedAppId, template);
       setPreview(result);
       setShowPreview(true);
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to preview template');
+      showToast('error', err.message || t('previewError'));
     } finally {
       setPreviewing(false);
     }
@@ -129,9 +121,9 @@ function GitHubTemplatePageContent() {
       setPlaceholders(result.placeholders);
       setShowPreview(false);
       setPreview(null);
-      showToast('success', 'Template reset to default');
+      showToast('success', t('resetSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to reset template');
+      showToast('error', err.message || t('resetError'));
     } finally {
       setLoading(false);
     }
@@ -139,18 +131,14 @@ function GitHubTemplatePageContent() {
 
   // Insert placeholder at cursor position
   const insertPlaceholder = (placeholder: string) => {
-    const textarea = document.getElementById(
-      'template-editor'
-    ) as HTMLTextAreaElement;
+    const textarea = document.getElementById('template-editor') as HTMLTextAreaElement;
     if (!textarea) return;
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const newValue =
-      template.substring(0, start) + placeholder + template.substring(end);
+    const newValue = template.substring(0, start) + placeholder + template.substring(end);
     setTemplate(newValue);
 
-    // Restore cursor after the inserted placeholder
     requestAnimationFrame(() => {
       textarea.focus();
       textarea.selectionStart = start + placeholder.length;
@@ -194,41 +182,36 @@ function GitHubTemplatePageContent() {
               href="/dashboard/settings"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
             <a
               href="/dashboard/settings/github"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              GitHub
+              {t('breadcrumbGithub')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
             <span className="text-sm text-gray-900 dark:text-white font-medium">
-              Issue Template
+              {t('breadcrumbTemplate')}
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Issue Template Editor
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Customize the markdown template used when creating GitHub issues from
-            tickets. Use placeholders to include ticket data automatically.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
         </div>
 
         {/* Application Selector */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Application
+            {t('application')}
           </label>
           <select
             value={selectedAppId}
-            onChange={(e) => setSelectedAppId(e.target.value)}
+            onChange={e => setSelectedAppId(e.target.value)}
             className="block w-full max-w-md rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
-            <option value="">Select an application...</option>
-            {applications.map((app) => (
+            <option value="">{t('selectApplicationPlaceholder')}</option>
+            {applications.map(app => (
               <option key={app.id} value={app.id}>
                 {app.name} ({app.platform})
               </option>
@@ -239,16 +222,14 @@ function GitHubTemplatePageContent() {
         {!selectedAppId ? (
           <Card>
             <div className="text-center py-12 text-gray-500">
-              <p>Select an application above to configure its issue template.</p>
+              <p>{t('selectAppHint')}</p>
             </div>
           </Card>
         ) : loading ? (
           <Card>
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full" />
-              <span className="ml-3 text-sm text-gray-500">
-                Loading template...
-              </span>
+              <span className="ml-3 text-sm text-gray-500">{t('loadingTemplate')}</span>
             </div>
           </Card>
         ) : (
@@ -259,21 +240,16 @@ function GitHubTemplatePageContent() {
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Template
+                      {t('templateTitle')}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {isDefault ? 'Using default template' : 'Using custom template'}
+                      {isDefault ? t('usingDefault') : t('usingCustom')}
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     {!isDefault && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleReset}
-                        disabled={loading}
-                      >
-                        Reset to default
+                      <Button variant="ghost" size="sm" onClick={handleReset} disabled={loading}>
+                        {t('resetToDefault')}
                       </Button>
                     )}
                     <Button
@@ -282,14 +258,10 @@ function GitHubTemplatePageContent() {
                       onClick={handlePreview}
                       isLoading={previewing}
                     >
-                      Preview
+                      {t('preview')}
                     </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleSave}
-                      isLoading={saving}
-                    >
-                      Save
+                    <Button size="sm" onClick={handleSave} isLoading={saving}>
+                      {t('save')}
                     </Button>
                   </div>
                 </div>
@@ -297,10 +269,10 @@ function GitHubTemplatePageContent() {
                 <textarea
                   id="template-editor"
                   value={template}
-                  onChange={(e) => setTemplate(e.target.value)}
+                  onChange={e => setTemplate(e.target.value)}
                   rows={24}
                   className="w-full font-mono text-sm border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
-                  placeholder="Enter your issue template here..."
+                  placeholder={t('templatePlaceholder')}
                   spellCheck={false}
                 />
               </Card>
@@ -310,13 +282,13 @@ function GitHubTemplatePageContent() {
                 <Card>
                   <div className="flex items-center justify-between mb-4">
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Preview
+                      {t('previewTitle')}
                     </h2>
                     <button
                       onClick={() => setShowPreview(false)}
                       className="text-sm text-gray-400 hover:text-gray-600"
                     >
-                      Close
+                      {t('closePreview')}
                     </button>
                   </div>
                   <div
@@ -335,11 +307,10 @@ function GitHubTemplatePageContent() {
             <div className="lg:col-span-1">
               <Card>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                  Available Placeholders
+                  {t('placeholdersTitle')}
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                  Click a placeholder to insert it at the cursor position in the
-                  template editor.
+                  {t('placeholdersHint')}
                 </p>
                 <div className="space-y-2">
                   {Object.entries(placeholders).map(([placeholder, description]) => (

@@ -2,110 +2,102 @@
 
 import { useState, useEffect } from 'react';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input, Select, Badge, useToast } from '@/components/ui';
 import { aiConfigApi, type AiConfigResponse } from '@/lib/api/ai-config';
 import type { AIProviderType } from '@/lib/types/ai-config';
 
 // ---------------------------------------------------------------------------
-// Static configuration data
+// Static (non-translatable) provider configuration data
 // ---------------------------------------------------------------------------
 
-const PROVIDER_INFO: Record<
-  AIProviderType,
-  {
-    name: string;
-    description: string;
-    requiresApiKey: boolean;
-    keyPlaceholder: string;
-    keyHint: string | null;
-    keyLink: string | null;
-    keyLinkLabel: string | null;
-    defaultEndpoint: string | null;
-  }
-> = {
-  anthropic: {
-    name: 'Anthropic',
-    description: 'Claude models with advanced context understanding and safety',
-    requiresApiKey: true,
-    keyPlaceholder: 'sk-ant-api03-...',
-    keyHint: 'Get your API key from',
-    keyLink: 'https://console.anthropic.com/settings/keys',
-    keyLinkLabel: 'console.anthropic.com',
-    defaultEndpoint: null,
-  },
-  openai: {
-    name: 'OpenAI',
-    description: 'Industry-leading GPT models with exceptional reasoning capabilities',
-    requiresApiKey: true,
-    keyPlaceholder: 'sk-proj-...',
-    keyHint: 'Get your API key from',
-    keyLink: 'https://platform.openai.com/api-keys',
-    keyLinkLabel: 'platform.openai.com',
-    defaultEndpoint: null,
-  },
-  gemini: {
-    name: 'Google Gemini',
-    description: 'Google DeepMind multimodal models with strong reasoning and long context',
-    requiresApiKey: true,
-    keyPlaceholder: 'AIza...',
-    keyHint: 'Get your API key from',
-    keyLink: 'https://aistudio.google.com/app/apikey',
-    keyLinkLabel: 'aistudio.google.com',
-    defaultEndpoint: null,
-  },
-  bedrock: {
-    name: 'AWS Bedrock',
-    description: 'Claude models via AWS Bedrock using IAM credentials — no API key required',
-    requiresApiKey: false,
-    keyPlaceholder: '',
-    keyHint: null,
-    keyLink: null,
-    keyLinkLabel: null,
-    defaultEndpoint: null,
-  },
-  ollama: {
-    name: 'Ollama (Local)',
-    description: 'Run open-source models locally on your own hardware for full privacy',
-    requiresApiKey: false,
-    keyPlaceholder: '',
-    keyHint: null,
-    keyLink: null,
-    keyLinkLabel: null,
-    defaultEndpoint: 'http://localhost:11434',
-  },
+const PROVIDER_REQUIRES_API_KEY: Record<AIProviderType, boolean> = {
+  anthropic: true,
+  openai: true,
+  gemini: true,
+  bedrock: false,
+  ollama: false,
+};
+
+const PROVIDER_KEY_PLACEHOLDER: Record<AIProviderType, string> = {
+  anthropic: 'sk-ant-api03-...',
+  openai: 'sk-proj-...',
+  gemini: 'AIza...',
+  bedrock: '',
+  ollama: '',
+};
+
+const PROVIDER_KEY_LINK: Record<AIProviderType, string | null> = {
+  anthropic: 'https://console.anthropic.com/settings/keys',
+  openai: 'https://platform.openai.com/api-keys',
+  gemini: 'https://aistudio.google.com/app/apikey',
+  bedrock: null,
+  ollama: null,
+};
+
+const PROVIDER_KEY_LINK_LABEL: Record<AIProviderType, string | null> = {
+  anthropic: 'console.anthropic.com',
+  openai: 'platform.openai.com',
+  gemini: 'aistudio.google.com',
+  bedrock: null,
+  ollama: null,
+};
+
+const PROVIDER_DEFAULT_ENDPOINT: Record<AIProviderType, string | null> = {
+  anthropic: null,
+  openai: null,
+  gemini: null,
+  bedrock: null,
+  ollama: 'http://localhost:11434',
 };
 
 const PROVIDER_ORDER: AIProviderType[] = ['anthropic', 'openai', 'gemini', 'bedrock', 'ollama'];
 
-const MODEL_OPTIONS: Record<AIProviderType, Array<{ value: string; label: string }> | null> = {
+const MODEL_VALUES: Record<AIProviderType, Array<{ value: string; labelKey: string }> | null> = {
   anthropic: [
-    { value: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Recommended)' },
-    { value: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 (Fast)' },
+    { value: 'claude-sonnet-4-6', labelKey: 'modelClaudeSonnet' },
+    { value: 'claude-haiku-4-5-20251001', labelKey: 'modelClaudeHaiku' },
   ],
   openai: [
-    { value: 'gpt-4o', label: 'GPT-4o (Recommended)' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o mini (Fast)' },
+    { value: 'gpt-4o', labelKey: 'modelGpt4o' },
+    { value: 'gpt-4o-mini', labelKey: 'modelGpt4oMini' },
   ],
   gemini: [
-    { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash (Recommended)' },
-    { value: 'gemini-2.0-pro', label: 'Gemini 2.0 Pro' },
+    { value: 'gemini-2.0-flash', labelKey: 'modelGeminiFlash' },
+    { value: 'gemini-2.0-pro', labelKey: 'modelGeminiPro' },
   ],
   bedrock: [
-    { value: 'anthropic.claude-sonnet-4-6-v1:0', label: 'Claude Sonnet 4.6 (Recommended)' },
-    { value: 'anthropic.claude-haiku-4-5-20251001-v1:0', label: 'Claude Haiku 4.5 (Fast)' },
+    { value: 'anthropic.claude-sonnet-4-6-v1:0', labelKey: 'modelClaudeSonnet' },
+    { value: 'anthropic.claude-haiku-4-5-20251001-v1:0', labelKey: 'modelClaudeHaiku' },
   ],
   // null means free-text input
   ollama: null,
 };
 
-const BEDROCK_REGIONS = [
-  { value: 'us-east-1', label: 'US East (N. Virginia)' },
-  { value: 'us-west-2', label: 'US West (Oregon)' },
-  { value: 'eu-west-1', label: 'EU (Ireland)' },
-  { value: 'ap-southeast-1', label: 'Asia Pacific (Singapore)' },
-  { value: 'ap-northeast-1', label: 'Asia Pacific (Tokyo)' },
+const BEDROCK_REGION_VALUES = [
+  { value: 'us-east-1', labelKey: 'regionUsEast1' },
+  { value: 'us-west-2', labelKey: 'regionUsWest2' },
+  { value: 'eu-west-1', labelKey: 'regionEuWest1' },
+  { value: 'ap-southeast-1', labelKey: 'regionApSoutheast1' },
+  { value: 'ap-northeast-1', labelKey: 'regionApNortheast1' },
 ];
+
+const PROVIDER_NAMES: Record<AIProviderType, string> = {
+  anthropic: 'Anthropic',
+  openai: 'OpenAI',
+  gemini: 'Google Gemini',
+  bedrock: 'AWS Bedrock',
+  ollama: 'Ollama (Local)',
+};
+
+const PROVIDER_DESC_KEYS: Record<AIProviderType, string> = {
+  anthropic: 'anthropicDesc',
+  openai: 'openaiDesc',
+  gemini: 'geminiDesc',
+  bedrock: 'bedrockDesc',
+  ollama: 'ollamaDesc',
+};
 
 // ---------------------------------------------------------------------------
 // Provider icon SVG components
@@ -140,7 +132,13 @@ function ProviderIcon({ provider, className }: { provider: AIProviderType; class
       );
     case 'ollama':
       return (
-        <svg className={cls} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+        <svg
+          className={cls}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+        >
           <rect x="2" y="3" width="20" height="14" rx="2" />
           <path d="M8 21h8M12 17v4" />
         </svg>
@@ -160,6 +158,7 @@ type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
 export default function AiSettingsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsAi');
 
   const [config, setConfig] = useState<AiConfigResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,6 +182,16 @@ export default function AiSettingsPage() {
 
   const toast = useToast();
 
+  // Derived translated data
+  const modelOptions = MODEL_VALUES[provider]
+    ? MODEL_VALUES[provider]!.map(m => ({ value: m.value, label: t(m.labelKey as any) }))
+    : null;
+
+  const bedrockRegions = BEDROCK_REGION_VALUES.map(r => ({
+    value: r.value,
+    label: t(r.labelKey as any),
+  }));
+
   // ---------------------------------------------------------------------------
   // Load config on mount
   // ---------------------------------------------------------------------------
@@ -198,9 +207,9 @@ export default function AiSettingsPage() {
         const currentProvider = (data.provider || 'anthropic') as AIProviderType;
         setProvider(currentProvider);
 
-        const modelOptions = MODEL_OPTIONS[currentProvider];
-        if (modelOptions) {
-          setModel(data.model || modelOptions[0]?.value || '');
+        const currentModelValues = MODEL_VALUES[currentProvider];
+        if (currentModelValues) {
+          setModel(data.model || currentModelValues[0]?.value || '');
         } else {
           // Ollama free text
           setOllamaModel(data.model || 'llama3.1');
@@ -208,7 +217,7 @@ export default function AiSettingsPage() {
 
         if (currentProvider === 'ollama') {
           setEndpoint(
-            data.endpoint || data.settings?.endpoint || PROVIDER_INFO.ollama.defaultEndpoint || ''
+            data.endpoint || data.settings?.endpoint || PROVIDER_DEFAULT_ENDPOINT.ollama || ''
           );
         }
 
@@ -218,7 +227,7 @@ export default function AiSettingsPage() {
           );
         }
       } catch {
-        toast.error('AI Configuration', 'Failed to load AI configuration');
+        toast.error(t('aiConfigTitle'), t('loadError'));
       } finally {
         setLoading(false);
       }
@@ -234,9 +243,9 @@ export default function AiSettingsPage() {
 
   const handleProviderChange = (newProvider: AIProviderType) => {
     setProvider(newProvider);
-    const modelOptions = MODEL_OPTIONS[newProvider];
-    if (modelOptions) {
-      setModel(modelOptions[0]?.value || '');
+    const newModelValues = MODEL_VALUES[newProvider];
+    if (newModelValues) {
+      setModel(newModelValues[0]?.value || '');
     } else {
       setOllamaModel('llama3.1');
     }
@@ -247,7 +256,7 @@ export default function AiSettingsPage() {
     setFieldErrors({});
 
     if (newProvider === 'ollama') {
-      setEndpoint(PROVIDER_INFO.ollama.defaultEndpoint || 'http://localhost:11434');
+      setEndpoint(PROVIDER_DEFAULT_ENDPOINT.ollama || 'http://localhost:11434');
     } else {
       setEndpoint('');
     }
@@ -258,28 +267,27 @@ export default function AiSettingsPage() {
   // ---------------------------------------------------------------------------
 
   const validateEndpoint = (value: string): string => {
-    if (!value.trim()) return 'Endpoint URL is required';
+    if (!value.trim()) return t('endpointRequired');
     try {
       new URL(value);
       return '';
     } catch {
-      return 'Invalid URL (e.g. http://localhost:11434)';
+      return t('endpointInvalid');
     }
   };
 
   const getFormErrors = (): Record<string, string> => {
     const errors: Record<string, string> = {};
-    const info = PROVIDER_INFO[provider];
     const isConfigured = config?.configured && config?.provider === provider;
 
     if (provider === 'ollama') {
       const endpointErr = validateEndpoint(endpoint);
       if (endpointErr) errors.endpoint = endpointErr;
-      if (!ollamaModel.trim()) errors.model = 'Model name is required';
+      if (!ollamaModel.trim()) errors.model = t('modelRequired');
     }
 
-    if (info.requiresApiKey && !isConfigured && !apiKey.trim()) {
-      errors.apiKey = 'API key is required';
+    if (PROVIDER_REQUIRES_API_KEY[provider] && !isConfigured && !apiKey.trim()) {
+      errors.apiKey = t('apiKeyRequired');
     }
 
     return errors;
@@ -296,7 +304,7 @@ export default function AiSettingsPage() {
     setTestMessage(null);
 
     try {
-      const effectiveModel = MODEL_OPTIONS[provider] ? model : ollamaModel;
+      const effectiveModel = MODEL_VALUES[provider] ? model : ollamaModel;
       const payload: Record<string, string> = {
         provider,
         model: effectiveModel,
@@ -314,7 +322,7 @@ export default function AiSettingsPage() {
 
       if (result.valid) {
         setTestStatus('success');
-        setTestMessage('Connection successful — the AI provider is responding correctly.');
+        setTestMessage(t('testSuccess'));
       } else {
         setTestStatus('error');
         setTestMessage(result.error || 'Connection failed');
@@ -341,14 +349,13 @@ export default function AiSettingsPage() {
     setSaving(true);
 
     try {
-      const effectiveModel = MODEL_OPTIONS[provider] ? model : ollamaModel;
+      const effectiveModel = MODEL_VALUES[provider] ? model : ollamaModel;
       const payload: Record<string, any> = {
         provider,
         model: effectiveModel,
       };
 
-      const info = PROVIDER_INFO[provider];
-      if (apiKey.trim() && info.requiresApiKey) {
+      if (apiKey.trim() && PROVIDER_REQUIRES_API_KEY[provider]) {
         payload.apiKey = apiKey;
       }
 
@@ -366,9 +373,9 @@ export default function AiSettingsPage() {
       setTestStatus('idle');
       setTestMessage(null);
       setFieldErrors({});
-      toast.success('AI Configuration', 'Configuration saved successfully');
+      toast.success(t('aiConfigTitle'), t('saveSuccess'));
     } catch (err: any) {
-      toast.error('AI Configuration', err.message || 'Failed to save configuration');
+      toast.error(t('aiConfigTitle'), err.message || t('saveError'));
     } finally {
       setSaving(false);
     }
@@ -380,8 +387,6 @@ export default function AiSettingsPage() {
 
   const isConfigured = config?.configured === true;
   const isCurrentProviderConfigured = isConfigured && config?.provider === provider;
-  const info = PROVIDER_INFO[provider];
-  const modelOptions = MODEL_OPTIONS[provider];
 
   if (authLoading || loading) {
     return <PageLoader />;
@@ -401,16 +406,13 @@ export default function AiSettingsPage() {
               href="/dashboard/settings"
               className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-gray-900 dark:text-white font-medium">AI Configuration</span>
+            <span className="text-gray-900 dark:text-white font-medium">{t('title')}</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">AI Configuration</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Bring your own API key (BYOK) to power ticket analysis, agent conversations, and
-            automated classification.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
         </div>
 
         {/* Status banner */}
@@ -421,19 +423,22 @@ export default function AiSettingsPage() {
                 <div className="w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-green-800 dark:text-green-300">
-                    Connected — {PROVIDER_INFO[config.provider as AIProviderType]?.name ?? config.provider}
+                    {t('connectedBanner', {
+                      provider:
+                        PROVIDER_NAMES[config.provider as AIProviderType] ?? config.provider,
+                    })}
                   </p>
                   <p className="text-xs text-green-700 dark:text-green-400 mt-0.5">
-                    Model: <span className="font-mono">{config.model}</span>
+                    {t('model')} <span className="font-mono">{config.model}</span>
                     {config.maskedApiKey && (
                       <span className="ml-3">
-                        Key: <span className="font-mono">{config.maskedApiKey}</span>
+                        {t('key')} <span className="font-mono">{config.maskedApiKey}</span>
                       </span>
                     )}
                   </p>
                 </div>
               </div>
-              <Badge variant="success">Connected</Badge>
+              <Badge variant="success">{t('connectedBadge')}</Badge>
             </div>
           ) : (
             <div className="flex items-center justify-between p-4 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
@@ -441,14 +446,14 @@ export default function AiSettingsPage() {
                 <div className="w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" />
                 <div>
                   <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    Using platform default
+                    {t('notConfiguredBanner')}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                    Configure your own API key below to use your preferred provider and model.
+                    {t('notConfiguredDetail')}
                   </p>
                 </div>
               </div>
-              <Badge variant="default">Not configured</Badge>
+              <Badge variant="default">{t('notConfiguredBadge')}</Badge>
             </div>
           )}
         </div>
@@ -456,11 +461,10 @@ export default function AiSettingsPage() {
         {/* Provider Selection */}
         <div className="mb-6">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
-            Select Provider
+            {t('selectProvider')}
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {PROVIDER_ORDER.map((providerKey) => {
-              const pInfo = PROVIDER_INFO[providerKey];
+            {PROVIDER_ORDER.map(providerKey => {
               const isSelected = provider === providerKey;
 
               return (
@@ -493,7 +497,7 @@ export default function AiSettingsPage() {
                               : 'text-gray-900 dark:text-white'
                           }`}
                         >
-                          {pInfo.name}
+                          {PROVIDER_NAMES[providerKey]}
                         </span>
                         {isSelected && (
                           <svg
@@ -510,7 +514,7 @@ export default function AiSettingsPage() {
                         )}
                       </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">
-                        {pInfo.description}
+                        {t(PROVIDER_DESC_KEYS[providerKey] as any)}
                       </p>
                     </div>
                   </div>
@@ -526,51 +530,58 @@ export default function AiSettingsPage() {
             {/* Current provider status */}
             <div className="flex items-center justify-between pb-5 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">
-                <ProviderIcon provider={provider} className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                <span className="font-semibold text-gray-900 dark:text-white">{info.name}</span>
+                <ProviderIcon
+                  provider={provider}
+                  className="w-5 h-5 text-gray-600 dark:text-gray-400"
+                />
+                <span className="font-semibold text-gray-900 dark:text-white">
+                  {PROVIDER_NAMES[provider]}
+                </span>
               </div>
               <div>
                 {isCurrentProviderConfigured ? (
-                  <Badge variant="success">Configured</Badge>
+                  <Badge variant="success">{t('configuredBadge')}</Badge>
                 ) : (
-                  <Badge variant="default">Not configured</Badge>
+                  <Badge variant="default">{t('notConfiguredBadge')}</Badge>
                 )}
               </div>
             </div>
 
             {/* API Key field */}
-            {info.requiresApiKey && (
+            {PROVIDER_REQUIRES_API_KEY[provider] && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  API Key
+                  {t('apiKey')}
                   {!isCurrentProviderConfigured && (
-                    <span className="text-red-500 ml-1" aria-label="required">*</span>
+                    <span className="text-red-500 ml-1" aria-label="required">
+                      *
+                    </span>
                   )}
                 </label>
                 <div className="relative">
                   <Input
                     type={showApiKey ? 'text' : 'password'}
                     value={apiKey}
-                    onChange={(e) => {
+                    onChange={e => {
                       setApiKey(e.target.value);
                       setTestStatus('idle');
                       setTestMessage(null);
                       if (fieldErrors.apiKey) {
-                        setFieldErrors((prev) => ({ ...prev, apiKey: '' }));
+                        setFieldErrors(prev => ({ ...prev, apiKey: '' }));
                       }
                     }}
                     onBlur={() => {
                       if (!isCurrentProviderConfigured && !apiKey.trim()) {
-                        setFieldErrors((prev) => ({ ...prev, apiKey: 'API key is required' }));
+                        setFieldErrors(prev => ({ ...prev, apiKey: t('apiKeyRequired') }));
                       } else {
-                        setFieldErrors((prev) => ({ ...prev, apiKey: '' }));
+                        setFieldErrors(prev => ({ ...prev, apiKey: '' }));
                       }
                     }}
                     error={fieldErrors.apiKey}
                     placeholder={
                       isCurrentProviderConfigured
-                        ? 'Enter a new key to replace the existing one'
-                        : info.keyPlaceholder
+                        ? t('apiKeyPlaceholderReplace')
+                        : PROVIDER_KEY_PLACEHOLDER[provider]
                     }
                     disabled={saving}
                   />
@@ -579,10 +590,15 @@ export default function AiSettingsPage() {
                     onClick={() => setShowApiKey(!showApiKey)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                     tabIndex={-1}
-                    aria-label={showApiKey ? 'Hide API key' : 'Show API key'}
+                    aria-label={showApiKey ? t('hideApiKey') : t('showApiKey')}
                   >
                     {showApiKey ? (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -591,7 +607,12 @@ export default function AiSettingsPage() {
                         />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -610,19 +631,19 @@ export default function AiSettingsPage() {
                 </div>
                 {isCurrentProviderConfigured && config?.maskedApiKey && (
                   <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    Current key: <span className="font-mono">{config.maskedApiKey}</span>
+                    {t('currentKey')} <span className="font-mono">{config.maskedApiKey}</span>
                   </p>
                 )}
-                {info.keyHint && info.keyLink && (
+                {PROVIDER_KEY_LINK[provider] && (
                   <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {info.keyHint}{' '}
+                    {t('keyHint')}{' '}
                     <a
-                      href={info.keyLink}
+                      href={PROVIDER_KEY_LINK[provider]!}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-blue-600 dark:text-blue-400 hover:underline"
                     >
-                      {info.keyLinkLabel}
+                      {PROVIDER_KEY_LINK_LABEL[provider]}
                     </a>
                   </p>
                 )}
@@ -633,26 +654,26 @@ export default function AiSettingsPage() {
             <div>
               {modelOptions ? (
                 <Select
-                  label="Model"
+                  label={t('modelLabel')}
                   options={modelOptions}
                   value={model}
-                  onChange={(e) => setModel(e.target.value)}
+                  onChange={e => setModel(e.target.value)}
                   disabled={saving}
                 />
               ) : (
                 <Input
-                  label="Model"
+                  label={t('modelLabel')}
                   type="text"
                   value={ollamaModel}
-                  onChange={(e) => {
+                  onChange={e => {
                     setOllamaModel(e.target.value);
                     if (fieldErrors.model) {
-                      setFieldErrors((prev) => ({ ...prev, model: '' }));
+                      setFieldErrors(prev => ({ ...prev, model: '' }));
                     }
                   }}
                   error={fieldErrors.model}
-                  placeholder="llama3.1"
-                  helperText={fieldErrors.model ? undefined : 'Enter the name of the Ollama model (e.g. llama3.1, mistral, codellama)'}
+                  placeholder={t('ollamaModelPlaceholder')}
+                  helperText={fieldErrors.model ? undefined : t('ollamaModelHelper')}
                   disabled={saving}
                 />
               )}
@@ -661,10 +682,10 @@ export default function AiSettingsPage() {
             {/* Bedrock-specific: Region */}
             {provider === 'bedrock' && (
               <Select
-                label="AWS Region"
-                options={BEDROCK_REGIONS}
+                label={t('awsRegion')}
+                options={bedrockRegions}
                 value={bedrockRegion}
-                onChange={(e) => setBedrockRegion(e.target.value)}
+                onChange={e => setBedrockRegion(e.target.value)}
                 disabled={saving}
               />
             )}
@@ -672,24 +693,22 @@ export default function AiSettingsPage() {
             {/* Ollama-specific: Endpoint URL */}
             {provider === 'ollama' && (
               <Input
-                label="Endpoint URL"
+                label={t('endpointUrl')}
                 type="url"
                 value={endpoint}
-                onChange={(e) => {
+                onChange={e => {
                   setEndpoint(e.target.value);
                   if (fieldErrors.endpoint) {
-                    setFieldErrors((prev) => ({ ...prev, endpoint: '' }));
+                    setFieldErrors(prev => ({ ...prev, endpoint: '' }));
                   }
                 }}
-                onBlur={(e) => {
+                onBlur={e => {
                   const err = validateEndpoint(e.target.value);
-                  setFieldErrors((prev) => ({ ...prev, endpoint: err }));
+                  setFieldErrors(prev => ({ ...prev, endpoint: err }));
                 }}
                 error={fieldErrors.endpoint}
                 placeholder="http://localhost:11434"
-                helperText={
-                  fieldErrors.endpoint ? undefined : 'URL of your local Ollama server'
-                }
+                helperText={fieldErrors.endpoint ? undefined : t('endpointHelper')}
                 disabled={saving}
                 required
               />
@@ -700,10 +719,10 @@ export default function AiSettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    Test Connection
+                    {t('testConnectionTitle')}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    Verify that the configuration can reach the AI provider
+                    {t('testConnectionDetail')}
                   </p>
                 </div>
                 <Button
@@ -713,11 +732,13 @@ export default function AiSettingsPage() {
                   onClick={handleTestConnection}
                   disabled={
                     testStatus === 'testing' ||
-                    (info.requiresApiKey && !apiKey.trim() && !isCurrentProviderConfigured)
+                    (PROVIDER_REQUIRES_API_KEY[provider] &&
+                      !apiKey.trim() &&
+                      !isCurrentProviderConfigured)
                   }
                   isLoading={testStatus === 'testing'}
                 >
-                  Test Connection
+                  {t('testConnectionButton')}
                 </Button>
               </div>
 
@@ -764,23 +785,23 @@ export default function AiSettingsPage() {
             {isCurrentProviderConfigured && config && (
               <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 space-y-2">
                 <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
-                  Current Configuration
+                  {t('currentConfig')}
                 </p>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Provider</span>
+                  <span className="text-gray-600 dark:text-gray-400">{t('providerLabel')}</span>
                   <span className="font-medium text-gray-900 dark:text-white">
-                    {PROVIDER_INFO[config.provider as AIProviderType]?.name ?? config.provider}
+                    {PROVIDER_NAMES[config.provider as AIProviderType] ?? config.provider}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Model</span>
+                  <span className="text-gray-600 dark:text-gray-400">{t('modelLabel')}</span>
                   <span className="font-mono text-xs font-medium text-gray-900 dark:text-white">
                     {config.model}
                   </span>
                 </div>
                 {config.maskedApiKey && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">API Key</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('apiKeyLabel')}</span>
                     <span className="font-mono text-xs font-medium text-gray-900 dark:text-white">
                       {config.maskedApiKey}
                     </span>
@@ -788,7 +809,7 @@ export default function AiSettingsPage() {
                 )}
                 {provider === 'bedrock' && bedrockRegion && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">AWS Region</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('awsRegionLabel')}</span>
                     <span className="font-mono text-xs font-medium text-gray-900 dark:text-white">
                       {bedrockRegion}
                     </span>
@@ -796,7 +817,7 @@ export default function AiSettingsPage() {
                 )}
                 {provider === 'ollama' && endpoint && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Endpoint</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('endpointLabel')}</span>
                     <span className="font-mono text-xs font-medium text-gray-900 dark:text-white">
                       {endpoint}
                     </span>
@@ -804,9 +825,9 @@ export default function AiSettingsPage() {
                 )}
                 {config.updatedAt && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Last Updated</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('lastUpdated')}</span>
                     <span className="text-gray-900 dark:text-white">
-                      {new Date(config.updatedAt).toLocaleDateString('en-US', {
+                      {new Date(config.updatedAt).toLocaleDateString(undefined, {
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',
@@ -821,12 +842,8 @@ export default function AiSettingsPage() {
 
             {/* Form actions */}
             <div className="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
-              <Button
-                type="submit"
-                isLoading={saving}
-                disabled={saving || !isFormValid}
-              >
-                {isCurrentProviderConfigured ? 'Update Configuration' : 'Save Configuration'}
+              <Button type="submit" isLoading={saving} disabled={saving || !isFormValid}>
+                {isCurrentProviderConfigured ? t('updateConfig') : t('saveConfig')}
               </Button>
               {!isCurrentProviderConfigured && (
                 <Button
@@ -841,7 +858,7 @@ export default function AiSettingsPage() {
                   }}
                   disabled={saving}
                 >
-                  Clear
+                  {t('clear')}
                 </Button>
               )}
             </div>

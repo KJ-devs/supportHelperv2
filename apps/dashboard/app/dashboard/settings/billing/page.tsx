@@ -8,58 +8,12 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Badge } from '@/components/ui';
-import {
-  getSubscription,
-  createCheckoutSession,
-  createPortalSession,
-} from '@/lib/api/billing';
+import { getSubscription, createCheckoutSession, createPortalSession } from '@/lib/api/billing';
 import type { SubscriptionStatus } from '@/lib/api/billing';
 import { CreditCard, ExternalLink, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
-
-const PLANS = [
-  {
-    name: 'Free',
-    key: 'free',
-    price: '$0',
-    period: '/month',
-    features: ['10 tickets/month', '1 application', 'Basic AI analysis', 'Email support'],
-    priceId: null,
-    highlight: false,
-  },
-  {
-    name: 'Pro',
-    key: 'pro',
-    price: '$49',
-    period: '/month',
-    features: [
-      '100 tickets/month',
-      'Unlimited applications',
-      'Advanced AI analysis',
-      'GitHub integration',
-      'Priority support',
-    ],
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? null,
-    highlight: true,
-  },
-  {
-    name: 'Enterprise',
-    key: 'enterprise',
-    price: '$199',
-    period: '/month',
-    features: [
-      '1000 tickets/month',
-      'Unlimited applications',
-      'Deep AI analysis + codebase indexing',
-      'SSO / SAML',
-      'SLA support',
-      'Custom integrations',
-    ],
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? null,
-    highlight: false,
-  },
-];
 
 function getPlanBadgeVariant(plan: string): 'default' | 'success' | 'warning' {
   if (plan === 'enterprise') return 'success';
@@ -90,6 +44,7 @@ export default function BillingPage() {
 
 function BillingPageContent() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsBilling');
   const searchParams = useSearchParams();
 
   const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
@@ -100,6 +55,49 @@ function BillingPageContent() {
   const successParam = searchParams.get('success');
   const canceledParam = searchParams.get('canceled');
 
+  const PLANS = [
+    {
+      nameKey: 'planFree',
+      key: 'free',
+      price: '$0',
+      periodKey: 'periodMonth',
+      featureKeys: ['featureFreeTickets', 'featureFreeApps', 'featureFreeAi', 'featureFreeSupport'],
+      priceId: null,
+      highlight: false,
+    },
+    {
+      nameKey: 'planPro',
+      key: 'pro',
+      price: '$49',
+      periodKey: 'periodMonth',
+      featureKeys: [
+        'featureProTickets',
+        'featureProApps',
+        'featureProAi',
+        'featureProGithub',
+        'featureProSupport',
+      ],
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_PRO ?? null,
+      highlight: true,
+    },
+    {
+      nameKey: 'planEnterprise',
+      key: 'enterprise',
+      price: '$199',
+      periodKey: 'periodMonth',
+      featureKeys: [
+        'featureEnterpriseTickets',
+        'featureEnterpriseApps',
+        'featureEnterpriseAi',
+        'featureEnterpriseSso',
+        'featureEnterpriseSla',
+        'featureEnterpriseIntegrations',
+      ],
+      priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ENTERPRISE ?? null,
+      highlight: false,
+    },
+  ];
+
   const fetchSubscription = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -107,12 +105,12 @@ function BillingPageContent() {
       const data = await getSubscription();
       setSubscription(data);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load billing data';
+      const message = err instanceof Error ? err.message : t('loadError');
       setError(message);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -127,7 +125,7 @@ function BillingPageContent() {
       const { url } = await createCheckoutSession(priceId);
       window.location.href = url;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to start checkout';
+      const message = err instanceof Error ? err.message : t('checkoutError');
       setError(message);
       setIsRedirecting(null);
     }
@@ -139,7 +137,7 @@ function BillingPageContent() {
       const { url } = await createPortalSession();
       window.location.href = url;
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to open billing portal';
+      const message = err instanceof Error ? err.message : t('portalError');
       setError(message);
       setIsRedirecting(null);
     }
@@ -163,18 +161,18 @@ function BillingPageContent() {
               href="/dashboard/settings"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-sm text-gray-900 dark:text-white font-medium">Billing</span>
+            <span className="text-sm text-gray-900 dark:text-white font-medium">
+              {t('breadcrumbBilling')}
+            </span>
           </div>
           <div className="flex items-center gap-3">
             <CreditCard className="w-8 h-8 text-blue-600" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Billing</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Manage your subscription and payment details
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
             </div>
           </div>
         </div>
@@ -183,17 +181,13 @@ function BillingPageContent() {
         {successParam === 'true' && (
           <div className="mb-6 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-            <p className="text-sm text-green-800 dark:text-green-300">
-              Subscription activated successfully. Your plan has been updated.
-            </p>
+            <p className="text-sm text-green-800 dark:text-green-300">{t('successMessage')}</p>
           </div>
         )}
         {canceledParam === 'true' && (
           <div className="mb-6 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4 flex items-center gap-3">
             <AlertTriangle className="w-5 h-5 text-orange-600 flex-shrink-0" />
-            <p className="text-sm text-orange-800 dark:text-orange-300">
-              Checkout was canceled. No changes have been made.
-            </p>
+            <p className="text-sm text-orange-800 dark:text-orange-300">{t('canceledMessage')}</p>
           </div>
         )}
 
@@ -202,7 +196,7 @@ function BillingPageContent() {
           <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
             <Button onClick={fetchSubscription} className="mt-2" size="sm" variant="ghost">
-              Retry
+              {t('retry')}
             </Button>
           </div>
         )}
@@ -213,7 +207,7 @@ function BillingPageContent() {
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                  Current Plan
+                  {t('currentPlan')}
                 </h2>
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-2xl font-bold text-gray-900 dark:text-white capitalize">
@@ -234,18 +228,22 @@ function BillingPageContent() {
                 {subscription.currentPeriodEnd && (
                   <p className="text-sm text-gray-600 dark:text-gray-400">
                     {subscription.cancelAtPeriodEnd
-                      ? 'Cancels on '
-                      : 'Renews on '}
-                    {new Date(subscription.currentPeriodEnd).toLocaleDateString('en-US', {
-                      year: 'numeric',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
+                      ? t('cancelsOn', {
+                          date: new Date(subscription.currentPeriodEnd).toLocaleDateString(
+                            undefined,
+                            { year: 'numeric', month: 'long', day: 'numeric' }
+                          ),
+                        })
+                      : t('renewsOn', {
+                          date: new Date(subscription.currentPeriodEnd).toLocaleDateString(
+                            undefined,
+                            { year: 'numeric', month: 'long', day: 'numeric' }
+                          ),
+                        })}
                   </p>
                 )}
               </div>
 
-              {/* Manage Subscription Button (only if customer exists) */}
               {subscription.stripeCustomerId && (
                 <Button
                   onClick={handleManageSubscription}
@@ -253,7 +251,7 @@ function BillingPageContent() {
                   variant="ghost"
                   className="flex items-center gap-2"
                 >
-                  Manage Subscription
+                  {t('manageSubscription')}
                   <ExternalLink className="w-4 h-4" />
                 </Button>
               )}
@@ -264,14 +262,15 @@ function BillingPageContent() {
         {/* Plan Cards */}
         <div className="mb-8">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Available Plans
+            {t('availablePlans')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {PLANS.map((plan) => {
+            {PLANS.map(plan => {
               const isCurrent = plan.key === currentPlan;
               const isUpgrade =
                 (currentPlan === 'free' && (plan.key === 'pro' || plan.key === 'enterprise')) ||
                 (currentPlan === 'pro' && plan.key === 'enterprise');
+              const planName = t(plan.nameKey as any);
 
               return (
                 <div
@@ -280,51 +279,52 @@ function BillingPageContent() {
                     plan.highlight
                       ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/10'
                       : isCurrent
-                      ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/10'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
+                        ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/10'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800'
                   }`}
                 >
                   {plan.highlight && !isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <span className="bg-blue-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                        Most Popular
+                        {t('mostPopular')}
                       </span>
                     </div>
                   )}
                   {isCurrent && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <span className="bg-green-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
-                        Current Plan
+                        {t('currentPlanBadge')}
                       </span>
                     </div>
                   )}
 
                   <div className="mb-4">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {plan.name}
-                    </h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{planName}</h3>
                     <div className="mt-2 flex items-baseline gap-1">
                       <span className="text-4xl font-bold text-gray-900 dark:text-white">
                         {plan.price}
                       </span>
                       <span className="text-gray-600 dark:text-gray-400 text-sm">
-                        {plan.period}
+                        {t(plan.periodKey as any)}
                       </span>
                     </div>
                   </div>
 
                   <ul className="space-y-2 flex-1 mb-6">
-                    {plan.features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+                    {plan.featureKeys.map(featureKey => (
+                      <li
+                        key={featureKey}
+                        className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"
+                      >
                         <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
-                        {feature}
+                        {t(featureKey as any)}
                       </li>
                     ))}
                   </ul>
 
                   {isCurrent ? (
                     <Button disabled variant="ghost" className="w-full">
-                      Current Plan
+                      {t('currentPlanButton')}
                     </Button>
                   ) : isUpgrade && plan.priceId ? (
                     <Button
@@ -332,7 +332,7 @@ function BillingPageContent() {
                       isLoading={isRedirecting === plan.priceId}
                       className="w-full"
                     >
-                      Upgrade to {plan.name}
+                      {t('upgradeTo', { plan: planName })}
                     </Button>
                   ) : plan.key === 'free' && hasActiveSubscription ? (
                     <Button
@@ -341,11 +341,11 @@ function BillingPageContent() {
                       variant="ghost"
                       className="w-full"
                     >
-                      Downgrade via Portal
+                      {t('downgradePortal')}
                     </Button>
                   ) : (
                     <Button disabled variant="ghost" className="w-full">
-                      Contact Sales
+                      {t('contactSales')}
                     </Button>
                   )}
                 </div>
@@ -357,24 +357,26 @@ function BillingPageContent() {
         {/* Info Footer */}
         <Card>
           <p className="text-sm text-gray-600 dark:text-gray-400">
-            Payments are securely processed by{' '}
-            <a
-              href="https://stripe.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              Stripe
-            </a>
-            . Subscriptions renew automatically and can be cancelled at any time via the
-            billing portal. For enterprise pricing or custom needs,{' '}
-            <a
-              href="mailto:sales@support-helper.io"
-              className="text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              contact sales
-            </a>
-            .
+            {t.rich('paymentInfo', {
+              stripe: chunks => (
+                <a
+                  href="https://stripe.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {chunks}
+                </a>
+              ),
+              contactSales: chunks => (
+                <a
+                  href="mailto:sales@support-helper.io"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {chunks}
+                </a>
+              ),
+            })}
           </p>
         </Card>
       </div>

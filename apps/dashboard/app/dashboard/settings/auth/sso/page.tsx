@@ -2,19 +2,17 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input, Badge } from '@/components/ui';
 import { ssoApi } from '@/lib/api/sso';
-import type {
-  SsoConfigResponse,
-  SsoProviderType,
-  RoleMapping,
-} from '@/lib/types/sso';
+import type { SsoConfigResponse, SsoProviderType, RoleMapping } from '@/lib/types/sso';
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'error';
 
 export default function SsoSettingsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsSso');
 
   // State
   const [config, setConfig] = useState<SsoConfigResponse | null>(null);
@@ -91,21 +89,16 @@ export default function SsoSettingsPage() {
         const data = await ssoApi.getConfig();
         setConfig(data);
 
-        // Populate form from config
         setProviderType(data.providerType || 'saml');
         setEnabled(data.enabled || false);
         setAutoProvision(data.autoProvision ?? true);
         setDisablePassword(data.disablePassword || false);
 
-        // SAML fields
         if (data.entityId) setEntityId(data.entityId);
         if (data.ssoUrl) setSsoUrl(data.ssoUrl);
-
-        // OIDC fields
         if (data.clientId) setClientId(data.clientId);
         if (data.issuerUrl) setIssuerUrl(data.issuerUrl);
 
-        // Role mappings
         if (data.roleMapping && Object.keys(data.roleMapping).length > 0) {
           const mappings: RoleMapping[] = Object.entries(data.roleMapping).map(
             ([idpGroup, appRole], index) => ({
@@ -118,7 +111,7 @@ export default function SsoSettingsPage() {
         }
       } catch (err: any) {
         if (err.statusCode !== 404) {
-          showToast('error', 'Failed to load SSO configuration');
+          showToast('error', t('loadError'));
         }
       } finally {
         setLoading(false);
@@ -126,16 +119,14 @@ export default function SsoSettingsPage() {
     };
 
     loadConfig();
-  }, [authLoading, showToast]);
+  }, [authLoading, showToast, t]);
 
-  // Handle provider change
   const handleProviderChange = (newProvider: SsoProviderType) => {
     setProviderType(newProvider);
     setTestStatus('idle');
     setTestMessage(null);
   };
 
-  // Role mapping handlers
   const addRoleMapping = () => {
     const newMapping: RoleMapping = {
       id: Date.now().toString(),
@@ -146,30 +137,24 @@ export default function SsoSettingsPage() {
   };
 
   const updateRoleMapping = (id: string, field: keyof RoleMapping, value: string) => {
-    setRoleMappings(
-      roleMappings.map((m) => (m.id === id ? { ...m, [field]: value } : m))
-    );
+    setRoleMappings(roleMappings.map(m => (m.id === id ? { ...m, [field]: value } : m)));
   };
 
   const removeRoleMapping = (id: string) => {
-    setRoleMappings(roleMappings.filter((m) => m.id !== id));
+    setRoleMappings(roleMappings.filter(m => m.id !== id));
   };
 
-  // Copy to clipboard
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    showToast('success', 'Copied to clipboard');
+    showToast('success', t('copySuccess'));
   };
 
-  // Test connection
   const handleTestConnection = async () => {
     setTestStatus('testing');
     setTestMessage(null);
 
     try {
-      const testPayload: any = {
-        providerType,
-      };
+      const testPayload: any = { providerType };
 
       if (providerType === 'saml') {
         testPayload.entityId = entityId;
@@ -192,21 +177,19 @@ export default function SsoSettingsPage() {
       }
     } catch (err: any) {
       setTestStatus('error');
-      setTestMessage(err.message || 'Failed to test connection');
+      setTestMessage(err.message || t('testError'));
     }
   };
 
-  // Save configuration
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
 
     try {
-      // Convert role mappings to object
       const roleMapping: Record<string, string> = {};
       roleMappings
-        .filter((m) => m.idpGroup.trim())
-        .forEach((m) => {
+        .filter(m => m.idpGroup.trim())
+        .forEach(m => {
           roleMapping[m.idpGroup] = m.appRole;
         });
 
@@ -221,15 +204,11 @@ export default function SsoSettingsPage() {
       if (providerType === 'saml') {
         payload.entityId = entityId;
         payload.ssoUrl = ssoUrl;
-        if (certificate.trim()) {
-          payload.certificate = certificate;
-        }
+        if (certificate.trim()) payload.certificate = certificate;
       } else {
         payload.clientId = clientId;
         payload.issuerUrl = issuerUrl;
-        if (clientSecret.trim()) {
-          payload.clientSecret = clientSecret;
-        }
+        if (clientSecret.trim()) payload.clientSecret = clientSecret;
       }
 
       const updated = await ssoApi.updateConfig(payload);
@@ -239,19 +218,16 @@ export default function SsoSettingsPage() {
       setShowClientSecret(false);
       setTestStatus('idle');
       setTestMessage(null);
-      showToast('success', 'SSO configuration saved successfully');
+      showToast('success', t('saveSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to save SSO configuration');
+      showToast('error', err.message || t('saveError'));
     } finally {
       setSaving(false);
     }
   };
 
-  // Delete configuration
   const handleDelete = async () => {
-    if (!confirm('Are you sure you want to delete the SSO configuration?')) {
-      return;
-    }
+    if (!confirm(t('deleteConfirm'))) return;
 
     try {
       await ssoApi.deleteConfig();
@@ -264,9 +240,9 @@ export default function SsoSettingsPage() {
       setClientSecret('');
       setIssuerUrl('');
       setRoleMappings([]);
-      showToast('success', 'SSO configuration deleted');
+      showToast('success', t('deleteSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to delete SSO configuration');
+      showToast('error', err.message || t('deleteError'));
     }
   };
 
@@ -306,20 +282,15 @@ export default function SsoSettingsPage() {
               href="/dashboard/settings"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
             <span className="text-sm text-gray-900 dark:text-white font-medium">
-              SSO
+              {t('breadcrumbSso')}
             </span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Single Sign-On (SSO)
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Configure SAML 2.0 or OpenID Connect (OIDC) authentication for your
-            organization.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
         </div>
 
         {/* Enterprise gate */}
@@ -342,17 +313,13 @@ export default function SsoSettingsPage() {
                 </svg>
               </div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-                Enterprise Feature
+                {t('enterpriseTitle')}
               </h2>
               <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-md mx-auto">
-                Single Sign-On (SSO) is available on Enterprise plans. Upgrade to
-                enable SAML 2.0 and OpenID Connect authentication for your
-                organization.
+                {t('enterpriseDescription')}
               </p>
-              <Button
-                onClick={() => (window.location.href = '/dashboard/settings/plan')}
-              >
-                Upgrade to Enterprise
+              <Button onClick={() => (window.location.href = '/dashboard/settings/plan')}>
+                {t('upgradeToEnterprise')}
               </Button>
             </div>
           </Card>
@@ -374,18 +341,18 @@ export default function SsoSettingsPage() {
                   />
                   <div>
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      SSO Status
+                      {t('ssoStatusTitle')}
                     </h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {enabled && config?.configured
-                        ? `Active (${providerType.toUpperCase()})`
-                        : 'Not configured'}
+                        ? t('ssoStatusActive', { provider: providerType.toUpperCase() })
+                        : t('ssoStatusNotConfigured')}
                     </p>
                   </div>
                 </div>
                 {config?.configured && (
                   <Badge variant={enabled ? 'success' : 'default'}>
-                    {enabled ? 'Enabled' : 'Disabled'}
+                    {enabled ? t('enabled') : t('disabled')}
                   </Badge>
                 )}
               </div>
@@ -394,7 +361,7 @@ export default function SsoSettingsPage() {
             {/* Provider Selection */}
             <div className="mb-6">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Select Protocol
+                {t('selectProtocol')}
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <button
@@ -407,9 +374,7 @@ export default function SsoSettingsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      SAML 2.0
-                    </h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">SAML 2.0</h3>
                     {providerType === 'saml' && (
                       <svg
                         className="w-5 h-5 text-blue-500"
@@ -424,10 +389,7 @@ export default function SsoSettingsPage() {
                       </svg>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Industry standard for enterprise SSO with identity providers like
-                    Okta, Azure AD, and OneLogin.
-                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('samlDescription')}</p>
                 </button>
 
                 <button
@@ -440,9 +402,7 @@ export default function SsoSettingsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      OpenID Connect
-                    </h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">OpenID Connect</h3>
                     {providerType === 'oidc' && (
                       <svg
                         className="w-5 h-5 text-blue-500"
@@ -457,10 +417,7 @@ export default function SsoSettingsPage() {
                       </svg>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Modern authentication protocol built on OAuth 2.0, used by Google,
-                    Auth0, and more.
-                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('oidcDescription')}</p>
                 </button>
               </div>
             </div>
@@ -472,51 +429,52 @@ export default function SsoSettingsPage() {
                 {providerType === 'saml' && (
                   <>
                     <Input
-                      label="Entity ID"
+                      label={t('entityId')}
                       value={entityId}
-                      onChange={(e) => setEntityId(e.target.value)}
-                      placeholder="https://your-app.com/saml/metadata"
-                      helperText="Unique identifier for your service provider"
+                      onChange={e => setEntityId(e.target.value)}
+                      placeholder={t('entityIdPlaceholder')}
+                      helperText={t('entityIdHelper')}
                       disabled={saving}
                       required
                     />
 
                     <Input
-                      label="SSO URL"
+                      label={t('ssoUrl')}
                       type="url"
                       value={ssoUrl}
-                      onChange={(e) => setSsoUrl(e.target.value)}
-                      placeholder="https://idp.example.com/sso/saml"
-                      helperText="Identity Provider's single sign-on URL"
+                      onChange={e => setSsoUrl(e.target.value)}
+                      placeholder={t('ssoUrlPlaceholder')}
+                      helperText={t('ssoUrlHelper')}
                       disabled={saving}
                       required
                     />
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        X.509 Certificate
+                        {t('certificate')}
                       </label>
                       <textarea
                         value={certificate}
-                        onChange={(e) => setCertificate(e.target.value)}
+                        onChange={e => setCertificate(e.target.value)}
                         placeholder={
                           config?.certificate
-                            ? 'Enter new certificate to replace existing one'
-                            : '-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----'
+                            ? t('certificatePlaceholderReplace')
+                            : t('certificatePlaceholderNew')
                         }
                         rows={6}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs"
                         disabled={saving}
                       />
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Public certificate from your identity provider
-                        {config?.certificate && ' (currently configured)'}
+                        {config?.certificate
+                          ? t('certificateHelperConfigured')
+                          : t('certificateHelper')}
                       </p>
                     </div>
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Assertion Consumer Service (ACS) URL
+                        {t('acsUrl')}
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -530,11 +488,11 @@ export default function SsoSettingsPage() {
                           variant="secondary"
                           onClick={() => copyToClipboard(acsUrl)}
                         >
-                          Copy
+                          {t('copy')}
                         </Button>
                       </div>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Configure this URL in your identity provider
+                        {t('acsUrlHelper')}
                       </p>
                     </div>
                   </>
@@ -544,28 +502,28 @@ export default function SsoSettingsPage() {
                 {providerType === 'oidc' && (
                   <>
                     <Input
-                      label="Client ID"
+                      label={t('clientId')}
                       value={clientId}
-                      onChange={(e) => setClientId(e.target.value)}
-                      placeholder="your-client-id"
-                      helperText="OAuth 2.0 client identifier"
+                      onChange={e => setClientId(e.target.value)}
+                      placeholder={t('clientIdPlaceholder')}
+                      helperText={t('clientIdHelper')}
                       disabled={saving}
                       required
                     />
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Client Secret
+                        {t('clientSecret')}
                       </label>
                       <div className="flex-1 relative">
                         <Input
                           type={showClientSecret ? 'text' : 'password'}
                           value={clientSecret}
-                          onChange={(e) => setClientSecret(e.target.value)}
+                          onChange={e => setClientSecret(e.target.value)}
                           placeholder={
                             config?.clientSecret
-                              ? 'Enter new secret to replace existing one'
-                              : 'your-client-secret'
+                              ? t('clientSecretPlaceholderReplace')
+                              : t('clientSecretPlaceholderNew')
                           }
                           disabled={saving}
                         />
@@ -613,18 +571,19 @@ export default function SsoSettingsPage() {
                         </button>
                       </div>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        OAuth 2.0 client secret
-                        {config?.clientSecret && ' (currently configured)'}
+                        {config?.clientSecret
+                          ? t('clientSecretHelperConfigured')
+                          : t('clientSecretHelper')}
                       </p>
                     </div>
 
                     <Input
-                      label="Issuer URL"
+                      label={t('issuerUrl')}
                       type="url"
                       value={issuerUrl}
-                      onChange={(e) => setIssuerUrl(e.target.value)}
-                      placeholder="https://accounts.google.com"
-                      helperText="OpenID Connect issuer URL (without .well-known path)"
+                      onChange={e => setIssuerUrl(e.target.value)}
+                      placeholder={t('issuerUrlPlaceholder')}
+                      helperText={t('issuerUrlHelper')}
                       disabled={saving}
                       required
                     />
@@ -632,7 +591,7 @@ export default function SsoSettingsPage() {
                     {discoveryUrl && (
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Discovery URL
+                          {t('discoveryUrl')}
                         </label>
                         <input
                           type="text"
@@ -641,14 +600,14 @@ export default function SsoSettingsPage() {
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-md font-mono text-sm"
                         />
                         <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          Auto-calculated from issuer URL
+                          {t('discoveryUrlHelper')}
                         </p>
                       </div>
                     )}
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Redirect URI
+                        {t('redirectUri')}
                       </label>
                       <div className="flex gap-2">
                         <input
@@ -662,11 +621,11 @@ export default function SsoSettingsPage() {
                           variant="secondary"
                           onClick={() => copyToClipboard(redirectUri)}
                         >
-                          Copy
+                          {t('copy')}
                         </Button>
                       </div>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Configure this URL in your identity provider
+                        {t('redirectUriHelper')}
                       </p>
                     </div>
                   </>
@@ -675,7 +634,7 @@ export default function SsoSettingsPage() {
                 {/* Common Settings */}
                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                    Settings
+                    {t('settingsTitle')}
                   </h3>
 
                   <div className="space-y-4">
@@ -683,19 +642,17 @@ export default function SsoSettingsPage() {
                     <div className="flex items-center justify-between p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
                       <div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          Enable SSO
+                          {t('enableSso')}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Allow users to sign in using SSO
+                          {t('enableSsoHelper')}
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setEnabled(!enabled)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          enabled
-                            ? 'bg-blue-600'
-                            : 'bg-gray-200 dark:bg-gray-700'
+                          enabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                       >
                         <span
@@ -710,19 +667,17 @@ export default function SsoSettingsPage() {
                     <div className="flex items-center justify-between p-4 border border-gray-300 dark:border-gray-600 rounded-lg">
                       <div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          Auto-provision Users
+                          {t('autoProvision')}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Automatically create user accounts on first SSO login
+                          {t('autoProvisionHelper')}
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setAutoProvision(!autoProvision)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          autoProvision
-                            ? 'bg-blue-600'
-                            : 'bg-gray-200 dark:bg-gray-700'
+                          autoProvision ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                       >
                         <span
@@ -737,19 +692,17 @@ export default function SsoSettingsPage() {
                     <div className="flex items-center justify-between p-4 border border-red-300 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-900/10">
                       <div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          Disable Password Login
+                          {t('disablePassword')}
                         </div>
                         <div className="text-xs text-red-600 dark:text-red-400 mt-1">
-                          Warning: Users will only be able to sign in via SSO
+                          {t('disablePasswordWarning')}
                         </div>
                       </div>
                       <button
                         type="button"
                         onClick={() => setDisablePassword(!disablePassword)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                          disablePassword
-                            ? 'bg-red-600'
-                            : 'bg-gray-200 dark:bg-gray-700'
+                          disablePassword ? 'bg-red-600' : 'bg-gray-200 dark:bg-gray-700'
                         }`}
                       >
                         <span
@@ -767,64 +720,49 @@ export default function SsoSettingsPage() {
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        Role Mapping
+                        {t('roleMappingTitle')}
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        Map identity provider groups to application roles
+                        {t('roleMappingDescription')}
                       </p>
                     </div>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={addRoleMapping}
-                      size="sm"
-                    >
-                      Add Mapping
+                    <Button type="button" variant="secondary" onClick={addRoleMapping} size="sm">
+                      {t('addMapping')}
                     </Button>
                   </div>
 
                   <div className="space-y-3">
                     {roleMappings.length === 0 ? (
                       <div className="text-center py-8 text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg">
-                        <p className="text-sm">No role mappings configured</p>
-                        <p className="text-xs mt-1">
-                          Click &quot;Add Mapping&quot; to create one
-                        </p>
+                        <p className="text-sm">{t('noMappings')}</p>
+                        <p className="text-xs mt-1">{t('noMappingsHint')}</p>
                       </div>
                     ) : (
-                      roleMappings.map((mapping) => (
+                      roleMappings.map(mapping => (
                         <div
                           key={mapping.id}
                           className="flex gap-3 items-start p-3 border border-gray-300 dark:border-gray-600 rounded-lg"
                         >
                           <div className="flex-1 grid grid-cols-2 gap-3">
                             <Input
-                              placeholder="IdP Group Name"
+                              placeholder={t('idpGroupPlaceholder')}
                               value={mapping.idpGroup}
-                              onChange={(e) =>
-                                updateRoleMapping(
-                                  mapping.id,
-                                  'idpGroup',
-                                  e.target.value
-                                )
+                              onChange={e =>
+                                updateRoleMapping(mapping.id, 'idpGroup', e.target.value)
                               }
                               disabled={saving}
                             />
                             <select
                               value={mapping.appRole}
-                              onChange={(e) =>
-                                updateRoleMapping(
-                                  mapping.id,
-                                  'appRole',
-                                  e.target.value
-                                )
+                              onChange={e =>
+                                updateRoleMapping(mapping.id, 'appRole', e.target.value)
                               }
                               className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                               disabled={saving}
                             >
-                              <option value="viewer">Viewer</option>
-                              <option value="member">Member</option>
-                              <option value="admin">Admin</option>
+                              <option value="viewer">{t('roleViewer')}</option>
+                              <option value="member">{t('roleMember')}</option>
+                              <option value="admin">{t('roleAdmin')}</option>
                             </select>
                           </div>
                           <button
@@ -857,7 +795,7 @@ export default function SsoSettingsPage() {
                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-medium text-gray-900 dark:text-white">
-                      Test Connection
+                      {t('testConnection')}
                     </h3>
                     <Button
                       type="button"
@@ -866,12 +804,10 @@ export default function SsoSettingsPage() {
                       isLoading={testStatus === 'testing'}
                       disabled={
                         testStatus === 'testing' ||
-                        (providerType === 'saml'
-                          ? !entityId || !ssoUrl
-                          : !clientId || !issuerUrl)
+                        (providerType === 'saml' ? !entityId || !ssoUrl : !clientId || !issuerUrl)
                       }
                     >
-                      Test Connection
+                      {t('testConnection')}
                     </Button>
                   </div>
 
@@ -895,20 +831,16 @@ export default function SsoSettingsPage() {
                 {config?.configured && (
                   <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">
-                        Protocol
-                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('protocol')}</span>
                       <span className="font-medium text-gray-900 dark:text-white uppercase">
                         {config.providerType}
                       </span>
                     </div>
                     {config.updatedAt && (
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Last Updated
-                        </span>
+                        <span className="text-gray-600 dark:text-gray-400">{t('lastUpdated')}</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {new Date(config.updatedAt).toLocaleDateString('en-US', {
+                          {new Date(config.updatedAt).toLocaleDateString(undefined, {
                             year: 'numeric',
                             month: 'long',
                             day: 'numeric',
@@ -924,16 +856,11 @@ export default function SsoSettingsPage() {
                 {/* Actions */}
                 <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <Button type="submit" isLoading={saving}>
-                    {config?.configured ? 'Update Configuration' : 'Save Configuration'}
+                    {config?.configured ? t('updateConfiguration') : t('saveConfiguration')}
                   </Button>
                   {config?.configured && (
-                    <Button
-                      type="button"
-                      variant="danger"
-                      onClick={handleDelete}
-                      disabled={saving}
-                    >
-                      Delete Configuration
+                    <Button type="button" variant="danger" onClick={handleDelete} disabled={saving}>
+                      {t('deleteConfiguration')}
                     </Button>
                   )}
                 </div>

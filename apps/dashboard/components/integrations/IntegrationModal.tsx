@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import {
   Integration,
   IntegrationType,
@@ -26,6 +27,7 @@ export function IntegrationModal({
   types,
   isLoading,
 }: IntegrationModalProps) {
+  const t = useTranslations('integrationModal');
   const [formData, setFormData] = useState<CreateIntegrationData>({
     type: '',
     name: '',
@@ -45,7 +47,7 @@ export function IntegrationModal({
         config: integration.config,
         mappings: integration.mappings || {},
       });
-      const type = types.find((t) => t.type === integration.type);
+      const type = types.find(t => t.type === integration.type);
       setSelectedType(type || null);
     } else {
       setFormData({
@@ -61,7 +63,7 @@ export function IntegrationModal({
   }, [integration, types, isOpen]);
 
   const handleTypeChange = (type: string) => {
-    const selectedTypeObj = types.find((t) => t.type === type);
+    const selectedTypeObj = types.find(t => t.type === type);
     setSelectedType(selectedTypeObj || null);
     setFormData({
       ...formData,
@@ -87,17 +89,17 @@ export function IntegrationModal({
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = t('nameRequired');
     }
 
     if (!formData.type) {
-      newErrors.type = 'Type is required';
+      newErrors.type = t('typeRequired');
     }
 
     if (selectedType) {
-      selectedType.requiredConfig.forEach((field) => {
+      selectedType.requiredConfig.forEach(field => {
         if (!formData.config[field.key] || formData.config[field.key] === '') {
-          newErrors[field.key] = `${field.label} is required`;
+          newErrors[field.key] = t('fieldRequired', { label: field.label });
         }
       });
     }
@@ -127,10 +129,10 @@ export function IntegrationModal({
           key={field.key}
           label={field.label}
           value={value}
-          onChange={(e) => handleConfigChange(field.key, e.target.value)}
+          onChange={e => handleConfigChange(field.key, e.target.value)}
           error={error}
           options={field.options}
-          placeholder={`Select ${field.label}`}
+          placeholder={t('selectFieldPlaceholder', { label: field.label })}
         />
       );
     }
@@ -141,7 +143,7 @@ export function IntegrationModal({
         label={field.label}
         type={field.type === 'password' ? 'password' : 'text'}
         value={value}
-        onChange={(e) => handleConfigChange(field.key, e.target.value)}
+        onChange={e => handleConfigChange(field.key, e.target.value)}
         placeholder={field.placeholder}
         error={error}
         helperText={field.description}
@@ -153,47 +155,45 @@ export function IntegrationModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={integration ? 'Edit Integration' : 'New Integration'}
+      title={integration ? t('titleEdit') : t('titleNew')}
       size="lg"
     >
       <div className="space-y-4">
         {/* Name */}
         <Input
-          label="Integration Name"
+          label={t('nameLabel')}
           value={formData.name}
-          onChange={(e) =>
-            setFormData({ ...formData, name: e.target.value })
-          }
-          placeholder="My Slack Integration"
+          onChange={e => setFormData({ ...formData, name: e.target.value })}
+          placeholder={t('namePlaceholder')}
           error={errors.name}
         />
 
         {/* Type */}
         {!integration && (
           <Select
-            label="Integration Type"
+            label={t('typeLabel')}
             value={formData.type}
-            onChange={(e) => handleTypeChange(e.target.value)}
+            onChange={e => handleTypeChange(e.target.value)}
             error={errors.type}
-            options={types.map((type) => ({
+            options={types.map(type => ({
               value: type.type,
               label: `${type.name} - ${type.description}`,
             }))}
-            placeholder="Select type"
+            placeholder={t('typePlaceholder')}
           />
         )}
 
         {/* Dynamic Config Fields */}
         {selectedType && (
           <div className="border-t dark:border-gray-700 pt-4 space-y-4">
-            <h4 className="font-medium text-gray-900 dark:text-gray-100">Configuration</h4>
+            <h4 className="font-medium text-gray-900 dark:text-gray-100">{t('configSection')}</h4>
 
             {selectedType.requiredConfig.map(renderConfigField)}
 
             {selectedType.optionalConfig.length > 0 && (
               <>
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-4">
-                  Optional Settings
+                  {t('optionalSettings')}
                 </h5>
                 {selectedType.optionalConfig.map(renderConfigField)}
               </>
@@ -207,16 +207,14 @@ export function IntegrationModal({
             type="checkbox"
             id="enabled"
             checked={formData.enabled}
-            onChange={(e) =>
-              setFormData({ ...formData, enabled: e.target.checked })
-            }
+            onChange={e => setFormData({ ...formData, enabled: e.target.checked })}
             className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
           />
           <label
             htmlFor="enabled"
             className="ml-2 text-sm font-medium text-gray-900 dark:text-gray-100"
           >
-            Enable this integration
+            {t('enableLabel')}
           </label>
         </div>
 
@@ -228,10 +226,10 @@ export function IntegrationModal({
 
       <div className="flex justify-end gap-3 mt-6">
         <Button variant="secondary" onClick={onClose} disabled={isLoading}>
-          Cancel
+          {t('cancel')}
         </Button>
         <Button onClick={handleSubmit} isLoading={isLoading}>
-          {integration ? 'Update' : 'Create'} Integration
+          {integration ? t('update') : t('create')}
         </Button>
       </div>
     </Modal>

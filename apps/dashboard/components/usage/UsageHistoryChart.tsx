@@ -5,6 +5,7 @@
 
 'use client';
 
+import { useTranslations } from 'next-intl';
 import type { MonthlyUsageData } from '@/lib/types/usage';
 
 interface UsageHistoryChartProps {
@@ -12,17 +13,15 @@ interface UsageHistoryChartProps {
 }
 
 export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
+  const t = useTranslations('usageHistoryChart');
+
   if (data.length === 0) {
-    return (
-      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        No usage history available
-      </div>
-    );
+    return <div className="text-center py-8 text-gray-500 dark:text-gray-400">{t('noData')}</div>;
   }
 
   // Find max value for scaling
-  const maxTickets = Math.max(...data.map((d) => d.tickets), 1);
-  const maxAgentTasks = Math.max(...data.map((d) => d.agent_tasks), 1);
+  const maxTickets = Math.max(...data.map(d => d.tickets), 1);
+  const maxAgentTasks = Math.max(...data.map(d => d.agent_tasks), 1);
   const maxValue = Math.max(maxTickets, maxAgentTasks);
 
   // Calculate chart dimensions
@@ -66,9 +65,7 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
 
   return (
     <div>
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-        Usage History (Last 6 Months)
-      </h3>
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">{t('title')}</h3>
 
       <div className="overflow-x-auto">
         <svg
@@ -78,7 +75,7 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
           viewBox={`0 0 ${chartWidth} ${chartHeight}`}
         >
           {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
+          {[0, 0.25, 0.5, 0.75, 1].map(ratio => {
             const y = chartPadding.top + dataHeight * (1 - ratio);
             return (
               <g key={ratio}>
@@ -105,27 +102,13 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
           })}
 
           {/* Area fill for tickets */}
-          <path
-            d={ticketsAreaPath}
-            fill="#3b82f6"
-            fillOpacity="0.1"
-          />
+          <path d={ticketsAreaPath} fill="#3b82f6" fillOpacity="0.1" />
 
           {/* Line for tickets */}
-          <path
-            d={ticketsPath}
-            fill="none"
-            stroke="#3b82f6"
-            strokeWidth="2"
-          />
+          <path d={ticketsPath} fill="none" stroke="#3b82f6" strokeWidth="2" />
 
           {/* Line for agent tasks */}
-          <path
-            d={agentTasksPath}
-            fill="none"
-            stroke="#8b5cf6"
-            strokeWidth="2"
-          />
+          <path d={agentTasksPath} fill="none" stroke="#8b5cf6" strokeWidth="2" />
 
           {/* Data points for tickets */}
           {data.map((d, i) => {
@@ -140,7 +123,7 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
                 fill="#3b82f6"
                 className="hover:r-6 transition-all cursor-pointer"
               >
-                <title>{`${d.month}: ${d.tickets} tickets`}</title>
+                <title>{t('tooltipTickets', { month: d.month, count: d.tickets })}</title>
               </circle>
             );
           })}
@@ -158,7 +141,7 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
                 fill="#8b5cf6"
                 className="hover:r-6 transition-all cursor-pointer"
               >
-                <title>{`${d.month}: ${d.agent_tasks} agent tasks`}</title>
+                <title>{t('tooltipAgentTasks', { month: d.month, count: d.agent_tasks })}</title>
               </circle>
             );
           })}
@@ -186,11 +169,11 @@ export function UsageHistoryChart({ data }: UsageHistoryChartProps) {
       <div className="flex justify-center gap-6 mt-4">
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">Tickets</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{t('legendTickets')}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-          <span className="text-sm text-gray-600 dark:text-gray-400">Agent Tasks</span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">{t('legendAgentTasks')}</span>
         </div>
       </div>
     </div>

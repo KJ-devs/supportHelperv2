@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card } from '@/components/ui';
 import { aiUsageApi, type AiUsageResponse, type AiUsageDayStats } from '@/lib/api/ai-usage';
@@ -47,9 +48,7 @@ function KpiCard({ label, value, subLabel, icon }: KpiCardProps) {
       <div className="min-w-0">
         <p className="text-sm text-gray-500 dark:text-gray-400 font-medium truncate">{label}</p>
         <p className="text-2xl font-bold text-gray-900 dark:text-white mt-0.5">{value}</p>
-        {subLabel && (
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subLabel}</p>
-        )}
+        {subLabel && <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">{subLabel}</p>}
       </div>
     </div>
   );
@@ -60,12 +59,12 @@ function KpiCard({ label, value, subLabel, icon }: KpiCardProps) {
 // ---------------------------------------------------------------------------
 
 function CostChart({ data }: { data: AiUsageDayStats[] }) {
-  const maxCost = Math.max(...data.map((d) => d.cost), 0.000001);
+  const maxCost = Math.max(...data.map(d => d.cost), 0.000001);
 
   return (
     <div className="w-full">
       <div className="flex items-end gap-0.5 h-40">
-        {data.map((day) => {
+        {data.map(day => {
           const heightPct = (day.cost / maxCost) * 100;
           return (
             <div
@@ -119,6 +118,7 @@ function CostChart({ data }: { data: AiUsageDayStats[] }) {
 
 export default function AiUsagePage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsAiUsage');
   const [data, setData] = useState<AiUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -131,14 +131,14 @@ export default function AiUsagePage() {
         const result = await aiUsageApi.getUsage();
         setData(result);
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : 'Failed to load AI usage data');
+        setError(err instanceof Error ? err.message : t('loadError'));
       } finally {
         setLoading(false);
       }
     };
 
     load();
-  }, [authLoading]);
+  }, [authLoading, t]);
 
   if (authLoading || loading) {
     return <PageLoader />;
@@ -154,21 +154,24 @@ export default function AiUsagePage() {
               href="/dashboard/settings"
               className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-gray-900 dark:text-white font-medium">AI Usage</span>
+            <span className="text-gray-900 dark:text-white font-medium">{t('title')}</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">AI Usage</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Cost and token usage for AI analysis over the last 30 days.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
         </div>
 
         {error && (
           <Card>
             <div className="flex items-center gap-3 text-red-600 dark:text-red-400">
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="w-5 h-5 shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -186,9 +189,9 @@ export default function AiUsagePage() {
             {/* KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <KpiCard
-                label="Total Cost (30d)"
+                label={t('totalCost30d')}
                 value={formatCurrency(data.totalCost)}
-                subLabel="USD"
+                subLabel={t('usd')}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -201,9 +204,9 @@ export default function AiUsagePage() {
                 }
               />
               <KpiCard
-                label="Total Tokens"
+                label={t('totalTokens')}
                 value={formatTokens(data.totalTokens)}
-                subLabel="input + output"
+                subLabel={t('inputOutput')}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -216,9 +219,9 @@ export default function AiUsagePage() {
                 }
               />
               <KpiCard
-                label="Total Requests"
+                label={t('totalRequests')}
                 value={data.totalRequests.toLocaleString()}
-                subLabel="AI calls"
+                subLabel={t('aiCalls')}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -231,9 +234,9 @@ export default function AiUsagePage() {
                 }
               />
               <KpiCard
-                label="Cost / Ticket"
+                label={t('costPerTicket')}
                 value={formatCurrency(data.costPerTicket)}
-                subLabel="analyzed tickets"
+                subLabel={t('analyzedTickets')}
                 icon={
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
@@ -252,10 +255,10 @@ export default function AiUsagePage() {
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                    Daily Cost
+                    {t('dailyCost')}
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                    AI spend per day over the last 30 days
+                    {t('dailyCostDetail')}
                   </p>
                 </div>
                 <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded">
@@ -263,7 +266,7 @@ export default function AiUsagePage() {
                 </span>
               </div>
 
-              {data.byDay.every((d) => d.cost === 0) ? (
+              {data.byDay.every(d => d.cost === 0) ? (
                 <div className="flex flex-col items-center justify-center h-40 text-gray-400 dark:text-gray-500">
                   <svg
                     className="w-8 h-8 mb-2"
@@ -278,7 +281,7 @@ export default function AiUsagePage() {
                       d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                     />
                   </svg>
-                  <p className="text-sm">No usage data for this period</p>
+                  <p className="text-sm">{t('noUsageData')}</p>
                 </div>
               ) : (
                 <CostChart data={data.byDay} />
@@ -289,10 +292,10 @@ export default function AiUsagePage() {
             <Card>
               <div className="mb-4">
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Daily Breakdown
+                  {t('dailyBreakdown')}
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-                  Detailed usage per day, sorted by most recent
+                  {t('dailyBreakdownDetail')}
                 </p>
               </div>
 
@@ -301,23 +304,23 @@ export default function AiUsagePage() {
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-700">
                       <th className="text-left py-2 pr-4 font-medium text-gray-500 dark:text-gray-400 w-32">
-                        Date
+                        {t('colDate')}
                       </th>
                       <th className="text-right py-2 px-4 font-medium text-gray-500 dark:text-gray-400">
-                        Cost
+                        {t('colCost')}
                       </th>
                       <th className="text-right py-2 px-4 font-medium text-gray-500 dark:text-gray-400">
-                        Tokens
+                        {t('colTokens')}
                       </th>
                       <th className="text-right py-2 pl-4 font-medium text-gray-500 dark:text-gray-400">
-                        Requests
+                        {t('colRequests')}
                       </th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...data.byDay]
                       .sort((a, b) => b.date.localeCompare(a.date))
-                      .map((day) => (
+                      .map(day => (
                         <tr
                           key={day.date}
                           className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
@@ -355,7 +358,7 @@ export default function AiUsagePage() {
                   <tfoot>
                     <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
                       <td className="py-2.5 pr-4 font-semibold text-gray-900 dark:text-white text-sm">
-                        Total
+                        {t('total')}
                       </td>
                       <td className="py-2.5 px-4 text-right tabular-nums font-semibold text-gray-900 dark:text-white">
                         {formatCurrency(data.totalCost)}

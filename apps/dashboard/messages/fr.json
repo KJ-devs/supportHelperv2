@@ -458,6 +458,32 @@
       "cancel": "Annuler"
     }
   },
+  "integrationModal": {
+    "titleEdit": "Modifier l'intégration",
+    "titleNew": "Nouvelle intégration",
+    "nameLabel": "Nom de l'intégration",
+    "namePlaceholder": "Mon intégration Slack",
+    "typeLabel": "Type d'intégration",
+    "typePlaceholder": "Sélectionner un type",
+    "configSection": "Configuration",
+    "optionalSettings": "Paramètres optionnels",
+    "enableLabel": "Activer cette intégration",
+    "selectFieldPlaceholder": "Sélectionner {label}",
+    "nameRequired": "Le nom est requis",
+    "typeRequired": "Le type est requis",
+    "fieldRequired": "{label} est requis",
+    "cancel": "Annuler",
+    "create": "Créer l'intégration",
+    "update": "Mettre à jour l'intégration"
+  },
+  "usageHistoryChart": {
+    "title": "Historique d'utilisation (6 derniers mois)",
+    "noData": "Aucun historique d'utilisation disponible",
+    "legendTickets": "Tickets",
+    "legendAgentTasks": "Tâches IA",
+    "tooltipTickets": "{month} : {count} tickets",
+    "tooltipAgentTasks": "{month} : {count} tâches IA"
+  },
   "github": {
     "title": "Intégration GitHub",
     "subtitle": "Connectez GitHub pour créer des issues, générer des user stories et synchroniser vos tickets",
@@ -722,7 +748,11 @@
     "clearEvents": "Effacer"
   },
   "page": {
-    "notFound": "Page introuvable"
+    "notFound": "Page introuvable",
+    "landingTitle": "Tableau de bord Support Helper",
+    "landingSubtitle": "Plateforme de support technique propulsée par l'IA",
+    "login": "Connexion",
+    "signUp": "S'inscrire"
   },
   "setupAdmin": {
     "title": "Créer votre compte administrateur",
@@ -1610,7 +1640,10 @@
     "statusDown": "Hors service",
     "bannerHealthy": "Tous les systèmes opérationnels",
     "bannerDegraded": "Panne partielle du système",
-    "bannerUnhealthy": "Panne majeure du système"
+    "bannerUnhealthy": "Panne majeure du système",
+    "statusHealthy": "Opérationnel",
+    "statusDegraded": "Dégradé",
+    "statusUnhealthy": "Hors service"
   },
   "settingsGithub": {
     "breadcrumbSettings": "Paramètres",
@@ -1807,7 +1840,23 @@
     "stepFailed": "Échoué",
     "stepAnalyzing": "Analyse en cours...",
     "toolCalls": "{count} appels d'outils",
-    "filesModified": "{count} fichier(s) modifié(s)"
+    "filesModified": "{count} fichier(s) modifié(s)",
+    "backToAgentTasks": "Retour aux tâches IA",
+    "pageTitle": "Détail de la tâche IA",
+    "refresh": "Actualiser",
+    "rejectPlan": "Rejeter le plan",
+    "approveCode": "Approuver le code",
+    "rejectCode": "Rejeter le code",
+    "retry": "Réessayer",
+    "backToList": "Retour à la liste",
+    "offline": "Hors ligne",
+    "offlineTooltip": "WebSocket déconnecté — utilisation du mode polling",
+    "confirmCancel": "Êtes-vous sûr de vouloir annuler cette tâche ?",
+    "alertRetryFailed": "Échec de la relance de la tâche",
+    "alertCancelFailed": "Échec de l'annulation de la tâche",
+    "alertApproveFailed": "Échec de l'approbation de la tâche",
+    "alertRejectFailed": "Échec du rejet de la tâche",
+    "promptRejectReason": "Raison du rejet (optionnel) :"
   },
   "agentTaskLogs": {
     "phaseAll": "Tout",

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRequireAuth } from '@/lib/auth';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Badge, Button } from '@/components/ui';
@@ -31,6 +32,7 @@ interface LicenseInfo {
 
 export default function LicenseSettingsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('settingsLicense');
 
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,7 +53,7 @@ export default function LicenseSettingsPage() {
       const data = await apiRequest<LicenseInfo>('/api/system/license');
       setLicenseInfo(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to load license information');
+      setError(err.message || t('loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -70,7 +72,7 @@ export default function LicenseSettingsPage() {
       setLicenseKey('');
       await fetchLicenseInfo();
     } catch (err: any) {
-      setError(err.message || 'Failed to update license');
+      setError(err.message || t('updateLicenseError'));
     } finally {
       setIsUpdating(false);
     }
@@ -82,7 +84,10 @@ export default function LicenseSettingsPage() {
     return 'default';
   };
 
-  const getStatusBadgeVariant = (valid: boolean, expiresAt: string | null): 'success' | 'danger' | 'warning' => {
+  const getStatusBadgeVariant = (
+    valid: boolean,
+    expiresAt: string | null
+  ): 'success' | 'danger' | 'warning' => {
     if (!valid) return 'danger';
     if (expiresAt) {
       const daysUntilExpiry = Math.ceil(
@@ -107,7 +112,7 @@ export default function LicenseSettingsPage() {
   };
 
   const formatLimit = (limit: number | null): string => {
-    return limit === null ? 'Unlimited' : limit.toString();
+    return limit === null ? t('unlimited') : limit.toString();
   };
 
   const hasFeature = (feature: string): boolean => {
@@ -136,10 +141,10 @@ export default function LicenseSettingsPage() {
       multiProviderAI: true,
     },
     enterprise: {
-      tickets: 'Unlimited',
-      aiTasks: 'Unlimited',
-      repos: 'Unlimited',
-      users: 'Unlimited',
+      tickets: t('unlimited'),
+      aiTasks: t('unlimited'),
+      repos: t('unlimited'),
+      users: t('unlimited'),
       sso: true,
       auditLogs: true,
       autoMerge: true,
@@ -161,25 +166,23 @@ export default function LicenseSettingsPage() {
                 href="/dashboard/settings"
                 className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
               >
-                Settings
+                {t('breadcrumbSettings')}
               </a>
               <span className="text-gray-300 dark:text-gray-600">/</span>
               <span className="text-sm text-gray-900 dark:text-white font-medium">
-                License
+                {t('title')}
               </span>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              License Settings
-            </h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
           </div>
 
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6">
             <h3 className="text-lg font-medium text-red-800 dark:text-red-300 mb-2">
-              Error Loading License
+              {t('errorTitle')}
             </h3>
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
             <Button onClick={fetchLicenseInfo} className="mt-4">
-              Retry
+              {t('retry')}
             </Button>
           </div>
         </div>
@@ -197,19 +200,13 @@ export default function LicenseSettingsPage() {
               href="/dashboard/settings"
               className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
             >
-              Settings
+              {t('breadcrumbSettings')}
             </a>
             <span className="text-gray-300 dark:text-gray-600">/</span>
-            <span className="text-sm text-gray-900 dark:text-white font-medium">
-              License
-            </span>
+            <span className="text-sm text-gray-900 dark:text-white font-medium">{t('title')}</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            License Settings
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Manage your subscription plan, view usage limits, and update your license key.
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('description')}</p>
         </div>
 
         {/* Current Plan Card */}
@@ -220,33 +217,36 @@ export default function LicenseSettingsPage() {
                 <div>
                   <div className="flex items-center space-x-3 mb-2">
                     <h2 className="text-2xl font-semibold text-gray-900 dark:text-white capitalize">
-                      {licenseInfo.plan} Plan
+                      {t('planLabel', { plan: licenseInfo.plan })}
                     </h2>
                     <Badge variant={getPlanBadgeVariant(licenseInfo.plan)}>
                       {licenseInfo.plan.toUpperCase()}
                     </Badge>
-                    <Badge variant={getStatusBadgeVariant(licenseInfo.valid, licenseInfo.expiresAt)}>
+                    <Badge
+                      variant={getStatusBadgeVariant(licenseInfo.valid, licenseInfo.expiresAt)}
+                    >
                       {!licenseInfo.valid
-                        ? 'Invalid'
+                        ? t('invalid')
                         : licenseInfo.expiresAt
-                        ? `Expires ${new Date(licenseInfo.expiresAt).toLocaleDateString()}`
-                        : 'Active'}
+                          ? t('expires', {
+                              date: new Date(licenseInfo.expiresAt).toLocaleDateString(),
+                            })
+                          : t('active')}
                     </Badge>
                   </div>
                   {licenseInfo.expiresAt && licenseInfo.valid && (
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      Your license will expire on{' '}
-                      {new Date(licenseInfo.expiresAt).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
+                      {t('willExpire', {
+                        date: new Date(licenseInfo.expiresAt).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric',
+                        }),
                       })}
                     </p>
                   )}
                   {!licenseInfo.valid && (
-                    <p className="text-sm text-red-600 dark:text-red-400">
-                      Your license is invalid or expired. Please update your license key.
-                    </p>
+                    <p className="text-sm text-red-600 dark:text-red-400">{t('invalidLicense')}</p>
                   )}
                 </div>
               </div>
@@ -255,7 +255,7 @@ export default function LicenseSettingsPage() {
             {/* Usage Section */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Usage & Limits
+                {t('usageLimits')}
               </h2>
               <Card>
                 <div className="space-y-6">
@@ -263,10 +263,11 @@ export default function LicenseSettingsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Tickets This Month
+                        {t('ticketsThisMonth')}
                       </span>
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {licenseInfo.usage.tickets.current} / {formatLimit(licenseInfo.usage.tickets.limit)}
+                        {licenseInfo.usage.tickets.current} /{' '}
+                        {formatLimit(licenseInfo.usage.tickets.limit)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -289,10 +290,11 @@ export default function LicenseSettingsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Agent AI Tasks
+                        {t('agentAiTasks')}
                       </span>
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {licenseInfo.usage.agentTasks.current} / {formatLimit(licenseInfo.usage.agentTasks.limit)}
+                        {licenseInfo.usage.agentTasks.current} /{' '}
+                        {formatLimit(licenseInfo.usage.agentTasks.limit)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -315,10 +317,11 @@ export default function LicenseSettingsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Connected Repositories
+                        {t('connectedRepos')}
                       </span>
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {licenseInfo.usage.repos.current} / {formatLimit(licenseInfo.usage.repos.limit)}
+                        {licenseInfo.usage.repos.current} /{' '}
+                        {formatLimit(licenseInfo.usage.repos.limit)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -341,10 +344,11 @@ export default function LicenseSettingsPage() {
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Active Users
+                        {t('activeUsers')}
                       </span>
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {licenseInfo.usage.users.current} / {formatLimit(licenseInfo.usage.users.limit)}
+                        {licenseInfo.usage.users.current} /{' '}
+                        {formatLimit(licenseInfo.usage.users.limit)}
                       </span>
                     </div>
                     <div className="h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
@@ -369,7 +373,7 @@ export default function LicenseSettingsPage() {
             {/* Features Section */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Enabled Features
+                {t('enabledFeatures')}
               </h2>
               <Card>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -405,7 +409,7 @@ export default function LicenseSettingsPage() {
                       </svg>
                     )}
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Auto-merge PRs
+                      {t('featureAutoMerge')}
                     </span>
                   </div>
 
@@ -441,7 +445,7 @@ export default function LicenseSettingsPage() {
                       </svg>
                     )}
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Audit Logs
+                      {t('featureAuditLogs')}
                     </span>
                   </div>
 
@@ -477,7 +481,7 @@ export default function LicenseSettingsPage() {
                       </svg>
                     )}
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Multi-Provider AI
+                      {t('featureMultiAi')}
                     </span>
                   </div>
 
@@ -513,7 +517,7 @@ export default function LicenseSettingsPage() {
                       </svg>
                     )}
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      SSO (SAML/OIDC)
+                      {t('featureSso')}
                     </span>
                   </div>
                 </div>
@@ -523,7 +527,7 @@ export default function LicenseSettingsPage() {
             {/* Plan Comparison Table */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Plan Comparison
+                {t('planComparison')}
               </h2>
               <Card>
                 <div className="overflow-x-auto">
@@ -531,7 +535,7 @@ export default function LicenseSettingsPage() {
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-gray-700">
                         <th className="text-left py-3 px-4 font-medium text-gray-700 dark:text-gray-300">
-                          Feature
+                          {t('colFeature')}
                         </th>
                         <th
                           className={`text-center py-3 px-4 font-medium ${
@@ -565,7 +569,7 @@ export default function LicenseSettingsPage() {
                     <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          Tickets / month
+                          {t('rowTickets')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -583,7 +587,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           {planFeatures.enterprise.tickets}
@@ -591,7 +597,7 @@ export default function LicenseSettingsPage() {
                       </tr>
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          AI tasks / month
+                          {t('rowAiTasks')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -609,7 +615,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           {planFeatures.enterprise.aiTasks}
@@ -617,7 +625,7 @@ export default function LicenseSettingsPage() {
                       </tr>
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          Repositories
+                          {t('rowRepos')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -635,14 +643,18 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           {planFeatures.enterprise.repos}
                         </td>
                       </tr>
                       <tr>
-                        <td className="py-3 px-4 text-gray-700 dark:text-gray-300">Users</td>
+                        <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
+                          {t('rowUsers')}
+                        </td>
                         <td
                           className={`text-center py-3 px-4 ${
                             licenseInfo.plan === 'free' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
@@ -659,7 +671,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           {planFeatures.enterprise.users}
@@ -667,7 +681,7 @@ export default function LicenseSettingsPage() {
                       </tr>
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          SSO (SAML/OIDC)
+                          {t('rowSso')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -685,7 +699,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           <svg
@@ -705,7 +721,7 @@ export default function LicenseSettingsPage() {
                       </tr>
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          Audit Logs
+                          {t('rowAuditLogs')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -735,7 +751,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           <svg
@@ -755,7 +773,7 @@ export default function LicenseSettingsPage() {
                       </tr>
                       <tr>
                         <td className="py-3 px-4 text-gray-700 dark:text-gray-300">
-                          Auto-merge
+                          {t('rowAutoMerge')}
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
@@ -785,7 +803,9 @@ export default function LicenseSettingsPage() {
                         </td>
                         <td
                           className={`text-center py-3 px-4 ${
-                            licenseInfo.plan === 'enterprise' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                            licenseInfo.plan === 'enterprise'
+                              ? 'bg-blue-50 dark:bg-blue-900/20'
+                              : ''
                           }`}
                         >
                           <svg
@@ -812,23 +832,23 @@ export default function LicenseSettingsPage() {
             {/* License Key Update */}
             <div className="mb-6">
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                Update License Key
+                {t('updateLicenseKey')}
               </h2>
               <Card>
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      License Key
+                      {t('licenseKeyLabel')}
                     </label>
                     <textarea
                       value={licenseKey}
-                      onChange={(e) => setLicenseKey(e.target.value)}
-                      placeholder="Paste your license key here..."
+                      onChange={e => setLicenseKey(e.target.value)}
+                      placeholder={t('licenseKeyPlaceholder')}
                       rows={4}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Enter your license key to upgrade or update your plan.
+                      {t('licenseKeyHelper')}
                     </p>
                   </div>
                   {error && (
@@ -842,7 +862,7 @@ export default function LicenseSettingsPage() {
                       disabled={!licenseKey.trim() || isUpdating}
                       isLoading={isUpdating}
                     >
-                      Update License
+                      {t('updateLicense')}
                     </Button>
                   </div>
                 </div>
