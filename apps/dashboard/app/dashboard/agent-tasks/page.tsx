@@ -16,9 +16,11 @@ import { AgentTaskMetrics } from './components/AgentTaskMetrics';
 import { AgentTaskTable } from './components/AgentTaskTable';
 import { AgentTaskFiltersBar } from './components/AgentTaskFilters';
 import { useAgentTasksRealtime } from '@/hooks/useAgentTasksRealtime';
+import { useTranslations } from 'next-intl';
 
 export default function AgentTasksPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('agent');
 
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [stats, setStats] = useState<AgentTaskStats | null>(null);
@@ -48,7 +50,7 @@ export default function AgentTasksPage() {
       setIsLoading(true);
       setError(null);
       const response: PaginatedResponse<AgentTask> = await agentTasksApi.getTasks(
-        currentFilters ?? filtersRef.current,
+        currentFilters ?? filtersRef.current
       );
       setTasks(response.data);
       setPagination({
@@ -110,18 +112,18 @@ export default function AgentTasksPage() {
       fetchTasks();
       fetchStats();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to retry task');
+      alert(err instanceof Error ? err.message : t('retryFailed'));
     }
   };
 
   const handleCancel = async (id: string) => {
-    if (!confirm('Are you sure you want to cancel this task?')) return;
+    if (!confirm(t('cancelTask'))) return;
     try {
       await agentTasksApi.cancelTask(id);
       fetchTasks();
       fetchStats();
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Failed to cancel task');
+      alert(err instanceof Error ? err.message : t('cancelFailed'));
     }
   };
 
@@ -136,12 +138,8 @@ export default function AgentTasksPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                Agent Tasks
-              </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Monitor and manage AI agent analysis tasks
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">{t('subtitle')}</p>
             </div>
             <div className="flex items-center gap-3">
               {/* Real-time status indicator */}
@@ -150,15 +148,27 @@ export default function AgentTasksPage() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                 </span>
-                <span>Live</span>
+                <span>{t('liveIndicator')}</span>
                 {lastUpdated && (
                   <span className="ml-1 text-gray-400 dark:text-gray-500">
-                    · updated {lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                    · updated{' '}
+                    {lastUpdated.toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })}
                   </span>
                 )}
               </div>
-              <Button variant="ghost" size="sm" onClick={() => { fetchTasks(); fetchStats(); }}>
-                Refresh
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  fetchTasks();
+                  fetchStats();
+                }}
+              >
+                {t('refresh')}
               </Button>
             </div>
           </div>
@@ -182,8 +192,10 @@ export default function AgentTasksPage() {
         <div className="mb-4 bg-white dark:bg-gray-900 p-3 rounded-lg shadow">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600 dark:text-gray-400">
-              <span className="font-medium text-gray-900 dark:text-gray-100">{pagination.total}</span>{' '}
-              task(s) total
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {pagination.total}
+              </span>{' '}
+              {t('totalTasks', { count: '' }).replace('{count} ', '')}
             </span>
             {isLoading && (
               <div className="flex items-center text-gray-500 dark:text-gray-400">
@@ -193,10 +205,21 @@ export default function AgentTasksPage() {
                   fill="none"
                   viewBox="0 0 24 24"
                 >
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
                 </svg>
-                Loading...
+                {t('loading')}
               </div>
             )}
           </div>
@@ -207,11 +230,11 @@ export default function AgentTasksPage() {
           <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center">
               <div>
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{t('error')}</h3>
                 <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
               </div>
               <Button variant="ghost" size="sm" onClick={() => fetchTasks()} className="ml-auto">
-                Retry
+                {t('retry')}
               </Button>
             </div>
           </div>

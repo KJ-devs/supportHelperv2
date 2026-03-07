@@ -5,6 +5,8 @@
 
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
@@ -12,6 +14,8 @@ interface PaginationProps {
 }
 
 export function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
+  const t = useTranslations('pagination');
+
   if (totalPages <= 1) return null;
 
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
@@ -24,15 +28,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
     } else if (currentPage >= totalPages - 3) {
       visiblePages = [1, -1, ...pages.slice(totalPages - 5)];
     } else {
-      visiblePages = [
-        1,
-        -1,
-        currentPage - 1,
-        currentPage,
-        currentPage + 1,
-        -1,
-        totalPages,
-      ];
+      visiblePages = [1, -1, currentPage - 1, currentPage, currentPage + 1, -1, totalPages];
     }
   }
 
@@ -45,8 +41,7 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
       <div className="flex items-center justify-between w-full">
         <div>
           <p className="text-sm text-gray-700 dark:text-gray-300" aria-live="polite">
-            Page <span className="font-medium">{currentPage}</span> sur{' '}
-            <span className="font-medium">{totalPages}</span>
+            {t('page', { current: currentPage, total: totalPages })}
           </p>
         </div>
 
@@ -56,13 +51,13 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage === 1}
             className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Page précédente"
+            aria-label={t('previous')}
           >
-            ← Précédent
+            ← {t('previous')}
           </button>
 
           {/* Page Numbers */}
-          <div className="hidden md:flex space-x-1" role="group" aria-label="Numéros de page">
+          <div className="hidden md:flex space-x-1" role="group" aria-label="Pagination">
             {visiblePages.map((page, index) => {
               if (page === -1) {
                 return (
@@ -99,9 +94,9 @@ export function Pagination({ currentPage, totalPages, onPageChange }: Pagination
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage === totalPages}
             className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="Page suivante"
+            aria-label={t('next')}
           >
-            Suivant →
+            {t('next')} →
           </button>
         </div>
       </div>

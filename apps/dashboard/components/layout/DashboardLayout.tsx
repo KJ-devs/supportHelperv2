@@ -9,8 +9,10 @@ import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { GlobalSearch } from '@/components/search/GlobalSearch';
 import { ThemeToggle } from '@/components/layout/ThemeToggle';
+import { LanguageSelector } from '@/components/layout/LanguageSelector';
 import { ConnectionStatus } from '@/components/layout/ConnectionStatus';
 import { SkipLink } from '@/components/ui/SkipLink';
 import { SdkWidget } from '@/components/layout/SdkWidget';
@@ -35,43 +37,41 @@ import { LucideIcon } from 'lucide-react';
 
 interface NavItem {
   href: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }
 
 interface NavSection {
-  title: string;
+  titleKey: string;
   items: NavItem[];
 }
 
 const navSections: NavSection[] = [
   {
-    title: 'Principal',
+    titleKey: 'nav.main',
     items: [
-      { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard },
-      { href: '/dashboard/tickets', label: 'Tickets', icon: Ticket },
-      { href: '/dashboard/agent-tasks', label: 'Tâches IA', icon: Bot },
+      { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard },
+      { href: '/dashboard/tickets', labelKey: 'nav.tickets', icon: Ticket },
+      { href: '/dashboard/agent-tasks', labelKey: 'nav.agentTasks', icon: Bot },
     ],
   },
   {
-    title: 'Configuration',
+    titleKey: 'nav.configuration',
     items: [
-      { href: '/dashboard/applications', label: 'Applications', icon: AppWindow },
-      { href: '/dashboard/integrations', label: 'Intégrations', icon: Plug },
-      { href: '/dashboard/github', label: 'GitHub', icon: Github },
+      { href: '/dashboard/applications', labelKey: 'nav.applications', icon: AppWindow },
+      { href: '/dashboard/integrations', labelKey: 'nav.integrations', icon: Plug },
+      { href: '/dashboard/github', labelKey: 'nav.github', icon: Github },
     ],
   },
   {
-    title: 'Rapports',
-    items: [
-      { href: '/dashboard/analytics', label: 'Analytiques', icon: BarChart3 },
-    ],
+    titleKey: 'nav.reports',
+    items: [{ href: '/dashboard/analytics', labelKey: 'nav.analytics', icon: BarChart3 }],
   },
   {
-    title: 'Outils',
+    titleKey: 'nav.tools',
     items: [
-      { href: '/dashboard/sdk-demo', label: 'Démo SDK', icon: Puzzle },
-      { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
+      { href: '/dashboard/sdk-demo', labelKey: 'nav.sdkDemo', icon: Puzzle },
+      { href: '/dashboard/settings', labelKey: 'nav.settings', icon: Settings },
     ],
   },
 ];
@@ -83,19 +83,15 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, logout } = useAuth();
   const pathname = usePathname();
-  // sidebarOpen controls ONLY the mobile drawer
+  const t = useTranslations();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
 
-  // Global real-time connection — drives the ConnectionStatus indicator in the header.
-  // Tickets page calls useTicketSocket independently for its own event handling.
   const { isConnected, error: socketError } = useTicketSocket();
 
-  // Detect mobile viewport
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 1024);
-      // Close mobile drawer when switching to desktop
       if (window.innerWidth >= 1024) {
         setSidebarOpen(false);
       }
@@ -106,7 +102,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Close mobile drawer on navigation
   useEffect(() => {
     if (isMobile) {
       setSidebarOpen(false);
@@ -118,14 +113,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   const NavSections = () => (
-    <nav className="px-4 py-6 flex-1 overflow-y-auto" aria-label="Menu principal">
+    <nav className="px-4 py-6 flex-1 overflow-y-auto" aria-label={t('nav.mainNav')}>
       {navSections.map((section, sectionIndex) => (
-        <div key={section.title} className={sectionIndex > 0 ? 'mt-6' : ''}>
+        <div key={section.titleKey} className={sectionIndex > 0 ? 'mt-6' : ''}>
           <p className="px-4 mb-2 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            {section.title}
+            {t(section.titleKey as any)}
           </p>
           <div className="space-y-1">
-            {section.items.map((item) => {
+            {section.items.map(item => {
               const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
               const Icon = item.icon;
               return (
@@ -140,7 +135,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   aria-current={isActive ? 'page' : undefined}
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" aria-hidden="true" />
-                  <span>{item.label}</span>
+                  <span>{t(item.labelKey as any)}</span>
                 </Link>
               );
             })}
@@ -162,7 +157,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           <button
             onClick={() => setSidebarOpen(false)}
             className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            aria-label="Fermer le menu"
+            aria-label={t('nav.closeMenu')}
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -176,14 +171,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       <div className="border-t dark:border-gray-700 p-4 mt-auto">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{user.name || user.email}</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+              {user.name || user.email}
+            </p>
             <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.role}</p>
           </div>
           <button
             onClick={() => logout()}
             className="ml-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            title="Se déconnecter"
-            aria-label="Se déconnecter"
+            title={t('nav.signOut')}
+            aria-label={t('nav.signOut')}
           >
             <LogOut className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -196,10 +193,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <SkipLink />
 
-      {/* Desktop Sidebar — always visible on lg+ screens, no toggle */}
+      {/* Desktop Sidebar */}
       <aside
         className="hidden lg:flex lg:flex-col fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-gray-900 shadow-lg dark:shadow-gray-800/20"
-        aria-label="Navigation principale"
+        aria-label={t('nav.principalNav')}
       >
         <SidebarContent />
       </aside>
@@ -211,17 +208,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </Sheet>
       )}
 
-      {/* Main Content — always offset by sidebar width on desktop */}
+      {/* Main Content */}
       <div className="lg:ml-64">
         {/* Header */}
         <header className="bg-white dark:bg-gray-900 shadow-sm dark:shadow-gray-800/20 sticky top-0 z-40 border-b border-transparent dark:border-gray-700">
           <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-3">
-            {/* Mobile-only: hamburger menu button */}
             {isMobile && (
               <button
                 onClick={() => setSidebarOpen(true)}
                 className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 min-w-[44px] min-h-[44px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded lg:hidden"
-                aria-label="Ouvrir le menu"
+                aria-label={t('nav.openMenu')}
                 aria-expanded={sidebarOpen}
                 aria-controls="sidebar"
               >
@@ -235,8 +231,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <div className="flex items-center space-x-2 sm:space-x-4">
               <ConnectionStatus isConnected={isConnected} error={socketError} />
+              <LanguageSelector />
               <ThemeToggle />
-              <span className="hidden sm:inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full" role="status" aria-label={`Rôle: ${user.role}`}>
+              <span
+                className="hidden sm:inline-block px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full"
+                role="status"
+                aria-label={t('nav.role', { role: user.role })}
+              >
                 {user.role}
               </span>
             </div>
@@ -249,7 +250,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </main>
       </div>
 
-      {/* SDK Bug Report Widget — persistent on all pages */}
+      {/* SDK Bug Report Widget */}
       <SdkWidget />
 
       {/* Mobile Overlay */}

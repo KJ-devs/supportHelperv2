@@ -37,6 +37,7 @@ export interface WidgetConfig {
   primaryColor: string;
   zIndex: number;
   theme: WidgetTheme;
+  locale?: 'en' | 'fr';
 }
 
 export interface ReportPayload {

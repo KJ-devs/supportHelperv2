@@ -6,6 +6,8 @@
 import type {
   AnalyticsData,
   DashboardStats,
+  DifficultyData,
+  ResolutionTrendsResponse,
   TimeRange,
 } from '../types/analytics';
 
@@ -27,10 +29,7 @@ function getAuthToken(): string | null {
   return localStorage.getItem('auth_token');
 }
 
-async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
+async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getAuthToken();
 
   const headers: Record<string, string> = {
@@ -52,11 +51,7 @@ async function apiRequest<T>(
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(
-      response.status,
-      errorData.message || 'API request failed',
-      errorData
-    );
+    throw new ApiError(response.status, errorData.message || 'API request failed', errorData);
   }
 
   return response.json();
@@ -98,18 +93,29 @@ export const analyticsApi = {
   },
 
   /**
+   * Get resolution trends by month
+   */
+  async getResolutionTrends(): Promise<ResolutionTrendsResponse> {
+    return apiRequest<ResolutionTrendsResponse>('/api/analytics/resolution-trends');
+  },
+
+  /**
+   * Get agent difficulty / N1 decision distribution
+   */
+  async getDifficulty(): Promise<DifficultyData> {
+    return apiRequest<DifficultyData>('/api/analytics/difficulty');
+  },
+
+  /**
    * Export analytics data
    */
   async exportData(format: 'csv' | 'json', timeRange?: Partial<TimeRange>): Promise<Blob> {
     const query = timeRange ? `&${buildQueryString(timeRange)}` : '';
     const token = getAuthToken();
 
-    const response = await fetch(
-      `${API_URL}/api/analytics/export?format=${format}${query}`,
-      {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      }
-    );
+    const response = await fetch(`${API_URL}/api/analytics/export?format=${format}${query}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
 
     if (!response.ok) {
       throw new ApiError(response.status, 'Export failed');

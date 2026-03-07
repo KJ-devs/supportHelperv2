@@ -465,3 +465,28 @@ After completing a US, append a summary here then `/clear` the context.
 - **Decisions**: Tests skippés via `PLAYWRIGHT_SERVER_AVAILABLE` env var car localhost:3000 retourne 500 au moment de l'exécution. Auth corrigé: `owner@test.local` / `password123` (le helper auth.ts utilise `admin@test.com` qui n'existe pas en DB). Task IDs réels depuis DB: `8a073e0d-...` (analyzing) + `cbe9e647-...` (failed). Activer avec `PLAYWRIGHT_SERVER_AVAILABLE=true`.
 - **Remaining**: Tests actuellement skippés (serveur non actif) — GREEN quand le serveur est lancé
 - **Date**: 2026-03-06
+
+## [i18n-02] Dashboard Translation (Task #2) — DONE ✅
+
+- **Files modified**:
+  - `apps/dashboard/messages/en.json` — Added 150+ new translation keys across all namespaces
+  - `apps/dashboard/messages/fr.json` — French equivalents for all new keys (full parity)
+  - `apps/dashboard/components/tickets/TicketCard.tsx` — `useTranslations('tickets')`, locale-aware date
+  - `apps/dashboard/components/tickets/Pagination.tsx` — `useTranslations('pagination')`, translated prev/next/page
+  - `apps/dashboard/app/dashboard/tickets/[id]/page.tsx` — `useTranslations('tickets.detail')`, all hardcoded strings translated
+  - `apps/dashboard/app/dashboard/agent-tasks/page.tsx` — `useTranslations('agent')`, header/stats/error translated
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskMetrics.tsx` — `useTranslations('agent.metrics')`
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskTable.tsx` — `useTranslations('agent')`, headers/states translated, locale-aware dates
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskFilters.tsx` — `useTranslations('agent.filters')`, all filters translated
+  - `apps/dashboard/app/dashboard/agent-tasks/components/AgentTaskStatusBadge.tsx` — `useTranslations('agent.taskStatuses')`, all 13 statuses translated
+  - `apps/dashboard/app/dashboard/applications/page.tsx` — `useTranslations('applications')`, full translation
+  - `apps/dashboard/components/media/VideoPlayer.tsx` — `useTranslations('video')`, error messages translated
+  - `apps/dashboard/components/export/ExportButton.tsx` — `useTranslations('export')`, button labels translated
+  - `apps/dashboard/app/dashboard/analytics/page.tsx` — `useTranslations('analytics')`, all chart labels, stats cards, time range selector, N1 decisions, section headers
+  - `apps/dashboard/app/dashboard/sdk-demo/page.tsx` — `useTranslations('sdk')`, all form labels, button labels, event log panel
+  - `apps/dashboard/app/dashboard/integrations/page.tsx` — `useTranslations('integrations')`, all toast messages, sync dialog, stats, filter labels
+  - `apps/dashboard/app/dashboard/github/page.tsx` — `useTranslations('github')`, all UI strings, modals, table headers, toast messages
+  - `apps/dashboard/app/dashboard/settings/page.tsx` — `useTranslations('settings')`, all tabs, form labels, toast messages, security section
+- **Build**: `pnpm --filter @support-helper/dashboard build` passes with 0 errors (28 static pages)
+- **Remaining**: settings sub-pages (ai/billing/etc.) still use some hardcoded strings — not in scope for this task
+- **Date**: 2026-03-07

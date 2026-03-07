@@ -3,6 +3,7 @@
  */
 
 import type { WidgetState, ReportResponse, AnalyzingContext } from './widget-types';
+import type { WidgetTranslations } from './i18n';
 
 /**
  * SVG Icons
@@ -13,52 +14,52 @@ const ICONS = {
     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
     <line x1="12" y1="17" x2="12.01" y2="17"/>
   </svg>`,
-  
+
   close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <line x1="18" y1="6" x2="6" y2="18"/>
     <line x1="6" y1="6" x2="18" y2="18"/>
   </svg>`,
-  
+
   video: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <rect x="2" y="4" width="20" height="16" rx="2"/>
     <circle cx="12" cy="12" r="3"/>
   </svg>`,
-  
+
   play: `<svg viewBox="0 0 24 24" fill="currentColor">
     <polygon points="5 3 19 12 5 21 5 3"/>
   </svg>`,
-  
+
   stop: `<svg viewBox="0 0 24 24" fill="currentColor">
     <rect x="4" y="4" width="16" height="16" rx="2"/>
   </svg>`,
-  
+
   pause: `<svg viewBox="0 0 24 24" fill="currentColor">
     <rect x="6" y="4" width="4" height="16"/>
     <rect x="14" y="4" width="4" height="16"/>
   </svg>`,
-  
+
   check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
     <polyline points="20 6 9 17 4 12"/>
   </svg>`,
-  
+
   refresh: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
     <path d="M21 3v5h-5"/>
     <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
     <path d="M3 21v-5h5"/>
   </svg>`,
-  
+
   send: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <line x1="22" y1="2" x2="11" y2="13"/>
     <polygon points="22 2 15 22 11 13 2 9 22 2"/>
   </svg>`,
-  
+
   alertCircle: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="12" cy="12" r="10"/>
     <line x1="12" y1="8" x2="12" y2="12"/>
     <line x1="12" y1="16" x2="12.01" y2="16"/>
   </svg>`,
-  
+
   externalLink: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
     <polyline points="15 3 21 3 21 9"/>
@@ -80,7 +81,8 @@ const ICONS = {
 /**
  * Floating Action Button
  */
-export function renderFAB(tooltip: string): string {
+export function renderFAB(t: WidgetTranslations): string {
+  const tooltip = t.fab.tooltip;
   return `
     <button
       class="sh-fab"
@@ -97,7 +99,7 @@ export function renderFAB(tooltip: string): string {
 /**
  * Modal shell with header
  */
-export function renderModal(title: string, bodyContent: string): string {
+export function renderModal(title: string, bodyContent: string, t: WidgetTranslations): string {
   return `
     <div class="sh-backdrop" data-action="close" aria-hidden="true"></div>
     <div class="sh-modal" role="dialog" aria-modal="true" aria-labelledby="sh-modal-title">
@@ -106,7 +108,7 @@ export function renderModal(title: string, bodyContent: string): string {
         <button
           class="sh-close-btn"
           data-action="close"
-          aria-label="Close dialog"
+          aria-label="${escapeHtml(t.modal.closeDialog)}"
           tabindex="0"
         >
           ${ICONS.close}
@@ -122,25 +124,24 @@ export function renderModal(title: string, bodyContent: string): string {
 /**
  * Open view - Start recording button
  */
-export function renderOpenView(): string {
+export function renderOpenView(t: WidgetTranslations): string {
   return `
     <div class="sh-view sh-view-center">
       <div class="sh-start-icon" aria-hidden="true">
         ${ICONS.video}
       </div>
-      <div class="sh-title">Record your issue</div>
+      <div class="sh-title">${escapeHtml(t.open.title)}</div>
       <p class="sh-message">
-        Share your screen to capture exactly what went wrong.
-        We'll analyze the video to help resolve your issue faster.
+        ${escapeHtml(t.open.message)}
       </p>
       <button
         class="sh-btn sh-btn-primary sh-btn-block"
         data-action="start"
-        aria-label="Start recording your screen"
+        aria-label="${escapeHtml(t.open.startRecording)}"
         tabindex="0"
       >
         ${ICONS.video}
-        <span>Start Recording</span>
+        <span>${escapeHtml(t.open.startRecording)}</span>
       </button>
     </div>
   `;
@@ -149,7 +150,11 @@ export function renderOpenView(): string {
 /**
  * Recording view - Timer + stop button (used inside modal for non-recording states)
  */
-export function renderRecordingView(elapsedSeconds: number, isPaused: boolean): string {
+export function renderRecordingView(
+  elapsedSeconds: number,
+  isPaused: boolean,
+  t: WidgetTranslations
+): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -161,16 +166,16 @@ export function renderRecordingView(elapsedSeconds: number, isPaused: boolean): 
         <div class="sh-timer-time">${timeStr}</div>
       </div>
       <p class="sh-message">
-        ${isPaused ? 'Recording paused' : 'Recording your screen...'}
+        ${isPaused ? escapeHtml(t.recording.paused) : escapeHtml(t.recording.recording)}
       </p>
       <div class="sh-btn-group">
         <button class="sh-btn sh-btn-secondary" data-action="${isPaused ? 'resume' : 'pause'}">
           ${isPaused ? ICONS.play : ICONS.pause}
-          <span>${isPaused ? 'Resume' : 'Pause'}</span>
+          <span>${isPaused ? escapeHtml(t.recording.resume) : escapeHtml(t.recording.pause)}</span>
         </button>
         <button class="sh-btn sh-btn-danger" data-action="stop">
           ${ICONS.stop}
-          <span>Stop</span>
+          <span>${escapeHtml(t.recording.stop)}</span>
         </button>
       </div>
     </div>
@@ -181,7 +186,11 @@ export function renderRecordingView(elapsedSeconds: number, isPaused: boolean): 
  * Minimal floating recording bar - shown during recording instead of modal
  * No backdrop/overlay so the page is fully visible and capturable
  */
-export function renderRecordingBar(elapsedSeconds: number, isPaused: boolean): string {
+export function renderRecordingBar(
+  elapsedSeconds: number,
+  isPaused: boolean,
+  t: WidgetTranslations
+): string {
   const mins = Math.floor(elapsedSeconds / 60);
   const secs = elapsedSeconds % 60;
   const timeStr = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
@@ -192,18 +201,18 @@ export function renderRecordingBar(elapsedSeconds: number, isPaused: boolean): s
       <span class="sh-rec-time sh-timer-time" aria-label="Recording time ${timeStr}">${timeStr}</span>
       <button
         data-action="${isPaused ? 'resume' : 'pause'}"
-        aria-label="${isPaused ? 'Resume recording' : 'Pause recording'}"
+        aria-label="${isPaused ? escapeHtml(t.recording.resume) : escapeHtml(t.recording.pause)}"
         tabindex="0"
       >
-        ${isPaused ? 'Resume' : 'Pause'}
+        ${isPaused ? escapeHtml(t.recording.resume) : escapeHtml(t.recording.pause)}
       </button>
       <button
         class="sh-rec-stop"
         data-action="stop"
-        aria-label="Stop recording"
+        aria-label="${escapeHtml(t.recording.stop)}"
         tabindex="0"
       >
-        Stop
+        ${escapeHtml(t.recording.stop)}
       </button>
     </div>
   `;
@@ -212,7 +221,12 @@ export function renderRecordingBar(elapsedSeconds: number, isPaused: boolean): s
 /**
  * Preview view - Video player + accept/re-record
  */
-export function renderPreviewView(videoUrl: string, duration: number, size: number): string {
+export function renderPreviewView(
+  videoUrl: string,
+  duration: number,
+  size: number,
+  t: WidgetTranslations
+): string {
   const mins = Math.floor(duration / 60);
   const secs = Math.floor(duration % 60);
   const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -225,31 +239,31 @@ export function renderPreviewView(videoUrl: string, duration: number, size: numb
           class="sh-video"
           src="${videoUrl}"
           controls
-          aria-label="Preview of recorded video"
+          aria-label="${escapeHtml(t.preview.previewLabel)}"
         ></video>
       </div>
       <div class="sh-video-info" aria-live="polite">
-        <span>Duration: ${timeStr}</span>
-        <span>Size: ${sizeStr}</span>
+        <span>${escapeHtml(t.preview.duration)} ${timeStr}</span>
+        <span>${escapeHtml(t.preview.size)} ${sizeStr}</span>
       </div>
       <div class="sh-btn-group">
         <button
           class="sh-btn sh-btn-secondary"
           data-action="re-record"
-          aria-label="Record video again"
+          aria-label="${escapeHtml(t.preview.recordAgain)}"
           tabindex="0"
         >
           ${ICONS.refresh}
-          <span>Record again</span>
+          <span>${escapeHtml(t.preview.recordAgain)}</span>
         </button>
         <button
           class="sh-btn sh-btn-primary"
           data-action="accept"
-          aria-label="Use this video and continue"
+          aria-label="${escapeHtml(t.preview.useThisVideo)}"
           tabindex="0"
         >
           ${ICONS.check}
-          <span>Use this video</span>
+          <span>${escapeHtml(t.preview.useThisVideo)}</span>
         </button>
       </div>
     </div>
@@ -259,19 +273,23 @@ export function renderPreviewView(videoUrl: string, duration: number, size: numb
 /**
  * Editing view - Form with title, description, video thumbnail
  */
-export function renderEditingView(videoUrl: string, duration: number): string {
+export function renderEditingView(
+  videoUrl: string,
+  duration: number,
+  t: WidgetTranslations
+): string {
   const mins = Math.floor(duration / 60);
   const secs = Math.floor(duration % 60);
   const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
 
   return `
     <div class="sh-view">
-      <form class="sh-form" data-form="report" aria-label="Issue report form">
+      <form class="sh-form" data-form="report" aria-label="${escapeHtml(t.editing.formLabel)}">
         <div class="sh-video-thumb">
           <video src="${videoUrl}" muted aria-hidden="true"></video>
           <div class="sh-video-thumb-overlay" aria-hidden="true">
             ${ICONS.film}
-            <span>${timeStr} video attached</span>
+            <span>${timeStr} ${escapeHtml(t.editing.videoAttached)}</span>
           </div>
         </div>
         <div class="sh-form-field">
@@ -281,14 +299,14 @@ export function renderEditingView(videoUrl: string, duration: number): string {
             type="text"
             class="sh-input"
             name="title"
-            placeholder="Brief title for your issue..."
+            placeholder="${escapeHtml(t.editing.titlePlaceholder)}"
             required
             maxlength="200"
             aria-required="true"
             aria-describedby="sh-title-hint"
             tabindex="0"
           />
-          <span id="sh-title-hint" class="sh-sr-only">Enter a brief title describing your issue</span>
+          <span id="sh-title-hint" class="sh-sr-only">${escapeHtml(t.editing.titleHint)}</span>
         </div>
         <div class="sh-form-field">
           <label for="sh-input-description" class="sh-sr-only">Issue description</label>
@@ -296,23 +314,23 @@ export function renderEditingView(videoUrl: string, duration: number): string {
             id="sh-input-description"
             class="sh-textarea"
             name="description"
-            placeholder="Describe what happened..."
+            placeholder="${escapeHtml(t.editing.descriptionPlaceholder)}"
             required
             maxlength="2000"
             aria-required="true"
             aria-describedby="sh-description-hint"
             tabindex="0"
           ></textarea>
-          <span id="sh-description-hint" class="sh-sr-only">Describe what happened in detail</span>
+          <span id="sh-description-hint" class="sh-sr-only">${escapeHtml(t.editing.descriptionHint)}</span>
         </div>
         <button
           type="submit"
           class="sh-btn sh-btn-primary sh-btn-block"
-          aria-label="Send report"
+          aria-label="${escapeHtml(t.editing.sendReport)}"
           tabindex="0"
         >
           ${ICONS.send}
-          <span>Send Report</span>
+          <span>${escapeHtml(t.editing.sendReport)}</span>
         </button>
       </form>
     </div>
@@ -322,11 +340,11 @@ export function renderEditingView(videoUrl: string, duration: number): string {
 /**
  * Submitting view - Spinner
  */
-export function renderSubmittingView(): string {
+export function renderSubmittingView(t: WidgetTranslations): string {
   return `
     <div class="sh-view sh-view-center" role="status" aria-live="polite">
       <div class="sh-spinner" aria-hidden="true"></div>
-      <p class="sh-message">Sending your report...</p>
+      <p class="sh-message">${escapeHtml(t.submitting.sending)}</p>
     </div>
   `;
 }
@@ -334,19 +352,28 @@ export function renderSubmittingView(): string {
 /**
  * Success view
  */
-export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse['aiAnalysis'], dashboardUrl?: string): string {
+export function renderSuccessView(
+  ticketId: string,
+  t: WidgetTranslations,
+  aiAnalysis?: ReportResponse['aiAnalysis'],
+  dashboardUrl?: string
+): string {
   let analysisHtml = '';
 
   if (aiAnalysis) {
-    const severityClass = aiAnalysis.severity === 'high' ? 'sh-badge-high' :
-                          aiAnalysis.severity === 'medium' ? 'sh-badge-medium' : 'sh-badge-low';
+    const severityClass =
+      aiAnalysis.severity === 'high'
+        ? 'sh-badge-high'
+        : aiAnalysis.severity === 'medium'
+          ? 'sh-badge-medium'
+          : 'sh-badge-low';
 
     analysisHtml = `
-      <div class="sh-analysis" role="region" aria-label="AI Analysis Results">
-        <div class="sh-analysis-label">AI Analysis</div>
+      <div class="sh-analysis" role="region" aria-label="${escapeHtml(t.success.aiAnalysis)}">
+        <div class="sh-analysis-label">${escapeHtml(t.success.aiAnalysis)}</div>
         <p class="sh-analysis-text">${escapeHtml(aiAnalysis.summary)}</p>
         <div style="margin-top: 8px;">
-          <span class="sh-badge ${severityClass}" role="status">${aiAnalysis.severity} severity</span>
+          <span class="sh-badge ${severityClass}" role="status">${aiAnalysis.severity} ${escapeHtml(t.success.severity)}</span>
         </div>
       </div>
     `;
@@ -359,9 +386,9 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
       <div class="sh-success-icon" aria-hidden="true">
         ${ICONS.check}
       </div>
-      <div class="sh-title">Report Sent!</div>
+      <div class="sh-title">${escapeHtml(t.success.title)}</div>
       <p class="sh-message">
-        Your issue has been submitted successfully. Our team will analyze it and get back to you.
+        ${escapeHtml(t.success.message)}
       </p>
       ${analysisHtml}
       <a
@@ -369,20 +396,20 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
         href="${ticketUrl}"
         target="_blank"
         rel="noopener"
-        aria-label="View ticket ${ticketId.substring(0, 8)} in new window"
+        aria-label="${escapeHtml(t.success.viewTicket)} ${ticketId.substring(0, 8)}"
         tabindex="0"
       >
-        View ticket #${escapeHtml(ticketId.substring(0, 8))}
+        ${escapeHtml(t.success.viewTicket)} #${escapeHtml(ticketId.substring(0, 8))}
         ${ICONS.externalLink}
       </a>
       <button
         class="sh-btn sh-btn-secondary sh-btn-block"
         data-action="close"
         style="margin-top: 12px;"
-        aria-label="Close dialog"
+        aria-label="${escapeHtml(t.success.close)}"
         tabindex="0"
       >
-        Close
+        ${escapeHtml(t.success.close)}
       </button>
     </div>
   `;
@@ -395,7 +422,7 @@ export function renderSuccessView(ticketId: string, aiAnalysis?: ReportResponse[
  *   2. Results received (summary + severity + type)
  *   3. Timed out (fallback message)
  */
-export function renderAnalyzingView(ctx: AnalyzingContext): string {
+export function renderAnalyzingView(ctx: AnalyzingContext, t: WidgetTranslations): string {
   // --- timed out ---
   if (ctx.timedOut) {
     return `
@@ -403,18 +430,18 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
         <div class="sh-success-icon" aria-hidden="true">
           ${ICONS.check}
         </div>
-        <div class="sh-title">Report Sent!</div>
+        <div class="sh-title">${escapeHtml(t.success.title)}</div>
         <p class="sh-message">
-          Analysis is in progress. Check your dashboard for results.
+          ${escapeHtml(t.analyzing.timedOutMessage)}
         </p>
         <button
           class="sh-btn sh-btn-secondary sh-btn-block"
           data-action="close"
           style="margin-top: 8px;"
-          aria-label="Close dialog"
+          aria-label="${escapeHtml(t.modal.closeDialog)}"
           tabindex="0"
         >
-          Close
+          ${escapeHtml(t.success.close)}
         </button>
       </div>
     `;
@@ -423,8 +450,11 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
   // --- results received ---
   if (ctx.aiResult) {
     const severityClass =
-      ctx.aiResult.severity === 'high' ? 'sh-badge-high' :
-      ctx.aiResult.severity === 'medium' ? 'sh-badge-medium' : 'sh-badge-low';
+      ctx.aiResult.severity === 'high'
+        ? 'sh-badge-high'
+        : ctx.aiResult.severity === 'medium'
+          ? 'sh-badge-medium'
+          : 'sh-badge-low';
 
     const typeHtml = ctx.aiResult.type
       ? `<span class="sh-badge sh-badge-type" style="margin-left:6px;">${escapeHtml(ctx.aiResult.type)}</span>`
@@ -435,14 +465,16 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
         <div class="sh-success-icon" aria-hidden="true">
           ${ICONS.check}
         </div>
-        <div class="sh-title">Report Sent!</div>
-        <div class="sh-analysis" role="region" aria-label="AI Analysis Results">
-          <div class="sh-analysis-label">AI Analysis</div>
+        <div class="sh-title">${escapeHtml(t.success.title)}</div>
+        <div class="sh-analysis" role="region" aria-label="${escapeHtml(t.success.aiAnalysis)}">
+          <div class="sh-analysis-label">${escapeHtml(t.success.aiAnalysis)}</div>
           <p class="sh-analysis-text">${escapeHtml(ctx.aiResult.summary)}</p>
           <div style="margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;">
-            ${ctx.aiResult.severity
-              ? `<span class="sh-badge ${severityClass}" role="status">${escapeHtml(ctx.aiResult.severity)} severity</span>`
-              : ''}
+            ${
+              ctx.aiResult.severity
+                ? `<span class="sh-badge ${severityClass}" role="status">${escapeHtml(ctx.aiResult.severity)} ${escapeHtml(t.success.severity)}</span>`
+                : ''
+            }
             ${typeHtml}
           </div>
         </div>
@@ -450,10 +482,10 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
           class="sh-btn sh-btn-secondary sh-btn-block"
           data-action="close"
           style="margin-top: 12px;"
-          aria-label="Close dialog"
+          aria-label="${escapeHtml(t.modal.closeDialog)}"
           tabindex="0"
         >
-          Close
+          ${escapeHtml(t.success.close)}
         </button>
       </div>
     `;
@@ -463,28 +495,32 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
   const elapsed = ctx.elapsedSeconds;
   const remaining = Math.max(0, 120 - elapsed);
   const progressPct = Math.min(100, Math.round((elapsed / 120) * 100));
+  const timerText =
+    remaining > 0
+      ? t.analyzing.remaining.replace('{seconds}', String(remaining))
+      : t.analyzing.almostDone;
 
   return `
-    <div class="sh-view sh-view-center" role="status" aria-live="polite" aria-label="Analyzing your report">
+    <div class="sh-view sh-view-center" role="status" aria-live="polite" aria-label="${escapeHtml(t.analyzing.title)}">
       <div class="sh-spinner" aria-hidden="true"></div>
-      <div class="sh-title">Analyzing...</div>
+      <div class="sh-title">${escapeHtml(t.analyzing.title)}</div>
       <p class="sh-message">
-        Our AI is reviewing your report. This usually takes less than a minute.
+        ${escapeHtml(t.analyzing.message)}
       </p>
       <div class="sh-progress-bar" aria-hidden="true">
         <div class="sh-progress-fill" style="width: ${progressPct}%"></div>
       </div>
       <p class="sh-message sh-analyzing-timer" aria-live="off">
-        ${remaining > 0 ? `Up to ${remaining}s remaining` : 'Almost done...'}
+        ${escapeHtml(timerText)}
       </p>
       <button
         class="sh-btn sh-btn-secondary"
         data-action="close"
         style="margin-top: 8px;"
-        aria-label="Close dialog (analysis will continue in background)"
+        aria-label="${escapeHtml(t.analyzing.closeBackground)}"
         tabindex="0"
       >
-        Close
+        ${escapeHtml(t.success.close)}
       </button>
     </div>
   `;
@@ -493,31 +529,31 @@ export function renderAnalyzingView(ctx: AnalyzingContext): string {
 /**
  * Error view
  */
-export function renderErrorView(message: string): string {
+export function renderErrorView(message: string, t: WidgetTranslations): string {
   return `
     <div class="sh-view sh-view-center" role="alert" aria-live="assertive">
       <div class="sh-error-icon" aria-hidden="true">
         ${ICONS.alertCircle}
       </div>
-      <div class="sh-title">Something went wrong</div>
+      <div class="sh-title">${escapeHtml(t.error.title)}</div>
       <p class="sh-message">${escapeHtml(message)}</p>
       <div class="sh-btn-group" style="margin-top: 8px;">
         <button
           class="sh-btn sh-btn-secondary"
           data-action="close"
-          aria-label="Close dialog"
+          aria-label="${escapeHtml(t.error.close)}"
           tabindex="0"
         >
-          Close
+          ${escapeHtml(t.error.close)}
         </button>
         <button
           class="sh-btn sh-btn-primary"
           data-action="retry"
-          aria-label="Try again"
+          aria-label="${escapeHtml(t.error.tryAgain)}"
           tabindex="0"
         >
           ${ICONS.refresh}
-          <span>Try again</span>
+          <span>${escapeHtml(t.error.tryAgain)}</span>
         </button>
       </div>
     </div>
@@ -539,31 +575,35 @@ export function getViewForState(
     dashboardUrl?: string;
     errorMessage?: string;
     analyzingContext?: AnalyzingContext;
-  }
+  },
+  t: WidgetTranslations
 ): string {
   switch (state) {
     case 'open':
-      return renderOpenView();
+      return renderOpenView(t);
     case 'recording':
-      return renderRecordingView(context.duration || 0, context.isPaused || false);
+      return renderRecordingView(context.duration || 0, context.isPaused || false, t);
     case 'preview':
-      return renderPreviewView(context.videoUrl || '', context.duration || 0, context.size || 0);
+      return renderPreviewView(context.videoUrl || '', context.duration || 0, context.size || 0, t);
     case 'editing':
-      return renderEditingView(context.videoUrl || '', context.duration || 0);
+      return renderEditingView(context.videoUrl || '', context.duration || 0, t);
     case 'submitting':
-      return renderSubmittingView();
+      return renderSubmittingView(t);
     case 'analyzing':
-      return renderAnalyzingView(context.analyzingContext || {
-        ticketId: context.ticketId || '',
-        elapsedSeconds: 0,
-        timedOut: false,
-      });
+      return renderAnalyzingView(
+        context.analyzingContext || {
+          ticketId: context.ticketId || '',
+          elapsedSeconds: 0,
+          timedOut: false,
+        },
+        t
+      );
     case 'success':
-      return renderSuccessView(context.ticketId || '', context.aiAnalysis, context.dashboardUrl);
+      return renderSuccessView(context.ticketId || '', t, context.aiAnalysis, context.dashboardUrl);
     case 'error':
-      return renderErrorView(context.errorMessage || 'An unknown error occurred.');
+      return renderErrorView(context.errorMessage || t.error.unknownError, t);
     default:
-      return renderOpenView();
+      return renderOpenView(t);
   }
 }
 

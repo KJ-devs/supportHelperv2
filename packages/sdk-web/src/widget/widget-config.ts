@@ -58,6 +58,11 @@ export function parseAttributeConfig(element: HTMLElement): Partial<WidgetConfig
     config.theme = theme;
   }
 
+  const locale = element.getAttribute('locale');
+  if (locale && isValidLocale(locale)) {
+    config.locale = locale;
+  }
+
   return config;
 }
 
@@ -73,4 +78,11 @@ function isValidPosition(value: string): value is WidgetPosition {
  */
 function isValidTheme(value: string): value is import('./widget-types').WidgetTheme {
   return ['light', 'dark', 'auto'].includes(value);
+}
+
+/**
+ * Validate locale value
+ */
+function isValidLocale(value: string): value is 'en' | 'fr' {
+  return ['en', 'fr'].includes(value);
 }

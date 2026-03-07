@@ -4,8 +4,11 @@ import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { authApi, AuthApiError } from '@/lib/api/auth';
+import { useTranslations } from 'next-intl';
+import { LanguageSelector } from '@/components/layout/LanguageSelector';
 
 function ResetPasswordForm() {
+  const t = useTranslations('auth.resetPassword');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -17,23 +20,16 @@ function ResetPasswordForm() {
 
   useEffect(() => {
     if (!token) {
-      setError('Invalid or missing reset token. Please request a new password reset link.');
+      setError(t('invalidToken'));
     }
-  }, [token]);
+  }, [token, t]);
 
   const validatePassword = (pwd: string): string | null => {
-    if (pwd.length < 8) {
-      return 'Password must be at least 8 characters';
-    }
-    if (!/[A-Z]/.test(pwd)) {
-      return 'Password must contain at least one uppercase letter';
-    }
-    if (!/[a-z]/.test(pwd)) {
-      return 'Password must contain at least one lowercase letter';
-    }
-    if (!/[0-9]/.test(pwd)) {
-      return 'Password must contain at least one number';
-    }
+    if (pwd.length < 8)
+      return t('passwordTooShort' as any) || 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(pwd)) return t('mustUppercase');
+    if (!/[a-z]/.test(pwd)) return t('mustLowercase');
+    if (!/[0-9]/.test(pwd)) return t('mustNumber');
     return null;
   };
 
@@ -42,14 +38,12 @@ function ResetPasswordForm() {
     setIsLoading(true);
     setError('');
 
-    // Validate passwords match
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('passwordMismatch' as any) || 'Passwords do not match');
       setIsLoading(false);
       return;
     }
 
-    // Validate password requirements
     const validationError = validatePassword(password);
     if (validationError) {
       setError(validationError);
@@ -58,7 +52,7 @@ function ResetPasswordForm() {
     }
 
     if (!token) {
-      setError('Invalid reset token');
+      setError(t('invalidToken'));
       setIsLoading(false);
       return;
     }
@@ -66,50 +60,49 @@ function ResetPasswordForm() {
     try {
       await authApi.resetPassword(token, password);
       setSuccess(true);
-      // Redirect to login after 3 seconds
       setTimeout(() => {
         router.push('/login');
       }, 3000);
     } catch (err) {
       if (err instanceof AuthApiError) {
         if (err.statusCode === 400 || err.statusCode === 404) {
-          setError('Invalid or expired reset token. Please request a new password reset link.');
+          setError(t('expiredToken'));
         } else {
           setError(err.message);
         }
       } else {
-        setError('Failed to reset password. Please try again.');
+        setError(t('resetFailed'));
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500";
+  const inputClassName =
+    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500';
 
   return (
     <main className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-md p-8 bg-white dark:bg-gray-900 rounded-lg shadow-md dark:shadow-gray-800/20">
+        <div className="flex justify-end mb-2">
+          <LanguageSelector />
+        </div>
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Create new password</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Enter a new password for your account
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">{t('subtitle')}</p>
         </div>
 
         {success ? (
           <div className="space-y-6">
             <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 rounded-md">
-              <p className="font-medium mb-1">Password reset successful!</p>
-              <p className="text-sm">
-                Your password has been reset. You will be redirected to the login page in a few seconds.
-              </p>
+              <p className="font-medium mb-1">{t('successTitle')}</p>
+              <p className="text-sm">{t('successMessage')}</p>
             </div>
             <Link
               href="/login"
               className="block w-full py-2 px-4 text-center bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
             >
-              Go to login
+              {t('goToLogin')}
             </Link>
           </div>
         ) : (
@@ -121,8 +114,11 @@ function ResetPasswordForm() {
             )}
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                New password
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('newPassword')}
               </label>
               <input
                 id="password"
@@ -136,12 +132,12 @@ function ResetPasswordForm() {
                 autoFocus
               />
               <div className="mt-2 space-y-1">
-                <p className="text-xs text-gray-500 dark:text-gray-400">Password must contain:</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{t('requirementsTitle')}</p>
                 <ul className="text-xs text-gray-500 dark:text-gray-400 list-disc list-inside space-y-0.5">
-                  <li>At least 8 characters</li>
-                  <li>One uppercase letter</li>
-                  <li>One lowercase letter</li>
-                  <li>One number</li>
+                  <li>{t('reqLength')}</li>
+                  <li>{t('reqUppercase')}</li>
+                  <li>{t('reqLowercase')}</li>
+                  <li>{t('reqNumber')}</li>
                 </ul>
               </div>
             </div>
@@ -151,7 +147,7 @@ function ResetPasswordForm() {
                 htmlFor="confirmPassword"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Confirm new password
+                {t('confirmPassword')}
               </label>
               <input
                 id="confirmPassword"
@@ -170,12 +166,15 @@ function ResetPasswordForm() {
               disabled={isLoading || !token}
               className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Resetting password...' : 'Reset password'}
+              {isLoading ? t('submitting') : t('submit')}
             </button>
 
             <div className="text-center">
-              <Link href="/login" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                Back to login
+              <Link
+                href="/login"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                {t('backToLogin')}
               </Link>
             </div>
           </form>
@@ -186,12 +185,15 @@ function ResetPasswordForm() {
 }
 
 export default function ResetPasswordPage() {
+  const t = useTranslations('auth.resetPassword');
   return (
-    <Suspense fallback={
-      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
-        <div className="text-gray-600 dark:text-gray-400">Loading...</div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
+          <div className="text-gray-600 dark:text-gray-400">{t('loading')}</div>
+        </div>
+      }
+    >
       <ResetPasswordForm />
     </Suspense>
   );

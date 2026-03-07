@@ -9,13 +9,19 @@ import Link from 'next/link';
 import type { Ticket } from '@/lib/types/ticket';
 import { StatusBadge, SeverityBadge, TypeBadge } from '@/components/ui';
 import { AppWindow, Bot } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface TicketCardProps {
   ticket: Ticket;
 }
 
 export function TicketCard({ ticket }: TicketCardProps) {
-  const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
+  const t = useTranslations('tickets');
+  const locale =
+    typeof document !== 'undefined'
+      ? (document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr')
+      : 'fr';
+  const createdAt = new Date(ticket.createdAt).toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -30,7 +36,9 @@ export function TicketCard({ ticket }: TicketCardProps) {
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate mb-1">
               {ticket.title}
             </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{ticket.description}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+              {ticket.description}
+            </p>
           </div>
           <SeverityBadge severity={ticket.severity} />
         </div>
@@ -58,8 +66,11 @@ export function TicketCard({ ticket }: TicketCardProps) {
         {ticket.aiSummary && (
           <div className="mt-2 text-xs text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 rounded p-2 flex items-start gap-2">
             <Bot className="w-3 h-3 flex-shrink-0 mt-0.5" aria-hidden="true" />
-            <span><span className="font-medium">IA:</span> {ticket.aiSummary.substring(0, 100)}
-            {ticket.aiSummary.length > 100 && '...'}</span>
+            <span>
+              <span className="font-medium">{t('detail.aiLabel')}:</span>{' '}
+              {ticket.aiSummary.substring(0, 100)}
+              {ticket.aiSummary.length > 100 && '...'}
+            </span>
           </div>
         )}
       </div>

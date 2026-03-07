@@ -33,6 +33,17 @@
 - `disabled` prop triggers `opacity-50 cursor-not-allowed` + tooltip via `title` attribute
 - Tailwind classes: `appearance-none text-xs pl-2 pr-6 py-1 rounded-lg border bg-gray-900 border-gray-700`
 
+## i18n (next-intl) Patterns
+
+- Infrastructure: `apps/dashboard/i18n/request.ts` (cookie-based locale, defaults to `fr`)
+- Translation files: `apps/dashboard/messages/en.json` and `apps/dashboard/messages/fr.json` (MUST have identical keys)
+- Client components: `useTranslations('namespace')` hook — requires `'use client'` directive
+- Server components: `getTranslations('namespace')` async function
+- Namespaces: `common`, `nav`, `auth.login/signup/forgotPassword/resetPassword`, `setup`, `dashboard`, `tickets`, `tickets.detail`, `bulkActions`, `pagination`, `agent`, `agent.metrics`, `agent.filters`, `agent.taskStatuses`, `applications`, `integrations`, `github`, `analytics`, `settings`, `search`, `connection`, `theme`, `language`, `export`, `video`, `sdk`, `page`
+- Locale-aware dates on client: `document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr'`
+- Nested namespaces (e.g. `agent.metrics`): `useTranslations('agent.metrics')` — note the dot notation
+- When using `t('key' as any)`, prefer adding the key to the JSON namespace directly instead
+
 ## Tech Stack Notes
 
 - Next.js 14 App Router in `apps/dashboard/`

@@ -7,17 +7,33 @@
 
 import { useState, useEffect } from 'react';
 import { useRequireAuth, useAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
 import { usersApi, ApiError } from '@/lib/api/users';
 import toast, { Toaster } from 'react-hot-toast';
-import { User, Lock, Bell, Users, CreditCard, Key, Bot, Github, Shield, BarChart3, TrendingUp } from 'lucide-react';
+import {
+  User,
+  Lock,
+  Bell,
+  Users,
+  CreditCard,
+  Key,
+  Bot,
+  Github,
+  Shield,
+  BarChart3,
+  TrendingUp,
+} from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
   const { logout, reloadUser } = useAuth();
+  const t = useTranslations('settings');
 
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'team'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'notifications' | 'team'>(
+    'profile'
+  );
 
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -59,12 +75,12 @@ export default function SettingsPage() {
     try {
       await usersApi.updateProfile(profileData);
       await reloadUser();
-      toast.success('Profil mis à jour avec succès !');
+      toast.success(t('profile.updateSuccess'));
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message || 'Erreur lors de la mise à jour du profil');
+        toast.error(error.message || t('profile.updateError'));
       } else {
-        toast.error('Erreur lors de la mise à jour du profil');
+        toast.error(t('profile.updateError'));
       }
     } finally {
       setIsUpdating(false);
@@ -75,12 +91,12 @@ export default function SettingsPage() {
     e.preventDefault();
 
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Les mots de passe ne correspondent pas');
+      toast.error(t('security.passwordMismatch'));
       return;
     }
 
     if (passwordData.newPassword.length < 8) {
-      toast.error('Le mot de passe doit contenir au moins 8 caractères');
+      toast.error(t('security.passwordTooShort'));
       return;
     }
 
@@ -91,7 +107,7 @@ export default function SettingsPage() {
         currentPassword: passwordData.currentPassword,
         newPassword: passwordData.newPassword,
       });
-      toast.success('Mot de passe mis à jour avec succès !');
+      toast.success(t('security.updateSuccess'));
       setPasswordData({
         currentPassword: '',
         newPassword: '',
@@ -100,12 +116,12 @@ export default function SettingsPage() {
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.statusCode === 401) {
-          toast.error('Le mot de passe actuel est incorrect');
+          toast.error(t('security.wrongPassword'));
         } else {
-          toast.error(error.message || 'Erreur lors de la mise à jour du mot de passe');
+          toast.error(error.message || t('security.updateError'));
         }
       } else {
-        toast.error('Erreur lors de la mise à jour du mot de passe');
+        toast.error(t('security.updateError'));
       }
     } finally {
       setIsUpdating(false);
@@ -118,12 +134,12 @@ export default function SettingsPage() {
 
     try {
       await usersApi.updateNotifications(notificationsData);
-      toast.success('Préférences de notifications mises à jour !');
+      toast.success(t('notifications.updateSuccess'));
     } catch (error) {
       if (error instanceof ApiError) {
-        toast.error(error.message || 'Erreur lors de la mise à jour des notifications');
+        toast.error(error.message || t('notifications.updateError'));
       } else {
-        toast.error('Erreur lors de la mise à jour des notifications');
+        toast.error(t('notifications.updateError'));
       }
     } finally {
       setIsUpdating(false);
@@ -135,21 +151,21 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { id: 'profile', label: 'Profil', icon: User },
-    { id: 'security', label: 'Sécurité', icon: Lock },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'team', label: 'Équipe', icon: Users },
+    { id: 'profile', label: t('tabs.profile'), icon: User },
+    { id: 'security', label: t('tabs.security'), icon: Lock },
+    { id: 'notifications', label: t('tabs.notifications'), icon: Bell },
+    { id: 'team', label: t('tabs.team'), icon: Users },
   ] as const;
 
   const settingsPages = [
-    { href: '/dashboard/settings/plan', label: 'Plan & Usage', icon: CreditCard },
-    { href: '/dashboard/settings/billing', label: 'Billing', icon: CreditCard },
-    { href: '/dashboard/settings/license', label: 'License', icon: Key },
-    { href: '/dashboard/settings/ai', label: 'AI Configuration', icon: Bot },
-    { href: '/dashboard/settings/ai-usage', label: 'AI Usage', icon: TrendingUp },
-    { href: '/dashboard/settings/github', label: 'GitHub', icon: Github },
-    { href: '/dashboard/settings/auth/sso', label: 'SSO', icon: Shield },
-    { href: '/dashboard/settings/status', label: 'Statut Systeme', icon: BarChart3 },
+    { href: '/dashboard/settings/plan', label: t('pages.plan'), icon: CreditCard },
+    { href: '/dashboard/settings/billing', label: t('pages.billing'), icon: CreditCard },
+    { href: '/dashboard/settings/license', label: t('pages.license'), icon: Key },
+    { href: '/dashboard/settings/ai', label: t('pages.ai'), icon: Bot },
+    { href: '/dashboard/settings/ai-usage', label: t('pages.aiUsage'), icon: TrendingUp },
+    { href: '/dashboard/settings/github', label: t('pages.github'), icon: Github },
+    { href: '/dashboard/settings/auth/sso', label: t('pages.sso'), icon: Shield },
+    { href: '/dashboard/settings/status', label: t('pages.status'), icon: BarChart3 },
   ];
 
   return (
@@ -158,10 +174,8 @@ export default function SettingsPage() {
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Paramètres</h1>
-          <p className="text-gray-600 mt-1">
-            Gérez votre compte et vos préférences
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -169,7 +183,7 @@ export default function SettingsPage() {
           <div className="lg:col-span-1">
             <Card padding={false}>
               <nav className="space-y-1">
-                {tabs.map((tab) => {
+                {tabs.map(tab => {
                   const Icon = tab.icon;
                   return (
                     <button
@@ -191,7 +205,7 @@ export default function SettingsPage() {
 
             <Card padding={false} className="mt-4">
               <nav className="space-y-1">
-                {settingsPages.map((page) => {
+                {settingsPages.map(page => {
                   const Icon = page.icon;
                   return (
                     <a
@@ -213,49 +227,51 @@ export default function SettingsPage() {
             {/* Profile Tab */}
             {activeTab === 'profile' && (
               <Card>
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Informations du profil
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+                  {t('profile.title')}
                 </h2>
 
                 <form onSubmit={handleProfileUpdate} className="space-y-4">
                   <Input
-                    label="Nom complet"
+                    label={t('profile.fullName')}
                     value={profileData.name}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, name: e.target.value })
-                    }
+                    onChange={e => setProfileData({ ...profileData, name: e.target.value })}
                     placeholder="John Doe"
                     disabled={isUpdating}
                   />
 
                   <Input
-                    label="Email"
+                    label={t('profile.email')}
                     type="email"
                     value={profileData.email}
-                    onChange={(e) =>
-                      setProfileData({ ...profileData, email: e.target.value })
-                    }
+                    onChange={e => setProfileData({ ...profileData, email: e.target.value })}
                     placeholder="john@example.com"
                     disabled={isUpdating}
                   />
 
                   <div className="pt-4 border-t">
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-2">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Rôle</span>
-                        <span className="font-medium text-gray-900 capitalize">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {t('profile.role')}
+                        </span>
+                        <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
                           {user.role}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Tenant ID</span>
-                        <span className="font-mono text-xs text-gray-900">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {t('profile.tenantId')}
+                        </span>
+                        <span className="font-mono text-xs text-gray-900 dark:text-gray-100">
                           {user.tenantId.substring(0, 20)}...
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">User ID</span>
-                        <span className="font-mono text-xs text-gray-900">
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {t('profile.userId')}
+                        </span>
+                        <span className="font-mono text-xs text-gray-900 dark:text-gray-100">
                           {user.id.substring(0, 20)}...
                         </span>
                       </div>
@@ -264,7 +280,7 @@ export default function SettingsPage() {
 
                   <div className="flex gap-3 pt-4">
                     <Button type="submit" isLoading={isUpdating}>
-                      Enregistrer les modifications
+                      {t('profile.save')}
                     </Button>
                     <Button
                       type="button"
@@ -277,7 +293,7 @@ export default function SettingsPage() {
                       }
                       disabled={isUpdating}
                     >
-                      Annuler
+                      {t('profile.cancel')}
                     </Button>
                   </div>
                 </form>
@@ -287,49 +303,40 @@ export default function SettingsPage() {
             {/* Security Tab */}
             {activeTab === 'security' && (
               <Card>
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Sécurité du compte
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+                  {t('security.title')}
                 </h2>
 
                 <form onSubmit={handlePasswordUpdate} className="space-y-4">
                   <Input
-                    label="Mot de passe actuel"
+                    label={t('security.currentPassword')}
                     type="password"
                     value={passwordData.currentPassword}
-                    onChange={(e) =>
-                      setPasswordData({
-                        ...passwordData,
-                        currentPassword: e.target.value,
-                      })
+                    onChange={e =>
+                      setPasswordData({ ...passwordData, currentPassword: e.target.value })
                     }
                     disabled={isUpdating}
                     required
                   />
 
                   <Input
-                    label="Nouveau mot de passe"
+                    label={t('security.newPassword')}
                     type="password"
                     value={passwordData.newPassword}
-                    onChange={(e) =>
-                      setPasswordData({
-                        ...passwordData,
-                        newPassword: e.target.value,
-                      })
+                    onChange={e =>
+                      setPasswordData({ ...passwordData, newPassword: e.target.value })
                     }
-                    helperText="Au moins 8 caractères"
+                    helperText={t('security.newPasswordHint')}
                     disabled={isUpdating}
                     required
                   />
 
                   <Input
-                    label="Confirmer le nouveau mot de passe"
+                    label={t('security.confirmPassword')}
                     type="password"
                     value={passwordData.confirmPassword}
-                    onChange={(e) =>
-                      setPasswordData({
-                        ...passwordData,
-                        confirmPassword: e.target.value,
-                      })
+                    onChange={e =>
+                      setPasswordData({ ...passwordData, confirmPassword: e.target.value })
                     }
                     disabled={isUpdating}
                     required
@@ -337,38 +344,33 @@ export default function SettingsPage() {
 
                   <div className="flex gap-3 pt-4">
                     <Button type="submit" isLoading={isUpdating}>
-                      Changer le mot de passe
+                      {t('security.changePassword')}
                     </Button>
                   </div>
                 </form>
 
                 <div className="mt-8 pt-8 border-t">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                    Sessions actives
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                    {t('security.activeSessions')}
                   </h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          💻 Session actuelle
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          💻 {t('security.currentSession')}
                         </p>
-                        <p className="text-xs text-gray-600 mt-1">
-                          Windows • Chrome • {new Date().toLocaleDateString('fr-FR')}
+                        <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                          {t('security.currentSessionDetails')} • {new Date().toLocaleDateString()}
                         </p>
                       </div>
-                      <span className="text-xs text-green-600 font-medium">
-                        ● Actif
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                        ● {t('security.active')}
                       </span>
                     </div>
                   </div>
 
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => logout()}
-                    className="mt-4"
-                  >
-                    Se déconnecter de toutes les sessions
+                  <Button variant="danger" size="sm" onClick={() => logout()} className="mt-4">
+                    {t('security.signOutAll')}
                   </Button>
                 </div>
               </Card>
@@ -377,16 +379,16 @@ export default function SettingsPage() {
             {/* Notifications Tab */}
             {activeTab === 'notifications' && (
               <Card>
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Préférences de notifications
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+                  {t('notifications.title')}
                 </h2>
 
                 <form onSubmit={handleNotificationsUpdate} className="space-y-4">
-                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
                     <input
                       type="checkbox"
                       checked={notificationsData.emailOnNewTicket}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNotificationsData({
                           ...notificationsData,
                           emailOnNewTicket: e.target.checked,
@@ -396,20 +398,20 @@ export default function SettingsPage() {
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        Nouveau ticket
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {t('notifications.newTicket')}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Recevoir un email quand un nouveau ticket est créé
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('notifications.newTicketDescription')}
                       </div>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
                     <input
                       type="checkbox"
                       checked={notificationsData.emailOnStatusChange}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNotificationsData({
                           ...notificationsData,
                           emailOnStatusChange: e.target.checked,
@@ -419,20 +421,20 @@ export default function SettingsPage() {
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        Changement de statut
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {t('notifications.statusChange')}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Recevoir un email quand le statut d&apos;un ticket change
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('notifications.statusChangeDescription')}
                       </div>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
                     <input
                       type="checkbox"
                       checked={notificationsData.emailOnComment}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNotificationsData({
                           ...notificationsData,
                           emailOnComment: e.target.checked,
@@ -442,20 +444,20 @@ export default function SettingsPage() {
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        Nouveaux commentaires
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {t('notifications.newComment')}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Recevoir un email pour les commentaires sur vos tickets
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('notifications.newCommentDescription')}
                       </div>
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 rounded-lg">
+                  <label className="flex items-center gap-3 cursor-pointer p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
                     <input
                       type="checkbox"
                       checked={notificationsData.emailWeeklyReport}
-                      onChange={(e) =>
+                      onChange={e =>
                         setNotificationsData({
                           ...notificationsData,
                           emailWeeklyReport: e.target.checked,
@@ -465,18 +467,18 @@ export default function SettingsPage() {
                       className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">
-                        Rapport hebdomadaire
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {t('notifications.weeklyReport')}
                       </div>
-                      <div className="text-xs text-gray-500">
-                        Recevoir un résumé hebdomadaire de l&apos;activité
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {t('notifications.weeklyReportDescription')}
                       </div>
                     </div>
                   </label>
 
                   <div className="flex gap-3 pt-4">
                     <Button type="submit" isLoading={isUpdating}>
-                      Enregistrer les préférences
+                      {t('notifications.save')}
                     </Button>
                   </div>
                 </form>
@@ -486,36 +488,34 @@ export default function SettingsPage() {
             {/* Team Tab */}
             {activeTab === 'team' && (
               <Card>
-                <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                  Gestion de l&apos;équipe
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
+                  {t('team.title')}
                 </h2>
 
                 <div className="mb-6">
-                  <Button>
-                    ➕ Inviter un membre
-                  </Button>
+                  <Button>➕ {t('team.inviteMember')}</Button>
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
                         {user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                           {user.name || user.email}
                         </p>
-                        <p className="text-xs text-gray-600">{user.email}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{user.email}</p>
                       </div>
                     </div>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full capitalize">
+                    <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full capitalize">
                       {user.role}
                     </span>
                   </div>
 
-                  <div className="text-center py-8 text-gray-500">
-                    <p className="text-sm">Aucun autre membre pour l&apos;instant</p>
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <p className="text-sm">{t('team.noOtherMembers')}</p>
                   </div>
                 </div>
               </Card>

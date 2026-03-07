@@ -1,6 +1,5 @@
 /**
  * Tickets List Page
- * Page principale de la liste des tickets
  */
 
 'use client';
@@ -18,12 +17,14 @@ import { BulkActions } from '@/components/tickets/BulkActions';
 import { ExportButton } from '@/components/export/ExportButton';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
+import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 
 type ViewMode = 'table' | 'grid';
 
 export default function TicketsPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('tickets');
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -45,76 +46,76 @@ export default function TicketsPage() {
     totalPages: 0,
   });
 
-  // Real-time notification state
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Fetch tickets
   const fetchTickets = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
       const response: PaginatedResponse<Ticket> = await ticketsApi.getTickets(filters);
       setTickets(response.data);
-      // Backend returns 0-based page, convert to 1-based for UI
       setPagination({
         ...response.pagination,
         page: response.pagination.page + 1,
       });
     } catch (err: any) {
-      setError(err.message || 'Erreur lors du chargement des tickets');
+      setError(err.message || t('loadingError'));
       console.error('Error fetching tickets:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [filters]);
+  }, [filters, t]);
 
-  // Handle real-time ticket events
-  const handleTicketEvent = useCallback((event: TicketEvent) => {
-    switch (event.event) {
-      case 'ticket:created': {
-        const ticket = event.ticket as Ticket;
-        // If on page 1 with default sort, prepend the new ticket
-        if (filters.page === 1 && filters.sortBy === 'createdAt' && filters.sortOrder === 'desc') {
-          setTickets((prev) => [ticket, ...prev.slice(0, (filters.limit || 20) - 1)]);
-          setPagination((prev) => ({ ...prev, total: prev.total + 1 }));
+  const handleTicketEvent = useCallback(
+    (event: TicketEvent) => {
+      switch (event.event) {
+        case 'ticket:created': {
+          const ticket = event.ticket as Ticket;
+          if (
+            filters.page === 1 &&
+            filters.sortBy === 'createdAt' &&
+            filters.sortOrder === 'desc'
+          ) {
+            setTickets(prev => [ticket, ...prev.slice(0, (filters.limit || 20) - 1)]);
+            setPagination(prev => ({ ...prev, total: prev.total + 1 }));
+          }
+          setNotification(t('notification.newTicket', { title: ticket.title || 'Untitled' }));
+          break;
         }
-        setNotification(`New ticket: ${ticket.title || 'Untitled'}`);
-        break;
+        case 'ticket:updated':
+        case 'ticket:assigned':
+        case 'ticket:ai-analysis-completed': {
+          const updated = event.ticket;
+          setTickets(prev => prev.map(tk => (tk.id === updated.id ? { ...tk, ...updated } : tk)));
+          const label =
+            event.event === 'ticket:assigned'
+              ? t('notification.ticketAssigned')
+              : event.event === 'ticket:ai-analysis-completed'
+                ? t('notification.aiAnalysisCompleted')
+                : t('notification.ticketUpdated');
+          setNotification(label);
+          break;
+        }
+        case 'ticket:deleted': {
+          const deletedId = event.ticket.id;
+          setTickets(prev => prev.filter(tk => tk.id !== deletedId));
+          setSelectedTickets(prev => prev.filter(id => id !== deletedId));
+          setPagination(prev => ({ ...prev, total: Math.max(0, prev.total - 1) }));
+          setNotification(t('notification.ticketDeleted'));
+          break;
+        }
+        case 'ticket:bulk-updated': {
+          fetchTickets();
+          setNotification(t('notification.bulkUpdated'));
+          break;
+        }
       }
-      case 'ticket:updated':
-      case 'ticket:assigned':
-      case 'ticket:ai-analysis-completed': {
-        const updated = event.ticket;
-        setTickets((prev) =>
-          prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t))
-        );
-        const label = event.event === 'ticket:assigned'
-          ? 'Ticket assigned'
-          : event.event === 'ticket:ai-analysis-completed'
-          ? 'AI analysis completed'
-          : 'Ticket updated';
-        setNotification(label);
-        break;
-      }
-      case 'ticket:deleted': {
-        const deletedId = event.ticket.id;
-        setTickets((prev) => prev.filter((t) => t.id !== deletedId));
-        setSelectedTickets((prev) => prev.filter((id) => id !== deletedId));
-        setPagination((prev) => ({ ...prev, total: Math.max(0, prev.total - 1) }));
-        setNotification('Ticket deleted');
-        break;
-      }
-      case 'ticket:bulk-updated': {
-        fetchTickets();
-        setNotification('Tickets updated in bulk');
-        break;
-      }
-    }
-  }, [filters.page, filters.sortBy, filters.sortOrder, filters.limit, fetchTickets]);
+    },
+    [filters.page, filters.sortBy, filters.sortOrder, filters.limit, fetchTickets, t]
+  );
 
   const { isConnected } = useTicketSocket(handleTicketEvent);
 
-  // Auto-dismiss notification
   useEffect(() => {
     if (!notification) return;
     const timer = setTimeout(() => setNotification(null), 4000);
@@ -158,13 +159,13 @@ export default function TicketsPage() {
     if (checked) {
       setSelectedTickets([...selectedTickets, ticketId]);
     } else {
-      setSelectedTickets(selectedTickets.filter((id) => id !== ticketId));
+      setSelectedTickets(selectedTickets.filter(id => id !== ticketId));
     }
   };
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedTickets(tickets.map((t) => t.id));
+      setSelectedTickets(tickets.map(tk => tk.id));
     } else {
       setSelectedTickets([]);
     }
@@ -190,34 +191,38 @@ export default function TicketsPage() {
         <div className="mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">Tickets</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-gray-100">
+                {t('title')}
+              </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-1 text-sm sm:text-base">
-                Gérez et suivez tous les tickets de support
+                {t('subtitle')}
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Export Button */}
               <ExportButton tickets={tickets} filters={filters} />
 
-              {/* View Mode Toggle - Hidden on mobile, table shows cards automatically */}
               <div className="hidden sm:flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
                 <button
                   onClick={() => setViewMode('table')}
                   className={`px-3 py-2 rounded min-h-[40px] ${
-                    viewMode === 'table' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-600 dark:text-gray-400'
+                    viewMode === 'table'
+                      ? 'bg-white dark:bg-gray-800 shadow'
+                      : 'text-gray-600 dark:text-gray-400'
                   }`}
-                  title="Vue table"
-                  aria-label="Vue table"
+                  title={t('tableView')}
+                  aria-label={t('tableView')}
                 >
                   📋
                 </button>
                 <button
                   onClick={() => setViewMode('grid')}
                   className={`px-3 py-2 rounded min-h-[40px] ${
-                    viewMode === 'grid' ? 'bg-white dark:bg-gray-800 shadow' : 'text-gray-600 dark:text-gray-400'
+                    viewMode === 'grid'
+                      ? 'bg-white dark:bg-gray-800 shadow'
+                      : 'text-gray-600 dark:text-gray-400'
                   }`}
-                  title="Vue grille"
-                  aria-label="Vue grille"
+                  title={t('gridView')}
+                  aria-label={t('gridView')}
                 >
                   📦
                 </button>
@@ -250,11 +255,17 @@ export default function TicketsPage() {
         <div className="mb-6 bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-              <span className="font-medium text-gray-900 dark:text-gray-100">{pagination.total}</span> ticket(s) au total
+              <span className="font-medium text-gray-900 dark:text-gray-100">
+                {pagination.total}
+              </span>{' '}
+              {t('totalCount', { count: '' }).replace('{count} ', '')}
               {isConnected && (
-                <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400" title="Real-time updates active">
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400"
+                  title="Real-time updates active"
+                >
                   <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  Live
+                  {t('liveUpdates')}
                 </span>
               )}
             </div>
@@ -280,7 +291,7 @@ export default function TicketsPage() {
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
-                Chargement...
+                {t('loading')}
               </div>
             )}
           </div>
@@ -293,10 +304,15 @@ export default function TicketsPage() {
             <button
               onClick={() => setNotification(null)}
               className="ml-4 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 min-w-[40px] min-h-[40px] flex items-center justify-center"
-              aria-label="Fermer la notification"
+              aria-label={t('notification.close')}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
               </svg>
             </button>
           </div>
@@ -306,18 +322,18 @@ export default function TicketsPage() {
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-700 rounded-lg p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" aria-hidden="true" />
+              <AlertTriangle
+                className="w-5 h-5 text-red-600 dark:text-red-400"
+                aria-hidden="true"
+              />
               <div className="flex-1">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Erreur</h3>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                  {t('loadingError')}
+                </h3>
                 <p className="text-sm text-red-700 dark:text-red-300 mt-1">{error}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchTickets}
-                className="w-full sm:w-auto"
-              >
-                Réessayer
+              <Button variant="ghost" size="sm" onClick={fetchTickets} className="w-full sm:w-auto">
+                {t('resetFilters')}
               </Button>
             </div>
           </div>
@@ -328,7 +344,7 @@ export default function TicketsPage() {
           {isLoading && tickets.length === 0 ? (
             <div className="p-12 text-center">
               <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
-              <p className="mt-4 text-gray-600 dark:text-gray-400">Chargement des tickets...</p>
+              <p className="mt-4 text-gray-600 dark:text-gray-400">{t('loadingTickets')}</p>
             </div>
           ) : viewMode === 'table' ? (
             <TicketTable
@@ -344,19 +360,18 @@ export default function TicketsPage() {
             <div className="p-6">
               <EmptyState
                 icon="🎫"
-                title="Aucun ticket trouvé"
-                description="Modifiez vos filtres pour voir plus de résultats ou attendez que les utilisateurs soumettent leurs premiers tickets."
+                title={t('noTicketsFound')}
+                description={t('noTicketsDescription')}
               />
             </div>
           ) : (
             <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {tickets.map((ticket) => (
+              {tickets.map(ticket => (
                 <TicketCard key={ticket.id} ticket={ticket} />
               ))}
             </div>
           )}
 
-          {/* Pagination */}
           {!isLoading && tickets.length > 0 && (
             <Pagination
               currentPage={pagination.page}

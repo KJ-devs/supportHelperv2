@@ -1,9 +1,11 @@
 'use client';
 
 import { useTheme } from '@/providers/theme-provider';
+import { useTranslations } from 'next-intl';
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
+  const t = useTranslations('theme');
 
   const cycleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -11,20 +13,22 @@ export function ThemeToggle() {
     else setTheme('light');
   };
 
-  const themeLabels = {
-    light: 'Thème clair',
-    dark: 'Thème sombre',
-    system: 'Thème système'
-  };
+  const themeLabel = theme === 'light' ? t('light') : theme === 'dark' ? t('dark') : t('system');
 
   return (
     <button
       onClick={cycleTheme}
       className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
-      aria-label={`Changer le thème. Thème actuel: ${themeLabels[theme as keyof typeof themeLabels] || theme}`}
+      aria-label={t('changeTheme', { theme: themeLabel })}
     >
       {theme === 'light' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -34,7 +38,13 @@ export function ThemeToggle() {
         </svg>
       )}
       {theme === 'dark' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -44,7 +54,13 @@ export function ThemeToggle() {
         </svg>
       )}
       {theme === 'system' && (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+        >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"

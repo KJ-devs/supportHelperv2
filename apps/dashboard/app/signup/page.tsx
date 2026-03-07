@@ -5,8 +5,11 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { AuthApiError } from '@/lib/api/auth';
+import { useTranslations } from 'next-intl';
+import { LanguageSelector } from '@/components/layout/LanguageSelector';
 
 export default function SignupPage() {
+  const t = useTranslations('auth.signup');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +20,6 @@ export default function SignupPage() {
   const { register, isAuthenticated } = useAuth();
   const router = useRouter();
 
-  // Redirect if already authenticated
   if (isAuthenticated) {
     router.push('/dashboard');
     return null;
@@ -29,13 +31,13 @@ export default function SignupPage() {
     setError('');
 
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('passwordMismatch'));
       setIsLoading(false);
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters');
+      setError(t('passwordTooShort'));
       setIsLoading(false);
       return;
     }
@@ -46,21 +48,25 @@ export default function SignupPage() {
       if (err instanceof AuthApiError) {
         setError(err.message);
       } else {
-        setError('Failed to create account. Please try again.');
+        setError(t('createFailed'));
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500";
+  const inputClassName =
+    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500';
 
   return (
     <main className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="w-full max-w-md p-8 bg-white dark:bg-gray-900 rounded-lg shadow-md dark:shadow-gray-800/20">
+        <div className="flex justify-end mb-2">
+          <LanguageSelector />
+        </div>
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Create an account</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Get started with Support Helper</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">{t('subtitle')}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -71,8 +77,11 @@ export default function SignupPage() {
           )}
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Full name
+            <label
+              htmlFor="name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('fullName')}
             </label>
             <input
               id="name"
@@ -81,13 +90,16 @@ export default function SignupPage() {
               onChange={e => setName(e.target.value)}
               required
               className={inputClassName}
-              placeholder="John Doe"
+              placeholder={t('fullNamePlaceholder')}
             />
           </div>
 
           <div>
-            <label htmlFor="tenantName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Organization name
+            <label
+              htmlFor="tenantName"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('organization')}
             </label>
             <input
               id="tenantName"
@@ -96,13 +108,16 @@ export default function SignupPage() {
               onChange={e => setTenantName(e.target.value)}
               required
               className={inputClassName}
-              placeholder="Acme Inc"
+              placeholder={t('organizationPlaceholder')}
             />
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Email address
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('email')}
             </label>
             <input
               id="email"
@@ -111,13 +126,16 @@ export default function SignupPage() {
               onChange={e => setEmail(e.target.value)}
               required
               className={inputClassName}
-              placeholder="you@example.com"
+              placeholder={t('emailPlaceholder')}
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('password')}
             </label>
             <input
               id="password"
@@ -128,7 +146,7 @@ export default function SignupPage() {
               className={inputClassName}
               placeholder="••••••••"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Must be at least 8 characters</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('passwordHint')}</p>
           </div>
 
           <div>
@@ -136,7 +154,7 @@ export default function SignupPage() {
               htmlFor="confirmPassword"
               className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
             >
-              Confirm password
+              {t('confirmPassword')}
             </label>
             <input
               id="confirmPassword"
@@ -157,13 +175,13 @@ export default function SignupPage() {
               className="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded"
             />
             <label htmlFor="terms" className="ml-2 text-sm text-gray-600 dark:text-gray-400">
-              I agree to the{' '}
+              {t('agreeTerms')}{' '}
               <Link href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
-                Terms of Service
+                {t('termsOfService')}
               </Link>{' '}
-              and{' '}
+              {t('and')}{' '}
               <Link href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
-                Privacy Policy
+                {t('privacyPolicy')}
               </Link>
             </label>
           </div>
@@ -173,14 +191,17 @@ export default function SignupPage() {
             disabled={isLoading}
             className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isLoading ? 'Creating account...' : 'Create account'}
+            {isLoading ? t('submitting') : t('submit')}
           </button>
         </form>
 
         <p className="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
-          Already have an account?{' '}
-          <Link href="/login" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-            Sign in
+          {t('alreadyAccount')}{' '}
+          <Link
+            href="/login"
+            className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
+          >
+            {t('signIn')}
           </Link>
         </p>
       </div>

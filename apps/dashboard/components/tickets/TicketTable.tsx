@@ -1,6 +1,5 @@
 /**
  * Ticket Table Component
- * Table affichant les tickets avec tri
  */
 
 'use client';
@@ -11,6 +10,7 @@ import type { Ticket } from '@/lib/types/ticket';
 import { StatusBadge, SeverityBadge, TypeBadge } from '@/components/ui';
 import { TicketCheckbox } from './TicketCheckbox';
 import { Ticket as TicketIcon, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface TicketTableProps {
   tickets: Ticket[];
@@ -22,9 +22,18 @@ interface TicketTableProps {
   onSelectAll?: (checked: boolean) => void;
 }
 
-export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTickets = [], onSelectTicket, onSelectAll }: TicketTableProps) {
+export function TicketTable({
+  tickets,
+  onSort,
+  sortField,
+  sortOrder,
+  selectedTickets = [],
+  onSelectTicket,
+  onSelectAll,
+}: TicketTableProps) {
+  const t = useTranslations('tickets');
   const [isMobile, setIsMobile] = useState(false);
-  
+
   useEffect(() => {
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 640);
@@ -35,10 +44,10 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Sort tickets in descending order by createdAt date by default
-  const sortedTickets = [...tickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const sortedTickets = [...tickets].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
-  // Default sort by createdAt in descending order
   useEffect(() => {
     if (!sortField && !sortOrder && tickets.length > 0) {
       onSort && onSort('createdAt');
@@ -52,37 +61,52 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
   };
 
   const SortIcon = ({ field }: { field: string }) => {
-    if (sortField !== field) return <ArrowUpDown className="w-4 h-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />;
-    return sortOrder === 'asc' ? <ArrowUp className="w-4 h-4" aria-hidden="true" /> : <ArrowDown className="w-4 h-4" aria-hidden="true" />;
+    if (sortField !== field)
+      return (
+        <ArrowUpDown className="w-4 h-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
+      );
+    return sortOrder === 'asc' ? (
+      <ArrowUp className="w-4 h-4" aria-hidden="true" />
+    ) : (
+      <ArrowDown className="w-4 h-4" aria-hidden="true" />
+    );
   };
 
   const allSelected = tickets.length > 0 && selectedTickets.length === tickets.length;
 
+  const locale =
+    typeof document !== 'undefined'
+      ? (document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr')
+      : 'fr';
+
   if (tickets.length === 0) {
     return (
       <div className="text-center py-12">
-        <TicketIcon className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600" aria-hidden="true" />
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Aucun ticket trouvé</h3>
-        <p className="text-gray-600 dark:text-gray-400">Modifiez vos filtres pour voir plus de résultats.</p>
+        <TicketIcon
+          className="w-16 h-16 mx-auto mb-4 text-gray-400 dark:text-gray-600"
+          aria-hidden="true"
+        />
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+          {t('noTicketsFound')}
+        </h3>
+        <p className="text-gray-600 dark:text-gray-400">{t('noTicketsModify')}</p>
       </div>
     );
   }
 
-  // Mobile Card View
   if (isMobile) {
     return (
       <div className="space-y-3 p-4">
         {onSelectAll && (
           <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Tout sélectionner</span>
-            <TicketCheckbox
-              checked={allSelected}
-              onChange={(checked) => onSelectAll(checked)}
-            />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('selectAll')}
+            </span>
+            <TicketCheckbox checked={allSelected} onChange={checked => onSelectAll(checked)} />
           </div>
         )}
-        {sortedTickets.map((ticket) => {
-          const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
+        {sortedTickets.map(ticket => {
+          const createdAt = new Date(ticket.createdAt).toLocaleDateString(locale, {
             day: 'numeric',
             month: 'short',
             hour: '2-digit',
@@ -94,12 +118,11 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
               key={ticket.id}
               className="bg-white dark:bg-gray-800 rounded-lg shadow border border-gray-200 dark:border-gray-700 p-4"
             >
-              {/* Header with checkbox */}
               <div className="flex items-start gap-3 mb-3">
                 {onSelectTicket && (
                   <TicketCheckbox
                     checked={selectedTickets.includes(ticket.id)}
-                    onChange={(checked) => onSelectTicket(ticket.id, checked)}
+                    onChange={checked => onSelectTicket(ticket.id, checked)}
                   />
                 )}
                 <div className="flex-1 min-w-0">
@@ -116,13 +139,11 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                 <SeverityBadge severity={ticket.severity} />
               </div>
 
-              {/* Badges */}
               <div className="flex flex-wrap gap-2 mb-3">
                 <StatusBadge status={ticket.status} />
                 <TypeBadge type={ticket.type} />
               </div>
 
-              {/* Footer */}
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-3 border-t dark:border-gray-700">
                 <div className="flex items-center gap-2">
                   {ticket.application && (
@@ -134,7 +155,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                   <Link
                     href={`/dashboard/tickets/${ticket.id}`}
                     className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                    aria-label="Voir le ticket"
+                    aria-label={t('viewTicket')}
                   >
                     →
                   </Link>
@@ -147,7 +168,6 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
     );
   }
 
-  // Desktop Table View
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -155,10 +175,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
           <tr>
             {onSelectAll && (
               <th className="px-6 py-3 text-left">
-                <TicketCheckbox
-                  checked={allSelected}
-                  onChange={(checked) => onSelectAll(checked)}
-                />
+                <TicketCheckbox checked={allSelected} onChange={checked => onSelectAll(checked)} />
               </th>
             )}
             <th
@@ -166,22 +183,22 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
               onClick={() => handleSort('title')}
             >
               <div className="flex items-center space-x-1">
-                <span>Titre</span>
+                <span>{t('title' as any)}</span>
                 <SortIcon field="title" />
               </div>
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Status
+              {t('filterStatus')}
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Type
+              {t('filterType')}
             </th>
             <th
               className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('severity')}
             >
               <div className="flex items-center space-x-1">
-                <span>Sévérité</span>
+                <span>{t('filterSeverity')}</span>
                 <SortIcon field="severity" />
               </div>
             </th>
@@ -193,18 +210,18 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
               onClick={() => handleSort('createdAt')}
             >
               <div className="flex items-center space-x-1">
-                <span>Date</span>
+                <span>{t('date' as any)}</span>
                 <SortIcon field="createdAt" />
               </div>
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Actions
+              {t('actions' as any)}
             </th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-          {sortedTickets.map((ticket) => {
-            const createdAt = new Date(ticket.createdAt).toLocaleDateString('fr-FR', {
+          {sortedTickets.map(ticket => {
+            const createdAt = new Date(ticket.createdAt).toLocaleDateString(locale, {
               day: 'numeric',
               month: 'short',
               hour: '2-digit',
@@ -217,7 +234,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                   <td className="px-6 py-4">
                     <TicketCheckbox
                       checked={selectedTickets.includes(ticket.id)}
-                      onChange={(checked) => onSelectTicket(ticket.id, checked)}
+                      onChange={checked => onSelectTicket(ticket.id, checked)}
                     />
                   </td>
                 )}
@@ -254,7 +271,7 @@ export function TicketTable({ tickets, onSort, sortField, sortOrder, selectedTic
                     href={`/dashboard/tickets/${ticket.id}`}
                     className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                   >
-                    Voir →
+                    {t('view')} →
                   </Link>
                 </td>
               </tr>

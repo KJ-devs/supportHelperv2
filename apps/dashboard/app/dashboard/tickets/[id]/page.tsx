@@ -31,6 +31,7 @@ import { RelatedTicketsSection } from '@/components/ticket-relations/RelatedTick
 import type { N1Assessment } from '@/lib/types/ticket';
 import { AlertTriangle, RefreshCw, Trash2, Bot } from 'lucide-react';
 import { useTicketSocket, type AgentEscalatedToN2Event } from '@/hooks/useTicketSocket';
+import { useTranslations } from 'next-intl';
 
 // --- Collapsible section header ---
 
@@ -63,6 +64,7 @@ export default function TicketDetailPage() {
   const router = useRouter();
   const { isLoading: authLoading } = useRequireAuth();
   const toast = useToast();
+  const t = useTranslations('tickets.detail');
 
   const ticketId = params.id as string;
 
@@ -162,7 +164,7 @@ export default function TicketDetailPage() {
       await ticketsApi.deleteTicket(ticketId);
       router.push('/dashboard/tickets');
     } catch (err) {
-      toast.error('Erreur lors de la suppression du ticket');
+      toast.error(t('deleteError'));
       console.error('Error deleting ticket:', err);
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -178,10 +180,10 @@ export default function TicketDetailPage() {
     try {
       setIsAnalyzing(true);
       const task = await agentTasksApi.triggerAnalysis(ticketId);
-      toast.success('Analyse IA lancee');
+      toast.success(t('analyzeSuccess'));
       router.push(`/dashboard/agent-tasks/${task.id}`);
     } catch (err: any) {
-      toast.error(err.message || "Impossible de lancer l'analyse");
+      toast.error(err.message || t('analyzeError'));
     } finally {
       setIsAnalyzing(false);
     }
@@ -219,7 +221,7 @@ export default function TicketDetailPage() {
             className="flex items-center gap-1.5"
           >
             <Bot className="w-3.5 h-3.5" aria-hidden="true" />
-            Analyser
+            {t('analyze')}
           </Button>
           <Button
             variant="ghost"
@@ -250,7 +252,7 @@ export default function TicketDetailPage() {
               <AlertTriangle className="w-10 h-10 mx-auto mb-3 text-red-500" aria-hidden="true" />
               <p className="text-sm text-red-700 dark:text-red-400 mb-3">{error}</p>
               <Button variant="secondary" size="sm" onClick={fetchTicket}>
-                Retry
+                {t('retry')}
               </Button>
             </div>
           )}
@@ -263,7 +265,7 @@ export default function TicketDetailPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">
-                  AI Agent: N1 analysis complete — N2 action planning started
+                  {t('n2Notification')}
                 </p>
                 {n2Notification.n1Summary && (
                   <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5 line-clamp-2">
@@ -277,7 +279,7 @@ export default function TicketDetailPage() {
               <button
                 onClick={() => setN2Notification(null)}
                 className="flex-shrink-0 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 text-xs"
-                aria-label="Dismiss"
+                aria-label={t('dismiss')}
               >
                 ×
               </button>
@@ -299,7 +301,7 @@ export default function TicketDetailPage() {
                 <div className="flex flex-wrap gap-x-4 gap-y-1">
                   {ticket.reporter && (
                     <span className="text-xs text-gray-400">
-                      Reported by{' '}
+                      {t('reportedBy')}{' '}
                       <span className="font-medium text-gray-500">
                         {ticket.reporter.name || ticket.reporter.email}
                       </span>
@@ -310,7 +312,7 @@ export default function TicketDetailPage() {
                   </span>
                   {ticket.application && (
                     <span className="text-xs text-gray-400">
-                      App:{' '}
+                      {t('app')}:{' '}
                       <span className="font-medium text-gray-500">{ticket.application.name}</span>
                     </span>
                   )}
@@ -336,7 +338,7 @@ export default function TicketDetailPage() {
               {/* ── DESCRIPTION ── */}
               <div className="mb-6">
                 <SectionHeader
-                  label="Description"
+                  label={t('sectionDescription')}
                   open={descOpen}
                   onToggle={() => setDescOpen(v => !v)}
                 />
@@ -352,7 +354,7 @@ export default function TicketDetailPage() {
                 {/* Left: User Context */}
                 <div>
                   <SectionHeader
-                    label="User Context"
+                    label={t('sectionContext')}
                     open={contextOpen}
                     onToggle={() => setContextOpen(v => !v)}
                   />
@@ -382,7 +384,7 @@ export default function TicketDetailPage() {
                       </div>
                     ) : (
                       <p className="text-xs text-gray-400 dark:text-gray-500 italic">
-                        No context available
+                        {t('noContext')}
                       </p>
                     ))}
                 </div>
@@ -390,7 +392,7 @@ export default function TicketDetailPage() {
                 {/* Right: Recording */}
                 <div>
                   <SectionHeader
-                    label="Recording"
+                    label={t('sectionRecording')}
                     open={recordingOpen}
                     onToggle={() => setRecordingOpen(v => !v)}
                   />
@@ -410,9 +412,7 @@ export default function TicketDetailPage() {
                           d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
                         />
                       </svg>
-                      <p className="text-sm text-gray-400 dark:text-gray-500">
-                        No recording attached
-                      </p>
+                      <p className="text-sm text-gray-400 dark:text-gray-500">{t('noRecording')}</p>
                     </div>
                   )}
                   {recordingOpen && ticket.media && ticket.media.length > 0 && (
@@ -444,7 +444,7 @@ export default function TicketDetailPage() {
                                   {loadingUrls[media.id] ? (
                                     <div className="space-y-2">
                                       <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                                      <p className="text-sm text-gray-500">Loading video...</p>
+                                      <p className="text-sm text-gray-500">{t('loadingVideo')}</p>
                                     </div>
                                   ) : (
                                     <Button
@@ -452,7 +452,7 @@ export default function TicketDetailPage() {
                                       size="sm"
                                       onClick={() => fetchMediaUrl(media.id)}
                                     >
-                                      Load Video
+                                      {t('loadVideo')}
                                     </Button>
                                   )}
                                 </div>
@@ -509,10 +509,10 @@ export default function TicketDetailPage() {
         isOpen={showDeleteConfirm}
         onClose={() => setShowDeleteConfirm(false)}
         onConfirm={handleDeleteConfirm}
-        title="Supprimer le ticket"
-        message="Êtes-vous sûr de vouloir supprimer ce ticket ?\n\nCette action est irréversible."
-        confirmLabel="Supprimer"
-        cancelLabel="Annuler"
+        title={t('deleteConfirm')}
+        message={t('deleteMessage')}
+        confirmLabel={t('deleteConfirm')}
+        cancelLabel={t('dismiss')}
         variant="danger"
         isLoading={isDeleting}
       />

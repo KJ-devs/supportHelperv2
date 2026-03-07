@@ -3,12 +3,20 @@
  * <support-helper sdk-key="..." api-url="..."></support-helper>
  */
 
-import type { WidgetConfig, WidgetState, WidgetEventMap, ReportResponse, AnalyzingContext } from './widget-types';
+import type {
+  WidgetConfig,
+  WidgetState,
+  WidgetEventMap,
+  ReportResponse,
+  AnalyzingContext,
+} from './widget-types';
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
 import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
 import { submitReport, getOfflineQueue, pollTicketStatus } from './widget-api';
+import { getWidgetTranslations, detectLocale } from './i18n';
+import type { WidgetTranslations } from './i18n';
 import { VideoRecorder } from '../recorder/video-recorder';
 import { ContextCapture } from '../context/context-capture';
 import { KeyboardManager } from './keyboard-manager';
@@ -56,6 +64,9 @@ export class SupportHelperElement extends HTMLElement {
   private queueFlushedListener: ((detail: QueueFlushedDetail) => void) | null = null;
   private queueErrorListener: ((detail: QueueErrorDetail) => void) | null = null;
 
+  // Translations
+  private translations: WidgetTranslations = getWidgetTranslations('en');
+
   // Attention pulse timer
   private attentionPulseTimer: number | null = null;
   private attentionPulseDelay = 5000; // 5 seconds
@@ -70,7 +81,7 @@ export class SupportHelperElement extends HTMLElement {
   private pollingTickTimer: number | null = null;
 
   static get observedAttributes(): string[] {
-    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme'];
+    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme', 'locale'];
   }
 
   constructor() {
@@ -118,6 +129,10 @@ export class SupportHelperElement extends HTMLElement {
     if (!this.config.apiUrl) {
       console.warn('[SupportHelper] api-url attribute is required');
     }
+
+    // Initialize translations
+    const locale = this.config.locale ?? detectLocale();
+    this.translations = getWidgetTranslations(locale);
 
     // Initialize theme detection
     this.initializeThemeDetection();
@@ -191,6 +206,16 @@ export class SupportHelperElement extends HTMLElement {
         this.initializeThemeDetection();
         this.render();
         break;
+      case 'locale':
+        if (newValue === 'en' || newValue === 'fr') {
+          this.config.locale = newValue;
+          this.translations = getWidgetTranslations(newValue);
+        } else {
+          this.config.locale = undefined;
+          this.translations = getWidgetTranslations(detectLocale());
+        }
+        this.render();
+        break;
     }
   }
 
@@ -234,33 +259,42 @@ export class SupportHelperElement extends HTMLElement {
 
     let html = `<style>${styles}</style>`;
 
+    const t = this.translations;
+
     // Always render FAB
-    html += renderFAB('Report an issue');
+    html += renderFAB(t);
 
     // During recording: show minimal floating bar instead of modal+backdrop
     if (state === 'recording') {
-      html += renderRecordingBar(this.videoDuration, this.isRecordingPaused);
+      html += renderRecordingBar(this.videoDuration, this.isRecordingPaused, t);
     }
 
     // Render modal if not idle and not recording
     if (state !== 'idle' && state !== 'recording') {
-      const viewContent = getViewForState(state, {
-        videoUrl: this.videoUrl || undefined,
-        duration: this.videoDuration,
-        size: this.videoSize,
-        isPaused: this.isRecordingPaused,
-        ticketId: this.lastReportResponse?.ticket.id ?? this.pollingTicketId,
-        aiAnalysis: this.lastReportResponse?.aiAnalysis,
-        dashboardUrl: undefined, // Could be constructed from config
-        errorMessage: this.errorMessage,
-        analyzingContext: state === 'analyzing' ? {
-          ticketId: this.pollingTicketId,
-          elapsedSeconds: this.pollingElapsed,
-          timedOut: this.pollingTimedOut,
-          aiResult: this.pollingResult ?? undefined,
-        } : undefined,
-      });
-      html += renderModal('Report an Issue', viewContent);
+      const viewContent = getViewForState(
+        state,
+        {
+          videoUrl: this.videoUrl || undefined,
+          duration: this.videoDuration,
+          size: this.videoSize,
+          isPaused: this.isRecordingPaused,
+          ticketId: this.lastReportResponse?.ticket.id ?? this.pollingTicketId,
+          aiAnalysis: this.lastReportResponse?.aiAnalysis,
+          dashboardUrl: undefined, // Could be constructed from config
+          errorMessage: this.errorMessage,
+          analyzingContext:
+            state === 'analyzing'
+              ? {
+                  ticketId: this.pollingTicketId,
+                  elapsedSeconds: this.pollingElapsed,
+                  timedOut: this.pollingTimedOut,
+                  aiResult: this.pollingResult ?? undefined,
+                }
+              : undefined,
+        },
+        t
+      );
+      html += renderModal(t.open.title, viewContent, t);
     }
 
     this.shadow.innerHTML = html;
@@ -567,7 +601,9 @@ export class SupportHelperElement extends HTMLElement {
 
       // Mark invalid fields with aria-invalid
       const titleInput = this.shadow.querySelector('#sh-input-title') as HTMLInputElement | null;
-      const descInput = this.shadow.querySelector('#sh-input-description') as HTMLTextAreaElement | null;
+      const descInput = this.shadow.querySelector(
+        '#sh-input-description'
+      ) as HTMLTextAreaElement | null;
 
       if (titleInput && !this.formData.title.trim()) {
         titleInput.setAttribute('aria-invalid', 'true');
@@ -613,10 +649,10 @@ export class SupportHelperElement extends HTMLElement {
           userContext,
         },
         60000,
-        (reason) => {
+        reason => {
           // Report was queued because the network is unavailable.
           this.emit('sh:queued', { reason });
-        },
+        }
       );
 
       if (response === null) {
@@ -922,44 +958,46 @@ export class SupportHelperElement extends HTMLElement {
       }
       if (timerEl) {
         const remaining = Math.max(0, 120 - this.pollingElapsed);
-        timerEl.textContent = remaining > 0 ? `Up to ${remaining}s remaining` : 'Almost done...';
+        const t = this.translations;
+        timerEl.textContent =
+          remaining > 0
+            ? t.analyzing.remaining.replace('{seconds}', String(remaining))
+            : t.analyzing.almostDone;
       }
     }, 1000);
 
-    const handle = pollTicketStatus(
-      this.config.apiUrl,
-      this.config.sdkKey,
-      ticketId,
-      {
-        onResult: (ticket) => {
-          // Stop polling as soon as aiSummary is non-null.
-          if (ticket.aiSummary) {
-            this.pollingResult = {
-              summary: ticket.aiSummary,
-              severity: ticket.severity,
-              type: ticket.type,
-            };
-            this.stopPollingTick();
-
-            if (this.stateMachine.canTransition('ANALYSIS_DONE')) {
-              this.stateMachine.dispatch('ANALYSIS_DONE');
-            }
-            this.announcer.announce('AI analysis complete!', 'polite');
-            return true; // stop polling
-          }
-          return false; // keep polling
-        },
-        onTimeout: () => {
-          this.pollingTimedOut = true;
+    const handle = pollTicketStatus(this.config.apiUrl, this.config.sdkKey, ticketId, {
+      onResult: ticket => {
+        // Stop polling as soon as aiSummary is non-null.
+        if (ticket.aiSummary) {
+          this.pollingResult = {
+            summary: ticket.aiSummary,
+            severity: ticket.severity,
+            type: ticket.type,
+          };
           this.stopPollingTick();
 
-          if (this.stateMachine.canTransition('ANALYSIS_TIMEOUT')) {
-            this.stateMachine.dispatch('ANALYSIS_TIMEOUT');
+          if (this.stateMachine.canTransition('ANALYSIS_DONE')) {
+            this.stateMachine.dispatch('ANALYSIS_DONE');
           }
-          this.announcer.announce('Analysis is taking longer than expected. Check the dashboard for results.', 'polite');
-        },
+          this.announcer.announce('AI analysis complete!', 'polite');
+          return true; // stop polling
+        }
+        return false; // keep polling
       },
-    );
+      onTimeout: () => {
+        this.pollingTimedOut = true;
+        this.stopPollingTick();
+
+        if (this.stateMachine.canTransition('ANALYSIS_TIMEOUT')) {
+          this.stateMachine.dispatch('ANALYSIS_TIMEOUT');
+        }
+        this.announcer.announce(
+          'Analysis is taking longer than expected. Check the dashboard for results.',
+          'polite'
+        );
+      },
+    });
 
     this.pollStop = handle.stop;
   }
@@ -987,7 +1025,7 @@ export class SupportHelperElement extends HTMLElement {
    */
   private initializeOfflineQueue(): void {
     getOfflineQueue()
-      .then((queue) => {
+      .then(queue => {
         this.queueFlushedListener = (detail: QueueFlushedDetail) => {
           this.emit('sh:queue-flushed', detail);
         };
@@ -997,7 +1035,7 @@ export class SupportHelperElement extends HTMLElement {
         queue.on('queue:flushed', this.queueFlushedListener);
         queue.on('queue:error', this.queueErrorListener);
       })
-      .catch((err) => {
+      .catch(err => {
         console.warn('[SupportHelper] Could not initialize offline queue:', err);
       });
   }
@@ -1009,7 +1047,7 @@ export class SupportHelperElement extends HTMLElement {
     if (!this.queueFlushedListener && !this.queueErrorListener) return;
 
     getOfflineQueue()
-      .then((queue) => {
+      .then(queue => {
         if (this.queueFlushedListener) {
           // Cast required because TypeScript overload resolution is strict here.
           queue.off('queue:flushed', this.queueFlushedListener as (d: QueueFlushedDetail) => void);
@@ -1056,7 +1094,6 @@ export class SupportHelperElement extends HTMLElement {
     );
   }
 }
-
 
 // Type augmentation for HTMLElementTagNameMap
 declare global {

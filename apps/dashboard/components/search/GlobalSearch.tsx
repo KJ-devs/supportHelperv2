@@ -1,6 +1,5 @@
 /**
  * Global Search Component
- * Recherche globale dans le header avec résultats instantanés
  */
 
 'use client';
@@ -10,8 +9,10 @@ import { useRouter } from 'next/navigation';
 import { ticketsApi } from '@/lib/api/tickets';
 import type { Ticket } from '@/lib/types/ticket';
 import { StatusBadge, SeverityBadge } from '@/components/ui';
+import { useTranslations } from 'next-intl';
 
 export function GlobalSearch() {
+  const t = useTranslations('search');
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -20,7 +21,6 @@ export function GlobalSearch() {
   const searchRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Search debounced
   useEffect(() => {
     if (!query.trim()) {
       setResults([]);
@@ -46,7 +46,6 @@ export function GlobalSearch() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Close on click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -58,7 +57,6 @@ export function GlobalSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Keyboard shortcut: Ctrl+K or Cmd+K
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
@@ -89,22 +87,21 @@ export function GlobalSearch() {
 
   return (
     <div ref={searchRef} className="relative w-full max-w-md">
-      {/* Search Input */}
       <div className="relative" role="search">
         <label htmlFor="global-search" className="sr-only">
-          Rechercher dans les tickets
+          {t('label')}
         </label>
         <input
           id="global-search"
           ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => {
+          onChange={e => {
             setQuery(e.target.value);
             setIsOpen(true);
           }}
           onFocus={() => setIsOpen(true)}
-          placeholder="Rechercher... (Ctrl+K)"
+          placeholder={t('placeholder')}
           className="w-full px-4 py-2 pl-10 pr-10 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500 min-h-[44px]"
           aria-autocomplete="list"
           aria-controls="search-results"
@@ -132,7 +129,7 @@ export function GlobalSearch() {
               setResults([]);
             }}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 min-w-[40px] min-h-[40px] flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-blue-500 rounded"
-            aria-label="Effacer la recherche"
+            aria-label={t('clearSearch')}
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
               <path d="M10 8.586L2.929 1.515 1.515 2.929 8.586 10l-7.071 7.071 1.414 1.414L10 11.414l7.071 7.071 1.414-1.414L11.414 10l7.071-7.071-1.414-1.414L10 8.586z" />
@@ -141,7 +138,6 @@ export function GlobalSearch() {
         )}
       </div>
 
-      {/* Results Dropdown */}
       {isOpen && query && (
         <div
           id="search-results"
@@ -149,9 +145,12 @@ export function GlobalSearch() {
           role="listbox"
           aria-live="polite"
         >
-          {/* Loading */}
           {isLoading && (
-            <div className="p-4 text-center text-gray-500 dark:text-gray-400" role="status" aria-live="polite">
+            <div
+              className="p-4 text-center text-gray-500 dark:text-gray-400"
+              role="status"
+              aria-live="polite"
+            >
               <svg
                 className="animate-spin h-5 w-5 mx-auto mb-2"
                 xmlns="http://www.w3.org/2000/svg"
@@ -173,11 +172,10 @@ export function GlobalSearch() {
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              <p className="text-sm">Recherche en cours...</p>
+              <p className="text-sm">{t('searching')}</p>
             </div>
           )}
 
-          {/* No Results */}
           {!isLoading && results.length === 0 && (
             <div className="p-4 text-center text-gray-500 dark:text-gray-400">
               <svg
@@ -193,21 +191,24 @@ export function GlobalSearch() {
                   d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <p className="text-sm">Aucun résultat pour &quot;{query}&quot;</p>
+              <p className="text-sm">{t('noResults', { query })}</p>
             </div>
           )}
 
-          {/* Results List */}
           {!isLoading && results.length > 0 && (
             <>
               <div className="p-2" role="list">
-                {results.map((ticket) => (
+                {results.map(ticket => (
                   <button
                     key={ticket.id}
                     onClick={() => handleSelect(ticket.id)}
                     className="w-full text-left p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                     role="option"
-                    aria-label={`Ticket: ${ticket.title}, ${ticket.severity}, ${ticket.status}`}
+                    aria-label={t('ticketAriaLabel', {
+                      title: ticket.title,
+                      severity: ticket.severity,
+                      status: ticket.status,
+                    })}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-1">
@@ -230,13 +231,12 @@ export function GlobalSearch() {
                 ))}
               </div>
 
-              {/* View All Link */}
               <div className="border-t dark:border-gray-700 p-3">
                 <button
                   onClick={handleViewAll}
                   className="w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
                 >
-                  Voir tous les résultats pour &quot;{query}&quot; →
+                  {t('viewAll', { query })}
                 </button>
               </div>
             </>

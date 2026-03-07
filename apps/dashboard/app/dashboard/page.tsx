@@ -3,10 +3,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRequireAuth } from '@/lib/auth';
 import { ticketsApi } from '@/lib/api/tickets';
+import { analyticsApi } from '@/lib/api/analytics';
 import type { Ticket, TicketStats } from '@/lib/types/ticket';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Badge, SeverityBadge } from '@/components/ui';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import {
   Ticket as TicketIcon,
   AppWindow,
@@ -17,17 +19,17 @@ import {
   Clock,
 } from 'lucide-react';
 
-function formatDate(dateStr: string): string {
+function formatDate(dateStr: string, locale: string): string {
   const date = new Date(dateStr);
-  return date.toLocaleDateString('fr-FR', {
+  return date.toLocaleDateString(locale, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   });
 }
 
-function formatTodayDate(): string {
-  return new Date().toLocaleDateString('fr-FR', {
+function formatTodayDate(locale: string): string {
+  return new Date().toLocaleDateString(locale, {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -62,15 +64,18 @@ function KpiCard({ icon, label, value, subtitle, borderColor }: KpiCardProps) {
 
 export default function DashboardPage() {
   const { user, isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('dashboard');
+  const tTickets = useTranslations('tickets');
 
   const [stats, setStats] = useState<TicketStats | null>(null);
   const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
+  const [avgResolutionTimeHours, setAvgResolutionTimeHours] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [ticketStats, ticketsResponse] = await Promise.all([
+      const [ticketStats, ticketsResponse, trendsResult] = await Promise.allSettled([
         ticketsApi.getStats('month'),
         ticketsApi.getTickets({
           page: 1,
@@ -78,9 +83,15 @@ export default function DashboardPage() {
           sortBy: 'createdAt',
           sortOrder: 'desc',
         }),
+        analyticsApi.getResolutionTrends(),
       ]);
-      setStats(ticketStats);
-      setRecentTickets(ticketsResponse.data);
+
+      if (ticketStats.status === 'fulfilled') setStats(ticketStats.value);
+      if (ticketsResponse.status === 'fulfilled') setRecentTickets(ticketsResponse.value.data);
+      if (trendsResult.status === 'fulfilled' && trendsResult.value.data.length > 0) {
+        const lastMonth = trendsResult.value.data.at(-1);
+        if (lastMonth) setAvgResolutionTimeHours(lastMonth.avgResolutionTimeHours);
+      }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
     } finally {
@@ -102,6 +113,11 @@ export default function DashboardPage() {
     return null;
   }
 
+  const locale =
+    typeof document !== 'undefined'
+      ? (document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr')
+      : 'fr';
+
   const openTickets = stats
     ? (stats.byStatus.new || 0) + (stats.byStatus.open || 0) + (stats.byStatus.in_progress || 0)
     : 0;
@@ -115,27 +131,36 @@ export default function DashboardPage() {
 
   const quickLinks = [
     {
-      title: 'Tickets',
+      titleKey: 'nav.tickets',
       icon: TicketIcon,
-      description: 'Voir et gérer les tickets de support',
+      descriptionKey: 'ticketsDescription',
       href: '/dashboard/tickets',
-      stats: stats ? `${openTickets} ouverts` : '—',
+      stats: stats ? t('ticketsOpen', { count: openTickets }) : '—',
     },
     {
-      title: 'Applications',
+      titleKey: 'nav.applications',
       icon: AppWindow,
-      description: 'Gérer vos applications connectées',
+      descriptionKey: 'applicationsDescription',
       href: '/dashboard/applications',
-      stats: 'Gérer les clés SDK',
+      stats: t('manageSDKKeys'),
     },
     {
-      title: 'Analytiques',
+      titleKey: 'nav.analytics',
       icon: BarChart3,
-      description: 'Métriques et statistiques détaillées',
+      descriptionKey: 'analyticsDescription',
       href: '/dashboard/analytics',
-      stats: 'Voir les rapports',
+      stats: t('viewReports'),
     },
   ];
+
+  const tNav = (key: string) => {
+    const navMap: Record<string, string> = {
+      'nav.tickets': 'Tickets',
+      'nav.applications': 'Applications',
+      'nav.analytics': 'Analytics',
+    };
+    return navMap[key] || key;
+  };
 
   return (
     <DashboardLayout>
@@ -144,14 +169,12 @@ export default function DashboardPage() {
         <div className="mb-8 flex items-start justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              Bienvenue, {user.name || user.email}
+              {t('welcome', { name: user.name || user.email })}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              Voici un aperçu de votre plateforme de support
-            </p>
+            <p className="text-gray-600 dark:text-gray-400 mt-1">{t('subtitle')}</p>
           </div>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 capitalize hidden sm:block">
-            {formatTodayDate()}
+            {formatTodayDate(locale)}
           </p>
         </div>
 
@@ -159,30 +182,34 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <KpiCard
             icon={<TicketIcon className="w-6 h-6" aria-hidden="true" />}
-            label="Tickets ouverts"
+            label={t('openTickets')}
             value={openTickets}
-            subtitle={stats ? `${stats.total} au total` : 'Chargement...'}
+            subtitle={stats ? t('total', { count: stats.total }) : t('notAvailable')}
             borderColor="border-blue-500"
           />
           <KpiCard
             icon={<AlertTriangle className="w-6 h-6" aria-hidden="true" />}
-            label="Tickets critiques"
+            label={t('criticalTickets')}
             value={criticalTickets}
-            subtitle="Action requise"
+            subtitle={t('actionRequired')}
             borderColor="border-red-500"
           />
           <KpiCard
             icon={<CheckCircle className="w-6 h-6" aria-hidden="true" />}
-            label="Taux de resolution"
+            label={t('resolutionRate')}
             value={resolutionRate}
-            subtitle={`${resolvedTickets} resolus`}
+            subtitle={t('resolved', { count: resolvedTickets })}
             borderColor="border-green-500"
           />
           <KpiCard
             icon={<Clock className="w-6 h-6" aria-hidden="true" />}
-            label="Temps moy. resolution"
-            value="N/A"
-            subtitle="Non disponible"
+            label={t('avgResolutionTime')}
+            value={
+              avgResolutionTimeHours !== null
+                ? `${Math.round(avgResolutionTimeHours)}h`
+                : t('notAvailable')
+            }
+            subtitle={avgResolutionTimeHours !== null ? t('lastMonth') : t('notAvailable')}
             borderColor="border-gray-400"
           />
         </div>
@@ -191,7 +218,7 @@ export default function DashboardPage() {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-              Tickets recents
+              {t('recentTickets')}
             </h2>
           </div>
 
@@ -199,7 +226,7 @@ export default function DashboardPage() {
             {recentTickets.length === 0 ? (
               <div className="p-8 text-center text-gray-500 dark:text-gray-400">
                 <TicketIcon className="w-10 h-10 mx-auto mb-3 opacity-40" aria-hidden="true" />
-                <p className="text-sm">Aucun ticket pour le moment</p>
+                <p className="text-sm">{t('noTickets')}</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -207,19 +234,19 @@ export default function DashboardPage() {
                   <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Titre
+                        {t('tableTitle')}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Statut
+                        {t('tableStatus')}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Severite
+                        {t('tableSeverity')}
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Cree le
+                        {t('tableCreatedAt')}
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                        Action
+                        {t('tableAction')}
                       </th>
                     </tr>
                   </thead>
@@ -249,15 +276,15 @@ export default function DashboardPage() {
                             }
                           >
                             {ticket.status === 'new'
-                              ? 'Nouveau'
+                              ? t('statuses.new')
                               : ticket.status === 'open'
-                                ? 'Ouvert'
+                                ? t('statuses.open')
                                 : ticket.status === 'in_progress'
-                                  ? 'En cours'
+                                  ? t('statuses.inProgress')
                                   : ticket.status === 'resolved'
-                                    ? 'Resolu'
+                                    ? t('statuses.resolved')
                                     : ticket.status === 'closed'
-                                      ? 'Ferme'
+                                      ? t('statuses.closed')
                                       : ticket.status}
                           </Badge>
                         </td>
@@ -265,14 +292,14 @@ export default function DashboardPage() {
                           <SeverityBadge severity={ticket.severity} />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                          {formatDate(ticket.createdAt)}
+                          {formatDate(ticket.createdAt, locale)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
                           <Link
                             href={`/dashboard/tickets/${ticket.id}`}
                             className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1 justify-end"
                           >
-                            Voir <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                            {tTickets('view')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
                           </Link>
                         </td>
                       </tr>
@@ -288,7 +315,7 @@ export default function DashboardPage() {
               href="/dashboard/tickets"
               className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium flex items-center gap-1"
             >
-              Voir tous les tickets <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              {t('viewAllTickets')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </Link>
           </div>
         </div>
@@ -296,7 +323,7 @@ export default function DashboardPage() {
         {/* Quick Links */}
         <div>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Acces rapide
+            {t('quickAccess')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {quickLinks.map(link => {
@@ -310,16 +337,16 @@ export default function DashboardPage() {
                         aria-hidden="true"
                       />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {link.title}
+                        {tNav(link.titleKey)}
                       </h3>
                     </div>
                     <p className="text-gray-600 dark:text-gray-400 text-sm mb-4">
-                      {link.description}
+                      {t(link.descriptionKey as any)}
                     </p>
                     <div className="flex items-center justify-between pt-4 border-t dark:border-gray-700">
                       <span className="text-sm text-gray-500 dark:text-gray-400">{link.stats}</span>
                       <span className="text-blue-600 dark:text-blue-400 text-sm font-medium flex items-center gap-1">
-                        Voir <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                        {tTickets('view')} <ArrowRight className="w-4 h-4" aria-hidden="true" />
                       </span>
                     </div>
                   </Card>

@@ -57,6 +57,23 @@ export interface TimeRange {
   preset?: '7d' | '30d' | '90d' | 'all';
 }
 
+export interface ResolutionTrendItem {
+  month: string;
+  resolved: number;
+  avgResolutionTimeHours: number;
+}
+
+export interface ResolutionTrendsResponse {
+  data: ResolutionTrendItem[];
+}
+
+export interface DifficultyData {
+  byN1Decision: Array<{ decision: string; count: number }>;
+  bySeverityAndDecision: Array<{ severity: string; decision: string; count: number }>;
+  escalationRate: number;
+  avgResolutionTimeBySeverity: Array<{ severity: string; avgHours: number }>;
+}
+
 export interface AnalyticsData {
   stats: DashboardStats;
   trends: TicketTrend[];

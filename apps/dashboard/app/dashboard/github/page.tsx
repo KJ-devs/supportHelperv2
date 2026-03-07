@@ -3,15 +3,12 @@
 import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Badge, SeverityBadge, Modal, EmptyState } from '@/components/ui';
 import { ConnectionStatus } from '@/components/github/ConnectionStatus';
 import { RepoCard } from '@/components/github/RepoCard';
-import {
-  githubApi,
-  type GitHubConnectionStatus,
-  type GitHubRepo,
-} from '@/lib/api/github';
+import { githubApi, type GitHubConnectionStatus, type GitHubRepo } from '@/lib/api/github';
 import { ticketsApi } from '@/lib/api/tickets';
 import type { Ticket } from '@/lib/types/ticket';
 
@@ -25,6 +22,7 @@ export default function GitHubPage() {
 
 function GitHubPageContent() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('github');
   const searchParams = useSearchParams();
 
   // Connection state
@@ -64,14 +62,13 @@ function GitHubPageContent() {
     const userParam = searchParams.get('user');
 
     if (githubParam === 'connected') {
-      showToast('success', `GitHub connected successfully${userParam ? ` as ${userParam}` : ''}`);
-      // Clean URL
+      showToast('success', userParam ? t('connectedAs', { user: userParam }) : t('connected'));
       window.history.replaceState({}, '', '/dashboard/github');
     } else if (errorParam) {
-      showToast('error', `GitHub connection failed: ${errorParam}`);
+      showToast('error', t('connectionFailed', { error: errorParam }));
       window.history.replaceState({}, '', '/dashboard/github');
     }
-  }, [searchParams, showToast]);
+  }, [searchParams, showToast, t]);
 
   // Fetch connection status
   const fetchConnectionStatus = useCallback(async () => {
@@ -82,12 +79,12 @@ function GitHubPageContent() {
       setConnection(status);
       return status;
     } catch (err: any) {
-      setError(err.message || 'Failed to check GitHub connection status');
+      setError(err.message || t('fetchFailed'));
       return null;
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Fetch repos
   const fetchRepos = useCallback(async () => {
@@ -123,7 +120,7 @@ function GitHubPageContent() {
   // Initial data load
   useEffect(() => {
     if (!authLoading) {
-      fetchConnectionStatus().then((status) => {
+      fetchConnectionStatus().then(status => {
         if (status?.connected) {
           fetchRepos();
           fetchAnalyzedTickets();
@@ -139,7 +136,7 @@ function GitHubPageContent() {
       const { url } = await githubApi.getAuthorizationUrl(window.location.href);
       window.location.href = url;
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to initiate GitHub connection');
+      showToast('error', err.message || t('connectFailed'));
       setIsConnecting(false);
     }
   };
@@ -153,9 +150,9 @@ function GitHubPageContent() {
       setRepos([]);
       setAnalyzedTickets([]);
       setDisconnectConfirmOpen(false);
-      showToast('success', 'GitHub disconnected successfully');
+      showToast('success', t('disconnectedSuccess'));
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to disconnect GitHub');
+      showToast('error', err.message || t('disconnectFailed'));
     } finally {
       setIsDisconnecting(false);
     }
@@ -173,10 +170,10 @@ function GitHubPageContent() {
       });
       showToast(
         'success',
-        `User story created: #${result.issue.issueNumber} in ${result.issue.repository}`
+        t('storyCreated', { number: result.issue.issueNumber, repo: result.issue.repository })
       );
     } catch (err: any) {
-      showToast('error', err.message || 'Failed to generate user story');
+      showToast('error', err.message || t('storyFailed'));
     } finally {
       setGeneratingStory(null);
       setStoryTicketId(null);
@@ -221,10 +218,8 @@ function GitHubPageContent() {
 
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">GitHub Integration</h1>
-          <p className="text-gray-600 mt-1">
-            Connect GitHub to create issues, generate user stories, and sync tickets
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-1">{t('subtitle')}</p>
         </div>
 
         {/* Error State */}
@@ -232,16 +227,11 @@ function GitHubPageContent() {
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
             <div className="flex items-center">
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <h3 className="text-sm font-medium text-red-800">{t('error')}</h3>
                 <p className="text-sm text-red-700 mt-1">{error}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchConnectionStatus}
-                className="ml-auto"
-              >
-                Retry
+              <Button variant="ghost" size="sm" onClick={fetchConnectionStatus} className="ml-auto">
+                {t('retry')}
               </Button>
             </div>
           </div>
@@ -265,14 +255,11 @@ function GitHubPageContent() {
             {/* B. Connected Repositories */}
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-gray-900">Repositories</h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={fetchRepos}
-                  isLoading={reposLoading}
-                >
-                  Refresh
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  {t('repositories')}
+                </h2>
+                <Button variant="ghost" size="sm" onClick={fetchRepos} isLoading={reposLoading}>
+                  {t('refresh')}
                 </Button>
               </div>
 
@@ -280,18 +267,14 @@ function GitHubPageContent() {
                 <Card>
                   <div className="text-center py-8">
                     <div className="animate-spin inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full mb-3" />
-                    <p className="text-sm text-gray-500">Loading repositories...</p>
+                    <p className="text-sm text-gray-500">{t('loadingRepos')}</p>
                   </div>
                 </Card>
               ) : repos.length === 0 ? (
-                <EmptyState
-                  icon="📚"
-                  title="No repositories found"
-                  description="Make sure your GitHub account has access to repositories. You may need to grant additional permissions."
-                />
+                <EmptyState icon="📚" title={t('noRepos')} description={t('noReposDescription')} />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {repos.map((repo) => (
+                  {repos.map(repo => (
                     <RepoCard
                       key={repo.id}
                       fullName={repo.fullName}
@@ -311,11 +294,11 @@ function GitHubPageContent() {
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Create User Stories from Tickets
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                    {t('userStories')}
                   </h2>
-                  <p className="text-sm text-gray-600 mt-1">
-                    AI-generated user stories pushed directly to GitHub as issues
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {t('userStoriesSubtitle')}
                   </p>
                 </div>
                 <Button
@@ -324,7 +307,7 @@ function GitHubPageContent() {
                   onClick={fetchAnalyzedTickets}
                   isLoading={ticketsLoading}
                 >
-                  Refresh
+                  {t('refresh')}
                 </Button>
               </div>
 
@@ -332,15 +315,15 @@ function GitHubPageContent() {
                 <Card>
                   <div className="text-center py-8">
                     <div className="animate-spin inline-block w-6 h-6 border-2 border-gray-300 border-t-blue-600 rounded-full mb-3" />
-                    <p className="text-sm text-gray-500">Loading tickets...</p>
+                    <p className="text-sm text-gray-500">{t('loadingTickets')}</p>
                   </div>
                 </Card>
               ) : analyzedTickets.length === 0 ? (
                 <EmptyState
                   icon="🎫"
-                  title="No eligible tickets found"
-                  description="Tickets with status 'open' or 'in_progress' will appear here for user story generation."
-                  actionLabel="View all tickets"
+                  title={t('noTickets')}
+                  description={t('noTicketsDescription')}
+                  actionLabel={t('viewAllTickets')}
                   actionHref="/dashboard/tickets"
                 />
               ) : (
@@ -350,24 +333,24 @@ function GitHubPageContent() {
                       <thead className="bg-gray-50">
                         <tr>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Ticket
+                            {t('tableTicket')}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Type
+                            {t('tableType')}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Severity
+                            {t('tableSeverity')}
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Status
+                            {t('tableStatus')}
                           </th>
                           <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Action
+                            {t('tableAction')}
                           </th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {analyzedTickets.map((ticket) => (
+                        {analyzedTickets.map(ticket => (
                           <tr key={ticket.id} className="hover:bg-gray-50">
                             <td className="px-6 py-4">
                               <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
@@ -384,11 +367,7 @@ function GitHubPageContent() {
                               <SeverityBadge severity={ticket.severity} />
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <Badge
-                                variant={
-                                  ticket.status === 'in_progress' ? 'info' : 'warning'
-                                }
-                              >
+                              <Badge variant={ticket.status === 'in_progress' ? 'info' : 'warning'}>
                                 {ticket.status}
                               </Badge>
                             </td>
@@ -399,7 +378,7 @@ function GitHubPageContent() {
                                 isLoading={generatingStory === ticket.id}
                                 disabled={generatingStory !== null}
                               >
-                                Generate User Story
+                                {t('generateStory')}
                               </Button>
                             </td>
                           </tr>
@@ -417,29 +396,19 @@ function GitHubPageContent() {
         <Modal
           isOpen={disconnectConfirmOpen}
           onClose={() => setDisconnectConfirmOpen(false)}
-          title="Disconnect GitHub"
+          title={t('disconnectTitle')}
           footer={
             <>
-              <Button
-                variant="secondary"
-                onClick={() => setDisconnectConfirmOpen(false)}
-              >
-                Cancel
+              <Button variant="secondary" onClick={() => setDisconnectConfirmOpen(false)}>
+                {t('cancel')}
               </Button>
-              <Button
-                variant="danger"
-                onClick={handleDisconnect}
-                isLoading={isDisconnecting}
-              >
-                Disconnect
+              <Button variant="danger" onClick={handleDisconnect} isLoading={isDisconnecting}>
+                {t('disconnect')}
               </Button>
             </>
           }
         >
-          <p className="text-gray-600">
-            Are you sure you want to disconnect your GitHub account? This will
-            remove access to all repositories and disable issue synchronization.
-          </p>
+          <p className="text-gray-600 dark:text-gray-400">{t('disconnectMessage')}</p>
         </Modal>
 
         {/* User Story Repo Selection Modal */}
@@ -450,7 +419,7 @@ function GitHubPageContent() {
             setStoryTicketId(null);
             setSelectedRepo('');
           }}
-          title="Generate User Story"
+          title={t('storyModalTitle')}
           footer={
             <>
               <Button
@@ -461,44 +430,32 @@ function GitHubPageContent() {
                   setSelectedRepo('');
                 }}
               >
-                Cancel
+                {t('cancel')}
               </Button>
-              <Button
-                onClick={handleGenerateUserStory}
-                disabled={!selectedRepo}
-              >
-                Generate
+              <Button onClick={handleGenerateUserStory} disabled={!selectedRepo}>
+                {t('generate')}
               </Button>
             </>
           }
         >
           <div>
-            <label
-              htmlFor="repo-select"
-              className="block text-sm font-medium text-gray-700 mb-2"
-            >
-              Select a repository for the user story issue
+            <label htmlFor="repo-select" className="block text-sm font-medium text-gray-700 mb-2">
+              {t('storyModalLabel')}
             </label>
             <select
               id="repo-select"
               value={selectedRepo}
-              onChange={(e) => setSelectedRepo(e.target.value)}
+              onChange={e => setSelectedRepo(e.target.value)}
               className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
             >
-              {repos.length === 0 && (
-                <option value="">No repositories available</option>
-              )}
-              {repos.map((repo) => (
+              {repos.length === 0 && <option value="">{t('noReposAvailable')}</option>}
+              {repos.map(repo => (
                 <option key={repo.id} value={repo.fullName}>
                   {repo.fullName}
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-500 mt-2">
-              The AI will analyze the ticket and generate a structured user story
-              with acceptance criteria, then create it as a GitHub issue in this
-              repository.
-            </p>
+            <p className="text-xs text-gray-500 mt-2">{t('storyModalHint')}</p>
           </div>
         </Modal>
       </div>

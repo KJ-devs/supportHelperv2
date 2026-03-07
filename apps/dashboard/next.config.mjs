@@ -1,4 +1,7 @@
 import { withSentryConfig } from '@sentry/nextjs';
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin('./i18n/request.ts');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -88,9 +91,11 @@ const sentryWebpackPluginOptions = {
 };
 
 // Only wrap with Sentry in production or when explicitly enabled
-const config =
+const sentryConfig =
   process.env.NODE_ENV === 'production' || process.env.SENTRY_AUTH_TOKEN
     ? withSentryConfig(nextConfig, sentryWebpackPluginOptions)
     : nextConfig;
+
+const config = withNextIntl(sentryConfig);
 
 export default config;

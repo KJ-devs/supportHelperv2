@@ -14,10 +14,12 @@ import { ApplicationCard } from '@/components/applications/ApplicationCard';
 import { ApplicationModal } from '@/components/applications/ApplicationModal';
 import { PageLoader, Button, EmptyState, ConfirmModal, useToast } from '@/components/ui';
 import { AlertTriangle } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 export default function ApplicationsPage() {
   const { isLoading: authLoading } = useRequireAuth();
   const toast = useToast();
+  const t = useTranslations('applications');
 
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -83,7 +85,7 @@ export default function ApplicationsPage() {
       setIsModalOpen(false);
       setEditingApp(null);
     } catch (error: any) {
-      toast.error('Erreur lors de la sauvegarde', error.message);
+      toast.error(t('saveError'), error.message);
       throw error;
     } finally {
       setIsSubmitting(false);
@@ -102,7 +104,7 @@ export default function ApplicationsPage() {
       await fetchApplications();
       setDeleteConfirm({ isOpen: false, app: null });
     } catch (error: any) {
-      toast.error('Erreur lors de la suppression', error.message);
+      toast.error(t('deleteError'), error.message);
     } finally {
       setIsActionLoading(false);
     }
@@ -119,9 +121,9 @@ export default function ApplicationsPage() {
       await applicationsApi.regenerateKey(regenConfirm.app.id);
       await fetchApplications();
       setRegenConfirm({ isOpen: false, app: null });
-      toast.success('Clé SDK régénérée avec succès');
+      toast.success(t('regenSuccess'));
     } catch (error: any) {
-      toast.error('Erreur lors de la régénération', error.message);
+      toast.error(t('regenError'), error.message);
     } finally {
       setIsActionLoading(false);
     }
@@ -138,14 +140,10 @@ export default function ApplicationsPage() {
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Applications</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
-                Gérez vos applications et leurs clés SDK
-              </p>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">{t('subtitle')}</p>
             </div>
-            <Button onClick={handleCreate}>
-              ➕ Nouvelle application
-            </Button>
+            <Button onClick={handleCreate}>{t('newApplication')}</Button>
           </div>
         </div>
 
@@ -153,18 +151,16 @@ export default function ApplicationsPage() {
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-3" aria-hidden="true" />
+              <AlertTriangle
+                className="w-5 h-5 text-red-600 dark:text-red-400 mr-3"
+                aria-hidden="true"
+              />
               <div>
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Erreur</h3>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{t('error')}</h3>
                 <p className="text-sm text-red-700 dark:text-red-400 mt-1">{error}</p>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={fetchApplications}
-                className="ml-auto"
-              >
-                Réessayer
+              <Button variant="ghost" size="sm" onClick={fetchApplications} className="ml-auto">
+                {t('createFirst')}
               </Button>
             </div>
           </div>
@@ -174,9 +170,9 @@ export default function ApplicationsPage() {
         {!isLoading && applications.length === 0 && (
           <EmptyState
             icon="📱"
-            title="Aucune application"
-            description="Créez votre première application pour commencer à recevoir des tickets."
-            actionLabel="Créer une application"
+            title={t('noApplications')}
+            description={t('noApplicationsDescription')}
+            actionLabel={t('createFirst')}
             onAction={handleCreate}
             variant="bordered"
           />
@@ -192,10 +188,10 @@ export default function ApplicationsPage() {
                   <span className="font-medium text-gray-900 dark:text-gray-100">
                     {applications.length}
                   </span>{' '}
-                  application(s) active(s)
+                  {t('activeCount', { count: '' }).replace('{count} ', '')}
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Total tickets:{' '}
+                  {t('totalTickets')}{' '}
                   <span className="font-medium text-gray-900 dark:text-gray-100">
                     {applications.reduce((sum, app) => sum + (app._count?.tickets || 0), 0)}
                   </span>
@@ -205,7 +201,7 @@ export default function ApplicationsPage() {
 
             {/* Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {applications.map((app) => (
+              {applications.map(app => (
                 <ApplicationCard
                   key={app.id}
                   application={app}
@@ -235,10 +231,10 @@ export default function ApplicationsPage() {
           isOpen={deleteConfirm.isOpen}
           onClose={() => setDeleteConfirm({ isOpen: false, app: null })}
           onConfirm={handleDeleteConfirm}
-          title="Supprimer l'application"
-          message={`Êtes-vous sûr de vouloir supprimer "${deleteConfirm.app?.name}" ?\n\nCette action est irréversible et supprimera tous les tickets associés.`}
-          confirmLabel="Supprimer"
-          cancelLabel="Annuler"
+          title={t('deleteTitle')}
+          message={t('deleteMessage', { name: deleteConfirm.app?.name ?? '' })}
+          confirmLabel={t('deleteConfirm')}
+          cancelLabel={t('regenConfirm')}
           variant="danger"
           isLoading={isActionLoading}
         />
@@ -248,10 +244,10 @@ export default function ApplicationsPage() {
           isOpen={regenConfirm.isOpen}
           onClose={() => setRegenConfirm({ isOpen: false, app: null })}
           onConfirm={handleRegenerateKeyConfirm}
-          title="Régénérer la clé SDK"
-          message={`Régénérer la clé SDK pour "${regenConfirm.app?.name}" ?\n\nL'ancienne clé ne fonctionnera plus. Vous devrez mettre à jour votre application.`}
-          confirmLabel="Régénérer"
-          cancelLabel="Annuler"
+          title={t('regenTitle')}
+          message={t('regenMessage', { name: regenConfirm.app?.name ?? '' })}
+          confirmLabel={t('regenConfirm')}
+          cancelLabel={t('deleteConfirm')}
           variant="danger"
           isLoading={isActionLoading}
         />

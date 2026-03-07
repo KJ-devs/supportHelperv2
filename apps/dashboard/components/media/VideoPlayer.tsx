@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface VideoPlayerProps {
   src: string;
@@ -16,6 +17,7 @@ interface VideoPlayerProps {
 }
 
 export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlayerProps) {
+  const t = useTranslations('video');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -39,7 +41,7 @@ export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlay
         setError(null); // Clear any previous errors on successful play
       } catch (err) {
         console.error('Video playback failed:', err);
-        setError('Unable to play this video. The format may not be supported by your browser.');
+        setError(t('errorNotSupported'));
         setIsPlaying(false);
       }
     }
@@ -127,30 +129,34 @@ export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlay
     const videoElement = e.currentTarget;
     const mediaError = videoElement.error;
 
-    let errorMessage = 'Unable to load this video.';
+    let errorMessage = t('errorUnknown');
 
     if (mediaError) {
       switch (mediaError.code) {
         case MediaError.MEDIA_ERR_ABORTED:
-          errorMessage = 'Video loading was aborted.';
+          errorMessage = t('errorAborted');
           break;
         case MediaError.MEDIA_ERR_NETWORK:
-          errorMessage = 'A network error occurred while loading the video.';
+          errorMessage = t('errorNetwork');
           break;
         case MediaError.MEDIA_ERR_DECODE:
-          errorMessage = 'Video decoding failed. The format may be corrupted.';
+          errorMessage = t('errorDecode');
           break;
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
-          errorMessage = 'Video format is not supported by your browser.';
+          errorMessage = t('errorNotSupported');
           break;
         default:
-          errorMessage = 'An unknown error occurred.';
+          errorMessage = t('errorUnknown');
       }
     }
 
     setError(errorMessage);
     setIsPlaying(false);
-    console.error('Video error:', errorMessage, mediaError ? { code: mediaError.code, message: mediaError.message } : 'No media error details');
+    console.error(
+      'Video error:',
+      errorMessage,
+      mediaError ? { code: mediaError.code, message: mediaError.message } : 'No media error details'
+    );
 
     if (onError) {
       onError(new Error(errorMessage));
@@ -205,11 +211,7 @@ export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlay
             className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30 hover:bg-opacity-40 transition-opacity"
           >
             <div className="w-20 h-20 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
-              <svg
-                className="w-10 h-10 text-black ml-1"
-                fill="currentColor"
-                viewBox="0 0 20 20"
-              >
+              <svg className="w-10 h-10 text-black ml-1" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
               </svg>
             </div>
@@ -299,7 +301,7 @@ export function VideoPlayer({ src, poster, title, mimeType, onError }: VideoPlay
             <button
               onClick={handleDownload}
               className="p-2 hover:bg-gray-800 rounded transition-colors"
-              title="Télécharger"
+              title={t('download')}
             >
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />

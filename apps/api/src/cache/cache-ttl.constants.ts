@@ -36,11 +36,15 @@ export const CacheKeys = {
   userProfile: (tenantId: string, userId: string) => `tenant:${tenantId}:users:${userId}`,
   userList: (tenantId: string) => `tenant:${tenantId}:users:list`,
 
-  analyticsOverview: (tenantId: string, period: string) => `tenant:${tenantId}:analytics:overview:${period}`,
-  analyticsTrends: (tenantId: string, period: string, days: number) => `tenant:${tenantId}:analytics:trends:${period}:${days}`,
+  analyticsOverview: (tenantId: string, period: string) =>
+    `tenant:${tenantId}:analytics:overview:${period}`,
+  analyticsTrends: (tenantId: string, period: string, days: number) =>
+    `tenant:${tenantId}:analytics:trends:${period}:${days}`,
   analyticsPerformance: (tenantId: string) => `tenant:${tenantId}:analytics:performance`,
   analyticsAgentStats: (tenantId: string) => `tenant:${tenantId}:analytics:agents`,
   analyticsAppStats: (tenantId: string) => `tenant:${tenantId}:analytics:apps`,
+  analyticsResolutionTrends: (tenantId: string) => `tenant:${tenantId}:analytics:resolution-trends`,
+  analyticsDifficulty: (tenantId: string) => `tenant:${tenantId}:analytics:difficulty`,
 
   applicationList: (tenantId: string) => `tenant:${tenantId}:apps:list`,
   applicationDetail: (tenantId: string, appId: string) => `tenant:${tenantId}:apps:${appId}`,

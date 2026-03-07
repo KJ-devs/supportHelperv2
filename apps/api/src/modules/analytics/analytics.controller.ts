@@ -14,30 +14,39 @@ export class AnalyticsController {
 
   @Get('overview')
   @ApiOperation({ summary: 'Get dashboard overview statistics' })
-  @ApiQuery({ name: 'period', required: false, enum: ['day', 'week', 'month'], description: 'Time period for aggregation (default: week)' })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['day', 'week', 'month'],
+    description: 'Time period for aggregation (default: week)',
+  })
   @ApiResponse({ status: 200, description: 'Overview statistics retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getOverview(
-    @CurrentTenant() tenantId: string,
-    @Query() query: AnalyticsQueryDto,
-  ) {
+  async getOverview(@CurrentTenant() tenantId: string, @Query() query: AnalyticsQueryDto) {
     return this.analyticsService.getOverview(tenantId, query.period || AnalyticsPeriod.WEEK);
   }
 
   @Get('trends')
   @ApiOperation({ summary: 'Get ticket trends over time' })
-  @ApiQuery({ name: 'period', required: false, enum: ['day', 'week', 'month'], description: 'Time period for aggregation (default: week)' })
-  @ApiQuery({ name: 'days', required: false, type: Number, description: 'Number of days to look back (default: 30, min: 1, max: 365)' })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['day', 'week', 'month'],
+    description: 'Time period for aggregation (default: week)',
+  })
+  @ApiQuery({
+    name: 'days',
+    required: false,
+    type: Number,
+    description: 'Number of days to look back (default: 30, min: 1, max: 365)',
+  })
   @ApiResponse({ status: 200, description: 'Trend data retrieved successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getTrends(
-    @CurrentTenant() tenantId: string,
-    @Query() query: AnalyticsQueryDto,
-  ) {
+  async getTrends(@CurrentTenant() tenantId: string, @Query() query: AnalyticsQueryDto) {
     return this.analyticsService.getTrends(
       tenantId,
       query.period || AnalyticsPeriod.WEEK,
-      query.days || 30,
+      query.days || 30
     );
   }
 
@@ -63,5 +72,21 @@ export class AnalyticsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getApplicationStats(@CurrentTenant() tenantId: string) {
     return this.analyticsService.getApplicationStats(tenantId);
+  }
+
+  @Get('resolution-trends')
+  @ApiOperation({ summary: 'Get monthly resolution trends for the last 12 months' })
+  @ApiResponse({ status: 200, description: 'Resolution trend data retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getResolutionTrends(@CurrentTenant() tenantId: string) {
+    return this.analyticsService.getResolutionTrends(tenantId);
+  }
+
+  @Get('difficulty')
+  @ApiOperation({ summary: 'Get agent difficulty distribution and escalation metrics' })
+  @ApiResponse({ status: 200, description: 'Difficulty metrics retrieved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getDifficulty(@CurrentTenant() tenantId: string) {
+    return this.analyticsService.getDifficulty(tenantId);
   }
 }

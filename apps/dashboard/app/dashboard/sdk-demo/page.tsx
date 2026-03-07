@@ -8,6 +8,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import Script from 'next/script';
 import { useRequireAuth } from '@/lib/auth';
+import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Play, Square, Trash2, Puzzle } from 'lucide-react';
 
@@ -32,6 +33,7 @@ const THEMES = ['auto', 'light', 'dark'] as const;
 
 export default function SdkDemoPage() {
   const { isLoading: authLoading } = useRequireAuth();
+  const t = useTranslations('sdk');
 
   const [sdkKey, setSdkKey] = useState('sk_GojA7oEFJRpK0Dj22VsO2LyO913baczo');
   const [apiUrl, setApiUrl] = useState('http://localhost:3001');
@@ -135,18 +137,16 @@ export default function SdkDemoPage() {
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-2">
           <Puzzle className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">SDK Demo</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
         </div>
-        <p className="text-gray-600 dark:text-gray-400">
-          Testez le widget Support Helper en direct. Configurez les options puis lancez le widget.
-        </p>
+        <p className="text-gray-600 dark:text-gray-400">{t('subtitle')}</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Configuration Panel */}
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            Configuration
+            {t('configuration')}
           </h2>
 
           <div className="space-y-4">
@@ -156,7 +156,7 @@ export default function SdkDemoPage() {
                 htmlFor="sdk-key"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                SDK Key
+                {t('sdkKey')}
               </label>
               <input
                 id="sdk-key"
@@ -174,7 +174,7 @@ export default function SdkDemoPage() {
                 htmlFor="api-url"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                API URL
+                {t('apiUrl')}
               </label>
               <input
                 id="api-url"
@@ -192,7 +192,7 @@ export default function SdkDemoPage() {
                 htmlFor="position"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Position
+                {t('position')}
               </label>
               <select
                 id="position"
@@ -215,7 +215,7 @@ export default function SdkDemoPage() {
                 htmlFor="primary-color"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Couleur primaire
+                {t('primaryColor')}
               </label>
               <div className="flex items-center gap-3">
                 <input
@@ -242,7 +242,7 @@ export default function SdkDemoPage() {
                 htmlFor="theme"
                 className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
               >
-                Theme
+                {t('theme')}
               </label>
               <select
                 id="theme"
@@ -251,9 +251,9 @@ export default function SdkDemoPage() {
                 disabled={isWidgetActive}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:opacity-50"
               >
-                {THEMES.map(t => (
-                  <option key={t} value={t}>
-                    {t}
+                {THEMES.map(th => (
+                  <option key={th} value={th}>
+                    {th}
                   </option>
                 ))}
               </select>
@@ -269,7 +269,7 @@ export default function SdkDemoPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-4 h-4" />
-                Lancer le widget
+                {t('launch')}
               </button>
             ) : (
               <button
@@ -277,15 +277,13 @@ export default function SdkDemoPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Square className="w-4 h-4" />
-                Arreter le widget
+                {t('stop')}
               </button>
             )}
           </div>
 
           {!scriptLoaded && (
-            <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
-              Chargement du SDK en cours...
-            </p>
+            <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">{t('sdkLoading')}</p>
           )}
         </div>
 
@@ -293,7 +291,7 @@ export default function SdkDemoPage() {
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-              Events
+              {t('events')}
               {events.length > 0 && (
                 <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
                   ({events.length})
@@ -306,7 +304,7 @@ export default function SdkDemoPage() {
                 className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                Effacer
+                {t('clearEvents')}
               </button>
             )}
           </div>
@@ -314,7 +312,7 @@ export default function SdkDemoPage() {
           <div className="h-[400px] overflow-y-auto rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700">
             {events.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-400 dark:text-gray-500 text-sm">
-                Les events du widget apparaitront ici
+                {t('eventsEmpty')}
               </div>
             ) : (
               <div className="divide-y divide-gray-200 dark:divide-gray-700">

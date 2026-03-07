@@ -11,6 +11,8 @@ export { WidgetStateMachine } from './widget-state-machine';
 export { submitReport } from './widget-api';
 export * from './widget-types';
 export * from './widget-config';
+export { getWidgetTranslations, detectLocale } from './i18n';
+export type { SdkLocale, WidgetTranslations } from './i18n';
 
 /**
  * Register the custom element if not already registered
@@ -35,6 +37,7 @@ export interface InitOptions {
   primaryColor?: string;
   zIndex?: number;
   theme?: 'light' | 'dark' | 'auto';
+  locale?: 'en' | 'fr';
   container?: HTMLElement;
 }
 
@@ -60,6 +63,9 @@ export function init(options: InitOptions): SupportHelperElement {
   }
   if (options.theme) {
     element.setAttribute('theme', options.theme);
+  }
+  if (options.locale) {
+    element.setAttribute('locale', options.locale);
   }
 
   // Append to container or body

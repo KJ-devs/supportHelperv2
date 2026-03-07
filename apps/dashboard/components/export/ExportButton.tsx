@@ -9,6 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Button, useToast } from '@/components/ui';
 import type { Ticket, TicketFilters } from '@/lib/types/ticket';
 import { FileSpreadsheet, FileJson } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 
 interface ExportButtonProps {
   tickets: Ticket[];
@@ -21,6 +22,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
   const [isExporting, setIsExporting] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const toast = useToast();
+  const t = useTranslations('export');
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -52,7 +54,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       ];
 
       // CSV Rows
-      const rows = tickets.map((ticket) => [
+      const rows = tickets.map(ticket => [
         ticket.id,
         `"${ticket.title.replace(/"/g, '""')}"`,
         `"${ticket.description.replace(/"/g, '""')}"`,
@@ -65,10 +67,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       ]);
 
       // Build CSV
-      const csv = [
-        headers.join(','),
-        ...rows.map((row) => row.join(',')),
-      ].join('\n');
+      const csv = [headers.join(','), ...rows.map(row => row.join(','))].join('\n');
 
       // Download
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -86,7 +85,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       }
     } catch (error) {
       console.error('Error exporting to CSV:', error);
-      toast.error("Erreur lors de l'export CSV");
+      toast.error(t('exportCSV'));
     } finally {
       setIsExporting(false);
       setIsOpen(false);
@@ -102,7 +101,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
         exportDate: new Date().toISOString(),
         filters,
         totalTickets: tickets.length,
-        tickets: tickets.map((ticket) => ({
+        tickets: tickets.map(ticket => ({
           id: ticket.id,
           title: ticket.title,
           description: ticket.description,
@@ -135,7 +134,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
       }
     } catch (error) {
       console.error('Error exporting to JSON:', error);
-      toast.error("Erreur lors de l'export JSON");
+      toast.error(t('exportCSV'));
     } finally {
       setIsExporting(false);
       setIsOpen(false);
@@ -150,7 +149,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
         onClick={() => setIsOpen(!isOpen)}
         disabled={isExporting || tickets.length === 0}
       >
-        {isExporting ? '⏳ Export...' : '📥 Exporter'}
+        {isExporting ? t('exporting') : t('exportCSV')}
       </Button>
 
       {isOpen && (
@@ -163,9 +162,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
               <FileSpreadsheet className="w-4 h-4" aria-hidden="true" />
               <div>
                 <div className="font-medium">Exporter en CSV</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Format tableur
-                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Format tableur</div>
               </div>
             </div>
           </button>
@@ -178,9 +175,7 @@ export function ExportButton({ tickets, filters, onExport }: ExportButtonProps) 
               <FileJson className="w-4 h-4" aria-hidden="true" />
               <div>
                 <div className="font-medium">Exporter en JSON</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Format développeur
-                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">Format développeur</div>
               </div>
             </div>
           </button>

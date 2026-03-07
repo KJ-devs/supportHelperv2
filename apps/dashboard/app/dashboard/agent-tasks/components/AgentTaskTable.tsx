@@ -5,6 +5,7 @@ import type { AgentTask } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
 import { SeverityBadge, EmptyState } from '@/components/ui';
+import { useTranslations } from 'next-intl';
 
 interface AgentTaskTableProps {
   tasks: AgentTask[];
@@ -25,7 +26,11 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
+  const locale =
+    typeof document !== 'undefined'
+      ? (document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr')
+      : 'fr';
+  return new Date(dateStr).toLocaleDateString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -34,11 +39,13 @@ function formatDate(dateStr: string): string {
 }
 
 export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTaskTableProps) {
+  const t = useTranslations('agent');
+
   if (isLoading && tasks.length === 0) {
     return (
       <div className="p-12 text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading agent tasks...</p>
+        <p className="mt-4 text-gray-600 dark:text-gray-400">{t('loadingTasks')}</p>
       </div>
     );
   }
@@ -46,11 +53,7 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
   if (tasks.length === 0) {
     return (
       <div className="p-6">
-        <EmptyState
-          icon="🤖"
-          title="No agent tasks found"
-          description="Agent tasks will appear here when tickets are analyzed by the AI agent. Make sure you have tickets submitted and the AI agent is enabled."
-        />
+        <EmptyState icon="🤖" title={t('noTasksFound')} description={t('noTasksDescription')} />
       </div>
     );
   }
@@ -61,38 +64,41 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Ticket
+              {t('table.ticket')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              App
+              {t('table.app')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Status
+              {t('table.status')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Severity
+              {t('table.severity')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Created
+              {t('table.created')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Duration
+              {t('table.duration')}
             </th>
             <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              PR
+              {t('table.pr')}
             </th>
             <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Actions
+              {t('table.actions')}
             </th>
           </tr>
         </thead>
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-          {tasks.map((task) => {
+          {tasks.map(task => {
             const isTerminal = ['completed', 'failed', 'expired'].includes(task.status);
             const canRetry = ['failed', 'expired'].includes(task.status);
 
             return (
-              <tr key={task.id} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              <tr
+                key={task.id}
+                className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
                 <td className="px-4 py-3">
                   <Link
                     href={`/dashboard/agent-tasks/${task.id}`}
@@ -144,14 +150,14 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
                       href={`/dashboard/agent-tasks/${task.id}`}
                       className="px-2 py-1 text-xs rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                     >
-                      View
+                      {t('view')}
                     </Link>
                     {canRetry && (
                       <button
                         onClick={() => onRetry(task.id)}
                         className="px-2 py-1 text-xs rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
                       >
-                        Retry
+                        {t('retry')}
                       </button>
                     )}
                     {!isTerminal && (
@@ -159,7 +165,7 @@ export function AgentTaskTable({ tasks, isLoading, onRetry, onCancel }: AgentTas
                         onClick={() => onCancel(task.id)}
                         className="px-2 py-1 text-xs rounded bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-900/50 transition-colors"
                       >
-                        Cancel
+                        {t('cancel')}
                       </button>
                     )}
                   </div>

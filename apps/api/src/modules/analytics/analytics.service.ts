@@ -6,7 +6,7 @@ import { CacheService, CacheKeys, CacheTTL } from '../../cache';
 export class AnalyticsService {
   constructor(
     private prisma: PrismaService,
-    private readonly cacheService: CacheService,
+    private readonly cacheService: CacheService
   ) {}
 
   /**
@@ -47,7 +47,7 @@ export class AnalyticsService {
           ticketsByType,
           period,
         };
-      },
+      }
     );
   }
 
@@ -80,7 +80,7 @@ export class AnalyticsService {
           days,
           data: trendData,
         };
-      },
+      }
     );
   }
 
@@ -92,14 +92,13 @@ export class AnalyticsService {
       CacheKeys.analyticsPerformance(tenantId),
       CacheTTL.ANALYTICS,
       async () => {
-        const [firstResponseTime, resolutionRate, reopenRate, customerSatisfaction] = await Promise.all(
-          [
+        const [firstResponseTime, resolutionRate, reopenRate, customerSatisfaction] =
+          await Promise.all([
             this.getAvgFirstResponseTime(tenantId),
             this.getResolutionRate(tenantId),
             this.getReopenRate(tenantId),
             this.getCustomerSatisfaction(tenantId),
-          ]
-        );
+          ]);
 
         return {
           firstResponseTime,
@@ -107,7 +106,7 @@ export class AnalyticsService {
           reopenRate,
           customerSatisfaction,
         };
-      },
+      }
     );
   }
 
@@ -118,7 +117,7 @@ export class AnalyticsService {
     return this.cacheService.getOrSet(
       CacheKeys.analyticsAgentStats(tenantId),
       CacheTTL.ANALYTICS,
-      () => this.getAgentStatsUncached(tenantId),
+      () => this.getAgentStatsUncached(tenantId)
     );
   }
 
@@ -178,7 +177,7 @@ export class AnalyticsService {
     return this.cacheService.getOrSet(
       CacheKeys.analyticsAppStats(tenantId),
       CacheTTL.ANALYTICS,
-      () => this.getApplicationStatsUncached(tenantId),
+      () => this.getApplicationStatsUncached(tenantId)
     );
   }
 
@@ -225,6 +224,139 @@ export class AnalyticsService {
     );
 
     return appStats;
+  }
+
+  /**
+   * Get monthly resolution trends for last 12 months (cached for 1 hour)
+   */
+  async getResolutionTrends(tenantId: string) {
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsResolutionTrends(tenantId),
+      CacheTTL.ANALYTICS,
+      async () => {
+        const now = new Date();
+        const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+        const tickets = await this.prisma.ticket.findMany({
+          where: {
+            tenantId,
+            resolvedAt: { gte: twelveMonthsAgo, not: null },
+          },
+          select: {
+            createdAt: true,
+            resolvedAt: true,
+          },
+        });
+
+        // Build buckets for each of the last 12 months
+        const buckets = new Map<string, { resolved: number; totalHours: number }>();
+        for (let i = 11; i >= 0; i--) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          buckets.set(key, { resolved: 0, totalHours: 0 });
+        }
+
+        for (const ticket of tickets) {
+          if (!ticket.resolvedAt) continue;
+          const d = ticket.resolvedAt;
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          const bucket = buckets.get(key);
+          if (!bucket) continue;
+          bucket.resolved++;
+          bucket.totalHours +=
+            (ticket.resolvedAt.getTime() - ticket.createdAt.getTime()) / 1000 / 60 / 60;
+        }
+
+        const data = Array.from(buckets.entries()).map(([month, { resolved, totalHours }]) => ({
+          month,
+          resolved,
+          avgResolutionTimeHours: resolved > 0 ? Math.round(totalHours / resolved) : 0,
+        }));
+
+        return { data };
+      }
+    );
+  }
+
+  /**
+   * Get agent difficulty distribution (cached for 1 hour)
+   */
+  async getDifficulty(tenantId: string) {
+    return this.cacheService.getOrSet(
+      CacheKeys.analyticsDifficulty(tenantId),
+      CacheTTL.ANALYTICS,
+      async () => {
+        const [byN1Raw, crossTabRaw, resolvedTickets] = await Promise.all([
+          this.prisma.ticket.groupBy({
+            by: ['n1Decision'],
+            where: { tenantId },
+            _count: true,
+          }),
+          this.prisma.ticket.groupBy({
+            by: ['severity', 'n1Decision'],
+            where: { tenantId },
+            _count: true,
+          }),
+          this.prisma.ticket.findMany({
+            where: {
+              tenantId,
+              resolvedAt: { not: null },
+              severity: { not: null },
+            },
+            select: {
+              severity: true,
+              createdAt: true,
+              resolvedAt: true,
+            },
+          }),
+        ]);
+
+        // byN1Decision — map null to "not_triaged"
+        const byN1Decision = byN1Raw.map(row => ({
+          decision: row.n1Decision ?? 'not_triaged',
+          count: row._count,
+        }));
+
+        // bySeverityAndDecision
+        const bySeverityAndDecision = crossTabRaw.map(row => ({
+          severity: row.severity ?? 'unknown',
+          decision: row.n1Decision ?? 'not_triaged',
+          count: row._count,
+        }));
+
+        // escalationRate: escalate_n2 / total triaged * 100
+        const totalTriaged = byN1Raw
+          .filter(r => r.n1Decision !== null)
+          .reduce((sum, r) => sum + r._count, 0);
+        const escalatedCount = byN1Raw.find(r => r.n1Decision === 'escalate_n2')?._count ?? 0;
+        const escalationRate =
+          totalTriaged > 0 ? Math.round((escalatedCount / totalTriaged) * 10000) / 100 : 0;
+
+        // avgResolutionTimeBySeverity
+        const severityBuckets = new Map<string, { total: number; count: number }>();
+        for (const ticket of resolvedTickets) {
+          if (!ticket.resolvedAt || !ticket.severity) continue;
+          const hours = (ticket.resolvedAt.getTime() - ticket.createdAt.getTime()) / 1000 / 60 / 60;
+          const bucket = severityBuckets.get(ticket.severity) ?? { total: 0, count: 0 };
+          bucket.total += hours;
+          bucket.count++;
+          severityBuckets.set(ticket.severity, bucket);
+        }
+        const avgResolutionTimeBySeverity = Array.from(severityBuckets.entries()).map(
+          ([severity, { total, count }]) => ({
+            severity,
+            avgHours: count > 0 ? Math.round(total / count) : 0,
+          })
+        );
+
+        return {
+          byN1Decision,
+          bySeverityAndDecision,
+          escalationRate,
+          avgResolutionTimeBySeverity,
+        };
+      }
+    );
   }
 
   // Private helper methods
@@ -369,7 +501,7 @@ export class AnalyticsService {
 
   private groupByDate(
     data: { createdAt: Date; status: string }[],
-    period: 'day' | 'week' | 'month',
+    period: 'day' | 'week' | 'month'
   ) {
     const buckets = new Map<string, number>();
 
