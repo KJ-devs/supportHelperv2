@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 
 export interface ActivityItem {
   id: string;
@@ -42,6 +43,7 @@ function formatItemTime(date: Date): string {
 }
 
 export function LiveActivityFeed({ activities, isActive, currentAction }: LiveActivityFeedProps) {
+  const t = useTranslations('liveActivity');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,12 +56,12 @@ export function LiveActivityFeed({ activities, isActive, currentAction }: LiveAc
     <div className="mb-3 rounded-lg border border-gray-800 bg-gray-900/60 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-gray-800">
         <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
-          Live Activity
+          {t('title')}
         </span>
         {isActive && (
           <span className="flex items-center gap-1 text-[10px] text-cyan-500">
             <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
-            Active
+            {t('active')}
           </span>
         )}
       </div>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 type AgentMode = 'autonomous' | 'guided';
 
 interface Props {
@@ -8,29 +10,21 @@ interface Props {
   disabled?: boolean;
 }
 
-const MODES: { value: AgentMode; icon: string; label: string; description: string }[] = [
-  {
-    value: 'autonomous',
-    icon: 'Robot',
-    label: 'Autonomous',
-    description: 'Runs fully autonomously, creates PRs automatically',
-  },
-  {
-    value: 'guided',
-    icon: 'User',
-    label: 'Guided',
-    description: 'Pauses for your review at each step',
-  },
-];
-
 export function AgentModeSelector({ value, onChange, disabled = false }: Props) {
+  const t = useTranslations('agentMode');
+
+  const MODES: { value: AgentMode; label: string }[] = [
+    { value: 'autonomous', label: t('autonomous') },
+    { value: 'guided', label: t('guided') },
+  ];
+
   return (
     <div
       className="relative flex items-center gap-1.5"
-      title={disabled ? 'Mode locked during active session' : undefined}
+      title={disabled ? t('lockedDuringSession') : undefined}
     >
       <span className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
-        Mode
+        {t('mode')}
       </span>
       <div className="relative">
         <select
@@ -68,7 +62,7 @@ export function AgentModeSelector({ value, onChange, disabled = false }: Props) 
           value === 'autonomous' ? 'bg-blue-900/60 text-blue-300' : 'bg-amber-900/60 text-amber-300'
         }`}
       >
-        {value === 'autonomous' ? 'Auto' : 'Guided'}
+        {value === 'autonomous' ? t('auto') : t('guidedShort')}
       </span>
     </div>
   );

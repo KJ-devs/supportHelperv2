@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 export interface CheckpointData {
   checkpointType: 'analysis_complete' | 'pr_ready';
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, isLoading }: Props) {
+  const t = useTranslations('checkpoint');
   const [textValue, setTextValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -57,9 +59,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
         {/* Header */}
         <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-900/20 rounded-t-xl border-b border-amber-700/30">
           <span className="text-sm">&#128269;</span>
-          <span className="text-xs font-semibold text-amber-300">
-            Analysis Complete &mdash; Awaiting your review
-          </span>
+          <span className="text-xs font-semibold text-amber-300">{t('analysisTitle')}</span>
         </div>
 
         <div className="px-4 py-3 space-y-3">
@@ -70,7 +70,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
           {checkpoint.proposedNextSteps && checkpoint.proposedNextSteps.length > 0 && (
             <div>
               <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-widest mb-1.5">
-                Proposed Next Steps
+                {t('proposedNextSteps')}
               </p>
               <ul className="space-y-1">
                 {checkpoint.proposedNextSteps.map((step, i) => (
@@ -88,7 +88,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
             value={textValue}
             onChange={e => setTextValue(e.target.value)}
             disabled={busy}
-            placeholder="Add specific instructions for the agent..."
+            placeholder={t('addInstructions')}
             rows={2}
             className="w-full text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-amber-500/60 disabled:opacity-40"
           />
@@ -105,7 +105,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
               ) : (
                 <span>&#9654;</span>
               )}
-              Approve &amp; Proceed
+              {t('approveProceed')}
             </button>
             <button
               onClick={handleGuide}
@@ -113,7 +113,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
               className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium text-gray-300 transition-colors"
             >
               <span>&#9998;</span>
-              Guide only
+              {t('guideOnly')}
             </button>
           </div>
         </div>
@@ -127,7 +127,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-green-900/20 rounded-t-xl border-b border-green-700/30">
         <span className="text-sm">&#10003;</span>
-        <span className="text-xs font-semibold text-green-300">Ready to Create PR</span>
+        <span className="text-xs font-semibold text-green-300">{t('prReadyTitle')}</span>
       </div>
 
       <div className="px-4 py-3 space-y-3">
@@ -138,7 +138,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
         {checkpoint.proposedChanges && checkpoint.proposedChanges.length > 0 && (
           <div>
             <p className="text-[10px] font-semibold text-green-400 uppercase tracking-widest mb-1.5">
-              Files to be Modified
+              {t('filesToModify')}
             </p>
             <ul className="space-y-1">
               {checkpoint.proposedChanges.map((file, i) => (
@@ -156,7 +156,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
           value={textValue}
           onChange={e => setTextValue(e.target.value)}
           disabled={busy}
-          placeholder="Add notes for the PR description..."
+          placeholder={t('prNotes')}
           rows={2}
           className="w-full text-xs bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-gray-300 placeholder-gray-600 resize-none focus:outline-none focus:ring-1 focus:ring-green-500/60 disabled:opacity-40"
         />
@@ -173,7 +173,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
             ) : (
               <span>&#128640;</span>
             )}
-            Create Pull Request
+            {t('createPR')}
           </button>
           <button
             onClick={handleGuide}
@@ -181,7 +181,7 @@ export function CheckpointPanel({ checkpoint, onApprove, onRequestPR, onGuide, i
             className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-700 hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-xs font-medium text-gray-300 transition-colors"
           >
             <span>&#9998;</span>
-            Give more guidance
+            {t('giveMoreGuidance')}
           </button>
         </div>
       </div>

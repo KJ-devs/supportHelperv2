@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { Card, Button, Badge, Loader } from '@/components/ui';
 import {
   githubApi,
@@ -23,6 +24,7 @@ export function RepoSelector({
   onRepoLinked,
   onToast,
 }: RepoSelectorProps) {
+  const t = useTranslations('repoSelector');
   const [selectedInstallationId, setSelectedInstallationId] = useState<number | null>(
     installations.length > 0 ? installations[0]!.installationId : null
   );
@@ -64,7 +66,7 @@ export function RepoSelector({
         if (pageNum === 1) {
           setRepos(data.repositories || []);
         } else {
-          setRepos((prev) => [...prev, ...(data.repositories || [])]);
+          setRepos(prev => [...prev, ...(data.repositories || [])]);
         }
         setHasMore(data.hasMore ?? false);
       } catch (err: any) {
@@ -127,7 +129,7 @@ export function RepoSelector({
       onToast('success', `Linked ${repo.fullName} to application`);
       // Refresh configs
       const config = await githubApi.getGithubConfig(selectedAppId);
-      setAppConfigs((prev) => ({ ...prev, [selectedAppId]: config }));
+      setAppConfigs(prev => ({ ...prev, [selectedAppId]: config }));
       onRepoLinked();
     } catch (err: any) {
       onToast('error', err.message || 'Failed to link repository');
@@ -141,7 +143,7 @@ export function RepoSelector({
       setIsUnlinking(true);
       await githubApi.disconnectRepo(appId);
       onToast('success', 'Repository unlinked');
-      setAppConfigs((prev) => {
+      setAppConfigs(prev => {
         const updated = { ...prev };
         delete updated[appId];
         return updated;
@@ -160,9 +162,7 @@ export function RepoSelector({
   if (installations.length === 0) {
     return (
       <Card className="text-center py-8">
-        <p className="text-gray-500 dark:text-gray-400">
-          Install the GitHub App first to browse repositories.
-        </p>
+        <p className="text-gray-500 dark:text-gray-400">{t('installFirst')}</p>
       </Card>
     );
   }
@@ -170,9 +170,7 @@ export function RepoSelector({
   if (applications.length === 0) {
     return (
       <Card className="text-center py-8">
-        <p className="text-gray-500 dark:text-gray-400">
-          Create an application first to link a repository.
-        </p>
+        <p className="text-gray-500 dark:text-gray-400">{t('createAppFirst')}</p>
       </Card>
     );
   }
@@ -183,14 +181,14 @@ export function RepoSelector({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Application
+            {t('application')}
           </label>
           <select
             value={selectedAppId}
-            onChange={(e) => setSelectedAppId(e.target.value)}
+            onChange={e => setSelectedAppId(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {applications.map((app) => (
+            {applications.map(app => (
               <option key={app.id} value={app.id}>
                 {app.name} ({app.platform})
               </option>
@@ -199,14 +197,14 @@ export function RepoSelector({
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Installation
+            {t('installation')}
           </label>
           <select
             value={selectedInstallationId ?? ''}
-            onChange={(e) => setSelectedInstallationId(Number(e.target.value))}
+            onChange={e => setSelectedInstallationId(Number(e.target.value))}
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {installations.map((inst) => (
+            {installations.map(inst => (
               <option key={inst.id} value={inst.installationId}>
                 {inst.accountLogin} ({inst.accountType})
               </option>
@@ -219,7 +217,7 @@ export function RepoSelector({
       {configLoading ? (
         <Card>
           <div className="flex items-center justify-center py-4">
-            <Loader size="sm" text="Loading configuration..." />
+            <Loader size="sm" text={t('loadingConfig')} />
           </div>
         </Card>
       ) : isCurrentAppLinked ? (
@@ -246,10 +244,10 @@ export function RepoSelector({
                   {currentConfig!.owner}/{currentConfig!.repo}
                 </p>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Branch: {currentConfig!.defaultBranch || 'main'}
+                  {t('branch', { branch: currentConfig!.defaultBranch || 'main' })}
                 </p>
               </div>
-              <Badge variant="success">Linked</Badge>
+              <Badge variant="success">{t('linked')}</Badge>
             </div>
             <Button
               variant="danger"
@@ -257,15 +255,13 @@ export function RepoSelector({
               onClick={() => handleUnlink(selectedAppId)}
               isLoading={isUnlinking}
             >
-              Unlink
+              {t('unlink')}
             </Button>
           </div>
         </Card>
       ) : (
         <Card>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            No repository linked to this application. Select one below.
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('noRepoLinked')}</p>
         </Card>
       )}
 
@@ -275,18 +271,16 @@ export function RepoSelector({
           {reposLoading && repos.length === 0 ? (
             <Card>
               <div className="flex items-center justify-center py-8">
-                <Loader size="sm" text="Loading repositories..." />
+                <Loader size="sm" text={t('loadingRepos')} />
               </div>
             </Card>
           ) : repos.length === 0 ? (
             <Card className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400">
-                No repositories found for this installation.
-              </p>
+              <p className="text-gray-500 dark:text-gray-400">{t('noRepos')}</p>
             </Card>
           ) : (
             <div className="space-y-2">
-              {repos.map((repo) => (
+              {repos.map(repo => (
                 <div
                   key={repo.id}
                   className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
@@ -297,9 +291,7 @@ export function RepoSelector({
                         <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
                           {repo.fullName}
                         </span>
-                        {repo.private && (
-                          <Badge variant="default">Private</Badge>
-                        )}
+                        {repo.private && <Badge variant="default">{t('private')}</Badge>}
                       </div>
                       {repo.description && (
                         <p className="text-xs text-gray-500 dark:text-gray-400 truncate mt-0.5">
@@ -308,12 +300,8 @@ export function RepoSelector({
                       )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => handleLink(repo)}
-                    isLoading={isLinking}
-                  >
-                    Link
+                  <Button size="sm" onClick={() => handleLink(repo)} isLoading={isLinking}>
+                    {t('link')}
                   </Button>
                 </div>
               ))}
@@ -326,7 +314,7 @@ export function RepoSelector({
                     onClick={handleLoadMore}
                     isLoading={reposLoading}
                   >
-                    Load more
+                    {t('loadMore')}
                   </Button>
                 </div>
               )}

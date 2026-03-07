@@ -39,10 +39,14 @@
 - Translation files: `apps/dashboard/messages/en.json` and `apps/dashboard/messages/fr.json` (MUST have identical keys)
 - Client components: `useTranslations('namespace')` hook — requires `'use client'` directive
 - Server components: `getTranslations('namespace')` async function
-- Namespaces: `common`, `nav`, `auth.login/signup/forgotPassword/resetPassword`, `setup`, `dashboard`, `tickets`, `tickets.detail`, `bulkActions`, `pagination`, `agent`, `agent.metrics`, `agent.filters`, `agent.taskStatuses`, `applications`, `integrations`, `github`, `analytics`, `settings`, `search`, `connection`, `theme`, `language`, `export`, `video`, `sdk`, `page`
+- Namespaces: `common`, `nav`, `auth.login/signup/forgotPassword/resetPassword`, `setup`, `setupAdmin`, `setupAi`, `setupEmail`, `setupGithub`, `setupSummary`, `dashboard`, `tickets`, `tickets.detail`, `bulkActions`, `pagination`, `agent`, `agent.metrics`, `agent.filters`, `agent.taskStatuses`, `applications`, `appCard`, `appModal`, `integrations`, `integrationCard`, `syncLogs`, `github`, `githubConnection`, `githubInstallations`, `repoCard`, `repoSelector`, `analytics`, `settings`, `search`, `connection`, `theme`, `language`, `export`, `video`, `sdk`, `page`, `agentMode`, `modelSelector`, `checkpoint`, `agentSection`, `liveActivity`, `ticketDetail`, `confirmModal`
 - Locale-aware dates on client: `document.cookie.match(/NEXT_LOCALE=([^;]+)/)?.[1] ?? 'fr'`
 - Nested namespaces (e.g. `agent.metrics`): `useTranslations('agent.metrics')` — note the dot notation
 - When using `t('key' as any)`, prefer adding the key to the JSON namespace directly instead
+- Linter auto-reformats files after writes — re-read the file before any Edit if the file was recently written
+- Dynamic key access pattern: `t(\`months.${month}\` as any)` for computed translation keys
+- Parameterized translations: `t('sync.title', { name: syncTarget.name })`
+- For `confirm()` dialogs, translate the string: `!confirm(t('deleteConfirm', { name: item.name }))`
 
 ## Tech Stack Notes
 

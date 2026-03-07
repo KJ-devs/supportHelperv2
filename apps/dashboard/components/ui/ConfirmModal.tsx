@@ -5,6 +5,7 @@
 
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Modal } from './Modal';
 import { Button } from './Button';
 
@@ -26,22 +27,26 @@ export function ConfirmModal({
   onConfirm,
   title,
   message,
-  confirmLabel = 'Confirmer',
-  cancelLabel = 'Annuler',
+  confirmLabel,
+  cancelLabel,
   variant = 'default',
   isLoading = false,
 }: ConfirmModalProps) {
+  const t = useTranslations('confirmModal');
+  const resolvedConfirmLabel = confirmLabel ?? t('confirm');
+  const resolvedCancelLabel = cancelLabel ?? t('cancel');
+
   const footer = (
     <>
       <Button variant="secondary" onClick={onClose} disabled={isLoading}>
-        {cancelLabel}
+        {resolvedCancelLabel}
       </Button>
       <Button
         variant={variant === 'danger' ? 'danger' : 'primary'}
         onClick={onConfirm}
         disabled={isLoading}
       >
-        {isLoading ? 'En cours...' : confirmLabel}
+        {isLoading ? t('inProgress') : resolvedConfirmLabel}
       </Button>
     </>
   );

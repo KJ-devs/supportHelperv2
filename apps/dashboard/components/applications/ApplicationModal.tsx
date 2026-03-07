@@ -6,6 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Application, CreateApplicationData } from '@/lib/types/application';
 import { Modal, Button, Input, Select } from '@/components/ui';
 import { Video, FileText, Bot, Bell, Lightbulb } from 'lucide-react';
@@ -25,6 +26,7 @@ export function ApplicationModal({
   application,
   isLoading = false,
 }: ApplicationModalProps) {
+  const t = useTranslations('appModal');
   const [formData, setFormData] = useState<CreateApplicationData>({
     name: '',
     platform: 'web',
@@ -38,7 +40,6 @@ export function ApplicationModal({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Load application data when editing
   useEffect(() => {
     if (application) {
       setFormData({
@@ -47,7 +48,6 @@ export function ApplicationModal({
         settings: application.settings || {},
       });
     } else {
-      // Reset form for new application
       setFormData({
         name: '',
         platform: 'web',
@@ -66,11 +66,11 @@ export function ApplicationModal({
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Le nom est requis';
+      newErrors.name = t('nameRequired');
     }
 
     if (!formData.platform) {
-      newErrors.platform = 'La plateforme est requise';
+      newErrors.platform = t('platformRequired');
     }
 
     setErrors(newErrors);
@@ -79,10 +79,10 @@ export function ApplicationModal({
 
   const validateField = (field: string, value: any): string => {
     if (field === 'name' && !String(value).trim()) {
-      return 'Le nom est requis';
+      return t('nameRequired');
     }
     if (field === 'platform' && !value) {
-      return 'La plateforme est requise';
+      return t('platformRequired');
     }
     return '';
   };
@@ -101,22 +101,21 @@ export function ApplicationModal({
   };
 
   const handleChange = (field: keyof CreateApplicationData, value: any) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-    // Clear error for this field on change
+    setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: '' }));
+      setErrors(prev => ({ ...prev, [field]: '' }));
     }
   };
 
   const handleBlur = (field: string, value: any) => {
     const errorMsg = validateField(field, value);
-    setErrors((prev) => ({ ...prev, [field]: errorMsg }));
+    setErrors(prev => ({ ...prev, [field]: errorMsg }));
   };
 
-  const hasErrors = Object.values(errors).some((e) => e !== '');
+  const hasErrors = Object.values(errors).some(e => e !== '');
 
   const handleSettingChange = (key: string, value: any) => {
-    setFormData((prev) => ({
+    setFormData(prev => ({
       ...prev,
       settings: {
         ...prev.settings,
@@ -129,15 +128,15 @@ export function ApplicationModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={application ? 'Modifier l&apos;application' : 'Nouvelle application'}
+      title={application ? t('titleEdit') : t('titleNew')}
       size="lg"
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={isLoading}>
-            Annuler
+            {t('cancel')}
           </Button>
           <Button onClick={handleSubmit} isLoading={isLoading} disabled={isLoading || hasErrors}>
-            {application ? 'Enregistrer' : 'Créer'}
+            {application ? t('save') : t('create')}
           </Button>
         </>
       }
@@ -145,11 +144,11 @@ export function ApplicationModal({
       <form onSubmit={handleSubmit} className="space-y-4">
         {/* Name */}
         <Input
-          label="Nom de l&apos;application"
-          placeholder="Mon Application"
+          label={t('nameLabel')}
+          placeholder={t('namePlaceholder')}
           value={formData.name}
-          onChange={(e) => handleChange('name', e.target.value)}
-          onBlur={(e) => handleBlur('name', e.target.value)}
+          onChange={e => handleChange('name', e.target.value)}
+          onBlur={e => handleBlur('name', e.target.value)}
           error={errors.name}
           required
           disabled={isLoading}
@@ -157,10 +156,10 @@ export function ApplicationModal({
 
         {/* Platform */}
         <Select
-          label="Plateforme"
+          label={t('platformLabel')}
           value={formData.platform}
-          onChange={(e) => handleChange('platform', e.target.value)}
-          onBlur={(e) => handleBlur('platform', e.target.value)}
+          onChange={e => handleChange('platform', e.target.value)}
+          onBlur={e => handleBlur('platform', e.target.value)}
           error={errors.platform}
           required
           disabled={isLoading}
@@ -168,14 +167,14 @@ export function ApplicationModal({
             { value: 'web', label: 'Web' },
             { value: 'mobile', label: 'Mobile' },
             { value: 'desktop', label: 'Desktop' },
-            { value: 'other', label: 'Autre' },
+            { value: 'other', label: t('other') },
           ]}
         />
 
         {/* Settings */}
         <div className="pt-4 border-t dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-            Paramètres du SDK
+            {t('sdkSettings')}
           </h3>
 
           <div className="space-y-3">
@@ -184,17 +183,17 @@ export function ApplicationModal({
               <input
                 type="checkbox"
                 checked={formData.settings?.recordVideo ?? true}
-                onChange={(e) => handleSettingChange('recordVideo', e.target.checked)}
+                onChange={e => handleSettingChange('recordVideo', e.target.checked)}
                 disabled={isLoading}
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <Video className="w-4 h-4" aria-hidden="true" />
-                  Enregistrement vidéo
+                  {t('recordVideo')}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Permettre l&apos;enregistrement de vidéos avec les tickets
+                  {t('recordVideoDesc')}
                 </div>
               </div>
             </label>
@@ -204,17 +203,17 @@ export function ApplicationModal({
               <input
                 type="checkbox"
                 checked={formData.settings?.captureLogs ?? true}
-                onChange={(e) => handleSettingChange('captureLogs', e.target.checked)}
+                onChange={e => handleSettingChange('captureLogs', e.target.checked)}
                 disabled={isLoading}
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <FileText className="w-4 h-4" aria-hidden="true" />
-                  Capture des logs
+                  {t('captureLogs')}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Capturer les logs console automatiquement
+                  {t('captureLogsDesc')}
                 </div>
               </div>
             </label>
@@ -224,17 +223,17 @@ export function ApplicationModal({
               <input
                 type="checkbox"
                 checked={formData.settings?.autoAssign ?? false}
-                onChange={(e) => handleSettingChange('autoAssign', e.target.checked)}
+                onChange={e => handleSettingChange('autoAssign', e.target.checked)}
                 disabled={isLoading}
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <Bot className="w-4 h-4" aria-hidden="true" />
-                  Attribution automatique
+                  {t('autoAssign')}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Assigner automatiquement les nouveaux tickets
+                  {t('autoAssignDesc')}
                 </div>
               </div>
             </label>
@@ -244,17 +243,17 @@ export function ApplicationModal({
               <input
                 type="checkbox"
                 checked={formData.settings?.notifyOnNewTicket ?? true}
-                onChange={(e) => handleSettingChange('notifyOnNewTicket', e.target.checked)}
+                onChange={e => handleSettingChange('notifyOnNewTicket', e.target.checked)}
                 disabled={isLoading}
                 className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800"
               />
               <div>
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                   <Bell className="w-4 h-4" aria-hidden="true" />
-                  Notifications
+                  {t('notifications')}
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Recevoir des notifications pour les nouveaux tickets
+                  {t('notificationsDesc')}
                 </div>
               </div>
             </label>
@@ -265,8 +264,7 @@ export function ApplicationModal({
           <div className="pt-4 border-t dark:border-gray-700">
             <p className="text-xs text-gray-500 dark:text-gray-400 flex items-start gap-2">
               <Lightbulb className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
-              <span>La clé SDK ne peut pas être modifiée. Utilisez le bouton &quot;Régénérer&quot;
-              sur la carte de l&apos;application pour créer une nouvelle clé.</span>
+              <span>{t('sdkKeyNote')}</span>
             </p>
           </div>
         )}

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, KeyboardEvent } from 'react';
 import { Send, RefreshCw } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useAgentChatV2 } from '@/hooks/useAgentChatV2';
 import { MarkdownRenderer } from '@/components/ui';
 import { useToast } from '@/components/ui/Toast';
@@ -88,6 +89,7 @@ function formatTime(timestamp: string): string {
 }
 
 export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSectionProps) {
+  const t = useTranslations('agentSection');
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -209,7 +211,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
 
   const tabs = [
     { id: 'chat' as ActiveTab, label: 'Chat', icon: '💬' },
-    { id: 'logs' as ActiveTab, label: 'Logs', icon: '🔍' },
+    { id: 'logs' as ActiveTab, label: t('tabLogs'), icon: '🔍' },
   ];
 
   return (
@@ -249,7 +251,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
           {sessionId && !agentLevel && (
             <div className="flex items-center gap-1.5" title={`Session: ${sessionId}`}>
               <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-500">Session active</span>
+              <span className="text-xs text-gray-500">{t('sessionActive')}</span>
             </div>
           )}
         </div>
@@ -276,7 +278,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             {isLoading && (
               <div className="flex items-center justify-center h-32 gap-2 text-gray-500">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" />
-                <span className="text-sm">Initializing session...</span>
+                <span className="text-sm">{t('initializing')}</span>
               </div>
             )}
 
@@ -299,17 +301,17 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
                     onClick={handleRetry}
                     disabled={isAgentThinking || isLoading}
                     className="flex items-center gap-1 px-2 py-1 bg-red-800/50 hover:bg-red-700/60 disabled:opacity-40 disabled:cursor-not-allowed rounded text-red-300 transition-colors"
-                    aria-label="Retry"
+                    aria-label={t('retry')}
                   >
                     <RefreshCw className="w-3 h-3" aria-hidden="true" />
-                    <span>Retry</span>
+                    <span>{t('retry')}</span>
                   </button>
                   <button
                     onClick={() => setError(null)}
                     className="px-2 py-1 hover:bg-red-800/30 rounded text-red-500 hover:text-red-400 transition-colors"
-                    aria-label="Dismiss error"
+                    aria-label={t('dismiss')}
                   >
-                    Dismiss
+                    {t('dismiss')}
                   </button>
                 </div>
               </div>
@@ -318,7 +320,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             {/* Empty state */}
             {!isLoading && messages.length === 0 && !isAgentThinking && (
               <div className="flex items-center justify-center h-32 text-gray-600 text-sm text-center px-4">
-                Send a message to start the investigation.
+                {t('emptyState')}
               </div>
             )}
 
@@ -347,7 +349,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             {isAgentThinking && (
               <div className="flex mb-3 justify-start">
                 <div className="max-w-[85%] px-3 py-2 rounded-xl rounded-bl-sm bg-gray-800">
-                  <span className="text-sm text-gray-500 italic">Investigating</span>
+                  <span className="text-sm text-gray-500 italic">{t('investigating')}</span>
                   <span className="inline-flex gap-0.5 ml-1.5">
                     <span
                       className="animate-bounce w-1 h-1 bg-gray-500 rounded-full"
@@ -378,7 +380,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onInput={handleInput}
-                placeholder="Ask the agent..."
+                placeholder={t('placeholder')}
                 rows={1}
                 disabled={isAgentThinking || isLoading}
                 className="bg-transparent text-sm text-gray-200 placeholder-gray-600 resize-none flex-1 border-0 focus:outline-none max-h-32 overflow-y-auto disabled:opacity-40"
@@ -393,7 +395,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
               </button>
             </div>
             <p className="text-[10px] text-gray-600 mt-1.5 px-1">
-              {inputValue.length} chars · Enter ↵ to send
+              {t('charCount', { count: inputValue.length })}
             </p>
           </div>
         </>
@@ -404,12 +406,10 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
         <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
           {/* ── AI Investigation log ── */}
           <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest mb-2">
-            AI Investigation
+            {t('title')}
           </p>
           {investigationLog.length === 0 ? (
-            <p className="text-xs text-gray-600 text-center py-3 mb-4">
-              No investigation logs yet. Start a chat to begin analysis.
-            </p>
+            <p className="text-xs text-gray-600 text-center py-3 mb-4">{t('noLogs')}</p>
           ) : (
             <div className="mb-4">
               {investigationLog.map((entry, i) => (
@@ -438,7 +438,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
           <div className="border-t border-gray-800 pt-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest">
-                Ticket Events
+                {t('tabLogs')}
               </p>
               <button
                 onClick={fetchTicketEvents}
@@ -463,7 +463,7 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             )}
 
             {!eventsLoading && ticketEvents.length === 0 && (
-              <p className="text-xs text-gray-600 text-center py-3">No events yet.</p>
+              <p className="text-xs text-gray-600 text-center py-3">{t('noEvents')}</p>
             )}
 
             {ticketEvents.length > 0 && (

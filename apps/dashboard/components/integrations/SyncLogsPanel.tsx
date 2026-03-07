@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { integrationsApi } from '@/lib/api/integrations';
 import type { IntegrationSyncLog, IntegrationSyncStats } from '@/lib/types/integration';
 import { Loader } from '@/components/ui';
@@ -12,19 +13,17 @@ interface SyncLogsPanelProps {
   integrationName: string;
 }
 
-function timeAgo(dateString: string): string {
+function timeAgoRaw(dateString: string): string | 'just_now' {
   const date = new Date(dateString);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-
-  if (seconds < 60) return 'Just now';
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return 'just_now';
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days < 7) return `${days}d`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function formatDuration(ms?: number): string {
@@ -84,6 +83,14 @@ export function SyncLogsPanel({
   integrationId,
   integrationName,
 }: SyncLogsPanelProps) {
+  const t = useTranslations('syncLogs');
+
+  const timeAgo = (dateString: string): string => {
+    const raw = timeAgoRaw(dateString);
+    if (raw === 'just_now') return t('justNow');
+    return raw;
+  };
+
   const [logs, setLogs] = useState<IntegrationSyncLog[]>([]);
   const [stats, setStats] = useState<IntegrationSyncStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -195,16 +202,21 @@ export function SyncLogsPanel({
         {/* Fixed Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Sync Logs</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('title')}</h2>
             <p className="text-sm text-gray-500 dark:text-gray-400">{integrationName}</p>
           </div>
           <button
             onClick={handleClose}
             className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:text-gray-300 dark:hover:bg-gray-800 transition-colors"
-            aria-label="Close"
+            aria-label={t('close')}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -247,18 +259,24 @@ export function SyncLogsPanel({
                 <div className="grid grid-cols-1 gap-1.5 text-sm">
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                     <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.total}</span>
-                    <span>total syncs</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {stats.total}
+                    </span>
+                    <span>{t('totalSyncs')}</span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                     <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.success}</span>
-                    <span>successful</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {stats.success}
+                    </span>
+                    <span>{t('successful')}</span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                     <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{stats.failed}</span>
-                    <span>failed</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">
+                      {stats.failed}
+                    </span>
+                    <span>{t('failed')}</span>
                   </div>
                 </div>
               </div>
@@ -266,7 +284,7 @@ export function SyncLogsPanel({
 
             {/* Filter Chips */}
             <div className="flex gap-2 flex-wrap">
-              {statusFilters.map((s) => {
+              {statusFilters.map(s => {
                 const isActive = s === 'all' ? statusFilter === '' : statusFilter === s;
                 return (
                   <button
@@ -287,7 +305,7 @@ export function SyncLogsPanel({
             {/* Loading State */}
             {isLoading && (
               <div className="flex justify-center py-12">
-                <Loader size="md" text="Loading sync logs..." />
+                <Loader size="md" text={t('loading')} />
               </div>
             )}
 
@@ -299,7 +317,7 @@ export function SyncLogsPanel({
                   onClick={fetchData}
                   className="mt-2 text-xs font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 underline"
                 >
-                  Retry
+                  {t('retry')}
                 </button>
               </div>
             )}
@@ -320,9 +338,11 @@ export function SyncLogsPanel({
                     d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
                   />
                 </svg>
-                <p className="text-gray-600 dark:text-gray-400 font-medium">No sync logs found</p>
+                <p className="text-gray-600 dark:text-gray-400 font-medium">{t('noLogs')}</p>
                 {statusFilter && (
-                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">Try adjusting your filters</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                    Try adjusting your filters
+                  </p>
                 )}
               </div>
             )}
@@ -330,7 +350,7 @@ export function SyncLogsPanel({
             {/* Timeline Log Entries */}
             {!isLoading && !error && logs.length > 0 && (
               <div className="relative pl-6 border-l-2 border-gray-200 dark:border-gray-700">
-                {logs.map((log) => (
+                {logs.map(log => (
                   <div key={log.id} className="relative pb-6 last:pb-0">
                     {/* Timeline Dot */}
                     <div
@@ -341,7 +361,9 @@ export function SyncLogsPanel({
 
                     <div className="ml-4">
                       {/* Timestamp */}
-                      <p className="text-xs text-gray-500 dark:text-gray-500">{timeAgo(log.syncedAt)}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500">
+                        {timeAgo(log.syncedAt)}
+                      </p>
 
                       {/* Ticket Title */}
                       <p
@@ -378,9 +400,14 @@ export function SyncLogsPanel({
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={e => e.stopPropagation()}
                           >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg
+                              className="w-3.5 h-3.5"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
                               <path
                                 strokeLinecap="round"
                                 strokeLinejoin="round"
@@ -414,7 +441,7 @@ export function SyncLogsPanel({
                                 d="M9 5l7 7-7 7"
                               />
                             </svg>
-                            Error details
+                            {t('errorDetails')}
                           </button>
                           {expandedLogId === log.id && (
                             <div className="mt-2 p-2.5 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
@@ -437,26 +464,36 @@ export function SyncLogsPanel({
         {!isLoading && !error && logs.length > 0 && totalPages > 1 && (
           <div className="flex items-center justify-between px-6 py-3 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-gray-900">
             <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M15 19l-7-7 7-7"
+                />
               </svg>
-              Prev
+              {t('prev')}
             </button>
             <span className="text-sm text-gray-500 dark:text-gray-400">
               {page} / {totalPages}
             </span>
             <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
               className="flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              Next
+              {t('next')}
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
               </svg>
             </button>
           </div>

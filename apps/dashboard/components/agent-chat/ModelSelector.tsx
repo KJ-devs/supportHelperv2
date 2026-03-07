@@ -1,41 +1,38 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
+
 type ModelValue = 'auto' | 'claude-haiku-4-5-20251001' | 'claude-sonnet-4-6' | 'claude-opus-4-6';
 
 interface ModelOption {
   value: ModelValue;
-  label: string;
-  description: string;
+  labelKey: string;
   level: 'auto' | 'N1' | 'N2';
-  badge?: string;
+  badgeKey?: string;
 }
 
 const MODEL_OPTIONS: ModelOption[] = [
   {
     value: 'auto',
-    label: 'Automatic',
-    description: 'AI chooses the best model',
+    labelKey: 'auto',
     level: 'auto',
-    badge: 'Recommended',
+    badgeKey: 'recommended',
   },
   {
     value: 'claude-haiku-4-5-20251001',
-    label: 'Fast Analysis (N1)',
-    description: 'Quick diagnosis, lightweight',
+    labelKey: 'haiku',
     level: 'N1',
   },
   {
     value: 'claude-sonnet-4-6',
-    label: 'Deep Investigation (N2)',
-    description: 'Complex code analysis',
+    labelKey: 'sonnet',
     level: 'N2',
   },
   {
     value: 'claude-opus-4-6',
-    label: 'Expert Analysis (N2)',
-    description: 'Maximum capability',
+    labelKey: 'opus',
     level: 'N2',
-    badge: 'Most Powerful',
+    badgeKey: 'mostPowerful',
   },
 ];
 
@@ -54,15 +51,16 @@ interface Props {
 const DEFAULT_OPTION: ModelOption = MODEL_OPTIONS[0]!;
 
 export function ModelSelector({ value, onChange, disabled = false }: Props) {
+  const t = useTranslations('modelSelector');
   const selected = MODEL_OPTIONS.find(o => o.value === value) ?? DEFAULT_OPTION;
 
   return (
     <div
       className="relative flex items-center gap-1.5"
-      title={disabled ? 'Model locked during session' : undefined}
+      title={disabled ? t('lockedDuringSession') : undefined}
     >
       <span className="text-[10px] text-gray-600 uppercase tracking-widest font-semibold">
-        Model
+        {t('model')}
       </span>
       <div className="relative">
         <select
@@ -75,7 +73,7 @@ export function ModelSelector({ value, onChange, disabled = false }: Props) {
         >
           {MODEL_OPTIONS.map(opt => (
             <option key={opt.value} value={opt.value}>
-              {opt.label}
+              {t(opt.labelKey as any)}
             </option>
           ))}
         </select>
@@ -98,12 +96,12 @@ export function ModelSelector({ value, onChange, disabled = false }: Props) {
       <span
         className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${LEVEL_PILL[selected.level]}`}
       >
-        {selected.level === 'auto' ? 'Auto' : selected.level}
+        {selected.level === 'auto' ? t('autoShort') : selected.level}
       </span>
 
-      {selected.badge && (
+      {selected.badgeKey && (
         <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-900/50 text-amber-300 font-medium">
-          {selected.badge}
+          {t(selected.badgeKey as any)}
         </span>
       )}
     </div>

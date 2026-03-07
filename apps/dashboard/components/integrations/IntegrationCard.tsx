@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Integration } from '@/lib/types/integration';
 
 interface IntegrationCardProps {
@@ -169,48 +170,32 @@ const TrashIcon = () => (
   </svg>
 );
 
-function getStatus(integration: Integration): {
-  label: string;
-  dotClass: string;
-  textClass: string;
-} {
-  if (!integration.enabled) {
-    return {
-      label: 'Disabled',
-      dotClass: 'bg-gray-400',
-      textClass: 'text-gray-500 dark:text-gray-400',
-    };
-  }
+function getStatusKey(integration: Integration): 'disabled' | 'connected' | 'idle' {
+  if (!integration.enabled) return 'disabled';
   const isRecent = integration.lastSyncedAt
     ? Date.now() - new Date(integration.lastSyncedAt).getTime() < 3600000
     : false;
-  if (isRecent) {
-    return {
-      label: 'Connected',
-      dotClass: 'bg-green-500 animate-pulse',
-      textClass: 'text-green-600 dark:text-green-400',
-    };
-  }
-  return {
-    label: 'Idle',
-    dotClass: 'bg-yellow-500',
-    textClass: 'text-yellow-600 dark:text-yellow-400',
-  };
+  return isRecent ? 'connected' : 'idle';
 }
 
-function timeAgo(dateString?: string): string {
-  if (!dateString) return 'Never';
-  const date = new Date(dateString);
-  const now = new Date();
-  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
-  if (seconds < 60) return 'Just now';
+const STATUS_STYLES: Record<string, { dotClass: string; textClass: string }> = {
+  disabled: { dotClass: 'bg-gray-400', textClass: 'text-gray-500 dark:text-gray-400' },
+  connected: {
+    dotClass: 'bg-green-500 animate-pulse',
+    textClass: 'text-green-600 dark:text-green-400',
+  },
+  idle: { dotClass: 'bg-yellow-500', textClass: 'text-yellow-600 dark:text-yellow-400' },
+};
+
+function formatTimeAgoSeconds(seconds: number, date: Date): string {
+  if (seconds < 60) return 'just_now';
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  if (days < 7) return `${days}d`;
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function getSuccessRate(integration: Integration): number | null {
@@ -230,11 +215,22 @@ export function IntegrationCard({
   onSync,
   onViewLogs,
 }: IntegrationCardProps) {
+  const t = useTranslations('integrationCard');
   const IconComponent = INTEGRATION_ICONS[integration.type] || PlugIcon;
   const iconBg = ICON_BG[integration.type] || 'bg-gray-100 dark:bg-gray-700';
-  const status = getStatus(integration);
+  const statusKey = getStatusKey(integration);
+  const statusStyles = STATUS_STYLES[statusKey]!;
   const totalSyncs = integration._count?.syncLogs ?? 0;
   const successRate = getSuccessRate(integration);
+
+  const timeAgo = (dateString?: string): string => {
+    if (!dateString) return t('never');
+    const date = new Date(dateString);
+    const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+    const raw = formatTimeAgoSeconds(seconds, date);
+    if (raw === 'just_now') return t('justNow');
+    return raw;
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-600 hover:-translate-y-0.5 transition-all duration-300">
@@ -242,7 +238,9 @@ export function IntegrationCard({
       <div className="p-5 pb-0">
         <div className="flex items-start gap-4">
           {/* Provider icon with colored background */}
-          <div className={`flex-shrink-0 w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}>
+          <div
+            className={`flex-shrink-0 w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center`}
+          >
             <IconComponent />
           </div>
 
@@ -256,9 +254,11 @@ export function IntegrationCard({
                 {integration.type}
               </span>
               <span className="text-gray-300 dark:text-gray-600">&middot;</span>
-              <span className={`flex items-center gap-1.5 text-sm font-medium ${status.textClass}`}>
-                <span className={`w-2 h-2 rounded-full ${status.dotClass}`} />
-                {status.label}
+              <span
+                className={`flex items-center gap-1.5 text-sm font-medium ${statusStyles.textClass}`}
+              >
+                <span className={`w-2 h-2 rounded-full ${statusStyles.dotClass}`} />
+                {t(statusKey as any)}
               </span>
             </div>
           </div>
@@ -268,11 +268,11 @@ export function IntegrationCard({
       {/* Stats section */}
       <div className="px-5 py-4 mt-3 border-t border-gray-100 dark:border-gray-700/50">
         <div className="grid grid-cols-2 gap-y-2 text-sm">
-          <span className="text-gray-500 dark:text-gray-400">Last sync</span>
+          <span className="text-gray-500 dark:text-gray-400">{t('lastSync')}</span>
           <span className="text-right font-medium text-gray-900 dark:text-gray-100">
             {timeAgo(integration.lastSyncedAt)}
           </span>
-          <span className="text-gray-500 dark:text-gray-400">Total syncs</span>
+          <span className="text-gray-500 dark:text-gray-400">{t('totalSyncs')}</span>
           <span className="text-right font-medium text-gray-900 dark:text-gray-100">
             {totalSyncs.toLocaleString()}
           </span>
@@ -309,21 +309,21 @@ export function IntegrationCard({
         <div className="flex items-center gap-1">
           <button
             onClick={() => onTest(integration)}
-            title="Test connection"
+            title={t('manage')}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 transition-colors"
           >
             <ZapIcon />
           </button>
           <button
             onClick={() => onSync(integration)}
-            title="Sync now"
+            title={t('sync')}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:hover:text-blue-400 transition-colors"
           >
             <RefreshIcon />
           </button>
           <button
             onClick={() => onViewLogs(integration)}
-            title="View logs"
+            title={t('manage')}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-400 transition-colors"
           >
             <ListIcon />
@@ -334,14 +334,14 @@ export function IntegrationCard({
         <div className="flex items-center gap-1">
           <button
             onClick={() => onEdit(integration)}
-            title="Edit integration"
+            title={t('manage')}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-200 transition-colors"
           >
             <PencilIcon />
           </button>
           <button
             onClick={() => onDelete(integration)}
-            title="Delete integration"
+            title={t('delete')}
             className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
           >
             <TrashIcon />

@@ -6,9 +6,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Ticket, TicketStatus } from '@/lib/types/ticket';
 import { ticketsApi } from '@/lib/api/tickets';
-import { StatusBadge, SeverityBadge, TypeBadge, Button, Select, Card, useToast } from '@/components/ui';
+import {
+  StatusBadge,
+  SeverityBadge,
+  TypeBadge,
+  Button,
+  Select,
+  Card,
+  useToast,
+} from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { Bot, Monitor } from 'lucide-react';
 
@@ -18,6 +27,8 @@ interface TicketDetailProps {
 }
 
 export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
+  const t = useTranslations('ticketDetail');
+  const tTickets = useTranslations('tickets');
   const [isUpdating, setIsUpdating] = useState(false);
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
   const [loadingUrls, setLoadingUrls] = useState<Record<string, boolean>>({});
@@ -35,7 +46,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
       const response = await fetch(`${API_URL}/api/media/${mediaId}/url`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
       });
@@ -65,14 +76,14 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       onUpdate(updated);
     } catch (error) {
       console.error('Error updating status:', error);
-      toast.error('Erreur lors de la mise à jour du statut');
+      toast.error(tTickets('detail.deleteError'));
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const createdAt = new Date(ticket.createdAt).toLocaleString('fr-FR');
-  const updatedAt = new Date(ticket.updatedAt).toLocaleString('fr-FR');
+  const createdAt = new Date(ticket.createdAt).toLocaleString();
+  const updatedAt = new Date(ticket.updatedAt).toLocaleString();
 
   return (
     <div className="space-y-6">
@@ -80,7 +91,9 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       <Card>
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">{ticket.title}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+              {ticket.title}
+            </h1>
             <div className="flex flex-wrap gap-2">
               <StatusBadge status={ticket.status} />
               <TypeBadge type={ticket.type} />
@@ -91,16 +104,16 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
           {/* Status Changer */}
           <div className="ml-4" style={{ minWidth: '200px' }}>
             <Select
-              label="Changer le statut"
+              label={t('changeStatus')}
               value={ticket.status}
-              onChange={(e) => handleStatusChange(e.target.value as TicketStatus)}
+              onChange={e => handleStatusChange(e.target.value as TicketStatus)}
               disabled={isUpdating}
               options={[
-                { value: 'new', label: 'Nouveau' },
-                { value: 'open', label: 'Ouvert' },
-                { value: 'in_progress', label: 'En cours' },
-                { value: 'resolved', label: 'Résolu' },
-                { value: 'closed', label: 'Fermé' },
+                { value: 'new', label: t('statusNew') },
+                { value: 'open', label: t('statusOpen') },
+                { value: 'in_progress', label: t('statusInProgress') },
+                { value: 'resolved', label: t('statusResolved') },
+                { value: 'closed', label: t('statusClosed') },
               ]}
             />
           </div>
@@ -109,22 +122,25 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         {/* Metadata */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t dark:border-gray-700">
           <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Créé le</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('createdAt')}</p>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{createdAt}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Mis à jour</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('updatedAt')}</p>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{updatedAt}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Application</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('application')}</p>
             <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {ticket.application?.name || 'N/A'}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">ID</p>
-            <p className="text-sm font-mono text-gray-600 dark:text-gray-400 truncate" title={ticket.id}>
+            <p
+              className="text-sm font-mono text-gray-600 dark:text-gray-400 truncate"
+              title={ticket.id}
+            >
               {ticket.id.substring(0, 8)}...
             </p>
           </div>
@@ -133,7 +149,9 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
       {/* Description Card */}
       <Card>
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">📝 Description</h2>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+          📝 Description
+        </h2>
         <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ticket.description}</p>
       </Card>
 
@@ -142,11 +160,13 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         <Card>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Bot className="w-5 h-5" aria-hidden="true" />
-            Analyse IA
+            {t('aiAnalysis')}
           </h2>
           <div className="space-y-3">
             <div>
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Résumé</p>
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('summary')}
+              </p>
               <p className="text-sm text-gray-600 dark:text-gray-300 bg-blue-50 dark:bg-blue-900/20 p-3 rounded">
                 {ticket.aiSummary}
               </p>
@@ -154,7 +174,9 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
             {ticket.keywords && ticket.keywords.length > 0 && (
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Mots-clés</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('keywords')}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {ticket.keywords.map((keyword, index) => (
                     <span
@@ -170,7 +192,9 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
 
             {ticket.aiAnalysis && (
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Analyse détaillée</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  {t('aiAnalysis')}
+                </p>
                 <pre className="text-xs bg-gray-50 dark:bg-gray-800 text-gray-800 dark:text-gray-200 p-3 rounded overflow-x-auto">
                   {JSON.stringify(ticket.aiAnalysis, null, 2)}
                 </pre>
@@ -185,7 +209,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
         <Card>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
             <Monitor className="w-5 h-5" aria-hidden="true" />
-            Contexte Utilisateur
+            {tTickets('detail.sectionContext')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {Object.entries(ticket.userContext).map(([key, value]) => (
@@ -205,11 +229,14 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
       {/* Media Card */}
       {ticket.media && ticket.media.length > 0 && (
         <Card>
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">🎥 Médias</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">
+            🎥 {t('media')}
+          </h2>
           <div className="space-y-4">
-            {ticket.media.map((media) => {
+            {ticket.media.map(media => {
               const filename = getFilename(media);
-              const fileSize = typeof media.fileSize === 'bigint' ? Number(media.fileSize) : (media.fileSize || 0);
+              const fileSize =
+                typeof media.fileSize === 'bigint' ? Number(media.fileSize) : media.fileSize || 0;
               const isVideo = media.type === 'video' || media.mimeType?.startsWith('video/');
 
               return (
@@ -218,7 +245,9 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                     <div className="space-y-2">
                       <div className="flex items-center justify-between mb-2">
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{filename}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {filename}
+                          </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {media.type} • {(fileSize / 1024 / 1024).toFixed(2)} MB
                           </p>
@@ -229,14 +258,16 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                           src={mediaUrls[media.id]!}
                           title={filename}
                           mimeType={media.mimeType ?? undefined}
-                          onError={(error) => console.error('Video error:', error)}
+                          onError={error => console.error('Video error:', error)}
                         />
                       ) : (
                         <div className="border dark:border-gray-700 rounded-lg p-8 text-center bg-gray-50 dark:bg-gray-800">
                           {loadingUrls[media.id] ? (
                             <div className="space-y-2">
                               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400">Loading video...</p>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {tTickets('detail.loadingVideo')}
+                              </p>
                             </div>
                           ) : (
                             <Button
@@ -244,7 +275,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                               size="sm"
                               onClick={() => fetchMediaUrl(media.id)}
                             >
-                              Load Video
+                              {tTickets('detail.loadVideo')}
                             </Button>
                           )}
                         </div>
@@ -254,13 +285,16 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                     <div className="border dark:border-gray-700 rounded-lg p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{filename}</p>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {filename}
+                          </p>
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {media.type} • {(fileSize / 1024 / 1024).toFixed(2)} MB •{' '}
                             {media.processingStatus}
                           </p>
                         </div>
-                        {(media.processingStatus === 'uploaded' || media.processingStatus === 'completed') && (
+                        {(media.processingStatus === 'uploaded' ||
+                          media.processingStatus === 'completed') && (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -278,7 +312,7 @@ export function TicketDetail({ ticket, onUpdate }: TicketDetailProps) {
                             }}
                             disabled={loadingUrls[media.id]}
                           >
-                            {loadingUrls[media.id] ? '...' : '📥 Télécharger'}
+                            {loadingUrls[media.id] ? '...' : `📥 ${tTickets('detail.loadVideo')}`}
                           </Button>
                         )}
                       </div>

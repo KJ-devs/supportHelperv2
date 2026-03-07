@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface AdminCreationStepProps {
   onComplete: () => void;
@@ -10,7 +11,12 @@ interface AdminCreationStepProps {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
-export default function AdminCreationStep({ onComplete, isLoading, setIsLoading }: AdminCreationStepProps) {
+export default function AdminCreationStep({
+  onComplete,
+  isLoading,
+  setIsLoading,
+}: AdminCreationStepProps) {
+  const t = useTranslations('setupAdmin');
   const [formData, setFormData] = useState({
     organizationName: '',
     adminName: '',
@@ -21,35 +27,36 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState('');
 
-  const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500";
+  const inputClassName =
+    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500';
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.organizationName.trim()) {
-      newErrors.organizationName = 'Organization name is required';
+      newErrors.organizationName = t('orgRequired');
     }
 
     if (!formData.adminName.trim()) {
-      newErrors.adminName = 'Admin name is required';
+      newErrors.adminName = t('nameRequired');
     }
 
     if (!formData.email.trim()) {
-      newErrors.email = 'Email is required';
+      newErrors.email = t('emailRequired');
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Invalid email format';
+      newErrors.email = t('emailInvalid');
     }
 
     if (!formData.password) {
-      newErrors.password = 'Password is required';
+      newErrors.password = t('passwordRequired');
     } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+      newErrors.password = t('passwordTooShort');
     }
 
     if (!formData.confirmPassword) {
-      newErrors.confirmPassword = 'Please confirm your password';
+      newErrors.confirmPassword = t('confirmRequired');
     } else if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Passwords do not match';
+      newErrors.confirmPassword = t('passwordMismatch');
     }
 
     setErrors(newErrors);
@@ -81,13 +88,12 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
       });
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: 'Failed to create admin account' }));
-        throw new Error(error.message || 'Failed to create admin account');
+        const error = await response.json().catch(() => ({ message: t('createFailed') }));
+        throw new Error(error.message || t('createFailed'));
       }
 
       const data = await response.json();
 
-      // Store tokens in localStorage
       localStorage.setItem('auth_token', data.accessToken);
       if (data.refreshToken) {
         localStorage.setItem('refresh_token', data.refreshToken);
@@ -95,7 +101,7 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
 
       onComplete();
     } catch (error) {
-      setApiError(error instanceof Error ? error.message : 'An error occurred');
+      setApiError(error instanceof Error ? error.message : t('createFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +109,6 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
 
   const handleChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
-    // Clear error for this field when user starts typing
     if (errors[field]) {
       setErrors({ ...errors, [field]: '' });
     }
@@ -113,11 +118,9 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          Create Admin Account
+          {t('title')}
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Set up your organization and create the first administrator account.
-        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('subtitle')}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,8 +131,11 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
         )}
 
         <div>
-          <label htmlFor="organizationName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Organization Name <span className="text-red-500">*</span>
+          <label
+            htmlFor="organizationName"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('orgName')} <span className="text-red-500">*</span>
           </label>
           <input
             id="organizationName"
@@ -137,7 +143,7 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
             value={formData.organizationName}
             onChange={e => handleChange('organizationName', e.target.value)}
             className={inputClassName}
-            placeholder="Acme Inc."
+            placeholder={t('orgPlaceholder')}
           />
           {errors.organizationName && (
             <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.organizationName}</p>
@@ -145,8 +151,11 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
         </div>
 
         <div>
-          <label htmlFor="adminName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Admin Name <span className="text-red-500">*</span>
+          <label
+            htmlFor="adminName"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('adminName')} <span className="text-red-500">*</span>
           </label>
           <input
             id="adminName"
@@ -154,7 +163,7 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
             value={formData.adminName}
             onChange={e => handleChange('adminName', e.target.value)}
             className={inputClassName}
-            placeholder="John Doe"
+            placeholder={t('adminPlaceholder')}
           />
           {errors.adminName && (
             <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.adminName}</p>
@@ -162,8 +171,11 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
         </div>
 
         <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Email Address <span className="text-red-500">*</span>
+          <label
+            htmlFor="email"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('email')} <span className="text-red-500">*</span>
           </label>
           <input
             id="email"
@@ -179,8 +191,11 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password <span className="text-red-500">*</span>
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('password')} <span className="text-red-500">*</span>
           </label>
           <input
             id="password"
@@ -196,8 +211,11 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
         </div>
 
         <div>
-          <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Confirm Password <span className="text-red-500">*</span>
+          <label
+            htmlFor="confirmPassword"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('confirmPassword')} <span className="text-red-500">*</span>
           </label>
           <input
             id="confirmPassword"
@@ -217,7 +235,7 @@ export default function AdminCreationStep({ onComplete, isLoading, setIsLoading 
           disabled={isLoading}
           className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isLoading ? 'Creating Account...' : 'Create Admin Account'}
+          {isLoading ? t('creating') : t('submit')}
         </button>
       </form>
     </div>

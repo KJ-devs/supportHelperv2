@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
 interface EmailConfigStepProps {
   onComplete: () => void;
@@ -10,6 +11,7 @@ interface EmailConfigStepProps {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepProps) {
+  const t = useTranslations('setupEmail');
   const [formData, setFormData] = useState({
     host: '',
     port: '587',
@@ -23,7 +25,8 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [error, setError] = useState('');
 
-  const inputClassName = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500";
+  const inputClassName =
+    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-gray-400 dark:placeholder:text-gray-500';
 
   const handleChange = (field: string, value: string | boolean) => {
     setFormData({ ...formData, [field]: value });
@@ -33,7 +36,7 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
 
   const handleTest = async () => {
     if (!formData.host || !formData.username || !formData.password || !formData.fromEmail) {
-      setError('Please fill in all required fields before testing');
+      setError(t('fillRequired'));
       return;
     }
 
@@ -55,18 +58,18 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Test failed');
+        throw new Error(data.message || t('testFailed'));
       }
 
       if (data.success) {
-        setTestResult({ success: true, message: 'Connection successful! Test email sent.' });
+        setTestResult({ success: true, message: t('testSuccess') });
       } else {
-        setTestResult({ success: false, message: data.error || 'Connection failed' });
+        setTestResult({ success: false, message: data.error || t('connectionFailed') });
       }
     } catch (err) {
       setTestResult({
         success: false,
-        message: err instanceof Error ? err.message : 'Failed to test connection',
+        message: err instanceof Error ? err.message : t('testFailed'),
       });
     } finally {
       setIsTesting(false);
@@ -75,7 +78,7 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
 
   const handleSave = async () => {
     if (!formData.host || !formData.username || !formData.password || !formData.fromEmail) {
-      setError('Please fill in all required fields');
+      setError(t('fillRequired'));
       return;
     }
 
@@ -96,12 +99,12 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to save configuration');
+        throw new Error(data.message || t('saveFailed'));
       }
 
       onComplete();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save configuration');
+      setError(err instanceof Error ? err.message : t('saveFailed'));
     } finally {
       setIsSaving(false);
     }
@@ -111,17 +114,14 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
     <div className="space-y-6">
       <div>
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-          Email Configuration (Optional)
+          {t('title')}
         </h2>
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Configure SMTP settings to enable email notifications for tickets and system alerts.
-        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{t('subtitle')}</p>
       </div>
 
       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
         <p className="text-sm text-blue-700 dark:text-blue-300">
-          <strong>Optional:</strong> You can skip this step and configure email settings later.
-          Email notifications will not be sent until SMTP is configured.
+          <strong>{t('optionalLabel')}</strong> {t('optionalNote')}
         </p>
       </div>
 
@@ -133,19 +133,24 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
         )}
 
         {testResult && (
-          <div className={`p-3 border rounded-md text-sm ${
-            testResult.success
-              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-              : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
-          }`}>
+          <div
+            className={`p-3 border rounded-md text-sm ${
+              testResult.success
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            }`}
+          >
             {testResult.message}
           </div>
         )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 sm:col-span-1">
-            <label htmlFor="host" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              SMTP Host
+            <label
+              htmlFor="host"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('smtpHost')}
             </label>
             <input
               id="host"
@@ -158,8 +163,11 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
           </div>
 
           <div className="col-span-2 sm:col-span-1">
-            <label htmlFor="port" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Port
+            <label
+              htmlFor="port"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              {t('port')}
             </label>
             <input
               id="port"
@@ -173,8 +181,11 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
         </div>
 
         <div>
-          <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Username
+          <label
+            htmlFor="username"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('username')}
           </label>
           <input
             id="username"
@@ -187,8 +198,11 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
         </div>
 
         <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password
+          <label
+            htmlFor="password"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('password')}
           </label>
           <input
             id="password"
@@ -201,8 +215,11 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
         </div>
 
         <div>
-          <label htmlFor="fromEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            From Email Address
+          <label
+            htmlFor="fromEmail"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('fromEmail')}
           </label>
           <input
             id="fromEmail"
@@ -223,25 +240,37 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
             className="h-4 w-4 text-blue-600 border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded"
           />
           <label htmlFor="secure" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-            Use TLS/SSL (secure connection)
+            {t('useTLS')}
           </label>
         </div>
 
         <div className="flex space-x-3">
           <button
             onClick={handleTest}
-            disabled={isTesting || !formData.host || !formData.username || !formData.password || !formData.fromEmail}
+            disabled={
+              isTesting ||
+              !formData.host ||
+              !formData.username ||
+              !formData.password ||
+              !formData.fromEmail
+            }
             className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isTesting ? 'Testing...' : 'Test Connection'}
+            {isTesting ? t('testing') : t('test')}
           </button>
 
           <button
             onClick={handleSave}
-            disabled={isSaving || !formData.host || !formData.username || !formData.password || !formData.fromEmail}
+            disabled={
+              isSaving ||
+              !formData.host ||
+              !formData.username ||
+              !formData.password ||
+              !formData.fromEmail
+            }
             className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSaving ? 'Saving...' : 'Save & Continue'}
+            {isSaving ? t('saving') : t('save')}
           </button>
         </div>
 
@@ -249,7 +278,7 @@ export default function EmailConfigStep({ onComplete, onSkip }: EmailConfigStepP
           onClick={onSkip}
           className="w-full px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm"
         >
-          Skip Email Configuration
+          {t('skip')}
         </button>
       </div>
     </div>

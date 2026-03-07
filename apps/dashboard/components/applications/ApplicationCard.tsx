@@ -6,6 +6,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import type { Application } from '@/lib/types/application';
 import { Badge, Button } from '@/components/ui';
 import {
@@ -37,6 +38,7 @@ export function ApplicationCard({
   onDelete,
   onRegenerateKey,
 }: ApplicationCardProps) {
+  const t = useTranslations('appCard');
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -46,7 +48,7 @@ export function ApplicationCard({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const createdAt = new Date(application.createdAt).toLocaleDateString('fr-FR', {
+  const createdAt = new Date(application.createdAt).toLocaleDateString(undefined, {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -92,7 +94,7 @@ export function ApplicationCard({
       {/* SDK Key */}
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-          SDK Key
+          {t('sdkKey')}
         </label>
         <div className="flex items-center gap-2">
           <div className="flex-1 font-mono text-sm bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 px-3 py-2 rounded border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -102,19 +104,27 @@ export function ApplicationCard({
             size="sm"
             variant="ghost"
             onClick={() => setShowKey(!showKey)}
-            title={showKey ? 'Masquer' : 'Afficher'}
-            aria-label={showKey ? 'Masquer la clé' : 'Afficher la clé'}
+            title={showKey ? t('hideKey') : t('showKey')}
+            aria-label={showKey ? t('hideKeyAria') : t('showKeyAria')}
           >
-            {showKey ? <Eye className="w-4 h-4" aria-hidden="true" /> : <EyeOff className="w-4 h-4" aria-hidden="true" />}
+            {showKey ? (
+              <Eye className="w-4 h-4" aria-hidden="true" />
+            ) : (
+              <EyeOff className="w-4 h-4" aria-hidden="true" />
+            )}
           </Button>
           <Button
             size="sm"
             variant="secondary"
             onClick={handleCopyKey}
-            title="Copier"
-            aria-label="Copier la clé SDK"
+            title={t('copy')}
+            aria-label={t('copyKeyAria')}
           >
-            {copied ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
+            {copied ? (
+              <Check className="w-4 h-4" aria-hidden="true" />
+            ) : (
+              <Copy className="w-4 h-4" aria-hidden="true" />
+            )}
           </Button>
         </div>
       </div>
@@ -122,7 +132,7 @@ export function ApplicationCard({
       {/* Stats */}
       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
         <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-700 dark:text-gray-300">Tickets créés</span>
+          <span className="text-sm text-gray-700 dark:text-gray-300">{t('ticketsCreated')}</span>
           <span className="text-lg font-semibold text-blue-600 dark:text-blue-400">
             {ticketCount}
           </span>
@@ -136,19 +146,19 @@ export function ApplicationCard({
             {application.settings.recordVideo && (
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
                 <Video className="w-3 h-3" aria-hidden="true" />
-                Vidéo
+                {t('video')}
               </span>
             )}
             {application.settings.captureLogs && (
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
                 <FileText className="w-3 h-3" aria-hidden="true" />
-                Logs
+                {t('logs')}
               </span>
             )}
             {application.settings.autoAssign && (
               <span className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded flex items-center gap-1">
                 <Bot className="w-3 h-3" aria-hidden="true" />
-                Auto-assign
+                {t('autoAssign')}
               </span>
             )}
           </div>
@@ -164,14 +174,14 @@ export function ApplicationCard({
           className="flex-1 flex items-center justify-center gap-1"
         >
           <Edit className="w-4 h-4" aria-hidden="true" />
-          Modifier
+          {t('edit')}
         </Button>
         <Button
           size="sm"
           variant="ghost"
           onClick={() => onRegenerateKey(application)}
-          title="Régénérer la clé"
-          aria-label="Régénérer la clé SDK"
+          title={t('regenerate')}
+          aria-label={t('regenerateAria')}
         >
           <RotateCw className="w-4 h-4" aria-hidden="true" />
         </Button>
@@ -179,8 +189,8 @@ export function ApplicationCard({
           size="sm"
           variant="danger"
           onClick={() => onDelete(application)}
-          title="Supprimer"
-          aria-label="Supprimer l'application"
+          title={t('delete')}
+          aria-label={t('deleteAria')}
         >
           <Trash2 className="w-4 h-4" aria-hidden="true" />
         </Button>
