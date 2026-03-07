@@ -196,6 +196,8 @@ export interface AgenticLoopOptions {
   maxContextTokens?: number;
   /** Skip guided-mode checkpoints (used when resuming after approval) */
   skipCheckpoints?: boolean;
+  /** AgentTask ID to write execution log entries into (optional — loop is also used without a task) */
+  agentTaskId?: string;
 }
 
 export interface AgenticLoopResult {
@@ -220,6 +222,240 @@ export class AgenticLoopService {
     private readonly eventEmitter: EventEmitter2,
     private readonly prisma: PrismaService
   ) {}
+
+  private stepToEmoji(step: string, hasError?: boolean): string {
+    if (hasError) return '❌';
+    switch (step) {
+      case 'analysis_started':
+        return '🚀';
+      case 'thinking':
+        return '🧠';
+      case 'conclusion':
+        return '📋';
+      case 'read_file':
+        return '📖';
+      case 'list_directory':
+        return '📂';
+      case 'get_repo_structure':
+        return '🗂️';
+      case 'search_code':
+        return '🔍';
+      case 'search_codebase_semantic':
+        return '🔮';
+      case 'get_file_history':
+        return '📜';
+      case 'get_file_blame':
+        return '🔎';
+      case 'get_ticket_details':
+        return '🎫';
+      case 'search_similar_tickets':
+        return '🔗';
+      case 'update_diagnosis':
+        return '🩺';
+      case 'write_file':
+        return '✏️';
+      case 'edit_file':
+        return '🛠️';
+      case 'create_branch':
+        return '🌿';
+      case 'create_pull_request':
+        return '🚀';
+      case 'model_upgrade':
+        return '⚡';
+      case 'analysis_completed':
+        return '✅';
+      case 'status_changed':
+        return '🔄';
+      default:
+        return '▶️';
+    }
+  }
+
+  private stepToPhase(step: string): string {
+    switch (step) {
+      case 'analysis_started':
+      case 'thinking':
+      case 'read_file':
+      case 'list_directory':
+      case 'get_repo_structure':
+      case 'get_file_history':
+      case 'get_file_blame':
+      case 'get_ticket_details':
+      case 'search_similar_tickets':
+      case 'search_code':
+      case 'search_codebase_semantic':
+        return 'analysis';
+      case 'update_diagnosis':
+      case 'conclusion':
+        return 'plan';
+      case 'write_file':
+      case 'edit_file':
+      case 'create_branch':
+        return 'codegen';
+      case 'create_pull_request':
+        return 'pushpr';
+      default:
+        return 'system';
+    }
+  }
+
+  private emitLogEntry(
+    agentTaskId: string,
+    entry: {
+      step: string;
+      message: string;
+      durationMs?: number;
+      hasError?: boolean;
+      detail?: string;
+      toolInput?: Record<string, unknown>;
+      resultPreview?: string;
+    }
+  ): void {
+    const enrichedEntry = {
+      ...entry,
+      timestamp: new Date().toISOString(),
+      emoji: this.stepToEmoji(entry.step, entry.hasError),
+      phase: this.stepToPhase(entry.step),
+    };
+    this.prisma.agentTask
+      .findUnique({ where: { id: agentTaskId }, select: { executionLog: true, tenantId: true } })
+      .then(task => {
+        if (!task) return;
+        const currentLog = (task.executionLog as object[]) || [];
+        return this.prisma.agentTask
+          .update({
+            where: { id: agentTaskId },
+            data: { executionLog: [...currentLog, enrichedEntry] as object[] },
+          })
+          .then(() => {
+            this.eventEmitter.emit('agent-task:log-appended', {
+              taskId: agentTaskId,
+              tenantId: task.tenantId,
+              entry: enrichedEntry,
+            });
+          });
+      })
+      .catch(err => this.logger.warn(`Failed to append execution log: ${(err as Error).message}`));
+  }
+
+  /** Shorten a file path to the last 3 segments for display. */
+  private shortenPath(p: string): string {
+    if (!p) return p;
+    const parts = p.replace(/\\/g, '/').split('/').filter(Boolean);
+    return parts.length > 3 ? parts.slice(-3).join('/') : p;
+  }
+
+  private summarizeToolCall(
+    toolName: string,
+    input: Record<string, unknown>,
+    error?: string
+  ): string {
+    if (error) return `❌ ${toolName} failed — ${error}`;
+    const rawPath =
+      (input['file_path'] as string | undefined) || (input['path'] as string | undefined);
+    const filePath = rawPath ? this.shortenPath(rawPath) : undefined;
+    switch (toolName) {
+      case 'read_file':
+        return `Reading ${filePath || 'file'}`;
+      case 'search_code':
+        return `Searching codebase for "${(input['query'] as string | undefined) || (input['pattern'] as string | undefined) || ''}"`;
+      case 'search_codebase_semantic':
+        return `Searching codebase for "${(input['query'] as string | undefined) || ''}"`;
+      case 'list_directory':
+        return `Exploring ${filePath || 'directory'}`;
+      case 'get_repo_structure':
+        return 'Mapping repository structure';
+      case 'get_file_history':
+        return `Tracing history of ${filePath || 'file'}`;
+      case 'get_file_blame':
+        return `Inspecting blame for ${filePath || 'file'}`;
+      case 'update_diagnosis': {
+        const conf = input['confidence'] as number | string | undefined;
+        const pct =
+          conf !== undefined ? Math.round(Number(conf) * (Number(conf) <= 1 ? 100 : 1)) : null;
+        return `Diagnosis updated${pct !== null ? ` — confidence ${pct}%` : ''}`;
+      }
+      case 'create_branch':
+        return `Creating branch ${(input['branch_name'] as string | undefined) || ''}`;
+      case 'write_file':
+        return `Writing ${filePath || 'file'}`;
+      case 'edit_file':
+        return `Patching ${filePath || 'file'}`;
+      case 'create_pull_request':
+        return `Opening PR "${(input['title'] as string | undefined) || ''}"`;
+      case 'list_repos':
+        return 'Listing connected repositories';
+      default:
+        return `${toolName} executed`;
+    }
+  }
+
+  private buildResultPreview(toolName: string, result: unknown): string | undefined {
+    if (!result) return undefined;
+    const str = typeof result === 'string' ? result : JSON.stringify(result);
+    switch (toolName) {
+      case 'read_file': {
+        const lines = str.split('\n').length;
+        return `${lines} lines`;
+      }
+      case 'search_code':
+      case 'search_codebase_semantic': {
+        const matches = (str.match(/\n/g) || []).length;
+        return matches > 0 ? `${matches} results` : 'No results';
+      }
+      case 'list_directory': {
+        try {
+          const items = JSON.parse(str) as unknown;
+          return Array.isArray(items) ? `${(items as unknown[]).length} items` : undefined;
+        } catch {
+          const items = str.split('\n').filter(Boolean).length;
+          return `${items} items`;
+        }
+      }
+      case 'update_diagnosis': {
+        try {
+          const diag =
+            typeof result === 'object'
+              ? (result as Record<string, unknown>)
+              : (JSON.parse(str) as Record<string, unknown>);
+          const raw = diag['confidence'] as number | string | undefined;
+          if (raw === undefined) return undefined;
+          const pct = Math.round(Number(raw) * (Number(raw) <= 1 ? 100 : 1));
+          return `confidence: ${pct}%`;
+        } catch {
+          return undefined;
+        }
+      }
+      case 'create_pull_request': {
+        try {
+          const pr = result as Record<string, unknown>;
+          if (pr['error']) return `error: ${String(pr['error'])}`;
+          const reused = pr['reused'] ? ' (existing PR updated)' : '';
+          return `PR #${(pr['number'] as number | undefined) ?? '?'} → ${(pr['url'] as string | undefined) || ''}${reused}`;
+        } catch {
+          return undefined;
+        }
+      }
+      default:
+        return str.length > 100 ? `${str.length} chars` : undefined;
+    }
+  }
+
+  private sanitizeToolInput(
+    toolName: string,
+    input: Record<string, unknown>
+  ): Record<string, unknown> {
+    void toolName;
+    const safe: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(input)) {
+      if (['content', 'old_text', 'new_text', 'body'].includes(k)) {
+        safe[k] = `[${typeof v === 'string' ? v.length : '?'} chars]`;
+      } else {
+        safe[k] = v;
+      }
+    }
+    return safe;
+  }
 
   private selectModel(
     toolsUsed: string[],
@@ -298,6 +534,7 @@ export class AgenticLoopService {
       sessionId,
       maxContextTokens = this.DEFAULT_MAX_CONTEXT_TOKENS,
       skipCheckpoints = false,
+      agentTaskId,
     } = options;
 
     const [provider, config] = await Promise.all([
@@ -340,6 +577,13 @@ export class AgenticLoopService {
       );
     }
 
+    if (agentTaskId) {
+      this.emitLogEntry(agentTaskId, {
+        step: 'analysis_started',
+        message: 'V2 agentic analysis started',
+      });
+    }
+
     while (!checkpointHit && iterations < maxIterations) {
       if (Date.now() > deadline) {
         this.logger.warn(`Agentic loop timed out after ${iterations} iterations`);
@@ -353,29 +597,39 @@ export class AgenticLoopService {
         allToolsUsed,
         iterations
       );
-      if (selectedLevel !== currentLevel && sessionId) {
+      if (selectedLevel !== currentLevel) {
         const prevLevel = currentLevel;
         currentLevel = selectedLevel;
         currentModel = selectedModel;
         // Persist level/model to DB if we have a sessionId
-        try {
-          await this.prisma.agentSession.updateMany({
-            where: { id: sessionId },
-            data: { agentLevel: currentLevel, modelUsed: currentModel },
+        if (sessionId) {
+          try {
+            await this.prisma.agentSession.updateMany({
+              where: { id: sessionId },
+              data: { agentLevel: currentLevel, modelUsed: currentModel },
+            });
+          } catch {
+            // Non-blocking — best effort persistence
+          }
+          this.eventEmitter.emit('agent.level_changed', {
+            sessionId,
+            level: currentLevel,
+            model: currentModel,
+            reason:
+              iterations > 8
+                ? 'Extended investigation required'
+                : 'Deep code investigation required',
           });
-        } catch {
-          // Non-blocking — best effort persistence
         }
         this.logger.log(
           `Agent level upgraded: ${prevLevel} → ${currentLevel} (model: ${currentModel}) at iteration ${iterations}`
         );
-        this.eventEmitter.emit('agent.level_changed', {
-          sessionId,
-          level: currentLevel,
-          model: currentModel,
-          reason:
-            iterations > 8 ? 'Extended investigation required' : 'Deep code investigation required',
-        });
+        if (agentTaskId) {
+          this.emitLogEntry(agentTaskId, {
+            step: 'model_upgrade',
+            message: `Agent upgraded: ${prevLevel} → ${currentLevel} (${currentModel})`,
+          });
+        }
       } else {
         currentModel = selectedModel;
         currentLevel = selectedLevel;
@@ -425,9 +679,28 @@ export class AgenticLoopService {
       // Append the assistant message to history
       messages.push(turn.assistantMessage);
 
+      // Log AI reasoning if present
+      if (agentTaskId && turn.textBlocks.length > 0) {
+        const reasoning = turn.textBlocks.map(b => b.text).join('\n');
+        if (reasoning.trim()) {
+          this.emitLogEntry(agentTaskId, {
+            step: 'thinking',
+            message: reasoning.length > 200 ? reasoning.slice(0, 200) + '...' : reasoning,
+            detail: reasoning.length > 200 ? reasoning : undefined,
+          });
+        }
+      }
+
       // If no tool calls, we have the final response
       if (turn.toolUseBlocks.length === 0 || turn.stopReason === 'end_turn') {
         finalContent = turn.textBlocks.map(b => b.text).join('\n');
+        if (agentTaskId && finalContent.trim()) {
+          this.emitLogEntry(agentTaskId, {
+            step: 'conclusion',
+            message: finalContent.length > 200 ? finalContent.slice(0, 200) + '...' : finalContent,
+            detail: finalContent.length > 200 ? finalContent : undefined,
+          });
+        }
         break;
       }
 
@@ -533,6 +806,23 @@ export class AgenticLoopService {
 
         const durationMs = Date.now() - startTime;
 
+        // ToolExecutorService catches all errors internally and returns { error: "..." }.
+        // Promote those object-level errors so hasError is set correctly.
+        if (
+          !error &&
+          result !== null &&
+          typeof result === 'object' &&
+          'error' in (result as Record<string, unknown>)
+        ) {
+          const resultError = (result as Record<string, unknown>)['error'];
+          error = typeof resultError === 'string' ? resultError : JSON.stringify(resultError);
+          if (toolUse.name === 'create_pull_request') {
+            this.logger.error(
+              `create_pull_request failed for ticket ${executionContext.ticket.id}: ${error}`
+            );
+          }
+        }
+
         this.eventEmitter.emit('agent:tool_result', {
           ticketId,
           sessionId,
@@ -549,6 +839,26 @@ export class AgenticLoopService {
           error,
           durationMs,
         });
+
+        if (agentTaskId) {
+          const resultPreview = !error ? this.buildResultPreview(toolUse.name, result) : undefined;
+          this.emitLogEntry(agentTaskId, {
+            step: toolUse.name,
+            message: this.summarizeToolCall(
+              toolUse.name,
+              toolUse.input as Record<string, unknown>,
+              error
+            ),
+            durationMs,
+            hasError: !!error,
+            detail: error && toolUse.name === 'create_pull_request' ? error : undefined,
+            resultPreview,
+            toolInput: this.sanitizeToolInput(
+              toolUse.name,
+              toolUse.input as Record<string, unknown>
+            ),
+          });
+        }
 
         toolResultBlocks.push({
           type: 'tool_result',
@@ -624,6 +934,13 @@ export class AgenticLoopService {
     }
 
     this.eventEmitter.emit('agent:complete', { ticketId, sessionId, finalContent });
+
+    if (agentTaskId) {
+      this.emitLogEntry(agentTaskId, {
+        step: 'analysis_completed',
+        message: `Analysis completed: ${iterations} iterations, ${toolCallLog.length} tool calls`,
+      });
+    }
 
     return { finalContent, toolCallLog, iterations, messages };
   }

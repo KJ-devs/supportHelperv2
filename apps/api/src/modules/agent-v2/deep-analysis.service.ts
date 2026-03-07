@@ -63,7 +63,8 @@ export class DeepAnalysisService {
       reasoning: string;
       investigationHints?: string[];
       similarTicketIds?: string[];
-    }
+    },
+    existingAgentTaskId?: string
   ): Promise<Diagnosis | null> {
     const ticket = await this.loadTicketWithContext(ticketId, tenantId);
 
@@ -71,16 +72,25 @@ export class DeepAnalysisService {
       throw new NotFoundException(`Ticket ${ticketId} not found`);
     }
 
-    // Create an AgentTask record so the dashboard can track this analysis
-    const agentTask = await this.prisma.agentTask.create({
-      data: {
-        ticketId,
-        tenantId,
-        applicationId: ticket.applicationId,
-        status: 'analyzing',
-        startedAt: new Date(),
-      },
-    });
+    // Reuse existing AgentTask if provided (e.g. from controller), otherwise create one
+    let agentTask: { id: string };
+    if (existingAgentTaskId) {
+      await this.prisma.agentTask.update({
+        where: { id: existingAgentTaskId },
+        data: { status: 'analyzing', startedAt: new Date(), error: null },
+      });
+      agentTask = { id: existingAgentTaskId };
+    } else {
+      agentTask = await this.prisma.agentTask.create({
+        data: {
+          ticketId,
+          tenantId,
+          applicationId: ticket.applicationId,
+          status: 'analyzing',
+          startedAt: new Date(),
+        },
+      });
+    }
 
     // Mark ticket as analyzing
     await this.prisma.ticket.update({
@@ -170,6 +180,7 @@ Start by identifying which parts of the codebase are likely involved, then read 
       maxTokens: 4096,
       timeoutMs: 2 * 60 * 1000,
       ticketId,
+      agentTaskId: agentTask.id,
     };
 
     try {
@@ -225,13 +236,22 @@ Start by identifying which parts of the codebase are likely involved, then read 
         },
       });
 
-      // Mark AgentTask as completed
+      // Extract PR and branch data from tool calls
+      const prCall = result.toolCallLog.find(t => t.name === 'create_pull_request' && !t.error);
+      const branchCall = result.toolCallLog.find(t => t.name === 'create_branch' && !t.error);
+      const prData = prCall?.result as { number?: number; url?: string } | undefined;
+      const branchData = branchCall?.input as { branch_name?: string } | undefined;
+
+      // Mark AgentTask as completed with PR data
       await this.prisma.agentTask.update({
         where: { id: agentTask.id },
         data: {
           status: 'completed',
           completedAt: new Date(),
           diagnosisSnapshot: finalDiagnosis ? (finalDiagnosis as object) : undefined,
+          ...(prData?.url && { prUrl: prData.url }),
+          ...(prData?.number && { prNumber: prData.number }),
+          ...(branchData?.branch_name && { branchName: branchData.branch_name }),
         },
       });
 

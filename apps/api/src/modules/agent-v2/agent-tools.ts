@@ -51,7 +51,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['file_path'],
@@ -74,7 +75,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['path'],
@@ -101,7 +103,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['query'],
@@ -140,12 +143,12 @@ export const AGENT_TOOLS: AgentTool[] = [
         exclude_patterns: {
           type: 'array',
           items: { type: 'string' },
-          description:
-            'Patterns to exclude (default: ["node_modules", "dist", ".git", "*.lock"])',
+          description: 'Patterns to exclude (default: ["node_modules", "dist", ".git", "*.lock"])',
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
     },
@@ -167,7 +170,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['file_path'],
@@ -188,7 +192,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         end_line: { type: 'number' },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['file_path'],
@@ -304,7 +309,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   {
     name: 'create_branch',
     description:
-      'Create a new git branch in the connected repository. Always create a fix branch before writing any files.',
+      'Create a new git branch in the connected repository, or reuse it if it already exists. Always create a fix branch before writing any files.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -318,7 +323,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['branch_name'],
@@ -349,7 +355,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['branch', 'file_path', 'content', 'commit_message'],
@@ -384,7 +391,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['branch', 'file_path', 'old_text', 'new_text', 'commit_message'],
@@ -393,7 +401,7 @@ export const AGENT_TOOLS: AgentTool[] = [
   {
     name: 'create_pull_request',
     description:
-      'Open a pull request on GitHub after writing all fix files to the branch. Include a clear title and a body that references the ticket.',
+      'Open a pull request on GitHub after writing all fix files to the branch. If a PR already exists for the same head branch, a comment with the new fixes will be added to the existing PR instead of creating a duplicate. Include a clear title and a body that references the ticket.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -415,7 +423,8 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
         repo: {
           type: 'string',
-          description: 'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
         },
       },
       required: ['title', 'body', 'head_branch'],

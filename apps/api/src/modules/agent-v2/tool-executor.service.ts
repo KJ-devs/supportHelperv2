@@ -316,13 +316,37 @@ export class ToolExecutorService {
         const ctx = await this.resolveRepoContext(input, context);
         if (!ctx) return { error: NO_REPO_ERROR };
 
-        const pr = await this.codeInvestigation.createPullRequest(
-          ctx,
-          input.title as string,
-          input.body as string,
-          input.head_branch as string,
-          input.base_branch as string | undefined
-        );
+        const headBranch = input.head_branch as string;
+        const baseBranch = input.base_branch as string | undefined;
+
+        // Check if a PR already exists for this branch
+        const existingPR = await this.codeInvestigation.findOpenPR(ctx, headBranch, baseBranch);
+
+        let pr: { number: number; url: string; title: string };
+        let reused = false;
+
+        if (existingPR) {
+          // PR already exists — add a comment with the new fixes and reuse it
+          const commentBody =
+            `## Additional fixes pushed\n\n` +
+            `**${input.title as string}**\n\n` +
+            `${input.body as string}`;
+          await this.codeInvestigation.addPRComment(ctx, existingPR.number, commentBody);
+          pr = existingPR;
+          reused = true;
+          this.logger.log(
+            `Reused existing PR #${pr.number} for branch ${headBranch} — added comment`
+          );
+        } else {
+          // No existing PR — create a new one
+          pr = await this.codeInvestigation.createPullRequest(
+            ctx,
+            input.title as string,
+            input.body as string,
+            headBranch,
+            baseBranch
+          );
+        }
 
         // Transition ticket to fix_proposed and record the event
         await this.prisma.ticket.update({
@@ -339,14 +363,17 @@ export class ToolExecutorService {
               prUrl: pr.url,
               prNumber: pr.number,
               prTitle: pr.title,
-              branch: input.head_branch as string,
+              branch: headBranch,
+              reused,
             },
           },
         });
 
-        this.logger.log(`Ticket ${context.ticket.id} → fix_proposed (PR #${pr.number})`);
+        this.logger.log(
+          `Ticket ${context.ticket.id} → fix_proposed (PR #${pr.number}${reused ? ', reused' : ''})`
+        );
 
-        return pr;
+        return { ...pr, reused };
       }
 
       default: {

@@ -44,7 +44,7 @@ export class CodeInvestigationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly githubAppService: GithubAppService,
-    private readonly cacheService: CacheService,
+    private readonly cacheService: CacheService
   ) {}
 
   /**
@@ -65,10 +65,12 @@ export class CodeInvestigationService {
     });
 
     // Fallback to first config if none is primary
-    const resolvedConfig = config ?? await this.prisma.projectGithubConfig.findFirst({
-      where: { applicationId },
-      include: { installation: true },
-    });
+    const resolvedConfig =
+      config ??
+      (await this.prisma.projectGithubConfig.findFirst({
+        where: { applicationId },
+        include: { installation: true },
+      }));
 
     if (!resolvedConfig) {
       return null;
@@ -97,7 +99,11 @@ export class CodeInvestigationService {
   /**
    * Resolve a specific repo context by owner/repo.
    */
-  async getRepoContextByName(applicationId: string, owner: string, repo: string): Promise<RepoContext | null> {
+  async getRepoContextByName(
+    applicationId: string,
+    owner: string,
+    repo: string
+  ): Promise<RepoContext | null> {
     const config = await this.prisma.projectGithubConfig.findFirst({
       where: { applicationId, owner, repo },
       include: { installation: true },
@@ -120,10 +126,10 @@ export class CodeInvestigationService {
       role: string;
       installation: { installationId: bigint; tenantId: string };
     },
-    applicationId: string,
+    applicationId: string
   ): Promise<RepoContext> {
     const octokit = await this.githubAppService.getInstallationOctokit(
-      Number(config.installation.installationId),
+      Number(config.installation.installationId)
     );
 
     return {
@@ -148,7 +154,7 @@ export class CodeInvestigationService {
     ctx: RepoContext,
     filePath: string,
     startLine?: number,
-    endLine?: number,
+    endLine?: number
   ): Promise<string> {
     const cacheKey = `repo-file:${ctx.applicationId}:${filePath}:${ctx.defaultBranch}`;
 
@@ -177,14 +183,8 @@ export class CodeInvestigationService {
   /**
    * List files and directories using GitHub Trees API.
    */
-  async listDirectory(
-    ctx: RepoContext,
-    path: string,
-    recursive = false,
-  ): Promise<TreeEntry[]> {
-    const treeSha = path
-      ? `${ctx.defaultBranch}:${path}`
-      : ctx.defaultBranch;
+  async listDirectory(ctx: RepoContext, path: string, recursive = false): Promise<TreeEntry[]> {
+    const treeSha = path ? `${ctx.defaultBranch}:${path}` : ctx.defaultBranch;
 
     const { data: tree } = await ctx.octokit.git.getTree({
       owner: ctx.owner,
@@ -194,14 +194,14 @@ export class CodeInvestigationService {
     });
 
     return tree.tree
-      .filter((item) => {
+      .filter(item => {
         if (recursive) {
           const depth = (item.path || '').split('/').length;
           return depth <= 2;
         }
         return true;
       })
-      .map((item) => ({
+      .map(item => ({
         path: item.path || '',
         type: item.type === 'tree' ? ('directory' as const) : ('file' as const),
         size: item.size,
@@ -215,21 +215,21 @@ export class CodeInvestigationService {
     ctx: RepoContext,
     query: string,
     filePattern?: string,
-    maxResults = 20,
+    maxResults = 20
   ): Promise<CodeSearchHit[]> {
     const q =
-      `${query} repo:${ctx.owner}/${ctx.repo}` +
-      (filePattern ? ` path:${filePattern}` : '');
+      `${query} repo:${ctx.owner}/${ctx.repo}` + (filePattern ? ` path:${filePattern}` : '');
 
     const { data } = await ctx.octokit.search.code({
       q,
       per_page: Math.min(maxResults, 100),
     });
 
-    return data.items.map((item) => ({
+    return data.items.map(item => ({
       filePath: item.path,
       matchCount: item.text_matches?.length || 0,
-      fragments: item.text_matches?.map((m) => m.fragment).filter((f): f is string => f !== undefined) || [],
+      fragments:
+        item.text_matches?.map(m => m.fragment).filter((f): f is string => f !== undefined) || [],
     }));
   }
 
@@ -239,7 +239,7 @@ export class CodeInvestigationService {
   async getRepoStructure(
     ctx: RepoContext,
     maxDepth = 3,
-    excludePatterns: string[] = [],
+    excludePatterns: string[] = []
   ): Promise<string> {
     const cacheKey = `repo-structure:${ctx.applicationId}`;
 
@@ -258,11 +258,11 @@ export class CodeInvestigationService {
       recursive: 'true',
     });
 
-    const filtered = tree.tree.filter((item) => {
+    const filtered = tree.tree.filter(item => {
       const path = item.path || '';
       const depth = path.split('/').length;
       if (depth > maxDepth) return false;
-      return !exclude.some((pattern) => {
+      return !exclude.some(pattern => {
         if (pattern.startsWith('*')) return path.endsWith(pattern.slice(1));
         return path.includes(pattern);
       });
@@ -276,11 +276,7 @@ export class CodeInvestigationService {
   /**
    * Get recent git commit history for a file.
    */
-  async getFileHistory(
-    ctx: RepoContext,
-    filePath: string,
-    limit = 5,
-  ): Promise<CommitInfo[]> {
+  async getFileHistory(ctx: RepoContext, filePath: string, limit = 5): Promise<CommitInfo[]> {
     const { data: commits } = await ctx.octokit.repos.listCommits({
       owner: ctx.owner,
       repo: ctx.repo,
@@ -288,7 +284,7 @@ export class CodeInvestigationService {
       per_page: limit,
     });
 
-    return commits.map((c) => ({
+    return commits.map(c => ({
       sha: c.sha.substring(0, 7),
       message: c.commit.message.split('\n')[0],
       author: c.commit.author?.name || 'Unknown',
@@ -303,33 +299,39 @@ export class CodeInvestigationService {
     ctx: RepoContext,
     filePath: string,
     startLine?: number,
-    endLine?: number,
+    endLine?: number
   ): Promise<unknown> {
     try {
-      const response = await ctx.octokit.request(
-        'GET /repos/{owner}/{repo}/blame/{path}',
-        {
-          owner: ctx.owner,
-          repo: ctx.repo,
-          path: filePath,
-          ref: ctx.defaultBranch,
-          headers: {
-            Accept: 'application/vnd.github.v3+json',
-          },
+      const response = await ctx.octokit.request('GET /repos/{owner}/{repo}/blame/{path}', {
+        owner: ctx.owner,
+        repo: ctx.repo,
+        path: filePath,
+        ref: ctx.defaultBranch,
+        headers: {
+          Accept: 'application/vnd.github.v3+json',
         },
-      );
+      });
 
-      let ranges = (response.data as { ranges?: Array<{ startingLine: number; endingLine: number; commit: { sha: string; author?: { name?: string; date?: string }; message: string } }> }).ranges || [];
+      let ranges =
+        (
+          response.data as {
+            ranges?: Array<{
+              startingLine: number;
+              endingLine: number;
+              commit: { sha: string; author?: { name?: string; date?: string }; message: string };
+            }>;
+          }
+        ).ranges || [];
 
       if (startLine || endLine) {
-        ranges = ranges.filter((range) => {
+        ranges = ranges.filter(range => {
           if (startLine && range.endingLine < startLine) return false;
           if (endLine && range.startingLine > endLine) return false;
           return true;
         });
       }
 
-      return ranges.map((range) => ({
+      return ranges.map(range => ({
         startLine: range.startingLine,
         endLine: range.endingLine,
         author: range.commit.author?.name || 'Unknown',
@@ -349,9 +351,25 @@ export class CodeInvestigationService {
   async createBranch(
     ctx: RepoContext,
     branchName: string,
-    fromBranch?: string,
-  ): Promise<{ branchName: string; sha: string }> {
+    fromBranch?: string
+  ): Promise<{ branchName: string; sha: string; alreadyExisted?: boolean }> {
     const base = fromBranch || ctx.defaultBranch;
+
+    // Check if branch already exists — reuse it instead of failing
+    try {
+      const { data: existingRef } = await ctx.octokit.git.getRef({
+        owner: ctx.owner,
+        repo: ctx.repo,
+        ref: `heads/${branchName}`,
+      });
+      const sha = existingRef.object.sha;
+      this.logger.log(
+        `Branch ${branchName} already exists (${sha.substring(0, 7)}) in ${ctx.fullName} — reusing`
+      );
+      return { branchName, sha, alreadyExisted: true };
+    } catch {
+      // Branch does not exist — create it
+    }
 
     const { data: refData } = await ctx.octokit.git.getRef({
       owner: ctx.owner,
@@ -368,7 +386,9 @@ export class CodeInvestigationService {
       sha,
     });
 
-    this.logger.log(`Created branch ${branchName} from ${base} (${sha.substring(0, 7)}) in ${ctx.fullName}`);
+    this.logger.log(
+      `Created branch ${branchName} from ${base} (${sha.substring(0, 7)}) in ${ctx.fullName}`
+    );
     return { branchName, sha };
   }
 
@@ -381,7 +401,7 @@ export class CodeInvestigationService {
     branch: string,
     filePath: string,
     content: string,
-    commitMessage: string,
+    commitMessage: string
   ): Promise<{ sha: string; url: string }> {
     let existingSha: string | undefined;
 
@@ -413,7 +433,9 @@ export class CodeInvestigationService {
     const commitSha = data.commit.sha!;
     const fileUrl = data.content?.html_url ?? '';
 
-    this.logger.log(`Wrote ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`);
+    this.logger.log(
+      `Wrote ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`
+    );
     return { sha: commitSha, url: fileUrl };
   }
 
@@ -427,7 +449,7 @@ export class CodeInvestigationService {
     filePath: string,
     oldText: string,
     newText: string,
-    commitMessage: string,
+    commitMessage: string
   ): Promise<{ sha: string; url: string }> {
     // 1. Read the current file content
     let currentContent: string;
@@ -456,7 +478,7 @@ export class CodeInvestigationService {
     // 2. Find and replace
     if (!currentContent.includes(oldText)) {
       throw new Error(
-        `old_text not found in ${filePath}. Ensure the text matches exactly (including whitespace and line breaks).`,
+        `old_text not found in ${filePath}. Ensure the text matches exactly (including whitespace and line breaks).`
       );
     }
 
@@ -476,8 +498,57 @@ export class CodeInvestigationService {
     const commitSha = data.commit.sha!;
     const fileUrl = data.content?.html_url ?? '';
 
-    this.logger.log(`Edited ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`);
+    this.logger.log(
+      `Edited ${filePath} on branch ${branch} (commit ${commitSha.substring(0, 7)}) in ${ctx.fullName}`
+    );
     return { sha: commitSha, url: fileUrl };
+  }
+
+  /**
+   * Find an existing open PR for a given head branch.
+   */
+  async findOpenPR(
+    ctx: RepoContext,
+    headBranch: string,
+    baseBranch?: string
+  ): Promise<{ number: number; url: string; title: string } | null> {
+    const base = baseBranch || ctx.defaultBranch;
+
+    const { data: prs } = await ctx.octokit.pulls.list({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      head: `${ctx.owner}:${headBranch}`,
+      base,
+      state: 'open',
+      per_page: 1,
+    });
+
+    if (prs.length === 0) return null;
+
+    const pr = prs[0];
+    this.logger.log(
+      `Found existing open PR #${pr.number} for branch ${headBranch} in ${ctx.fullName}`
+    );
+    return { number: pr.number, url: pr.html_url, title: pr.title };
+  }
+
+  /**
+   * Add a comment to an existing PR.
+   */
+  async addPRComment(
+    ctx: RepoContext,
+    prNumber: number,
+    body: string
+  ): Promise<{ id: number; url: string }> {
+    const { data } = await ctx.octokit.issues.createComment({
+      owner: ctx.owner,
+      repo: ctx.repo,
+      issue_number: prNumber,
+      body,
+    });
+
+    this.logger.log(`Added comment to PR #${prNumber} in ${ctx.fullName}`);
+    return { id: data.id, url: data.html_url };
   }
 
   /**
@@ -488,7 +559,7 @@ export class CodeInvestigationService {
     title: string,
     body: string,
     headBranch: string,
-    baseBranch?: string,
+    baseBranch?: string
   ): Promise<{ number: number; url: string; title: string }> {
     const base = baseBranch || ctx.defaultBranch;
 
@@ -513,9 +584,7 @@ export class CodeInvestigationService {
     return lines.slice(start, end).join('\n');
   }
 
-  private formatAsTree(
-    items: Array<{ path?: string; type?: string }>,
-  ): string {
+  private formatAsTree(items: Array<{ path?: string; type?: string }>): string {
     const lines: string[] = [];
 
     for (const item of items) {
