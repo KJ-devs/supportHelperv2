@@ -56,9 +56,9 @@ test.describe('Agent Task Detail', () => {
     await expect(firstStep).toBeVisible();
   });
 
-  test('onglet Action Plan est cliquable', async ({ page }) => {
+  test('onglet Diagnosis est cliquable', async ({ page }) => {
     test.skip(!SERVER_AVAILABLE, 'Dashboard server not running');
-    await page.getByTestId('agent-task-tab-plan').click();
+    await page.getByTestId('agent-task-tab-diagnosis').click();
     await expect(page).not.toHaveURL(/error/);
   });
 });
