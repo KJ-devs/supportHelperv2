@@ -330,7 +330,7 @@ See [SDK Documentation](packages/sdk-web/README.md) for complete integration gui
 | [Monitoring](docs/SETUP_MONITORING.md)           | Sentry, PostHog, BetterStack setup           |
 | [Security](docs/SECURITY.md)                     | Security best practices and compliance       |
 | [Testing](docs/TESTING.md)                       | Testing strategy and CI/CD                   |
-| [Contributing](docs/CONTRIBUTING.md)             | Development guidelines and workflow          |
+| [Contributing](CONTRIBUTING.md)                  | Development guidelines and workflow          |
 
 ## Troubleshooting
 
@@ -428,13 +428,31 @@ Verify `packages/sdk-web/dist/cdn/sdk.iife.js` exists after the build.
 
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guide](docs/CONTRIBUTING.md) for details.
+We welcome contributions from everyone! Whether you're fixing a typo, reporting a bug, or building a new feature, your help is appreciated.
+
+### Quick start for contributors
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
+3. Commit your changes using [Conventional Commits](https://www.conventionalcommits.org/) (`git commit -m 'feat(api): add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### Looking for a first contribution?
+
+Check out issues labeled [**`good first issue`**](https://github.com/KJ-devs/supportHelperv2/labels/good%20first%20issue) — these are beginner-friendly tasks specifically curated for new contributors.
+
+You can also browse [**`help wanted`**](https://github.com/KJ-devs/supportHelperv2/labels/help%20wanted) for issues where we'd love community input.
+
+### Join the community
+
+- **[GitHub Discussions](https://github.com/KJ-devs/supportHelperv2/discussions)** — Ask questions, share ideas, or showcase what you've built with Support Helper
+- **[Issues](https://github.com/KJ-devs/supportHelperv2/issues)** — Report bugs or request features
+- **[Contributing Guide](CONTRIBUTING.md)** — Full development guidelines, code style, and PR process
+
+### Topics & discoverability
+
+This project is listed on [GitHub Explore](https://github.com/explore) under topics like `ai`, `support`, `bug-reporting`, `nestjs`, `nextjs`, and `typescript`. Star the repo to help others discover it!
 
 ## License
 
