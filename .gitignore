@@ -32,6 +32,7 @@ pnpm-debug.log*
 # Local analysis assets (screenshots, JSON snapshots)
 docs/analyze/*.png
 docs/analyze/*.json
+reports/
 
 # Claude local settings
 .claude/settings.local.json
