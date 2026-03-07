@@ -309,6 +309,24 @@ export class AgenticLoopService {
       detail?: string;
       toolInput?: Record<string, unknown>;
       resultPreview?: string;
+      agentLevel?: string;
+      modelUsed?: string;
+      filePreview?: string;
+      searchResults?: Array<{ filePath: string; fragment?: string }>;
+      directoryContents?: string[];
+      historyPreview?: unknown;
+      codeChanges?: {
+        filePath: string;
+        operation: string;
+        fullContent?: string;
+        oldText?: string;
+        newText?: string;
+      };
+      prData?: { number: number; url: string; title: string; reused?: boolean };
+      fromLevel?: string;
+      toLevel?: string;
+      fromModel?: string;
+      toModel?: string;
     }
   ): void {
     const enrichedEntry = {
@@ -581,6 +599,8 @@ export class AgenticLoopService {
       this.emitLogEntry(agentTaskId, {
         step: 'analysis_started',
         message: 'V2 agentic analysis started',
+        agentLevel: currentLevel,
+        modelUsed: currentModel,
       });
     }
 
@@ -599,6 +619,7 @@ export class AgenticLoopService {
       );
       if (selectedLevel !== currentLevel) {
         const prevLevel = currentLevel;
+        const prevModel = currentModel;
         currentLevel = selectedLevel;
         currentModel = selectedModel;
         // Persist level/model to DB if we have a sessionId
@@ -628,6 +649,12 @@ export class AgenticLoopService {
           this.emitLogEntry(agentTaskId, {
             step: 'model_upgrade',
             message: `Agent upgraded: ${prevLevel} → ${currentLevel} (${currentModel})`,
+            agentLevel: currentLevel,
+            modelUsed: currentModel,
+            fromLevel: prevLevel,
+            toLevel: currentLevel,
+            fromModel: prevModel,
+            toModel: currentModel,
           });
         }
       } else {
@@ -687,6 +714,8 @@ export class AgenticLoopService {
             step: 'thinking',
             message: reasoning.length > 200 ? reasoning.slice(0, 200) + '...' : reasoning,
             detail: reasoning.length > 200 ? reasoning : undefined,
+            agentLevel: currentLevel,
+            modelUsed: currentModel,
           });
         }
       }
@@ -699,6 +728,8 @@ export class AgenticLoopService {
             step: 'conclusion',
             message: finalContent.length > 200 ? finalContent.slice(0, 200) + '...' : finalContent,
             detail: finalContent.length > 200 ? finalContent : undefined,
+            agentLevel: currentLevel,
+            modelUsed: currentModel,
           });
         }
         break;
@@ -842,6 +873,101 @@ export class AgenticLoopService {
 
         if (agentTaskId) {
           const resultPreview = !error ? this.buildResultPreview(toolUse.name, result) : undefined;
+
+          // Build enrichment data from result
+          let filePreview: string | undefined;
+          let searchResults: Array<{ filePath: string; fragment?: string }> | undefined;
+          let directoryContents: string[] | undefined;
+          let historyPreview: unknown;
+          let codeChanges:
+            | {
+                filePath: string;
+                operation: string;
+                fullContent?: string;
+                oldText?: string;
+                newText?: string;
+              }
+            | undefined;
+          let prData: { number: number; url: string; title: string; reused?: boolean } | undefined;
+
+          if (!error && result) {
+            const input = toolUse.input as Record<string, unknown>;
+
+            switch (toolUse.name) {
+              case 'read_file': {
+                const content = typeof result === 'string' ? result : '';
+                const lines = content.split('\n').slice(0, 30).join('\n');
+                filePreview = lines.slice(0, 2000);
+                break;
+              }
+              case 'search_code':
+              case 'search_codebase_semantic': {
+                const hits = Array.isArray(result) ? result : [];
+                searchResults = hits.slice(0, 5).map((h: Record<string, unknown>) => ({
+                  filePath:
+                    (h['filePath'] as string | undefined) ||
+                    (h['file_path'] as string | undefined) ||
+                    '',
+                  fragment: (
+                    (Array.isArray(h['fragments'])
+                      ? (h['fragments'][0] as string | undefined)
+                      : undefined) ||
+                    (h['fragment'] as string | undefined) ||
+                    ''
+                  ).slice(0, 200),
+                }));
+                break;
+              }
+              case 'list_directory': {
+                const items = Array.isArray(result) ? result : [];
+                directoryContents = items
+                  .slice(0, 30)
+                  .map((i: unknown) =>
+                    typeof i === 'string'
+                      ? i
+                      : ((i as Record<string, unknown>)['path'] as string | undefined) ||
+                        ((i as Record<string, unknown>)['name'] as string | undefined) ||
+                        ''
+                  );
+                break;
+              }
+              case 'get_file_history':
+              case 'get_file_blame': {
+                historyPreview = Array.isArray(result) ? result.slice(0, 5) : result;
+                break;
+              }
+              case 'write_file': {
+                codeChanges = {
+                  filePath: (input['file_path'] as string) || '',
+                  operation: 'write',
+                  fullContent: ((input['content'] as string) || '').slice(0, 5000),
+                };
+                break;
+              }
+              case 'edit_file': {
+                codeChanges = {
+                  filePath: (input['file_path'] as string) || '',
+                  operation: 'edit',
+                  oldText: ((input['old_text'] as string) || '').slice(0, 2000),
+                  newText: ((input['new_text'] as string) || '').slice(0, 2000),
+                };
+                break;
+              }
+              case 'create_pull_request': {
+                const pr = result as Record<string, unknown>;
+                if (pr['number']) {
+                  prData = {
+                    number: pr['number'] as number,
+                    url: (pr['url'] as string) || '',
+                    title: (pr['title'] as string) || '',
+                    reused: (pr['reused'] as boolean) || false,
+                  };
+                }
+                break;
+              }
+            }
+          }
+
           this.emitLogEntry(agentTaskId, {
             step: toolUse.name,
             message: this.summarizeToolCall(
@@ -857,6 +983,14 @@ export class AgenticLoopService {
               toolUse.name,
               toolUse.input as Record<string, unknown>
             ),
+            agentLevel: currentLevel,
+            modelUsed: currentModel,
+            filePreview,
+            searchResults,
+            directoryContents,
+            historyPreview,
+            codeChanges,
+            prData,
           });
         }
 
@@ -939,6 +1073,8 @@ export class AgenticLoopService {
       this.emitLogEntry(agentTaskId, {
         step: 'analysis_completed',
         message: `Analysis completed: ${iterations} iterations, ${toolCallLog.length} tool calls`,
+        agentLevel: currentLevel,
+        modelUsed: currentModel,
       });
     }
 
