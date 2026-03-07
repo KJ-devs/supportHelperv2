@@ -11,10 +11,7 @@ import { CodebaseSearchService } from '../../codebase-index/services/codebase-se
 import { GithubAppService } from '../../github/services/github-app.service';
 import { AgentTasksService } from '../agent-tasks.service';
 import { ActionPlan, ActionPlanFile } from '../types/action-plan.types';
-import {
-  GeneratedFile,
-  GeneratedCodeResult,
-} from '../types/code-generation.types';
+import { GeneratedFile, GeneratedCodeResult } from '../types/code-generation.types';
 import { Octokit } from '@octokit/rest';
 import Anthropic from '@anthropic-ai/sdk';
 
@@ -40,7 +37,7 @@ export class CodeGenerationAgentService {
     private readonly aiConfigService: AiConfigService,
     private readonly codebaseSearchService: CodebaseSearchService,
     private readonly githubAppService: GithubAppService,
-    private readonly agentTasksService: AgentTasksService,
+    private readonly agentTasksService: AgentTasksService
   ) {}
 
   async generateCode(agentTaskId: string): Promise<GeneratedCodeResult> {
@@ -73,11 +70,13 @@ export class CodeGenerationAgentService {
 
     const { ticket } = agentTask;
     const { application } = ticket;
-    const githubConfig = application.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? application.githubConfigs?.[0];
+    const githubConfig =
+      application.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+      application.githubConfigs?.[0];
 
     if (!githubConfig) {
       throw new BadRequestException(
-        `No GitHub configuration found for application ${application.id}. Link a repository first.`,
+        `No GitHub configuration found for application ${application.id}. Link a repository first.`
       );
     }
 
@@ -86,18 +85,16 @@ export class CodeGenerationAgentService {
 
     if (!actionPlan || !actionPlan.files || actionPlan.files.length === 0) {
       throw new BadRequestException(
-        `Agent task ${agentTaskId} has no approved action plan or plan has no files.`,
+        `Agent task ${agentTaskId} has no approved action plan or plan has no files.`
       );
     }
 
     // 2. Get Anthropic client for this tenant
-    const anthropic = await this.anthropicClientFactory.createForTenant(
-      agentTask.tenantId,
-    );
+    const anthropic = await this.anthropicClientFactory.createForTenant(agentTask.tenantId);
 
     if (!anthropic) {
       throw new BadRequestException(
-        'No Anthropic API key configured for this tenant. Configure it in AI Settings.',
+        'No Anthropic API key configured for this tenant. Configure it in AI Settings.'
       );
     }
 
@@ -105,15 +102,12 @@ export class CodeGenerationAgentService {
     const model = aiConfig?.model || DEFAULT_MODEL;
 
     // 3. Get Octokit for repo access
-    const octokit: Octokit =
-      await this.githubAppService.getInstallationOctokit(
-        Number(installation.installationId),
-      );
+    const octokit: Octokit = await this.githubAppService.getInstallationOctokit(
+      Number(installation.installationId)
+    );
 
     // 4. Sort files by order
-    const sortedFiles = [...actionPlan.files].sort(
-      (a, b) => a.order - b.order,
-    );
+    const sortedFiles = [...actionPlan.files].sort((a, b) => a.order - b.order);
 
     // 5. Generate code for each file
     let apiCallCount = 0;
@@ -124,6 +118,13 @@ export class CodeGenerationAgentService {
       totalFiles: sortedFiles.length,
       model,
     });
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'codegen_started',
+        message: 'Starting code generation from action plan',
+      })
+      .catch(() => {});
 
     for (const planFile of sortedFiles) {
       // Check global timeout
@@ -162,7 +163,7 @@ export class CodeGenerationAgentService {
           repo,
           githubConfig.defaultBranch,
           anthropic,
-          model,
+          model
         );
 
         apiCallCount++;
@@ -174,11 +175,17 @@ export class CodeGenerationAgentService {
           operation: planFile.operation,
           apiCallCount,
         });
+
+        this.agentTasksService
+          .appendLog(agentTaskId, {
+            step: 'codegen_file',
+            message: `Generated ${planFile.operation}: ${planFile.filePath}`,
+            resultPreview: `${result.generatedContent.split('\n').length} lines`,
+          })
+          .catch(() => {});
       } catch (error: unknown) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        this.logger.error(
-          `Failed to generate code for ${planFile.filePath}: ${errMsg}`,
-        );
+        this.logger.error(`Failed to generate code for ${planFile.filePath}: ${errMsg}`);
         await this.agentTasksService.appendLog(agentTaskId, {
           step: 'file_generation_failed',
           file: planFile.filePath,
@@ -211,8 +218,15 @@ export class CodeGenerationAgentService {
       generationTimeMs,
     });
 
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'codegen_completed',
+        message: `Code generation complete: ${generatedFiles.length} files generated`,
+      })
+      .catch(() => {});
+
     this.logger.log(
-      `Code generation complete for agent task ${agentTaskId}: ${generatedFiles.length}/${sortedFiles.length} files, ${apiCallCount} API calls, ${generationTimeMs}ms`,
+      `Code generation complete for agent task ${agentTaskId}: ${generatedFiles.length}/${sortedFiles.length} files, ${apiCallCount} API calls, ${generationTimeMs}ms`
     );
 
     return result;
@@ -228,7 +242,7 @@ export class CodeGenerationAgentService {
     repo: string,
     defaultBranch: string,
     anthropic: Anthropic,
-    model: string,
+    model: string
   ): Promise<GeneratedFile> {
     // 1. Fetch current file content from GitHub (skip for 'create' operations)
     let originalContent: string | undefined;
@@ -239,7 +253,7 @@ export class CodeGenerationAgentService {
         owner,
         repo,
         defaultBranch,
-        planFile.filePath,
+        planFile.filePath
       );
     }
 
@@ -255,12 +269,11 @@ export class CodeGenerationAgentService {
     }
 
     // 3. Search for related code context via RAG
-    const relatedCode =
-      await this.codebaseSearchService.findRelevantFiles(
-        ticket.applicationId,
-        `${planFile.filePath} ${planFile.description}`,
-        5,
-      );
+    const relatedCode = await this.codebaseSearchService.findRelevantFiles(
+      ticket.applicationId,
+      `${planFile.filePath} ${planFile.description}`,
+      5
+    );
 
     // 4. Build prompts
     const systemPrompt = this.buildSystemPrompt(actionPlan);
@@ -269,13 +282,21 @@ export class CodeGenerationAgentService {
       actionPlan,
       ticket,
       originalContent,
-      relatedCode,
+      relatedCode
     );
 
     // 5. Call Claude
     this.logger.log(
-      `Calling Claude (${model}) for file ${planFile.filePath} in task ${agentTaskId}`,
+      `Calling Claude (${model}) for file ${planFile.filePath} in task ${agentTaskId}`
     );
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'codegen_ai_call',
+        message: `AI call for code generation (model: ${model})`,
+        file: planFile.filePath,
+      })
+      .catch(() => {});
 
     const response = await anthropic.messages.create({
       model,
@@ -285,13 +306,11 @@ export class CodeGenerationAgentService {
     });
 
     // 6. Extract generated code from response
-    const textBlock = response.content.find(
-      (block) => block.type === 'text',
-    );
+    const textBlock = response.content.find(block => block.type === 'text');
 
     if (!textBlock || textBlock.type !== 'text') {
       throw new ServiceUnavailableException(
-        `Claude returned an unexpected response format for ${planFile.filePath}`,
+        `Claude returned an unexpected response format for ${planFile.filePath}`
       );
     }
 
@@ -314,7 +333,7 @@ export class CodeGenerationAgentService {
     owner: string,
     repo: string,
     ref: string,
-    filePath: string,
+    filePath: string
   ): Promise<string | undefined> {
     try {
       const { data } = await octokit.repos.getContent({
@@ -331,9 +350,7 @@ export class CodeGenerationAgentService {
       return undefined;
     } catch (error: unknown) {
       if ((error as { status?: number }).status === 404) {
-        this.logger.warn(
-          `File not found on GitHub: ${owner}/${repo}/${filePath} (ref: ${ref})`,
-        );
+        this.logger.warn(`File not found on GitHub: ${owner}/${repo}/${filePath} (ref: ${ref})`);
         return undefined;
       }
       throw error;
@@ -375,7 +392,7 @@ IMPORTANT RULES:
       content: string;
       language: string;
       distance: number;
-    }>,
+    }>
   ): string {
     const parts: string[] = [];
 
@@ -411,7 +428,7 @@ IMPORTANT RULES:
 
     if (planFile.operation === 'create') {
       parts.push(
-        '\n## Note\nThis is a new file. Generate the complete file from scratch based on the task description and related code patterns.',
+        '\n## Note\nThis is a new file. Generate the complete file from scratch based on the task description and related code patterns.'
       );
     }
 
@@ -419,10 +436,7 @@ IMPORTANT RULES:
     if (relatedCode.length > 0) {
       parts.push('\n## Related Code (for context)\n');
       for (const snippet of relatedCode) {
-        const truncated = this.truncateSnippet(
-          snippet.content,
-          MAX_SNIPPET_LINES,
-        );
+        const truncated = this.truncateSnippet(snippet.content, MAX_SNIPPET_LINES);
         parts.push(`### ${snippet.filePath}`);
         parts.push(`\`\`\`${snippet.language || 'typescript'}`);
         parts.push(truncated);
@@ -441,7 +455,7 @@ IMPORTANT RULES:
     }
 
     parts.push(
-      '\n## Instructions\nGenerate the COMPLETE file content. Output ONLY the raw file content, no markdown fences, no explanations.',
+      '\n## Instructions\nGenerate the COMPLETE file content. Output ONLY the raw file content, no markdown fences, no explanations.'
     );
 
     return parts.join('\n');
@@ -451,9 +465,7 @@ IMPORTANT RULES:
     let code = responseText.trim();
 
     // Remove markdown code fences if Claude included them despite instructions
-    const codeBlockMatch = code.match(
-      /^```(?:typescript|ts|javascript|js)?\s*\n([\s\S]*?)\n```$/,
-    );
+    const codeBlockMatch = code.match(/^```(?:typescript|ts|javascript|js)?\s*\n([\s\S]*?)\n```$/);
     if (codeBlockMatch) {
       code = codeBlockMatch[1];
     }
@@ -461,11 +473,7 @@ IMPORTANT RULES:
     return code;
   }
 
-  private validateSyntax(
-    filePath: string,
-    content: string,
-    agentTaskId: string,
-  ): void {
+  private validateSyntax(filePath: string, content: string, agentTaskId: string): void {
     // Basic validation: check for common syntax issues
     const ext = filePath.split('.').pop()?.toLowerCase();
 
@@ -519,7 +527,7 @@ IMPORTANT RULES:
 
     if (issues.length > 0) {
       this.logger.warn(
-        `Syntax validation warnings for ${filePath} in task ${agentTaskId}: ${issues.join(', ')}`,
+        `Syntax validation warnings for ${filePath} in task ${agentTaskId}: ${issues.join(', ')}`
       );
     }
   }

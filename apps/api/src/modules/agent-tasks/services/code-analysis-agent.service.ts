@@ -1,13 +1,10 @@
-import {
-  Injectable,
-  Logger,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { AnthropicClientFactory } from '../../ai-config/anthropic-client.factory';
 import { AiConfigService } from '../../ai-config/ai-config.service';
 import { CodebaseSearchService } from '../../codebase-index/services/codebase-search.service';
 import { GithubAppService } from '../../github/services/github-app.service';
+import { AgentTasksService } from '../agent-tasks.service';
 import { ActionPlan, ActionPlanFile } from '../types/action-plan.types';
 import { Octokit } from '@octokit/rest';
 
@@ -25,10 +22,18 @@ export class CodeAnalysisAgentService {
     private readonly aiConfigService: AiConfigService,
     private readonly codebaseSearchService: CodebaseSearchService,
     private readonly githubAppService: GithubAppService,
+    private readonly agentTasksService: AgentTasksService
   ) {}
 
   async analyzeTicket(agentTaskId: string): Promise<ActionPlan> {
     this.logger.log(`Starting code analysis for agent task ${agentTaskId}`);
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'plan_started',
+        message: 'Generating action plan...',
+      })
+      .catch(() => {});
 
     // 1. Load the full chain: agentTask -> ticket -> application -> ProjectGithubConfig -> GithubInstallation
     const agentTask = await this.prisma.agentTask.findUnique({
@@ -56,24 +61,24 @@ export class CodeAnalysisAgentService {
 
     const { ticket } = agentTask;
     const { application } = ticket;
-    const githubConfig = application.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? application.githubConfigs?.[0];
+    const githubConfig =
+      application.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+      application.githubConfigs?.[0];
 
     if (!githubConfig) {
       throw new BadRequestException(
-        `No GitHub configuration found for application ${application.id}. Link a repository first.`,
+        `No GitHub configuration found for application ${application.id}. Link a repository first.`
       );
     }
 
     const { installation, owner, repo } = githubConfig;
 
     // 2. Get Anthropic client for this tenant
-    const anthropic = await this.anthropicClientFactory.createForTenant(
-      agentTask.tenantId,
-    );
+    const anthropic = await this.anthropicClientFactory.createForTenant(agentTask.tenantId);
 
     if (!anthropic) {
       throw new BadRequestException(
-        'No Anthropic API key configured for this tenant. Configure it in AI Settings.',
+        'No Anthropic API key configured for this tenant. Configure it in AI Settings.'
       );
     }
 
@@ -82,26 +87,39 @@ export class CodeAnalysisAgentService {
     const model = aiConfig?.model || DEFAULT_MODEL;
 
     // 3. Get repo tree via GitHub App installation
-    const repoTree = await this.getRepoTree(
-      Number(installation.installationId),
-      owner,
-      repo,
-    );
+    const repoTree = await this.getRepoTree(Number(installation.installationId), owner, repo);
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'plan_repo_loaded',
+        message: `Loaded repo structure: ${owner}/${repo}`,
+        resultPreview: `${repoTree.length} files`,
+      })
+      .catch(() => {});
 
     // 4. Search relevant code via RAG
-    const relevantCode = await this.codebaseSearchService.findRelevantForTicket(
-      ticket.id,
-      10,
-    );
+    const relevantCode = await this.codebaseSearchService.findRelevantForTicket(ticket.id, 10);
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'plan_context_gathered',
+        message: 'Gathered ticket context + codebase snippets',
+      })
+      .catch(() => {});
 
     // 5. Build prompts
     const systemPrompt = this.buildSystemPrompt();
     const userPrompt = this.buildUserPrompt(ticket, repoTree, relevantCode);
 
     // 6. Call Claude
-    this.logger.log(
-      `Calling Claude (${model}) for agent task ${agentTaskId}`,
-    );
+    this.logger.log(`Calling Claude (${model}) for agent task ${agentTaskId}`);
+
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'plan_ai_call',
+        message: `Calling AI for plan generation (model: ${model})`,
+      })
+      .catch(() => {});
 
     const response = await anthropic.messages.create({
       model,
@@ -111,17 +129,26 @@ export class CodeAnalysisAgentService {
     });
 
     // 7. Extract and parse JSON from response
-    const textBlock = response.content.find((block) => block.type === 'text');
+    const textBlock = response.content.find(block => block.type === 'text');
     if (!textBlock || textBlock.type !== 'text') {
       throw new BadRequestException(
-        'Claude returned an unexpected response format (no text block)',
+        'Claude returned an unexpected response format (no text block)'
       );
     }
 
     const actionPlan = this.parseActionPlan(textBlock.text);
 
+    this.agentTasksService
+      .appendLog(agentTaskId, {
+        step: 'plan_generated',
+        message: `Action plan: ${actionPlan.summary}`,
+        detail: JSON.stringify(actionPlan),
+        resultPreview: `${actionPlan.files.length} files to modify`,
+      })
+      .catch(() => {});
+
     this.logger.log(
-      `Code analysis complete for agent task ${agentTaskId}: ${actionPlan.files.length} files identified`,
+      `Code analysis complete for agent task ${agentTaskId}: ${actionPlan.files.length} files identified`
     );
 
     return actionPlan;
@@ -130,11 +157,10 @@ export class CodeAnalysisAgentService {
   private async getRepoTree(
     installationId: number,
     owner: string,
-    repo: string,
+    repo: string
   ): Promise<string[]> {
     try {
-      const octokit: Octokit =
-        await this.githubAppService.getInstallationOctokit(installationId);
+      const octokit: Octokit = await this.githubAppService.getInstallationOctokit(installationId);
 
       const { data } = await octokit.git.getTree({
         owner,
@@ -145,16 +171,14 @@ export class CodeAnalysisAgentService {
 
       // Filter to blobs (files) only, limit to MAX_TREE_ENTRIES
       const filePaths = data.tree
-        .filter((item) => item.type === 'blob' && item.path)
-        .map((item) => item.path!)
+        .filter(item => item.type === 'blob' && item.path)
+        .map(item => item.path!)
         .slice(0, MAX_TREE_ENTRIES);
 
       return filePaths;
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      this.logger.warn(
-        `Failed to get repo tree for ${owner}/${repo}: ${errMsg}`,
-      );
+      this.logger.warn(`Failed to get repo tree for ${owner}/${repo}: ${errMsg}`);
       return [];
     }
   }
@@ -213,7 +237,7 @@ Rules:
       content: string;
       language: string;
       distance: number;
-    }>,
+    }>
   ): string {
     const parts: string[] = [];
 
@@ -260,10 +284,7 @@ Rules:
       parts.push('\n## Relevant Code Snippets\n');
 
       for (const snippet of relevantCode) {
-        const truncatedContent = this.truncateSnippet(
-          snippet.content,
-          MAX_SNIPPET_LINES,
-        );
+        const truncatedContent = this.truncateSnippet(snippet.content, MAX_SNIPPET_LINES);
         parts.push(`### ${snippet.filePath} (similarity: ${(1 - snippet.distance).toFixed(3)})`);
         parts.push(`\`\`\`${snippet.language || 'typescript'}`);
         parts.push(truncatedContent);
@@ -300,10 +321,10 @@ Rules:
       parsed = JSON.parse(jsonStr);
     } catch {
       this.logger.error(
-        `Failed to parse Claude response as JSON. Response: ${text.substring(0, 500)}`,
+        `Failed to parse Claude response as JSON. Response: ${text.substring(0, 500)}`
       );
       throw new BadRequestException(
-        'Claude returned invalid JSON. The analysis could not be completed.',
+        'Claude returned invalid JSON. The analysis could not be completed.'
       );
     }
 
@@ -329,12 +350,12 @@ Rules:
       }
       if (!validOperations.includes(file.operation)) {
         throw new BadRequestException(
-          `Invalid operation "${file.operation}" for file ${file.filePath}`,
+          `Invalid operation "${file.operation}" for file ${file.filePath}`
         );
       }
       if (!validChangeTypes.includes(file.changeType)) {
         throw new BadRequestException(
-          `Invalid changeType "${file.changeType}" for file ${file.filePath}`,
+          `Invalid changeType "${file.changeType}" for file ${file.filePath}`
         );
       }
     }

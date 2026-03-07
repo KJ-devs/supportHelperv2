@@ -8,6 +8,7 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Logger,
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
@@ -20,8 +21,6 @@ import {
   ApiQuery,
   ApiExcludeEndpoint,
 } from '@nestjs/swagger';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { InternalAuthGuard } from '../../common/guards/internal-auth.guard';
 import { InternalRoute } from '../../common/decorators/internal-route.decorator';
@@ -29,6 +28,7 @@ import { CurrentTenant } from '../../common/decorators/current-tenant.decorator'
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AgentTasksService } from './agent-tasks.service';
 import { ValidationModeService } from './services/validation-mode.service';
+import { DeepAnalysisService } from '../agent-v2/deep-analysis.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AgentTaskResponseDto } from './dto/agent-task-response.dto';
 import { ApproveTaskDto, RejectTaskDto } from './dto/review-task.dto';
@@ -38,12 +38,13 @@ import { ApproveTaskDto, RejectTaskDto } from './dto/review-task.dto';
 @Controller('v1/agent-tasks')
 @UseGuards(JwtAuthGuard)
 export class AgentTasksController {
+  private readonly logger = new Logger(AgentTasksController.name);
+
   constructor(
     private readonly agentTasksService: AgentTasksService,
     private readonly validationModeService: ValidationModeService,
-    private readonly prisma: PrismaService,
-    @InjectQueue('agent-orchestration')
-    private readonly agentQueue: Queue
+    private readonly deepAnalysisService: DeepAnalysisService,
+    private readonly prisma: PrismaService
   ) {}
 
   @Post('tickets/:ticketId/analyze')
@@ -74,28 +75,15 @@ export class AgentTasksController {
       );
     }
 
-    // Create the agent task
+    // Create the agent task record (returned immediately to the dashboard)
     const task = await this.agentTasksService.create(ticketId, tenantId, ticket.applicationId);
 
-    // Queue the job
-    await this.agentQueue.add(
-      'generate-action-plan',
-      {
-        type: 'generate-action-plan',
-        ticketId,
-        tenantId,
-        applicationId: ticket.applicationId,
-        agentTaskId: task.id,
-      },
-      {
-        priority: 5,
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 30000,
-        },
-      }
-    );
+    // Fire V2 deep analysis in the background (non-blocking)
+    this.deepAnalysisService.analyze(ticketId, tenantId, undefined, task.id).catch(err => {
+      this.logger.error(
+        `V2 analysis failed for ticket ${ticketId} (task ${task.id}): ${err.message}`
+      );
+    });
 
     return task;
   }
@@ -149,50 +137,6 @@ export class AgentTasksController {
       userId
     );
 
-    // After plan approval, queue code generation
-    if (dto.phase === 'plan') {
-      await this.agentQueue.add(
-        'generate-code',
-        {
-          type: 'generate-code' as const,
-          ticketId: approvedTask.ticketId,
-          tenantId,
-          applicationId: approvedTask.applicationId,
-          agentTaskId: id,
-        },
-        {
-          priority: 5,
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 30000,
-          },
-        }
-      );
-    }
-
-    // After code approval, queue push/PR creation
-    if (dto.phase === 'code') {
-      await this.agentQueue.add(
-        'push-code',
-        {
-          type: 'push-code' as const,
-          ticketId: approvedTask.ticketId,
-          tenantId,
-          applicationId: approvedTask.applicationId,
-          agentTaskId: id,
-        },
-        {
-          priority: 5,
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 30000,
-          },
-        }
-      );
-    }
-
     return approvedTask;
   }
 
@@ -245,22 +189,10 @@ export class AgentTasksController {
 
     const retriedTask = await this.agentTasksService.retry(id);
 
-    // Re-queue the analysis job
-    await this.agentQueue.add(
-      'generate-action-plan',
-      {
-        type: 'generate-action-plan',
-        ticketId: task.ticketId,
-        tenantId,
-        applicationId: task.applicationId,
-        agentTaskId: id,
-      },
-      {
-        priority: 3,
-        attempts: 3,
-        backoff: { type: 'exponential', delay: 30000 },
-      }
-    );
+    // Fire V2 deep analysis in the background (non-blocking)
+    this.deepAnalysisService.analyze(task.ticketId, tenantId, undefined, id).catch(err => {
+      this.logger.error(`V2 retry analysis failed for task ${id}: ${err.message}`);
+    });
 
     return retriedTask;
   }

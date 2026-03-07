@@ -1,12 +1,8 @@
-import {
-  Injectable,
-  Logger,
-  NotFoundException,
-  BadRequestException,
-} from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../../prisma/prisma.service';
+import { AgentTasksService } from '../agent-tasks.service';
 import { AgentMode, ReviewPhase } from '../types/action-plan.types';
 
 const MAX_PLAN_ITERATIONS = 3;
@@ -19,6 +15,7 @@ export class ValidationModeService {
     private readonly prisma: PrismaService,
     @InjectQueue('agent-orchestration')
     private readonly agentQueue: Queue,
+    private readonly agentTasksService: AgentTasksService
   ) {}
 
   /**
@@ -48,10 +45,7 @@ export class ValidationModeService {
   /**
    * Check whether the agent pipeline should wait for review at the given phase.
    */
-  async shouldWaitForReview(
-    applicationId: string,
-    phase: ReviewPhase,
-  ): Promise<boolean> {
+  async shouldWaitForReview(applicationId: string, phase: ReviewPhase): Promise<boolean> {
     const mode = await this.getAgentMode(applicationId);
 
     if (mode === 'auto') {
@@ -79,8 +73,7 @@ export class ValidationModeService {
       throw new NotFoundException(`Agent task ${taskId} not found`);
     }
 
-    const pendingStatus =
-      phase === 'plan' ? 'plan_pending_review' : 'code_pending_review';
+    const pendingStatus = phase === 'plan' ? 'plan_pending_review' : 'code_pending_review';
 
     await this.prisma.agentTask.update({
       where: { id: taskId },
@@ -90,21 +83,21 @@ export class ValidationModeService {
       },
     });
 
-    this.logger.log(
-      `Review requested for task ${taskId} (phase: ${phase})`,
-    );
+    this.logger.log(`Review requested for task ${taskId} (phase: ${phase})`);
+
+    this.agentTasksService
+      .appendLog(taskId, {
+        step: 'review_requested',
+        message: `Review requested for phase: ${phase}`,
+      })
+      .catch(() => {});
   }
 
   /**
    * Approve a task at the given phase.
    * Returns the updated task.
    */
-  async approveTask(
-    taskId: string,
-    tenantId: string,
-    phase: ReviewPhase,
-    reviewerId: string,
-  ) {
+  async approveTask(taskId: string, tenantId: string, phase: ReviewPhase, reviewerId: string) {
     const task = await this.prisma.agentTask.findFirst({
       where: { id: taskId, tenantId },
     });
@@ -121,12 +114,11 @@ export class ValidationModeService {
 
     if (!validStatuses.includes(task.status)) {
       throw new BadRequestException(
-        `Cannot approve ${phase} for task in '${task.status}' status. Expected one of: ${validStatuses.join(', ')}`,
+        `Cannot approve ${phase} for task in '${task.status}' status. Expected one of: ${validStatuses.join(', ')}`
       );
     }
 
-    const approvedStatus =
-      phase === 'plan' ? 'plan_approved' : 'code_approved';
+    const approvedStatus = phase === 'plan' ? 'plan_approved' : 'code_approved';
 
     const updated = await this.prisma.agentTask.update({
       where: { id: taskId },
@@ -137,9 +129,14 @@ export class ValidationModeService {
       },
     });
 
-    this.logger.log(
-      `Task ${taskId} ${phase} approved by ${reviewerId}`,
-    );
+    this.logger.log(`Task ${taskId} ${phase} approved by ${reviewerId}`);
+
+    this.agentTasksService
+      .appendLog(taskId, {
+        step: 'review_approved',
+        message: `Phase ${phase} approved by user ${reviewerId}`,
+      })
+      .catch(() => {});
 
     return updated;
   }
@@ -155,7 +152,7 @@ export class ValidationModeService {
     phase: ReviewPhase,
     reviewerId: string,
     reason?: string,
-    iterate = true,
+    iterate = true
   ) {
     const task = await this.prisma.agentTask.findFirst({
       where: { id: taskId, tenantId },
@@ -172,7 +169,7 @@ export class ValidationModeService {
 
     if (!validStatuses.includes(task.status)) {
       throw new BadRequestException(
-        `Cannot reject ${phase} for task in '${task.status}' status. Expected one of: ${validStatuses.join(', ')}`,
+        `Cannot reject ${phase} for task in '${task.status}' status. Expected one of: ${validStatuses.join(', ')}`
       );
     }
 
@@ -203,12 +200,19 @@ export class ValidationModeService {
           priority: 2,
           attempts: 2,
           backoff: { type: 'exponential', delay: 5000 },
-        },
+        }
       );
 
       this.logger.log(
-        `Task ${taskId} plan rejected by ${reviewerId} — iteration ${task.retryCount + 1}/${MAX_PLAN_ITERATIONS}: ${reason || 'no reason'}`,
+        `Task ${taskId} plan rejected by ${reviewerId} — iteration ${task.retryCount + 1}/${MAX_PLAN_ITERATIONS}: ${reason || 'no reason'}`
       );
+
+      this.agentTasksService
+        .appendLog(taskId, {
+          step: 'review_rejected',
+          message: `Phase ${phase} rejected: ${reason || 'no reason'} (iteration ${task.retryCount + 1}/${MAX_PLAN_ITERATIONS})`,
+        })
+        .catch(() => {});
 
       return updated;
     }
@@ -226,9 +230,14 @@ export class ValidationModeService {
       },
     });
 
-    this.logger.log(
-      `Task ${taskId} ${phase} rejected by ${reviewerId}: ${reason || 'no reason'}`,
-    );
+    this.logger.log(`Task ${taskId} ${phase} rejected by ${reviewerId}: ${reason || 'no reason'}`);
+
+    this.agentTasksService
+      .appendLog(taskId, {
+        step: 'review_rejected',
+        message: `Phase ${phase} rejected: ${reason || 'no reason'}`,
+      })
+      .catch(() => {});
 
     return updated;
   }
@@ -257,7 +266,7 @@ export class ValidationModeService {
 
     await this.prisma.agentTask.updateMany({
       where: {
-        id: { in: staleTasks.map((t) => t.id) },
+        id: { in: staleTasks.map(t => t.id) },
       },
       data: {
         status: 'expired',
@@ -266,9 +275,7 @@ export class ValidationModeService {
       },
     });
 
-    this.logger.log(
-      `Expired ${staleTasks.length} stale review request(s)`,
-    );
+    this.logger.log(`Expired ${staleTasks.length} stale review request(s)`);
 
     return staleTasks.length;
   }

@@ -93,6 +93,12 @@ export class AgentTasksService {
 
     this.logger.log(`Updated agent task ${id} status to ${status}`);
 
+    // Fire-and-forget log entry for status change
+    this.appendLog(id, {
+      step: 'status_changed',
+      message: `Status: ${previous?.status} → ${status}`,
+    }).catch(() => {});
+
     // Emit WebSocket event for real-time UI updates
     this.eventEmitter.emit('agent-task:status-changed', {
       taskId: id,
