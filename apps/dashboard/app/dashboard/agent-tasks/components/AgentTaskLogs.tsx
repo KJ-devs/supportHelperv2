@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
 import { useAgentTaskSocket } from '@/hooks/useAgentTaskSocket';
 import type { ExecutionLogEntry } from '@/lib/api/agent-tasks';
 import { MarkdownRenderer } from '@/components/ui/MarkdownRenderer';
@@ -112,15 +113,6 @@ function stepToPhase(step: string): LogPhase {
   return 'system';
 }
 
-const PHASE_LABELS: Record<LogPhase, string> = {
-  all: 'All',
-  analysis: 'Analysis',
-  plan: 'Plan',
-  codegen: 'Code Gen',
-  pushpr: 'Push/PR',
-  system: 'System',
-};
-
 function stepToCategory(step: string, hasError?: boolean): StepCategory {
   if (hasError || step === 'error') return 'error';
   if (INVESTIGATION_STEPS.has(step)) return 'investigation';
@@ -214,7 +206,7 @@ function categoryDotColor(category: StepCategory): string {
 }
 
 function formatTime(date: Date): string {
-  return date.toLocaleTimeString('en-US', {
+  return date.toLocaleTimeString(undefined, {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -333,12 +325,12 @@ function ModelUpgradeSeparator({ line }: { line: LogLine }) {
   );
 }
 
-function IterationSeparator({ number }: { number: number }) {
+function IterationSeparator({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-2 py-1.5 my-0.5">
       <div className="flex-1 border-t border-zinc-800" />
       <span className="text-zinc-600 text-[10px] font-mono uppercase tracking-wider whitespace-nowrap">
-        Iteration {number}
+        {label}
       </span>
       <div className="flex-1 border-t border-zinc-800" />
     </div>
@@ -430,17 +422,29 @@ function CodeChangesPanel({ codeChanges }: { codeChanges: NonNullable<LogLine['c
   return null;
 }
 
-function PrDataPanel({ prData }: { prData: NonNullable<LogLine['prData']> }) {
+function PrDataPanel({
+  prData,
+  updatedLabel,
+  newLabel,
+  viewOnGitHubLabel,
+}: {
+  prData: NonNullable<LogLine['prData']>;
+  updatedLabel: string;
+  newLabel: string;
+  viewOnGitHubLabel: string;
+}) {
   return (
     <div className="mt-2 flex items-center gap-3 p-3 bg-green-950/40 border border-green-800/40 rounded-lg">
       <span className="text-green-400 font-bold">PR #{prData.number}</span>
       <span className="text-gray-300">{prData.title}</span>
       {prData.reused ? (
         <span className="px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 rounded-full">
-          Updated
+          {updatedLabel}
         </span>
       ) : (
-        <span className="px-2 py-0.5 text-xs bg-green-900/50 text-green-300 rounded-full">New</span>
+        <span className="px-2 py-0.5 text-xs bg-green-900/50 text-green-300 rounded-full">
+          {newLabel}
+        </span>
       )}
       <a
         href={prData.url}
@@ -448,7 +452,7 @@ function PrDataPanel({ prData }: { prData: NonNullable<LogLine['prData']> }) {
         rel="noopener noreferrer"
         className="ml-auto text-blue-400 hover:underline text-xs"
       >
-        View on GitHub →
+        {viewOnGitHubLabel}
       </a>
     </div>
   );
@@ -467,7 +471,17 @@ function hasRichDetail(line: LogLine): boolean {
   );
 }
 
-function LogRow({ line }: { line: LogLine }) {
+function LogRow({
+  line,
+  prUpdatedLabel,
+  prNewLabel,
+  viewOnGitHubLabel,
+}: {
+  line: LogLine;
+  prUpdatedLabel: string;
+  prNewLabel: string;
+  viewOnGitHubLabel: string;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const hasDetails = hasRichDetail(line) || line.durationMs !== undefined || line.hasError;
@@ -587,7 +601,14 @@ function LogRow({ line }: { line: LogLine }) {
               <DirectoryContentsPanel items={line.directoryContents} />
             )}
             {line.codeChanges && <CodeChangesPanel codeChanges={line.codeChanges} />}
-            {line.prData && <PrDataPanel prData={line.prData} />}
+            {line.prData && (
+              <PrDataPanel
+                prData={line.prData}
+                updatedLabel={prUpdatedLabel}
+                newLabel={prNewLabel}
+                viewOnGitHubLabel={viewOnGitHubLabel}
+              />
+            )}
 
             {/* Existing detail fields */}
             {!line.filePreview &&
@@ -686,6 +707,7 @@ function LogRow({ line }: { line: LogLine }) {
 }
 
 export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: AgentTaskLogsProps) {
+  const t = useTranslations('agentTaskLogs');
   const [logs, setLogs] = useState<LogLine[]>(() =>
     initialLogs.map((entry, idx) => entryToLogLine(entry, idx))
   );
@@ -693,6 +715,16 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
 
   const containerRef = useRef<HTMLDivElement>(null);
   const counterRef = useRef(initialLogs.length);
+
+  // Phase labels — defined inside component so t() is available
+  const PHASE_LABELS: Record<LogPhase, string> = {
+    all: t('phaseAll'),
+    analysis: t('phaseAnalysis'),
+    plan: t('phasePlan'),
+    codegen: t('phaseCodegen'),
+    pushpr: t('phasePushPr'),
+    system: t('phaseSystem'),
+  };
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -730,7 +762,7 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
         data-testid="agent-task-logs-terminal"
         className="h-full bg-zinc-950 flex items-center justify-center"
       >
-        <span className="text-yellow-500 font-mono text-xs">WebSocket not connected</span>
+        <span className="text-yellow-500 font-mono text-xs">{t('wsNotConnected')}</span>
       </div>
     );
   }
@@ -745,7 +777,7 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
             <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
           </span>
           <span className="text-[10px] text-green-400 font-mono uppercase tracking-wider">
-            Live
+            {t('live')}
           </span>
         </div>
       )}
@@ -753,20 +785,20 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
       {/* Phase filter pills */}
       <div className="flex gap-1.5 px-3 py-2 border-b border-zinc-800 flex-shrink-0 overflow-x-auto">
         {(Object.keys(PHASE_LABELS) as LogPhase[]).map(phase => {
-          const isActive = phase === activePhase;
+          const isPhaseActive = phase === activePhase;
           return (
             <button
               key={phase}
               type="button"
               onClick={() => setActivePhase(phase)}
               className={`px-2 py-1 rounded text-[10px] font-mono uppercase tracking-wider transition-colors whitespace-nowrap ${
-                isActive
+                isPhaseActive
                   ? 'bg-zinc-700 text-zinc-100'
                   : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
               }`}
             >
               {PHASE_LABELS[phase]}
-              <span className={`ml-1 ${isActive ? 'text-zinc-400' : 'text-zinc-600'}`}>
+              <span className={`ml-1 ${isPhaseActive ? 'text-zinc-400' : 'text-zinc-600'}`}>
                 {phaseCounts[phase]}
               </span>
             </button>
@@ -781,9 +813,9 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
             <span className="text-zinc-500 font-mono text-xs">
               {logs.length === 0
                 ? isActive
-                  ? 'Waiting for agent...'
-                  : 'No execution logs.'
-                : 'No logs for this phase.'}
+                  ? t('waitingForAgent')
+                  : t('noExecutionLogs')
+                : t('noLogsForPhase')}
             </span>
           </div>
         ) : (
@@ -792,9 +824,22 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
               return <ModelUpgradeSeparator key={line.id} line={line} />;
             }
             if (line.isIteration) {
-              return <IterationSeparator key={line.id} number={line.iterationNumber ?? 0} />;
+              return (
+                <IterationSeparator
+                  key={line.id}
+                  label={t('iteration', { number: line.iterationNumber ?? 0 })}
+                />
+              );
             }
-            return <LogRow key={line.id} line={line} />;
+            return (
+              <LogRow
+                key={line.id}
+                line={line}
+                prUpdatedLabel={t('prUpdated')}
+                prNewLabel={t('prNew')}
+                viewOnGitHubLabel={t('viewOnGitHub')}
+              />
+            );
           })
         )}
       </div>

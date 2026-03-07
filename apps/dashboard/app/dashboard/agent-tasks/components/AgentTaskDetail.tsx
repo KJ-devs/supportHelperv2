@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import type { AgentTask, DiagnosisSnapshot } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
 import { agentTasksApi } from '@/lib/api/agent-tasks';
@@ -42,7 +43,7 @@ function isTerminal(status: string): boolean {
 
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '-';
-  return new Date(dateStr).toLocaleString('en-US', {
+  return new Date(dateStr).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -75,18 +76,26 @@ function deriveAgentLevel(task: AgentTask): string | null {
   return null;
 }
 
-function AgentLevelBadge({ level }: { level: string }) {
+function AgentLevelBadge({
+  level,
+  n1Label,
+  n2Label,
+}: {
+  level: string;
+  n1Label: string;
+  n2Label: string;
+}) {
   if (level === 'N1') {
     return (
       <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50">
-        N1 — Fast Triage
+        {n1Label}
       </span>
     );
   }
   if (level === 'N2') {
     return (
       <span className="px-3 py-1 text-xs font-medium rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/50">
-        N2 — Deep Analysis
+        {n2Label}
       </span>
     );
   }
@@ -94,7 +103,15 @@ function AgentLevelBadge({ level }: { level: string }) {
 }
 
 // ---- Tab: Overview ----
-function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
+function OverviewTab({
+  task,
+  isLive,
+  t,
+}: {
+  task: AgentTask;
+  isLive?: boolean;
+  t: ReturnType<typeof useTranslations<'agentTaskDetail'>>;
+}) {
   const agentLevel = deriveAgentLevel(task);
 
   // Derive PR data from last create_pull_request log entry
@@ -114,22 +131,22 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
             <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-500" />
           </span>
-          <span className="text-sm text-blue-300 font-medium">
-            Agent is working — live updates active
-          </span>
+          <span className="text-sm text-blue-300 font-medium">{t('agentWorking')}</span>
         </div>
       )}
 
       {/* Ticket Info */}
       <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">Linked Ticket</h4>
+        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-3">
+          {t('linkedTicket')}
+        </h4>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Link
               href={`/dashboard/tickets/${task.ticketId}`}
               className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
             >
-              {task.ticket?.title || 'Untitled Ticket'}
+              {task.ticket?.title || t('untitledTicket')}
             </Link>
             {task.ticket?.severity && (
               <SeverityBadge severity={task.ticket.severity as TicketSeverity} />
@@ -142,31 +159,37 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
       {/* Task Info Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <InfoItem
-          label="Status"
+          label={t('statusLabel')}
           value={
             <div
               className="flex items-center gap-2 flex-wrap"
               data-testid="agent-task-status-badge"
             >
               <AgentTaskStatusBadge status={task.status} />
-              {agentLevel && <AgentLevelBadge level={agentLevel} />}
+              {agentLevel && (
+                <AgentLevelBadge
+                  level={agentLevel}
+                  n1Label={t('n1FastTriage')}
+                  n2Label={t('n2DeepAnalysis')}
+                />
+              )}
             </div>
           }
         />
-        <InfoItem label="Application" value={task.application?.name || '-'} />
-        <InfoItem label="Created" value={formatDate(task.createdAt)} />
-        <InfoItem label="Started" value={formatDate(task.startedAt)} />
-        <InfoItem label="Completed" value={formatDate(task.completedAt)} />
+        <InfoItem label={t('application')} value={task.application?.name || '-'} />
+        <InfoItem label={t('created')} value={formatDate(task.createdAt)} />
+        <InfoItem label={t('started')} value={formatDate(task.startedAt)} />
+        <InfoItem label={t('completed')} value={formatDate(task.completedAt)} />
         <InfoItem
-          label="Duration"
+          label={t('duration')}
           value={
             <span data-testid="agent-task-duration">
               {formatDuration(task.startedAt, task.completedAt)}
             </span>
           }
         />
-        <InfoItem label="Retry Count" value={String(task.retryCount)} />
-        {task.branchName && <InfoItem label="Branch" value={task.branchName} />}
+        <InfoItem label={t('retryCount')} value={String(task.retryCount)} />
+        {task.branchName && <InfoItem label={t('branch')} value={task.branchName} />}
       </div>
 
       {/* PR Panel — enhanced */}
@@ -193,11 +216,11 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
                   <span className="text-lg font-bold text-green-300">PR #{task.prNumber}</span>
                   {prData?.reused ? (
                     <span className="px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 rounded-full border border-blue-700/50">
-                      Updated
+                      {t('prUpdated')}
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 text-xs bg-green-900/50 text-green-300 rounded-full border border-green-700/50">
-                      New
+                      {t('prNew')}
                     </span>
                   )}
                 </div>
@@ -210,7 +233,7 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
               rel="noopener noreferrer"
               className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              View on GitHub
+              {t('viewOnGitHub')}
             </a>
           </div>
           {task.branchName && (
@@ -229,7 +252,9 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
           data-testid="agent-task-error"
           className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4"
         >
-          <h4 className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">Error</h4>
+          <h4 className="text-sm font-medium text-red-800 dark:text-red-300 mb-2">
+            {t('errorTitle')}
+          </h4>
           <pre className="text-sm text-red-700 dark:text-red-400 whitespace-pre-wrap font-mono">
             {task.error}
           </pre>
@@ -240,7 +265,7 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
       {task.ciErrorLog && (
         <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-4">
           <h4 className="text-sm font-medium text-orange-800 dark:text-orange-300 mb-2">
-            CI Error Log
+            {t('ciErrorLog')}
           </h4>
           <pre className="text-sm text-orange-700 dark:text-orange-400 whitespace-pre-wrap font-mono">
             {task.ciErrorLog}
@@ -251,11 +276,13 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
       {/* Execution Logs (inline terminal) */}
       <div className="mt-6">
         <div className="flex items-center gap-2 mb-3">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Execution Logs</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+            {t('executionLogs')}
+          </h3>
           {isLive && isInProgress(task.status) && (
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs text-green-500 font-medium">Live</span>
+              <span className="text-xs text-green-500 font-medium">{t('live')}</span>
             </span>
           )}
         </div>
@@ -288,14 +315,14 @@ interface ActionPlanData {
   suggested_fix?: string;
 }
 
-function ConfidenceBar({ value }: { value: number }) {
+function ConfidenceBar({ value, label }: { value: number; label: string }) {
   const pct = Math.round(value * 100);
   const barColor = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500';
   const textColor = pct >= 70 ? 'text-green-400' : pct >= 40 ? 'text-yellow-400' : 'text-red-400';
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
-        <span className="text-gray-500 dark:text-gray-400">Confidence</span>
+        <span className="text-gray-500 dark:text-gray-400">{label}</span>
         <span className={`font-semibold ${textColor}`}>{pct}%</span>
       </div>
       <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -308,7 +335,13 @@ function ConfidenceBar({ value }: { value: number }) {
   );
 }
 
-function ActionPlanPanel({ task }: { task: AgentTask }) {
+function ActionPlanPanel({
+  task,
+  t,
+}: {
+  task: AgentTask;
+  t: ReturnType<typeof useTranslations<'agentTaskDetail'>>;
+}) {
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -347,13 +380,13 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
 
   return (
     <div className="space-y-5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
-      <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Action Plan</h4>
+      <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{t('actionPlan')}</h4>
 
       {/* Root Cause */}
       {planData.root_cause && (
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
-            Root Cause
+            {t('rootCause')}
           </p>
           <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
             <MarkdownRenderer content={planData.root_cause} />
@@ -362,26 +395,28 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
       )}
 
       {/* Confidence */}
-      {planData.confidence !== undefined && <ConfidenceBar value={planData.confidence} />}
+      {planData.confidence !== undefined && (
+        <ConfidenceBar value={planData.confidence} label={t('confidence')} />
+      )}
 
       {/* Affected Files */}
       {planData.affected_files && planData.affected_files.length > 0 && (
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
-            Affected Files
+            {t('affectedFiles')}
           </p>
           <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-100 dark:bg-gray-800 text-left">
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    File Path
+                    {t('filePath')}
                   </th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Relevance
+                    {t('relevance')}
                   </th>
                   <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-                    Description
+                    {t('fileDescription')}
                   </th>
                 </tr>
               </thead>
@@ -417,7 +452,7 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
       {planData.suggested_fix && (
         <div>
           <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
-            Suggested Fix
+            {t('suggestedFix')}
           </p>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
             <MarkdownRenderer content={planData.suggested_fix} />
@@ -432,7 +467,7 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
             <textarea
               value={rejectReason}
               onChange={e => setRejectReason(e.target.value)}
-              placeholder="Reason for rejection (optional)..."
+              placeholder={t('rejectPlaceholder')}
               className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
               rows={3}
             />
@@ -443,14 +478,14 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
               disabled={isSubmitting}
               className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              Approve Plan
+              {t('approvePlan')}
             </button>
             <button
               onClick={handleReject}
               disabled={isSubmitting}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
             >
-              {showRejectInput ? 'Confirm Reject' : 'Reject'}
+              {showRejectInput ? t('confirmReject') : t('reject')}
             </button>
             {showRejectInput && (
               <button
@@ -460,7 +495,7 @@ function ActionPlanPanel({ task }: { task: AgentTask }) {
                 }}
                 className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
-                Cancel
+                {t('cancel')}
               </button>
             )}
           </div>
@@ -475,10 +510,12 @@ function DiagnosisTab({
   diagnosis,
   executionLog,
   task,
+  t,
 }: {
   diagnosis: DiagnosisSnapshot | null;
   executionLog: AgentTask['executionLog'];
   task: AgentTask;
+  t: ReturnType<typeof useTranslations<'agentTaskDetail'>>;
 }) {
   // If no formal diagnosis snapshot, try to extract from execution logs
   if (!diagnosis) {
@@ -490,28 +527,28 @@ function DiagnosisTab({
 
     if (!conclusionEntry && !lastThinking && !diagEntry) {
       return (
-        <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          No diagnosis available yet.
-        </div>
+        <div className="text-center py-8 text-gray-500 dark:text-gray-400">{t('noDiagnosis')}</div>
       );
     }
 
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Source:</span>
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t('sourceLabel')}
+          </span>
           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-            Extracted from logs
+            {t('extractedFromLogs')}
           </span>
         </div>
 
         {/* Structured ActionPlan from update_diagnosis toolInput */}
-        <ActionPlanPanel task={task} />
+        <ActionPlanPanel task={task} t={t} />
 
         {diagEntry && !diagEntry.toolInput && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Diagnosis Tool Call
+              {t('diagnosisToolCall')}
             </h4>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <MarkdownRenderer content={String(diagEntry.message)} />
@@ -526,7 +563,7 @@ function DiagnosisTab({
         {conclusionEntry && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Agent Conclusion
+              {t('agentConclusion')}
             </h4>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <MarkdownRenderer
@@ -538,7 +575,7 @@ function DiagnosisTab({
         {!conclusionEntry && lastThinking && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Last Agent Reasoning
+              {t('lastAgentReasoning')}
             </h4>
             <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
               <MarkdownRenderer content={String(lastThinking.detail || lastThinking.message)} />
@@ -560,11 +597,13 @@ function DiagnosisTab({
   return (
     <div className="space-y-6">
       {/* Structured plan panel (always shown at top when diagEntry exists) */}
-      <ActionPlanPanel task={task} />
+      <ActionPlanPanel task={task} t={t} />
 
       {/* Confidence */}
       <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Confidence:</span>
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {t('confidenceLabel')}
+        </span>
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${confidenceColor}`}
         >
@@ -574,7 +613,9 @@ function DiagnosisTab({
 
       {/* Root Cause */}
       <div>
-        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Root Cause</h4>
+        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+          {t('rootCause')}
+        </h4>
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
           <MarkdownRenderer content={diagnosis.rootCause} />
         </div>
@@ -584,7 +625,7 @@ function DiagnosisTab({
       {diagnosis.suggestedFix && (
         <div>
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Suggested Fix
+            {t('suggestedFix')}
           </h4>
           <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
             <MarkdownRenderer content={diagnosis.suggestedFix} />
@@ -596,7 +637,7 @@ function DiagnosisTab({
       {diagnosis.affectedFiles && diagnosis.affectedFiles.length > 0 && (
         <div>
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Affected Files ({diagnosis.affectedFiles.length})
+            {t('affectedFilesCount', { count: diagnosis.affectedFiles.length })}
           </h4>
           <div className="space-y-2">
             {diagnosis.affectedFiles.map((file, idx) => (
@@ -664,11 +705,26 @@ interface DerivedTimelineStep {
   detail?: string;
 }
 
+interface TimelineStepLabels {
+  analysis: string;
+  investigation: string;
+  diagnosis: string;
+  codegen: string;
+  branch: string;
+  pr: string;
+  completed: string;
+  expired: string;
+  failed: string;
+  analyzing: string;
+  toolCalls: (count: number) => string;
+  filesModified: (count: number) => string;
+}
+
 /**
  * Build a data-driven timeline from execution logs.
  * Instead of a fixed V1 pipeline, this detects which phases actually occurred.
  */
-function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
+function buildDerivedTimeline(task: AgentTask, labels: TimelineStepLabels): DerivedTimelineStep[] {
   const logs = task.executionLog ?? [];
   const steps: DerivedTimelineStep[] = [];
 
@@ -677,7 +733,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (analysisStart || task.startedAt) {
     steps.push({
       key: 'analysis',
-      label: 'Analysis',
+      label: labels.analysis,
       status: 'done',
       timestamp: (analysisStart?.timestamp as string) || task.startedAt || undefined,
     });
@@ -700,9 +756,9 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (investigationCalls.length > 0) {
     steps.push({
       key: 'investigation',
-      label: 'Investigation',
+      label: labels.investigation,
       status: 'done',
-      detail: `${investigationCalls.length} tool calls`,
+      detail: labels.toolCalls(investigationCalls.length),
       timestamp: investigationCalls[0]?.timestamp as string,
     });
   }
@@ -713,7 +769,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
     const lastDiag = diagnosisCalls[diagnosisCalls.length - 1];
     steps.push({
       key: 'diagnosis',
-      label: 'Diagnosis',
+      label: labels.diagnosis,
       status: 'done',
       timestamp: lastDiag?.timestamp as string,
       detail: (lastDiag?.resultPreview as string) || undefined,
@@ -721,7 +777,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   } else if (task.diagnosisSnapshot) {
     steps.push({
       key: 'diagnosis',
-      label: 'Diagnosis',
+      label: labels.diagnosis,
       status: 'done',
       detail: `confidence: ${Math.round(task.diagnosisSnapshot.confidence * 100)}%`,
     });
@@ -732,10 +788,10 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (codeGenCalls.length > 0) {
     steps.push({
       key: 'codegen',
-      label: 'Code Generation',
+      label: labels.codegen,
       status: 'done',
       timestamp: codeGenCalls[0]?.timestamp as string,
-      detail: `${codeGenCalls.length} file(s) modified`,
+      detail: labels.filesModified(codeGenCalls.length),
     });
   }
 
@@ -744,7 +800,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (branchCall || task.branchName) {
     steps.push({
       key: 'branch',
-      label: 'Branch Created',
+      label: labels.branch,
       status: 'done',
       timestamp: branchCall?.timestamp as string,
       detail: task.branchName || (branchCall?.message as string) || undefined,
@@ -756,7 +812,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (prCall || task.prUrl) {
     steps.push({
       key: 'pr',
-      label: 'Pull Request',
+      label: labels.pr,
       status: 'done',
       timestamp: prCall?.timestamp as string,
       detail: task.prUrl ? `PR #${task.prNumber}` : (prCall?.message as string) || undefined,
@@ -767,14 +823,14 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
   if (task.status === 'completed') {
     steps.push({
       key: 'completed',
-      label: 'Completed',
+      label: labels.completed,
       status: 'done',
       timestamp: task.completedAt || undefined,
     });
   } else if (task.status === 'failed' || task.status === 'expired') {
     steps.push({
       key: 'failed',
-      label: task.status === 'expired' ? 'Expired' : 'Failed',
+      label: task.status === 'expired' ? labels.expired : labels.failed,
       status: 'done',
     });
   } else {
@@ -782,7 +838,7 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
     const lastLog = logs[logs.length - 1];
     steps.push({
       key: 'in_progress',
-      label: task.status === 'analyzing' ? 'Analyzing...' : task.status,
+      label: task.status === 'analyzing' ? labels.analyzing : task.status,
       status: 'current',
       timestamp: lastLog?.timestamp as string,
     });
@@ -792,10 +848,32 @@ function buildDerivedTimeline(task: AgentTask): DerivedTimelineStep[] {
 }
 
 // ---- Tab: Timeline ----
-function TimelineTab({ task }: { task: AgentTask }) {
+function TimelineTab({
+  task,
+  t,
+}: {
+  task: AgentTask;
+  t: ReturnType<typeof useTranslations<'agentTaskDetail'>>;
+}) {
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
   const codegenFiles = getCodegenFiles(task.executionLog ?? []);
-  const derivedSteps = buildDerivedTimeline(task);
+
+  const timelineLabels: TimelineStepLabels = {
+    analysis: t('stepAnalysis'),
+    investigation: t('stepInvestigation'),
+    diagnosis: t('stepDiagnosis'),
+    codegen: t('stepCodeGeneration'),
+    branch: t('stepBranchCreated'),
+    pr: t('stepPullRequest'),
+    completed: t('stepCompleted'),
+    expired: t('stepExpired'),
+    failed: t('stepFailed'),
+    analyzing: t('stepAnalyzing'),
+    toolCalls: (count: number) => t('toolCalls', { count }),
+    filesModified: (count: number) => t('filesModified', { count }),
+  };
+
+  const derivedSteps = buildDerivedTimeline(task, timelineLabels);
 
   function toggleStep(key: string) {
     setExpandedStep(prev => (prev === key ? null : key));
@@ -808,7 +886,8 @@ function TimelineTab({ task }: { task: AgentTask }) {
           <div className="space-y-2">
             {task.startedAt && (
               <p className="text-sm text-gray-700 dark:text-gray-300">
-                Started at <span className="font-medium">{formatDate(task.startedAt)}</span>
+                {t('timelineStartedAt')}{' '}
+                <span className="font-medium">{formatDate(task.startedAt)}</span>
               </p>
             )}
           </div>
@@ -843,7 +922,7 @@ function TimelineTab({ task }: { task: AgentTask }) {
         return task.diagnosisSnapshot ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
-              Confidence:{' '}
+              {t('timelineConfidence')}{' '}
               <span className="text-gray-900 dark:text-gray-100">
                 {Math.round(task.diagnosisSnapshot.confidence * 100)}%
               </span>
@@ -858,16 +937,14 @@ function TimelineTab({ task }: { task: AgentTask }) {
             )}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Diagnosis generated from final analysis.
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('diagnosisFromAnalysis')}</p>
         );
 
       case 'codegen':
         return codegenFiles.length > 0 ? (
           <div>
             <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              Modified files ({codegenFiles.length})
+              {t('timelineModifiedFiles', { count: codegenFiles.length })}
             </p>
             <ul className="space-y-0.5 max-h-32 overflow-y-auto">
               {codegenFiles.map((f, i) => (
@@ -884,7 +961,7 @@ function TimelineTab({ task }: { task: AgentTask }) {
       case 'branch':
         return task.branchName ? (
           <p className="text-sm text-gray-700 dark:text-gray-300">
-            Branch:{' '}
+            {t('timelineBranch')}{' '}
             <span className="font-mono text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
               {task.branchName}
             </span>
@@ -901,7 +978,7 @@ function TimelineTab({ task }: { task: AgentTask }) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-sm text-blue-600 dark:text-blue-400 hover:underline"
               >
-                PR #{task.prNumber} — View on GitHub
+                {t('timelinePrLink', { number: task.prNumber ?? '' })}
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -919,14 +996,15 @@ function TimelineTab({ task }: { task: AgentTask }) {
         return (
           <div className="space-y-2">
             <p className="text-sm text-gray-700 dark:text-gray-300">
-              Duration:{' '}
+              {t('timelineDuration')}{' '}
               <span className="font-medium">
                 {formatDuration(task.startedAt, task.completedAt)}
               </span>
             </p>
             {task.diagnosisSnapshot && (
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Diagnosis confidence: {Math.round(task.diagnosisSnapshot.confidence * 100)}%
+                {t('timelineDiagnosisConfidence')}{' '}
+                {Math.round(task.diagnosisSnapshot.confidence * 100)}%
               </p>
             )}
           </div>
@@ -1075,16 +1153,14 @@ function TimelineTab({ task }: { task: AgentTask }) {
 
 // ---- Main Component ----
 export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) {
+  const t = useTranslations('agentTaskDetail');
   const [activeTab, setActiveTab] = useState<TabId>('overview');
 
   const tabs: TabDef[] = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'diagnosis', label: 'Diagnosis' },
-    {
-      id: 'logs',
-      label: isLive && !isTerminal(task.status) ? 'Execution Logs' : 'Execution Logs',
-    },
-    { id: 'timeline', label: 'Timeline' },
+    { id: 'overview', label: t('tabOverview') },
+    { id: 'diagnosis', label: t('tabDiagnosis') },
+    { id: 'logs', label: t('tabLogs') },
+    { id: 'timeline', label: t('tabTimeline') },
   ];
 
   return (
@@ -1119,12 +1195,13 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
 
       {/* Tab Content */}
       <div className="p-6">
-        {activeTab === 'overview' && <OverviewTab task={task} isLive={isLive} />}
+        {activeTab === 'overview' && <OverviewTab task={task} isLive={isLive} t={t} />}
         {activeTab === 'diagnosis' && (
           <DiagnosisTab
             diagnosis={task.diagnosisSnapshot}
             executionLog={task.executionLog ?? []}
             task={task}
+            t={t}
           />
         )}
         {activeTab === 'logs' && (
@@ -1136,7 +1213,7 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
             />
           </div>
         )}
-        {activeTab === 'timeline' && <TimelineTab task={task} />}
+        {activeTab === 'timeline' && <TimelineTab task={task} t={t} />}
       </div>
     </div>
   );
