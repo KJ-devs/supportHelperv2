@@ -469,7 +469,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 ## Hall of Fame: The Silicon Saviors
-
+https://www.leetchi.com/fr/c/aidez-moi-a-debloquer-claude-code-max-1173281
 This project is fueled by coffee, tears, and the incredible generosity of the community. Special thanks to those helping me unlock **Claude Code Max** and saving my sanity.
 
 ### Heroic Donors
