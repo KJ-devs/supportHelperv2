@@ -36,6 +36,25 @@ interface LogLine {
   toolInput?: Record<string, unknown>;
   resultPreview?: string;
   emoji?: string;
+  // Rich detail fields from backend
+  agentLevel?: string;
+  modelUsed?: string;
+  filePreview?: string;
+  searchResults?: Array<{ filePath: string; fragment?: string }>;
+  directoryContents?: string[];
+  historyPreview?: unknown;
+  codeChanges?: {
+    filePath: string;
+    operation: 'write' | 'edit';
+    fullContent?: string;
+    oldText?: string;
+    newText?: string;
+  };
+  prData?: { number: number; url: string; title: string; reused?: boolean };
+  fromLevel?: string;
+  toLevel?: string;
+  fromModel?: string;
+  toModel?: string;
 }
 
 interface AgentTaskLogsProps {
@@ -223,6 +242,18 @@ function entryToLogLine(entry: ExecutionLogEntry, index: number): LogLine {
     resultPreview,
     emoji,
     phase: backendPhase,
+    agentLevel,
+    modelUsed,
+    filePreview,
+    searchResults,
+    directoryContents,
+    historyPreview,
+    codeChanges,
+    prData,
+    fromLevel,
+    toLevel,
+    fromModel,
+    toModel,
     ...rest
   } = entry;
   const iterMatch = step?.match(/^iteration_(\d+)$/);
@@ -260,15 +291,42 @@ function entryToLogLine(entry: ExecutionLogEntry, index: number): LogLine {
         : undefined,
     resultPreview: typeof resultPreview === 'string' ? resultPreview : undefined,
     emoji: typeof emoji === 'string' ? emoji : undefined,
+    agentLevel: typeof agentLevel === 'string' ? agentLevel : undefined,
+    modelUsed: typeof modelUsed === 'string' ? modelUsed : undefined,
+    filePreview: typeof filePreview === 'string' ? filePreview : undefined,
+    searchResults: Array.isArray(searchResults)
+      ? (searchResults as Array<{ filePath: string; fragment?: string }>)
+      : undefined,
+    directoryContents: Array.isArray(directoryContents)
+      ? (directoryContents as string[])
+      : undefined,
+    historyPreview,
+    codeChanges:
+      codeChanges && typeof codeChanges === 'object' && !Array.isArray(codeChanges)
+        ? (codeChanges as LogLine['codeChanges'])
+        : undefined,
+    prData:
+      prData && typeof prData === 'object' && !Array.isArray(prData)
+        ? (prData as LogLine['prData'])
+        : undefined,
+    fromLevel: typeof fromLevel === 'string' ? fromLevel : undefined,
+    toLevel: typeof toLevel === 'string' ? toLevel : undefined,
+    fromModel: typeof fromModel === 'string' ? fromModel : undefined,
+    toModel: typeof toModel === 'string' ? toModel : undefined,
   };
 }
 
-function ModelUpgradeSeparator({ message }: { message: string }) {
+function ModelUpgradeSeparator({ line }: { line: LogLine }) {
+  const from = line.fromLevel || 'N1';
+  const to = line.toLevel || 'N2';
   return (
-    <div className="flex items-center gap-2 py-1.5 my-0.5">
+    <div className="flex items-center gap-2 py-1.5 my-0.5 rounded-lg bg-gradient-to-r from-blue-950/60 to-purple-950/60 border border-purple-700/40 px-3">
       <div className="flex-1 border-t border-zinc-700" />
-      <span className="text-amber-500 text-[10px] font-mono uppercase tracking-wider whitespace-nowrap">
-        {message}
+      <span className="text-[10px] font-mono uppercase tracking-wider whitespace-nowrap flex items-center gap-1.5">
+        <span className="text-blue-400">{from}</span>
+        <span className="text-zinc-500">→</span>
+        <span className="text-purple-400">{to}</span>
+        <span className="text-amber-500 ml-1">{line.message}</span>
       </span>
       <div className="flex-1 border-t border-zinc-700" />
     </div>
@@ -287,15 +345,132 @@ function IterationSeparator({ number }: { number: number }) {
   );
 }
 
+function FilePreviewPanel({ filePreview }: { filePreview: string }) {
+  return (
+    <pre className="mt-2 p-3 bg-gray-950 rounded-lg text-xs font-mono text-gray-300 max-h-64 overflow-auto border border-gray-800">
+      {filePreview.split('\n').map((fileLine, i) => (
+        <div key={i} className="flex">
+          <span className="text-gray-600 select-none w-8 text-right mr-3 flex-shrink-0">
+            {i + 1}
+          </span>
+          <span className="flex-1 whitespace-pre-wrap break-all">{fileLine}</span>
+        </div>
+      ))}
+    </pre>
+  );
+}
+
+function SearchResultsPanel({
+  searchResults,
+}: {
+  searchResults: Array<{ filePath: string; fragment?: string }>;
+}) {
+  return (
+    <div className="mt-2 space-y-1">
+      {searchResults.map((hit, i) => (
+        <div key={i} className="flex items-start gap-2 text-xs">
+          <span className="text-blue-400 font-mono flex-shrink-0">{hit.filePath}</span>
+          {hit.fragment && <span className="text-gray-400 truncate">{hit.fragment}</span>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DirectoryContentsPanel({ items }: { items: string[] }) {
+  return (
+    <div className="mt-2 grid grid-cols-2 gap-1 text-xs font-mono">
+      {items.map((item, i) => {
+        const isDir = item.endsWith('/') || !item.includes('.');
+        return (
+          <div key={i} className="flex items-center gap-1.5 text-gray-300">
+            <span className="text-gray-500">{isDir ? '📁' : '📄'}</span>
+            <span className="truncate">{item}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function CodeChangesPanel({ codeChanges }: { codeChanges: NonNullable<LogLine['codeChanges']> }) {
+  if (codeChanges.operation === 'write' && codeChanges.fullContent) {
+    return (
+      <div className="mt-2">
+        <div className="text-[10px] text-gray-500 font-mono mb-1">{codeChanges.filePath}</div>
+        <pre className="p-3 bg-gray-950 rounded-lg text-xs font-mono text-gray-300 max-h-96 overflow-auto border border-gray-800 whitespace-pre-wrap break-all">
+          {codeChanges.fullContent}
+        </pre>
+      </div>
+    );
+  }
+  if (codeChanges.operation === 'edit' && (codeChanges.oldText || codeChanges.newText)) {
+    return (
+      <div className="mt-2 rounded-lg overflow-hidden border border-gray-800 text-xs font-mono">
+        <div className="px-3 py-1.5 bg-gray-800 text-gray-400 text-[10px]">
+          {codeChanges.filePath}
+        </div>
+        {codeChanges.oldText &&
+          codeChanges.oldText.split('\n').map((oldLine, i) => (
+            <div key={`old-${i}`} className="flex bg-red-900/30 px-2 py-px">
+              <span className="text-red-500 select-none w-4 mr-2 flex-shrink-0">-</span>
+              <span className="text-red-300 whitespace-pre-wrap break-all flex-1">{oldLine}</span>
+            </div>
+          ))}
+        {codeChanges.newText &&
+          codeChanges.newText.split('\n').map((newLine, i) => (
+            <div key={`new-${i}`} className="flex bg-green-900/30 px-2 py-px">
+              <span className="text-green-500 select-none w-4 mr-2 flex-shrink-0">+</span>
+              <span className="text-green-300 whitespace-pre-wrap break-all flex-1">{newLine}</span>
+            </div>
+          ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function PrDataPanel({ prData }: { prData: NonNullable<LogLine['prData']> }) {
+  return (
+    <div className="mt-2 flex items-center gap-3 p-3 bg-green-950/40 border border-green-800/40 rounded-lg">
+      <span className="text-green-400 font-bold">PR #{prData.number}</span>
+      <span className="text-gray-300">{prData.title}</span>
+      {prData.reused ? (
+        <span className="px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 rounded-full">
+          Updated
+        </span>
+      ) : (
+        <span className="px-2 py-0.5 text-xs bg-green-900/50 text-green-300 rounded-full">New</span>
+      )}
+      <a
+        href={prData.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="ml-auto text-blue-400 hover:underline text-xs"
+      >
+        View on GitHub →
+      </a>
+    </div>
+  );
+}
+
+function hasRichDetail(line: LogLine): boolean {
+  return Boolean(
+    line.filePreview ||
+    (line.searchResults && line.searchResults.length > 0) ||
+    (line.directoryContents && line.directoryContents.length > 0) ||
+    line.historyPreview ||
+    line.codeChanges ||
+    line.prData ||
+    line.detail ||
+    line.toolInput
+  );
+}
+
 function LogRow({ line }: { line: LogLine }) {
   const [expanded, setExpanded] = useState(false);
 
-  const hasDetails =
-    line.durationMs !== undefined ||
-    line.hasError ||
-    Object.keys(line.metadata).length > 0 ||
-    Boolean(line.detail) ||
-    Boolean(line.toolInput);
+  const hasDetails = hasRichDetail(line) || line.durationMs !== undefined || line.hasError;
 
   const colorClasses = categoryColor(line.category);
   const dotColor = categoryDotColor(line.category);
@@ -303,16 +478,17 @@ function LogRow({ line }: { line: LogLine }) {
   const textColorClass = colorClasses.split(' ')[0];
 
   const isReasoning = line.category === 'reasoning';
+  const isPr = line.step === 'create_pull_request' && !line.hasError;
 
   return (
-    <div className="rounded overflow-hidden">
+    <div className={`rounded overflow-hidden ${isPr ? 'border border-green-800/40' : ''}`}>
       {/* Main row */}
       <button
         type="button"
         onClick={() => hasDetails && setExpanded(prev => !prev)}
         className={`w-full flex items-start gap-2 font-mono text-xs leading-5 px-1 py-0.5 rounded text-left transition-colors ${
-          hasDetails ? 'cursor-pointer hover:bg-zinc-900' : 'cursor-default'
-        }`}
+          isPr ? 'bg-green-950/20 hover:bg-green-950/40' : ''
+        } ${hasDetails ? 'cursor-pointer hover:bg-zinc-900' : 'cursor-default'}`}
       >
         {/* Timestamp */}
         <span className="text-zinc-500 whitespace-nowrap flex-shrink-0 pt-px">
@@ -330,6 +506,19 @@ function LogRow({ line }: { line: LogLine }) {
         <span className={`font-semibold flex-shrink-0 ${levelColor(line.level)}`}>
           [{line.level.toUpperCase()}]
         </span>
+
+        {/* Agent level badge */}
+        {line.agentLevel && (
+          <span
+            className={`text-[10px] font-mono px-1.5 py-0.5 rounded flex-shrink-0 self-center ${
+              line.agentLevel === 'N2'
+                ? 'bg-purple-900/40 text-purple-400'
+                : 'bg-blue-900/40 text-blue-400'
+            }`}
+          >
+            {line.agentLevel}
+          </span>
+        )}
 
         {/* Message */}
         <span
@@ -360,6 +549,19 @@ function LogRow({ line }: { line: LogLine }) {
           </span>
         )}
 
+        {/* PR inline link when not expanded */}
+        {isPr && line.prData && !expanded && (
+          <a
+            href={line.prData.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+            className="flex-shrink-0 text-green-400 text-[10px] font-mono self-center hover:underline"
+          >
+            PR #{line.prData.number}
+          </a>
+        )}
+
         {/* Expand chevron */}
         {hasDetails && (
           <span className="flex-shrink-0 text-zinc-600 self-center text-[10px] ml-1">
@@ -369,70 +571,116 @@ function LogRow({ line }: { line: LogLine }) {
       </button>
 
       {/* Expanded detail panel */}
-      {expanded && hasDetails && (
-        <div
-          className={`ml-10 mr-1 mb-1 p-2 rounded border text-[11px] font-mono space-y-1 ${colorClasses}`}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-zinc-500">step:</span>
-            <span>{line.step}</span>
+      <div
+        className={`overflow-hidden transition-all duration-200 ${expanded && hasDetails ? 'max-h-[600px]' : 'max-h-0'}`}
+      >
+        {expanded && hasDetails && (
+          <div
+            className={`ml-10 mr-1 mb-1 p-2 rounded border text-[11px] font-mono space-y-1 ${colorClasses}`}
+          >
+            {/* Rich detail panels */}
+            {line.filePreview && <FilePreviewPanel filePreview={line.filePreview} />}
+            {line.searchResults && line.searchResults.length > 0 && (
+              <SearchResultsPanel searchResults={line.searchResults} />
+            )}
+            {line.directoryContents && line.directoryContents.length > 0 && (
+              <DirectoryContentsPanel items={line.directoryContents} />
+            )}
+            {line.codeChanges && <CodeChangesPanel codeChanges={line.codeChanges} />}
+            {line.prData && <PrDataPanel prData={line.prData} />}
+
+            {/* Existing detail fields */}
+            {!line.filePreview &&
+              !line.searchResults &&
+              !line.directoryContents &&
+              !line.codeChanges &&
+              !line.prData && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500">step:</span>
+                    <span>{line.step}</span>
+                  </div>
+                  {line.durationMs !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500">duration:</span>
+                      <span>{formatDuration(line.durationMs)}</span>
+                      <span className="text-zinc-600">({line.durationMs}ms)</span>
+                    </div>
+                  )}
+                  {line.hasError && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-zinc-500">status:</span>
+                      <span className="text-red-400 font-semibold">ERROR</span>
+                    </div>
+                  )}
+                  {line.toolInput && Object.keys(line.toolInput).length > 0 && (
+                    <div>
+                      <span className="text-zinc-500">input:</span>
+                      <div className="mt-1 ml-2 space-y-0.5">
+                        {Object.entries(line.toolInput).map(([k, v]) => (
+                          <div key={k} className="flex gap-2">
+                            <span className="text-zinc-500">{k}:</span>
+                            <span className="break-all text-zinc-300">
+                              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {line.detail && (
+                    <div>
+                      <span className="text-zinc-500">detail:</span>
+                      <div className="bg-zinc-900/60 rounded p-2 mt-1 text-[11px] max-h-40 overflow-y-auto">
+                        <MarkdownRenderer
+                          content={line.detail}
+                          className="text-zinc-300 [&_pre]:bg-zinc-950 [&_code]:bg-zinc-800 [&_p]:text-zinc-300 [&_p]:text-[11px] [&_strong]:text-zinc-200 [&_li]:text-zinc-300 [&_h1]:text-zinc-200 [&_h2]:text-zinc-200 [&_h3]:text-zinc-200"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {Object.keys(line.metadata).length > 0 && (
+                    <div>
+                      <span className="text-zinc-500">metadata:</span>
+                      <div className="mt-1 ml-2 space-y-0.5">
+                        {Object.entries(line.metadata).map(([k, v]) => (
+                          <div key={k} className="flex gap-2">
+                            <span className="text-zinc-500">{k}:</span>
+                            <span className="break-all text-zinc-300">
+                              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+            {/* Show step/duration even when rich panels present */}
+            {(line.filePreview ||
+              line.searchResults ||
+              line.directoryContents ||
+              line.codeChanges ||
+              line.prData) && (
+              <>
+                {line.durationMs !== undefined && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className="text-zinc-500">duration:</span>
+                    <span>{formatDuration(line.durationMs)}</span>
+                  </div>
+                )}
+                {line.hasError && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-zinc-500">status:</span>
+                    <span className="text-red-400 font-semibold">ERROR</span>
+                  </div>
+                )}
+              </>
+            )}
           </div>
-          {line.durationMs !== undefined && (
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-500">duration:</span>
-              <span>{formatDuration(line.durationMs)}</span>
-              <span className="text-zinc-600">({line.durationMs}ms)</span>
-            </div>
-          )}
-          {line.hasError && (
-            <div className="flex items-center gap-2">
-              <span className="text-zinc-500">status:</span>
-              <span className="text-red-400 font-semibold">ERROR</span>
-            </div>
-          )}
-          {line.toolInput && Object.keys(line.toolInput).length > 0 && (
-            <div>
-              <span className="text-zinc-500">input:</span>
-              <div className="mt-1 ml-2 space-y-0.5">
-                {Object.entries(line.toolInput).map(([k, v]) => (
-                  <div key={k} className="flex gap-2">
-                    <span className="text-zinc-500">{k}:</span>
-                    <span className="break-all text-zinc-300">
-                      {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {line.detail && (
-            <div>
-              <span className="text-zinc-500">detail:</span>
-              <div className="bg-zinc-900/60 rounded p-2 mt-1 text-[11px] max-h-40 overflow-y-auto">
-                <MarkdownRenderer
-                  content={line.detail}
-                  className="text-zinc-300 [&_pre]:bg-zinc-950 [&_code]:bg-zinc-800 [&_p]:text-zinc-300 [&_p]:text-[11px] [&_strong]:text-zinc-200 [&_li]:text-zinc-300 [&_h1]:text-zinc-200 [&_h2]:text-zinc-200 [&_h3]:text-zinc-200"
-                />
-              </div>
-            </div>
-          )}
-          {Object.keys(line.metadata).length > 0 && (
-            <div>
-              <span className="text-zinc-500">metadata:</span>
-              <div className="mt-1 ml-2 space-y-0.5">
-                {Object.entries(line.metadata).map(([k, v]) => (
-                  <div key={k} className="flex gap-2">
-                    <span className="text-zinc-500">{k}:</span>
-                    <span className="break-all text-zinc-300">
-                      {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -541,7 +789,7 @@ export function AgentTaskLogs({ taskId, isActive = false, initialLogs = [] }: Ag
         ) : (
           filteredLogs.map(line => {
             if (line.step === 'model_upgrade') {
-              return <ModelUpgradeSeparator key={line.id} message={line.message} />;
+              return <ModelUpgradeSeparator key={line.id} line={line} />;
             }
             if (line.isIteration) {
               return <IterationSeparator key={line.id} number={line.iterationNumber ?? 0} />;

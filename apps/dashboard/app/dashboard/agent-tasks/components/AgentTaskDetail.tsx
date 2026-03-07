@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import type { AgentTask, DiagnosisSnapshot } from '@/lib/api/agent-tasks';
 import type { TicketSeverity } from '@/lib/types/ticket';
+import { agentTasksApi } from '@/lib/api/agent-tasks';
 import { AgentTaskStatusBadge } from './AgentTaskStatusBadge';
 import { AgentTaskLogs } from './AgentTaskLogs';
 import { SeverityBadge } from '@/components/ui';
@@ -62,8 +63,48 @@ function formatDuration(startedAt: string | null, completedAt: string | null): s
   return `${Math.round(diffMs / 3600000)}h ${Math.round((diffMs % 3600000) / 60000)}m`;
 }
 
+/** Derive the current agent level from the last log entry that has agentLevel */
+function deriveAgentLevel(task: AgentTask): string | null {
+  const logs = task.executionLog ?? [];
+  for (let i = logs.length - 1; i >= 0; i--) {
+    const entry = logs[i];
+    if (entry && typeof entry.agentLevel === 'string' && entry.agentLevel) {
+      return entry.agentLevel;
+    }
+  }
+  return null;
+}
+
+function AgentLevelBadge({ level }: { level: string }) {
+  if (level === 'N1') {
+    return (
+      <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-900/50 text-blue-300 border border-blue-700/50">
+        N1 — Fast Triage
+      </span>
+    );
+  }
+  if (level === 'N2') {
+    return (
+      <span className="px-3 py-1 text-xs font-medium rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/50">
+        N2 — Deep Analysis
+      </span>
+    );
+  }
+  return null;
+}
+
 // ---- Tab: Overview ----
 function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
+  const agentLevel = deriveAgentLevel(task);
+
+  // Derive PR data from last create_pull_request log entry
+  const prLogEntry = [...(task.executionLog ?? [])]
+    .reverse()
+    .find(e => e.step === 'create_pull_request');
+  const prData = prLogEntry?.prData as
+    | { number: number; url: string; title: string; reused?: boolean }
+    | undefined;
+
   return (
     <div className="space-y-6">
       {/* In-progress banner */}
@@ -103,8 +144,12 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
         <InfoItem
           label="Status"
           value={
-            <div data-testid="agent-task-status-badge">
+            <div
+              className="flex items-center gap-2 flex-wrap"
+              data-testid="agent-task-status-badge"
+            >
               <AgentTaskStatusBadge status={task.status} />
+              {agentLevel && <AgentLevelBadge level={agentLevel} />}
             </div>
           }
         />
@@ -124,20 +169,57 @@ function OverviewTab({ task, isLive }: { task: AgentTask; isLive?: boolean }) {
         {task.branchName && <InfoItem label="Branch" value={task.branchName} />}
       </div>
 
-      {/* PR Info */}
+      {/* PR Panel — enhanced */}
       {task.prUrl && (
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-green-800 dark:text-green-300 mb-2">
-            Pull Request
-          </h4>
-          <a
-            href={task.prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            PR #{task.prNumber} - View on GitHub
-          </a>
+        <div className="bg-gradient-to-r from-green-950/40 to-emerald-950/40 border border-green-700/50 rounded-xl p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {/* Git pull-request icon */}
+              <svg
+                className="w-6 h-6 text-green-400 flex-shrink-0"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 11l3 3L22 4M6 4v6m0 0a3 3 0 110 6 3 3 0 010-6zm10-4v6m0 0a3 3 0 110 6 3 3 0 010-6z"
+                />
+              </svg>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-lg font-bold text-green-300">PR #{task.prNumber}</span>
+                  {prData?.reused ? (
+                    <span className="px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 rounded-full border border-blue-700/50">
+                      Updated
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs bg-green-900/50 text-green-300 rounded-full border border-green-700/50">
+                      New
+                    </span>
+                  )}
+                </div>
+                {prData?.title && <p className="text-sm text-gray-400 mt-0.5">{prData.title}</p>}
+              </div>
+            </div>
+            <a
+              href={task.prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              View on GitHub
+            </a>
+          </div>
+          {task.branchName && (
+            <div className="mt-3 text-xs text-gray-500">
+              <span className="font-mono bg-gray-800 px-2 py-0.5 rounded">{task.branchName}</span>
+              <span className="mx-2">→</span>
+              <span className="font-mono bg-gray-800 px-2 py-0.5 rounded">main</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -198,13 +280,205 @@ function InfoItem({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+// ---- ActionPlanPanel ----
+interface ActionPlanData {
+  root_cause?: string;
+  affected_files?: Array<{ file_path?: string; relevance?: string; description?: string }>;
+  confidence?: number;
+  suggested_fix?: string;
+}
+
+function ConfidenceBar({ value }: { value: number }) {
+  const pct = Math.round(value * 100);
+  const barColor = pct >= 70 ? 'bg-green-500' : pct >= 40 ? 'bg-yellow-500' : 'bg-red-500';
+  const textColor = pct >= 70 ? 'text-green-400' : pct >= 40 ? 'text-yellow-400' : 'text-red-400';
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-gray-500 dark:text-gray-400">Confidence</span>
+        <span className={`font-semibold ${textColor}`}>{pct}%</span>
+      </div>
+      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+        <div
+          className={`${barColor} h-2 rounded-full transition-all duration-300`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ActionPlanPanel({ task }: { task: AgentTask }) {
+  const [rejectReason, setRejectReason] = useState('');
+  const [showRejectInput, setShowRejectInput] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const diagEntry = (task.executionLog ?? []).find(e => e.step === 'update_diagnosis');
+  if (!diagEntry) return null;
+
+  const planData = diagEntry.toolInput as ActionPlanData | undefined;
+  if (!planData) return null;
+
+  const showButtons = task.status === 'plan_pending_review' || task.status === 'analyzing';
+
+  async function handleApprove() {
+    setIsSubmitting(true);
+    try {
+      await agentTasksApi.approveTask(task.id, 'plan');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleReject() {
+    if (!showRejectInput) {
+      setShowRejectInput(true);
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await agentTasksApi.rejectTask(task.id, 'plan', rejectReason || undefined);
+      setShowRejectInput(false);
+      setRejectReason('');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+      <h4 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Action Plan</h4>
+
+      {/* Root Cause */}
+      {planData.root_cause && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+            Root Cause
+          </p>
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+            <MarkdownRenderer content={planData.root_cause} />
+          </div>
+        </div>
+      )}
+
+      {/* Confidence */}
+      {planData.confidence !== undefined && <ConfidenceBar value={planData.confidence} />}
+
+      {/* Affected Files */}
+      {planData.affected_files && planData.affected_files.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+            Affected Files
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-100 dark:bg-gray-800 text-left">
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    File Path
+                  </th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Relevance
+                  </th>
+                  <th className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400">
+                    Description
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {planData.affected_files.map((file, i) => (
+                  <tr key={i} className="bg-white dark:bg-gray-900">
+                    <td className="px-3 py-2 font-mono text-xs text-blue-600 dark:text-blue-400 break-all">
+                      {file.file_path || '-'}
+                    </td>
+                    <td className="px-3 py-2">
+                      <span
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${
+                          file.relevance === 'primary'
+                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                        }`}
+                      >
+                        {file.relevance || '-'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
+                      {file.description || '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Suggested Fix */}
+      {planData.suggested_fix && (
+        <div>
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider">
+            Suggested Fix
+          </p>
+          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-lg p-3">
+            <MarkdownRenderer content={planData.suggested_fix} />
+          </div>
+        </div>
+      )}
+
+      {/* Approve / Reject buttons */}
+      {showButtons && (
+        <div className="space-y-3">
+          {showRejectInput && (
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              placeholder="Reason for rejection (optional)..."
+              className="w-full text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
+              rows={3}
+            />
+          )}
+          <div className="flex gap-3">
+            <button
+              onClick={handleApprove}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              Approve Plan
+            </button>
+            <button
+              onClick={handleReject}
+              disabled={isSubmitting}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+            >
+              {showRejectInput ? 'Confirm Reject' : 'Reject'}
+            </button>
+            {showRejectInput && (
+              <button
+                onClick={() => {
+                  setShowRejectInput(false);
+                  setRejectReason('');
+                }}
+                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Tab: Diagnosis ----
 function DiagnosisTab({
   diagnosis,
   executionLog,
+  task,
 }: {
   diagnosis: DiagnosisSnapshot | null;
   executionLog: AgentTask['executionLog'];
+  task: AgentTask;
 }) {
   // If no formal diagnosis snapshot, try to extract from execution logs
   if (!diagnosis) {
@@ -230,7 +504,11 @@ function DiagnosisTab({
             Extracted from logs
           </span>
         </div>
-        {diagEntry && (
+
+        {/* Structured ActionPlan from update_diagnosis toolInput */}
+        <ActionPlanPanel task={task} />
+
+        {diagEntry && !diagEntry.toolInput && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Diagnosis Tool Call
@@ -281,6 +559,9 @@ function DiagnosisTab({
 
   return (
     <div className="space-y-6">
+      {/* Structured plan panel (always shown at top when diagEntry exists) */}
+      <ActionPlanPanel task={task} />
+
       {/* Confidence */}
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Confidence:</span>
@@ -840,7 +1121,11 @@ export function AgentTaskDetail({ task, isLive = false }: AgentTaskDetailProps) 
       <div className="p-6">
         {activeTab === 'overview' && <OverviewTab task={task} isLive={isLive} />}
         {activeTab === 'diagnosis' && (
-          <DiagnosisTab diagnosis={task.diagnosisSnapshot} executionLog={task.executionLog ?? []} />
+          <DiagnosisTab
+            diagnosis={task.diagnosisSnapshot}
+            executionLog={task.executionLog ?? []}
+            task={task}
+          />
         )}
         {activeTab === 'logs' && (
           <div className="h-[520px] rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
