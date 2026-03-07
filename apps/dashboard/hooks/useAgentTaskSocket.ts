@@ -86,9 +86,12 @@ export function useAgentTaskSocket(
       onStatusChangeRef.current?.(data.taskId, data.newStatus);
     });
 
-    socket.on('task:log-appended', (entry: ExecutionLogEntry) => {
-      onLogAppendedRef.current?.(entry);
-    });
+    socket.on(
+      'task:log-appended',
+      (data: { taskId: string; entry: ExecutionLogEntry; timestamp: string }) => {
+        onLogAppendedRef.current?.(data.entry);
+      }
+    );
 
     socket.on('task:plan-ready', (plan: unknown) => {
       onPlanReadyRef.current?.(plan);

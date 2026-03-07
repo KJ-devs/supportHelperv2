@@ -7,7 +7,7 @@ interface SdkWindow extends Window {
   SupportHelper?: { init: (opts: Record<string, unknown>) => HTMLElement };
 }
 
-const SDK_KEY = 'sk_QikJnO4KPxjGv7UuBVxbPOLAUOSDt1Jl';
+const SDK_KEY = 'sk_GojA7oEFJRpK0Dj22VsO2LyO913baczo';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 export function SdkWidget() {
@@ -38,10 +38,6 @@ export function SdkWidget() {
   }, [scriptLoaded]);
 
   return (
-    <Script
-      src="/sdk.iife.js"
-      strategy="afterInteractive"
-      onLoad={() => setScriptLoaded(true)}
-    />
+    <Script src="/sdk.iife.js" strategy="afterInteractive" onLoad={() => setScriptLoaded(true)} />
   );
 }

@@ -15,6 +15,17 @@ export type AgentTaskStatus =
   | 'failed'
   | 'expired';
 
+export interface DiagnosisSnapshot {
+  rootCause: string;
+  confidence: number;
+  suggestedFix?: string;
+  affectedFiles: Array<{
+    filePath: string;
+    relevance: string;
+    description: string;
+  }>;
+}
+
 export interface AgentTask {
   id: string;
   ticketId: string;
@@ -22,6 +33,7 @@ export interface AgentTask {
   applicationId: string;
   status: AgentTaskStatus;
   actionPlan: ActionPlan | null;
+  diagnosisSnapshot: DiagnosisSnapshot | null;
   executionLog: ExecutionLogEntry[];
   startedAt: string | null;
   completedAt: string | null;

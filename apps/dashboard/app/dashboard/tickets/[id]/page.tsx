@@ -16,7 +16,15 @@ import type { Ticket } from '@/lib/types/ticket';
 import type { Diagnosis } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { DiagnosisPanelV3A } from '@/components/diagnosis/DiagnosisPanelV3A';
 import { AgentSection } from '@/components/agent-chat/AgentSection';
-import { PageLoader, StatusBadge, SeverityBadge, TypeBadge, Button, ConfirmModal, useToast } from '@/components/ui';
+import {
+  PageLoader,
+  StatusBadge,
+  SeverityBadge,
+  TypeBadge,
+  Button,
+  ConfirmModal,
+  useToast,
+} from '@/components/ui';
 import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { N1AssessmentBadge } from '@/components/n1-assessment/N1AssessmentBadge';
 import { RelatedTicketsSection } from '@/components/ticket-relations/RelatedTicketsSection';
@@ -36,10 +44,7 @@ function SectionHeader({
   onToggle: () => void;
 }) {
   return (
-    <button
-      onClick={onToggle}
-      className="flex items-center gap-2 w-full text-left group mb-3"
-    >
+    <button onClick={onToggle} className="flex items-center gap-2 w-full text-left group mb-3">
       <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
         {label}
       </span>
@@ -116,19 +121,22 @@ export default function TicketDetailPage() {
     }
   }, [ticketId, authLoading, fetchTicket, fetchDiagnosis]);
 
-  const handleAgentEscalatedToN2 = useCallback((event: AgentEscalatedToN2Event) => {
-    if (event.ticketId === ticketId) {
-      setN2Notification(event);
-      // Refresh diagnosis after N1 completes so the panel shows new data
-      fetchDiagnosis();
-    }
-  }, [ticketId, fetchDiagnosis]);
+  const handleAgentEscalatedToN2 = useCallback(
+    (event: AgentEscalatedToN2Event) => {
+      if (event.ticketId === ticketId) {
+        setN2Notification(event);
+        // Refresh diagnosis after N1 completes so the panel shows new data
+        fetchDiagnosis();
+      }
+    },
+    [ticketId, fetchDiagnosis]
+  );
 
   useTicketSocket(undefined, handleAgentEscalatedToN2);
 
   const fetchMediaUrl = async (mediaId: string) => {
     if (mediaUrls[mediaId] || loadingUrls[mediaId]) return;
-    setLoadingUrls((prev) => ({ ...prev, [mediaId]: true }));
+    setLoadingUrls(prev => ({ ...prev, [mediaId]: true }));
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
       const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
@@ -140,11 +148,11 @@ export default function TicketDetailPage() {
       });
       if (!response.ok) throw new Error(`Failed to fetch media URL: ${response.statusText}`);
       const data = await response.json();
-      setMediaUrls((prev) => ({ ...prev, [mediaId]: data.url }));
+      setMediaUrls(prev => ({ ...prev, [mediaId]: data.url }));
     } catch (err) {
       console.error('Error fetching media URL:', err);
     } finally {
-      setLoadingUrls((prev) => ({ ...prev, [mediaId]: false }));
+      setLoadingUrls(prev => ({ ...prev, [mediaId]: false }));
     }
   };
 
@@ -173,7 +181,7 @@ export default function TicketDetailPage() {
       toast.success('Analyse IA lancee');
       router.push(`/dashboard/agent-tasks/${task.id}`);
     } catch (err: any) {
-      toast.error(err.message || 'Impossible de lancer l\'analyse');
+      toast.error(err.message || "Impossible de lancer l'analyse");
     } finally {
       setIsAnalyzing(false);
     }
@@ -213,10 +221,20 @@ export default function TicketDetailPage() {
             <Bot className="w-3.5 h-3.5" aria-hidden="true" />
             Analyser
           </Button>
-          <Button variant="ghost" size="sm" onClick={handleRefresh} className="flex items-center gap-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            className="flex items-center gap-1.5"
+          >
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
-          <Button variant="danger" size="sm" onClick={() => setShowDeleteConfirm(true)} className="flex items-center gap-1.5">
+          <Button
+            variant="danger"
+            size="sm"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center gap-1.5"
+          >
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
         </div>
@@ -224,10 +242,8 @@ export default function TicketDetailPage() {
 
       {/* ── BODY ── */}
       <div className="flex flex-1 min-h-0" style={{ height: 'calc(100vh - 56px)' }}>
-
         {/* ── LEFT PANE ── */}
         <div className="flex-1 overflow-y-auto px-6 py-6 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
-
           {/* Error state */}
           {error && (
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-6 text-center mb-6">
@@ -322,7 +338,7 @@ export default function TicketDetailPage() {
                 <SectionHeader
                   label="Description"
                   open={descOpen}
-                  onToggle={() => setDescOpen((v) => !v)}
+                  onToggle={() => setDescOpen(v => !v)}
                 />
                 {descOpen && (
                   <p className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
@@ -331,134 +347,141 @@ export default function TicketDetailPage() {
                 )}
               </div>
 
-              {/* ── USER CONTEXT ── */}
-              {ticket.userContext && Object.keys(ticket.userContext).length > 0 && (
-                <div className="mb-6">
+              {/* ── USER CONTEXT + RECORDING (side by side) ── */}
+              <div className="mb-6 grid grid-cols-2 gap-4 items-start">
+                {/* Left: User Context */}
+                <div>
                   <SectionHeader
                     label="User Context"
                     open={contextOpen}
-                    onToggle={() => setContextOpen((v) => !v)}
+                    onToggle={() => setContextOpen(v => !v)}
                   />
-                  {contextOpen && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {Object.entries(ticket.userContext).map(([key, value]) => {
-                        const displayValue =
-                          typeof value === 'object' ? JSON.stringify(value) : String(value);
+                  {contextOpen &&
+                    (ticket.userContext && Object.keys(ticket.userContext).length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(ticket.userContext).map(([key, value]) => {
+                          const displayValue =
+                            typeof value === 'object' ? JSON.stringify(value) : String(value);
+                          return (
+                            <div
+                              key={key}
+                              className="bg-gray-100 dark:bg-gray-800 rounded px-3 py-2"
+                            >
+                              <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">
+                                {key.replace(/([A-Z])/g, ' $1').trim()}
+                              </p>
+                              <p
+                                className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate"
+                                title={displayValue}
+                              >
+                                {displayValue}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 dark:text-gray-500 italic">
+                        No context available
+                      </p>
+                    ))}
+                </div>
+
+                {/* Right: Recording */}
+                <div>
+                  <SectionHeader
+                    label="Recording"
+                    open={recordingOpen}
+                    onToggle={() => setRecordingOpen(v => !v)}
+                  />
+                  {recordingOpen && (!ticket.media || ticket.media.length === 0) && (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+                      <svg
+                        className="w-8 h-8 text-gray-300 dark:text-gray-600"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        aria-hidden="true"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
+                        />
+                      </svg>
+                      <p className="text-sm text-gray-400 dark:text-gray-500">
+                        No recording attached
+                      </p>
+                    </div>
+                  )}
+                  {recordingOpen && ticket.media && ticket.media.length > 0 && (
+                    <div className="space-y-4">
+                      {ticket.media.map(media => {
+                        const filename =
+                          media.metadata?.originalFilename ||
+                          media.storageKey.split('/').pop() ||
+                          'video';
+                        const isVideo =
+                          media.type === 'video' || media.mimeType?.startsWith('video/');
+                        const fileSize =
+                          typeof media.fileSize === 'bigint'
+                            ? Number(media.fileSize)
+                            : media.fileSize || 0;
+
+                        if (media.processingStatus === 'completed' && isVideo) {
+                          return (
+                            <div key={media.id}>
+                              {mediaUrls[media.id] ? (
+                                <VideoPlayer
+                                  src={mediaUrls[media.id]!}
+                                  title={filename}
+                                  mimeType={media.mimeType ?? undefined}
+                                  onError={err => console.error('Video error:', err)}
+                                />
+                              ) : (
+                                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center bg-gray-50 dark:bg-gray-800">
+                                  {loadingUrls[media.id] ? (
+                                    <div className="space-y-2">
+                                      <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+                                      <p className="text-sm text-gray-500">Loading video...</p>
+                                    </div>
+                                  ) : (
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
+                                      onClick={() => fetchMediaUrl(media.id)}
+                                    >
+                                      Load Video
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+
                         return (
                           <div
-                            key={key}
-                            className="bg-gray-100 dark:bg-gray-800 rounded px-3 py-2"
+                            key={media.id}
+                            className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center justify-between"
                           >
-                            <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-0.5">
-                              {key.replace(/([A-Z])/g, ' $1').trim()}
-                            </p>
-                            <p
-                              className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate"
-                              title={displayValue}
-                            >
-                              {displayValue}
-                            </p>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {filename}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {media.type} · {(fileSize / 1024 / 1024).toFixed(2)} MB ·{' '}
+                                {media.processingStatus}
+                              </p>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
                   )}
                 </div>
-              )}
-
-              {/* ── RECORDING ── */}
-              <div className="mb-6">
-                <SectionHeader
-                  label="Recording"
-                  open={recordingOpen}
-                  onToggle={() => setRecordingOpen((v) => !v)}
-                />
-                {recordingOpen && (!ticket.media || ticket.media.length === 0) && (
-                  <div className="flex flex-col items-center justify-center py-8 gap-2 border border-dashed border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50">
-                    <svg
-                      className="w-8 h-8 text-gray-300 dark:text-gray-600"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={1.5}
-                        d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.36a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"
-                      />
-                    </svg>
-                    <p className="text-sm text-gray-400 dark:text-gray-500">No recording attached</p>
-                  </div>
-                )}
-                {recordingOpen && ticket.media && ticket.media.length > 0 && (
-                  <div className="space-y-4">
-                    {ticket.media.map((media) => {
-                      const filename =
-                        media.metadata?.originalFilename ||
-                        media.storageKey.split('/').pop() ||
-                        'video';
-                      const isVideo =
-                        media.type === 'video' || media.mimeType?.startsWith('video/');
-                      const fileSize =
-                        typeof media.fileSize === 'bigint'
-                          ? Number(media.fileSize)
-                          : media.fileSize || 0;
-
-                      if (media.processingStatus === 'completed' && isVideo) {
-                        return (
-                          <div key={media.id}>
-                            {mediaUrls[media.id] ? (
-                              <VideoPlayer
-                                src={mediaUrls[media.id]!}
-                                title={filename}
-                                mimeType={media.mimeType ?? undefined}
-                                onError={(err) => console.error('Video error:', err)}
-                              />
-                            ) : (
-                              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center bg-gray-50 dark:bg-gray-800">
-                                {loadingUrls[media.id] ? (
-                                  <div className="space-y-2">
-                                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
-                                    <p className="text-sm text-gray-500">Loading video...</p>
-                                  </div>
-                                ) : (
-                                  <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() => fetchMediaUrl(media.id)}
-                                  >
-                                    Load Video
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <div
-                          key={media.id}
-                          className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 flex items-center justify-between"
-                        >
-                          <div>
-                            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {filename}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {media.type} · {(fileSize / 1024 / 1024).toFixed(2)} MB ·{' '}
-                              {media.processingStatus}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
-
             </>
           )}
         </div>
@@ -469,11 +492,8 @@ export default function TicketDetailPage() {
           style={{ background: '#111827' }}
         >
           {/* DIAGNOSIS SECTION */}
-          <div className="px-4 pt-4 pb-3 border-b border-gray-800 flex-shrink-0">
-            <DiagnosisPanelV3A
-              diagnosis={diagnosis}
-              isLoading={isDiagnosisLoading}
-            />
+          <div className="px-4 pt-4 pb-3 border-b border-gray-800 flex-shrink-0 overflow-y-auto max-h-[calc(100vh-280px)]">
+            <DiagnosisPanelV3A diagnosis={diagnosis} isLoading={isDiagnosisLoading} />
           </div>
 
           {/* AGENT SECTION */}
@@ -482,7 +502,6 @@ export default function TicketDetailPage() {
             onDiagnosisUpdate={fetchDiagnosis}
             diagnosis={diagnosis}
           />
-
         </div>
       </div>
 
