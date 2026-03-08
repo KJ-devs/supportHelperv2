@@ -52,6 +52,7 @@ data/
 .eslintcache
 
 # Claude Code local data
+CLAUDE.local.md
 
 # Forge reports & docs
 docs/reports/

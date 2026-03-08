@@ -10,6 +10,28 @@
     "claude-md-management@claude-plugins-official": true
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/reinject-context.sh",
+            "timeout": 10000
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'Support Helper loaded. Skills: /forge, /status, /test-all, /stabilizer, /epic, /us, /bug, /db-reset, /prompt-gen | Agents: backend-dev, frontend-dev, dba, qa-engineer, ai-engineer, sdk-dev, devops, security-auditor, doc-writer'",
+            "timeout": 5000
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|Read",
@@ -45,6 +67,15 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/session-summary.sh",
+            "timeout": 15000
+          }
+        ]
+      },
       {
         "hooks": [
           {
