@@ -6,13 +6,16 @@
 
 ## Quick Reference
 
+- Setup: `pnpm install && pnpm docker:up && pnpm db:migrate`
 - Build: `pnpm build` | Dev: `pnpm dev` (API :3001, Dashboard :3000)
-- Test: `pnpm --filter @support-helper/<pkg> test -- --maxWorkers=2` (NEVER `pnpm test` globally)
+- Test (one at a time, NEVER `pnpm test`): `pnpm --filter @support-helper/api test -- --maxWorkers=2`
 - DB: `pnpm db:migrate` | `pnpm db:generate` | `pnpm db:studio`
 - Push directly to `main` (remote: `supportHelperv2`). Build must pass before push.
 
 ## Resources
 
+- Extended context: `.claude/rules/` (architecture, code-style, testing, commits, stability)
+- Agent team: `.claude/team.md` | Orchestrator: `/forge`
 - API docs: http://localhost:3001/api/docs
 - DB GUI: `pnpm db:studio`
 - MinIO: http://localhost:9001
