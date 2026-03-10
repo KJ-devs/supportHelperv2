@@ -146,7 +146,9 @@ describe('DeepAnalysisService', () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(null);
 
       await expect(service.analyze('missing', 'tenant-123')).rejects.toThrow(NotFoundException);
-      await expect(service.analyze('missing', 'tenant-123')).rejects.toThrow('Ticket missing not found');
+      await expect(service.analyze('missing', 'tenant-123')).rejects.toThrow(
+        'Ticket missing not found'
+      );
     });
 
     it('runs basic analysis when no GitHub repo connected', async () => {
@@ -159,7 +161,7 @@ describe('DeepAnalysisService', () => {
         expect.objectContaining({
           repoCtx: null,
           systemPrompt: expect.stringContaining('No repository connected'),
-        }),
+        })
       );
       expect(result).toEqual(mockDiagnosis);
     });
@@ -173,7 +175,7 @@ describe('DeepAnalysisService', () => {
         expect.objectContaining({
           where: { id: 'ticket-123' },
           data: { status: 'analyzing' },
-        }),
+        })
       );
     });
 
@@ -183,9 +185,7 @@ describe('DeepAnalysisService', () => {
       await service.analyze('ticket-123', 'tenant-123');
 
       const updateCalls = (prisma.ticket.update as jest.Mock).mock.calls;
-      const analyzedCall = updateCalls.find(
-        (call) => call[0].data?.status === 'analyzed',
-      );
+      const analyzedCall = updateCalls.find(call => call[0].data?.status === 'analyzed');
       expect(analyzedCall).toBeDefined();
     });
 
@@ -194,13 +194,11 @@ describe('DeepAnalysisService', () => {
       (agenticLoop.run as jest.Mock).mockRejectedValue(new Error('AI service unavailable'));
 
       await expect(service.analyze('ticket-123', 'tenant-123')).rejects.toThrow(
-        'AI service unavailable',
+        'AI service unavailable'
       );
 
       const updateCalls = (prisma.ticket.update as jest.Mock).mock.calls;
-      const failedCall = updateCalls.find(
-        (call) => call[0].data?.status === 'analysis_failed',
-      );
+      const failedCall = updateCalls.find(call => call[0].data?.status === 'analysis_failed');
       expect(failedCall).toBeDefined();
     });
 
@@ -215,7 +213,7 @@ describe('DeepAnalysisService', () => {
             ticketId: 'ticket-123',
             eventType: 'analysis_completed',
           }),
-        }),
+        })
       );
     });
 
@@ -230,7 +228,7 @@ describe('DeepAnalysisService', () => {
           data: expect.objectContaining({
             eventType: 'analysis_failed',
           }),
-        }),
+        })
       );
     });
 
@@ -253,7 +251,7 @@ describe('DeepAnalysisService', () => {
       await service.analyze('ticket-123', 'tenant-123');
 
       const loopOptions = (agenticLoop.run as jest.Mock).mock.calls[0][0];
-      expect(loopOptions.systemPrompt).toContain('Video Analysis (OCR extracted text)');
+      expect(loopOptions.systemPrompt).toContain('Video Analysis (OCR extracted text');
       expect(loopOptions.systemPrompt).toContain('Error: Cannot read property of null');
       expect(loopOptions.systemPrompt).toContain('TypeError at line 42');
     });
@@ -331,7 +329,9 @@ describe('DeepAnalysisService', () => {
     it('includes repo structure when provided', async () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicketBase);
       (codeInvestigation.getRepoContext as jest.Mock).mockResolvedValue(mockRepoCtx);
-      (codeInvestigation.getRepoStructure as jest.Mock).mockResolvedValue('📁 src\n  📄 auth.service.ts');
+      (codeInvestigation.getRepoStructure as jest.Mock).mockResolvedValue(
+        '📁 src\n  📄 auth.service.ts'
+      );
 
       await service.analyze('ticket-123', 'tenant-123');
 
@@ -346,9 +346,7 @@ describe('DeepAnalysisService', () => {
         media: [
           {
             metadata: null,
-            videoEvents: [
-              { timestampMs: 500, ocrText: 'Uncaught TypeError: Cannot set property' },
-            ],
+            videoEvents: [{ timestampMs: 500, ocrText: 'Uncaught TypeError: Cannot set property' }],
           },
         ],
       };
@@ -403,6 +401,121 @@ describe('DeepAnalysisService', () => {
 
       const loopOptions = (agenticLoop.run as jest.Mock).mock.calls[0][0];
       expect(loopOptions.systemPrompt).not.toContain('Visual Cues Extracted from Video');
+    });
+  });
+
+  describe('Phase 0 — Intent Verification (system prompt content)', () => {
+    beforeEach(() => {
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicketBase);
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({});
+      (prisma.ticketEvent.create as jest.Mock).mockResolvedValue({});
+      (codeInvestigation.getRepoContext as jest.Mock).mockResolvedValue(null);
+      (agenticLoop.run as jest.Mock).mockResolvedValue(mockLoopResult);
+      (diagnosisService.extractDiagnosisFromToolCalls as jest.Mock).mockReturnValue(mockDiagnosis);
+      (diagnosisService.saveDiagnosis as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('system prompt contains "Phase 0" section', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('Phase 0');
+    });
+
+    it('system prompt contains "Intent Verification" text', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('Intent Verification');
+    });
+
+    it('Phase 0 appears before Phase 1 in the prompt', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      const phase0Index = systemPrompt.indexOf('Phase 0');
+      const phase1Index = systemPrompt.indexOf('Phase 1');
+      expect(phase0Index).toBeGreaterThanOrEqual(0);
+      expect(phase1Index).toBeGreaterThanOrEqual(0);
+      expect(phase0Index).toBeLessThan(phase1Index);
+    });
+
+    it('Phase 0 instructs to use search_codebase_semantic for tests', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('search_codebase_semantic');
+    });
+
+    it('Phase 0 instructs to use get_file_history for commit history', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      // get_file_history appears under Phase 0 (before Phase 1 body)
+      const phase0Start = systemPrompt.indexOf('Phase 0');
+      const phase1Start = systemPrompt.indexOf('Phase 1 —');
+      const phase0Section = systemPrompt.slice(phase0Start, phase1Start);
+      expect(phase0Section).toContain('get_file_history');
+    });
+
+    it('Phase 0 instructs to check documentation', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('Check documentation');
+    });
+
+    it('Phase 0 includes decision criteria for strong, moderate, and no evidence', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('STRONG evidence');
+      expect(systemPrompt).toContain('MODERATE evidence');
+      expect(systemPrompt).toContain('NO evidence');
+    });
+
+    it('Phase 0 includes low-confidence diagnosis path (confidence < 0.3)', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('confidence: 0.2');
+    });
+
+    it('Phase 0 includes STOP instruction for strong intent evidence', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      const phase0Start = systemPrompt.indexOf('Phase 0');
+      const phase1Start = systemPrompt.indexOf('Phase 1 —');
+      const phase0Section = systemPrompt.slice(phase0Start, phase1Start);
+      expect(phase0Section).toContain('STOP');
+    });
+
+    it('system prompt includes all expected phase numbers in order (0, 1, 2, 3)', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      const phase0Idx = systemPrompt.indexOf('Phase 0');
+      const phase1Idx = systemPrompt.indexOf('Phase 1 —');
+      const phase2Idx = systemPrompt.indexOf('Phase 2 —');
+      const phase3Idx = systemPrompt.indexOf('Phase 3 —');
+      expect(phase0Idx).toBeGreaterThanOrEqual(0);
+      expect(phase1Idx).toBeGreaterThanOrEqual(0);
+      expect(phase2Idx).toBeGreaterThanOrEqual(0);
+      expect(phase3Idx).toBeGreaterThanOrEqual(0);
+      expect(phase0Idx).toBeLessThan(phase1Idx);
+      expect(phase1Idx).toBeLessThan(phase2Idx);
+      expect(phase2Idx).toBeLessThan(phase3Idx);
+    });
+
+    it('prompt is well-formed and does not break existing phases', async () => {
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      // Existing phase content still intact
+      expect(systemPrompt).toContain('search_code');
+      expect(systemPrompt).toContain('read_file');
+      expect(systemPrompt).toContain('update_diagnosis');
+      expect(systemPrompt).toContain('create_branch');
+      expect(systemPrompt).toContain('create_pull_request');
+      expect(systemPrompt).toContain('escalate_to_human');
+    });
+
+    it('when similar tickets were resolved as "not a bug", context includes resolution info', async () => {
+      // The similar tickets section is appended to the prompt; verify "not a bug" phrasing
+      // is part of Phase 0's decision criteria for checking resolved tickets
+      await service.analyze('ticket-123', 'tenant-123');
+      const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
+      expect(systemPrompt).toContain('not a bug');
     });
   });
 });

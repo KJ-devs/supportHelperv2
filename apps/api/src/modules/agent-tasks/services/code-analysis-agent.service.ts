@@ -98,7 +98,11 @@ export class CodeAnalysisAgentService {
       .catch(() => {});
 
     // 4. Search relevant code via RAG
-    const relevantCode = await this.codebaseSearchService.findRelevantForTicket(ticket.id, 10);
+    const relevantCode = await this.codebaseSearchService.findRelevantForTicket(
+      ticket.id,
+      agentTask.tenantId,
+      10
+    );
 
     this.agentTasksService
       .appendLog(agentTaskId, {

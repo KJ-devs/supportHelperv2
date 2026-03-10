@@ -9,7 +9,7 @@ export class CodebaseSearchService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiService: AIService,
+    private readonly aiService: AIService
   ) {}
 
   /**
@@ -18,7 +18,7 @@ export class CodebaseSearchService {
   async findRelevantFiles(
     applicationId: string,
     query: string,
-    limit: number = 10,
+    limit: number = 10
   ): Promise<CodeSearchResult[]> {
     const queryEmbedding = await this.aiService.generateEmbedding(query);
     if (queryEmbedding.length === 0) {
@@ -44,7 +44,7 @@ export class CodebaseSearchService {
       LIMIT ${limit}
     `;
 
-    return results.map((row) => ({
+    return results.map(row => ({
       filePath: row.file_path,
       chunkIndex: row.chunk_index,
       content: row.content,
@@ -59,10 +59,11 @@ export class CodebaseSearchService {
    */
   async findRelevantForTicket(
     ticketId: string,
-    limit: number = 10,
+    tenantId: string,
+    limit: number = 10
   ): Promise<CodeSearchResult[]> {
-    const ticket = await this.prisma.ticket.findUnique({
-      where: { id: ticketId },
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { id: ticketId, tenantId },
       select: { applicationId: true, title: true, description: true, aiSummary: true },
     });
 

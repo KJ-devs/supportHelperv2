@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { sanitizeForPrompt } from '../common/utils/prompt-sanitizer';
 import { AIProvider } from './providers/ai-provider.interface';
 import { AIProviderFactory } from './providers/ai-provider.factory';
 import { AIProviderConfig, DEFAULT_MODELS } from './providers/ai-provider.types';
@@ -31,7 +32,7 @@ export class AIService {
     private prisma: PrismaService,
     private providerFactory: AIProviderFactory,
     @Optional() private aiCache?: AiCacheService,
-    @Optional() private tiering?: ModelTieringService,
+    @Optional() private tiering?: ModelTieringService
   ) {}
 
   /**
@@ -70,7 +71,7 @@ export class AIService {
         }
       } catch (error) {
         this.logger.warn(
-          `Failed to fetch tenant AI config: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to fetch tenant AI config: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
     }
@@ -110,17 +111,14 @@ export class AIService {
    * Get the optimal AI provider for a specific task.
    * Uses ModelTieringService when available, falls back to default provider.
    */
-  async getProviderForTask(
-    task: AITask,
-    tenantId?: string,
-  ): Promise<AIProvider | null> {
+  async getProviderForTask(task: AITask, tenantId?: string): Promise<AIProvider | null> {
     if (this.tiering) {
       try {
         const resolution = await this.tiering.resolveForTask(task, tenantId);
         return this.providerFactory.create(resolution.providerConfig);
       } catch (error) {
         this.logger.warn(
-          `Tiering resolution failed for task=${task}: ${(error as Error).message}, falling back to default`,
+          `Tiering resolution failed for task=${task}: ${(error as Error).message}, falling back to default`
         );
       }
     }
@@ -191,9 +189,7 @@ export class AIService {
     }
 
     if (!provider.generateEmbedding) {
-      this.logger.warn(
-        `Provider ${provider.getProviderName()} does not support embeddings`,
-      );
+      this.logger.warn(`Provider ${provider.getProviderName()} does not support embeddings`);
       return [];
     }
 
@@ -201,7 +197,7 @@ export class AIService {
       return await provider.generateEmbedding(text);
     } catch (error) {
       this.logger.error(
-        `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       return [];
     }
@@ -228,7 +224,7 @@ export class AIService {
         results.push(embedding);
       } catch (error) {
         this.logger.error(
-          `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          `Failed to generate embedding: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
         results.push([]);
       }
@@ -240,7 +236,7 @@ export class AIService {
   async analyzeVideoTranscript(
     transcript: string,
     ocrText?: string,
-    tenantId?: string,
+    tenantId?: string
   ): Promise<VideoAnalysisResult> {
     const provider = await this.getProviderForTask('enrichment', tenantId);
 
@@ -252,13 +248,21 @@ export class AIService {
     const systemPrompt =
       'You are a technical support AI that analyzes bug reports and technical issues. Always respond with valid JSON.';
 
+    const safeTranscript = sanitizeForPrompt(transcript, {
+      maxLength: 10_000,
+      fieldName: 'description',
+    });
+    const safeOcrText = ocrText
+      ? sanitizeForPrompt(ocrText, { maxLength: 5_000, fieldName: 'ocr' })
+      : undefined;
+
     const prompt = `
 Analyze the following technical support issue based on the user's description and any OCR text from screenshots.
 
 User Description:
-${transcript}
+${safeTranscript}
 
-${ocrText ? `OCR Text from Screenshots:\n${ocrText}` : ''}
+${safeOcrText ? `OCR Text from Screenshots:\n${safeOcrText}` : ''}
 
 Please provide a JSON response with the following fields:
 - summary: A brief 1-2 sentence summary of the issue
@@ -283,11 +287,15 @@ Respond ONLY with valid JSON.
         reproductionSteps: 'array',
       };
 
-      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
-        systemPrompt,
-        temperature: 0.3,
-        maxTokens: 1000,
-      });
+      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(
+        prompt,
+        schema,
+        {
+          systemPrompt,
+          temperature: 0.3,
+          maxTokens: 1000,
+        }
+      );
 
       return {
         summary: (analysis.summary as string) || 'Unable to generate summary',
@@ -313,7 +321,7 @@ Respond ONLY with valid JSON.
       return await fetchAnalysis();
     } catch (error) {
       this.logger.error(
-        `Failed to analyze video: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to analyze video: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       return this.getMockAnalysis(transcript);
     }
@@ -325,7 +333,7 @@ Respond ONLY with valid JSON.
   async processUserDescription(
     description: string,
     userContext?: Record<string, unknown>,
-    tenantId?: string,
+    tenantId?: string
   ): Promise<VideoAnalysisResult & { enrichedDescription: string }> {
     const provider = await this.getProviderForTask('enrichment', tenantId);
 
@@ -342,11 +350,16 @@ Respond ONLY with valid JSON.
     const systemPrompt =
       'You are a technical support AI that processes and enriches bug reports. Always respond with valid JSON.';
 
+    const safeDescription = sanitizeForPrompt(description, {
+      maxLength: 10_000,
+      fieldName: 'description',
+    });
+
     const prompt = `
 You are a technical support AI assistant. A user has submitted a bug report with the following description and technical context.
 
 User Description:
-${description}
+${safeDescription}
 ${contextInfo}
 
 Please provide a JSON response with the following fields:
@@ -362,7 +375,9 @@ Please provide a JSON response with the following fields:
 Respond ONLY with valid JSON.
     `;
 
-    const fetchResult = async (): Promise<VideoAnalysisResult & { enrichedDescription: string }> => {
+    const fetchResult = async (): Promise<
+      VideoAnalysisResult & { enrichedDescription: string }
+    > => {
       const schema = {
         enrichedDescription: 'string',
         summary: 'string',
@@ -374,11 +389,15 @@ Respond ONLY with valid JSON.
         reproductionSteps: 'array',
       };
 
-      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(prompt, schema, {
-        systemPrompt,
-        temperature: 0.3,
-        maxTokens: 1500,
-      });
+      const analysis = await provider.generateStructuredOutput<Record<string, unknown>>(
+        prompt,
+        schema,
+        {
+          systemPrompt,
+          temperature: 0.3,
+          maxTokens: 1500,
+        }
+      );
 
       return {
         enrichedDescription: (analysis.enrichedDescription as string) || description,
@@ -405,7 +424,7 @@ Respond ONLY with valid JSON.
       return await fetchResult();
     } catch (error) {
       this.logger.error(
-        `Failed to process description: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to process description: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       const mock = this.getMockAnalysis(description);
       return { ...mock, enrichedDescription: description };
@@ -421,7 +440,11 @@ Respond ONLY with valid JSON.
 
     const systemPrompt =
       'You are a technical support AI classifier. Classify the issue into one category only: crash, performance, ui, data-loss, feature-request, or other.';
-    const prompt = `Classify this issue: ${description}`;
+    const safeDescription = sanitizeForPrompt(description, {
+      maxLength: 2_000,
+      fieldName: 'description',
+    });
+    const prompt = `Classify this issue: ${safeDescription}`;
 
     const fetchClassification = async (): Promise<string> => {
       const response = await provider.generateCompletion(prompt, {
@@ -431,7 +454,7 @@ Respond ONLY with valid JSON.
       });
       const content = response.toLowerCase();
       const validTypes = ['crash', 'performance', 'ui', 'data-loss', 'feature-request', 'other'];
-      return validTypes.find((t) => content.includes(t)) || 'other';
+      return validTypes.find(t => content.includes(t)) || 'other';
     };
 
     try {
@@ -442,7 +465,11 @@ Respond ONLY with valid JSON.
           systemPrompt,
           temperature: 0.1,
         });
-        return await this.aiCache.getOrSet(cacheKey, AI_CACHE_TTL.CLASSIFY_ISSUE, fetchClassification);
+        return await this.aiCache.getOrSet(
+          cacheKey,
+          AI_CACHE_TTL.CLASSIFY_ISSUE,
+          fetchClassification
+        );
       }
       return await fetchClassification();
     } catch (error) {
@@ -467,7 +494,7 @@ Respond ONLY with valid JSON.
       });
     } catch (error) {
       this.logger.error(
-        `Failed to generate completion: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        `Failed to generate completion: ${error instanceof Error ? error.message : 'Unknown error'}`
       );
       return '';
     }

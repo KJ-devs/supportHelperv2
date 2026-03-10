@@ -1,6 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
 import { FeedbackController } from '../../../src/modules/feedback/feedback.controller';
 import { FeedbackService } from '../../../src/modules/feedback/feedback.service';
+import { CreateFeedbackDto } from '../../../src/modules/feedback/dto/create-feedback.dto';
 
 describe('FeedbackController', () => {
   let controller: FeedbackController;
@@ -42,20 +45,64 @@ describe('FeedbackController', () => {
   });
 
   describe('create', () => {
-    it('should create feedback', async () => {
-      const dto = { ticketId: 'ticket-123', field: 'severity', originalValue: 'low', correctedValue: 'high' };
+    it('returns 201 on successful feedback submission', async () => {
+      const dto = plainToInstance(CreateFeedbackDto, {
+        ticketId: 'a0000000-0000-0000-0000-000000000000',
+        field: 'severity',
+        correctedValue: 'high',
+      });
       const req = { user: { id: 'user-123' } };
       (feedbackService.create as jest.Mock).mockResolvedValue(mockFeedback);
 
-      const result = await controller.create('tenant-123', dto as unknown, req as unknown);
+      const result = await controller.create('tenant-123', dto, req as { user: { id: string } });
 
       expect(feedbackService.create).toHaveBeenCalledWith('tenant-123', 'user-123', dto);
       expect(result).toEqual(mockFeedback);
     });
+
+    it('propagates NotFoundException when ticket not found', async () => {
+      const dto = plainToInstance(CreateFeedbackDto, {
+        ticketId: 'a0000000-0000-0000-0000-000000000000',
+        field: 'severity',
+        correctedValue: 'high',
+      });
+      const req = { user: { id: 'user-123' } };
+      (feedbackService.create as jest.Mock).mockRejectedValue(
+        new NotFoundException('Ticket not found')
+      );
+
+      await expect(
+        controller.create('tenant-123', dto, req as { user: { id: string } })
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('propagates BadRequestException for invalid payload', async () => {
+      const dto = plainToInstance(CreateFeedbackDto, {
+        ticketId: 'a0000000-0000-0000-0000-000000000000',
+        field: 'type',
+        correctedValue: 'high', // mismatch — would be rejected by ValidationPipe in real request
+      });
+      const req = { user: { id: 'user-123' } };
+      (feedbackService.create as jest.Mock).mockRejectedValue(
+        new BadRequestException('correctedValue must be one of [bug, feature_request, ...]')
+      );
+
+      await expect(
+        controller.create('tenant-123', dto, req as { user: { id: string } })
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // Verifying JwtAuthGuard is applied: the guard is set at class level via @UseGuards(JwtAuthGuard).
+  // In unit tests the guard is not run, but we can assert it's declared in the metadata.
+  it('requires authentication via JwtAuthGuard', () => {
+    const guards = Reflect.getMetadata('__guards__', FeedbackController) as unknown[];
+    expect(guards).toBeDefined();
+    expect(guards.length).toBeGreaterThan(0);
   });
 
   describe('findByTicket', () => {
-    it('should return feedback list for ticket', async () => {
+    it('returns feedback list for ticket', async () => {
       (feedbackService.findByTicket as jest.Mock).mockResolvedValue([mockFeedback]);
 
       const result = await controller.findByTicket('tenant-123', 'ticket-123');
@@ -66,7 +113,7 @@ describe('FeedbackController', () => {
   });
 
   describe('findOne', () => {
-    it('should return single feedback', async () => {
+    it('returns single feedback', async () => {
       (feedbackService.findOne as jest.Mock).mockResolvedValue(mockFeedback);
 
       const result = await controller.findOne('tenant-123', 'fb-123');
@@ -77,18 +124,22 @@ describe('FeedbackController', () => {
   });
 
   describe('update', () => {
-    it('should update feedback', async () => {
+    it('updates feedback', async () => {
       const dto = { correctedValue: 'critical' };
-      (feedbackService.update as jest.Mock).mockResolvedValue({ ...mockFeedback, correctedValue: 'critical' });
+      (feedbackService.update as jest.Mock).mockResolvedValue({
+        ...mockFeedback,
+        correctedValue: 'critical',
+      });
 
-      const result = await controller.update('tenant-123', 'fb-123', dto as unknown);
+      const result = await controller.update('tenant-123', 'fb-123', dto);
 
       expect(feedbackService.update).toHaveBeenCalledWith('fb-123', 'tenant-123', dto);
+      expect(result.correctedValue).toBe('critical');
     });
   });
 
   describe('remove', () => {
-    it('should remove feedback', async () => {
+    it('removes feedback', async () => {
       (feedbackService.remove as jest.Mock).mockResolvedValue({ success: true });
 
       const result = await controller.remove('tenant-123', 'fb-123');

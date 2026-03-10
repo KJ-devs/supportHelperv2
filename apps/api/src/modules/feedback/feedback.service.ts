@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ClassificationFeedback } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CreateFeedbackDto } from './dto/create-feedback.dto';
 import { UpdateFeedbackDto } from './dto/update-feedback.dto';
@@ -15,6 +16,22 @@ export class FeedbackService {
 
     if (!ticket) {
       throw new NotFoundException('Ticket not found');
+    }
+
+    // Upsert: update existing record for same ticket+field, or create a new one
+    const existing = await this.prisma.classificationFeedback.findFirst({
+      where: { ticketId: dto.ticketId, field: dto.field },
+    });
+
+    if (existing) {
+      return this.prisma.classificationFeedback.update({
+        where: { id: existing.id },
+        data: {
+          originalValue: dto.originalValue,
+          correctedValue: dto.correctedValue,
+          correctedBy: userId,
+        },
+      });
     }
 
     return this.prisma.classificationFeedback.create({
@@ -76,5 +93,18 @@ export class FeedbackService {
 
     await this.prisma.classificationFeedback.delete({ where: { id } });
     return { success: true };
+  }
+
+  /**
+   * Fetch all feedback corrections for a set of ticket IDs, most recent first.
+   * Used by the triage pipeline to inject human corrections as context signals.
+   */
+  async findByTicketIds(ticketIds: string[]): Promise<ClassificationFeedback[]> {
+    if (ticketIds.length === 0) return [];
+
+    return this.prisma.classificationFeedback.findMany({
+      where: { ticketId: { in: ticketIds } },
+      orderBy: { createdAt: 'desc' },
+    });
   }
 }

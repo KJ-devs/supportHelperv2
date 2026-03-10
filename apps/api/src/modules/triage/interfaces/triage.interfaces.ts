@@ -6,6 +6,15 @@
 
 import { SimilarTicketContext } from '@support-helper/shared';
 
+export interface FeedbackCorrection {
+  ticketId: string;
+  ticketTitle: string | null;
+  field: string;
+  originalValue: string | null;
+  correctedValue: string | null;
+  reason: string | null;
+}
+
 export interface TriageContext {
   ticket: {
     id: string;
@@ -36,6 +45,7 @@ export interface TriageContext {
     repoName: string | null;
   };
   similarTickets: SimilarTicketContext[];
+  feedbackCorrections: FeedbackCorrection[];
 }
 
 export interface TriageClassification {
@@ -46,6 +56,9 @@ export interface TriageClassification {
   summary: string;
   keywords: string[];
   reasoning: string;
+  isWorkingAsIntended: boolean;
+  workingAsIntendedConfidence: number;
+  workingAsIntendedReasoning: string;
 }
 
 export type TriageAction =

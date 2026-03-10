@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
 import { TicketsModule } from '../tickets/tickets.module';
+import { FeedbackModule } from '../feedback/feedback.module';
 import { TriageService } from './triage.service';
 import { TriageClassificationService } from './triage-classification.service';
 import { TriageRouterService } from './triage-router.service';
@@ -13,6 +14,7 @@ import { TriageController } from './triage.controller';
     PrismaModule,
     AIModule,
     forwardRef(() => TicketsModule),
+    FeedbackModule,
     BullModule.registerQueue({
       name: 'triage',
       defaultJobOptions: {
@@ -29,11 +31,7 @@ import { TriageController } from './triage.controller';
     BullModule.registerQueue({ name: 'agent-orchestration' }),
   ],
   controllers: [TriageController],
-  providers: [
-    TriageService,
-    TriageClassificationService,
-    TriageRouterService,
-  ],
+  providers: [TriageService, TriageClassificationService, TriageRouterService],
   exports: [TriageService],
 })
 export class TriageModule {}

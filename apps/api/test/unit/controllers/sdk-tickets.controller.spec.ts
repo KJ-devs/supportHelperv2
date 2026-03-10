@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { SdkTicketsController } from '../../../src/modules/tickets/sdk-tickets.controller';
+import {
+  SdkTicketsController,
+  MIME_TO_EXT,
+  videoFileFilter,
+} from '../../../src/modules/tickets/sdk-tickets.controller';
 import { TicketsService } from '../../../src/modules/tickets/tickets.service';
 import { TicketsSearchService } from '../../../src/modules/tickets/tickets-search.service';
 import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.service';
@@ -44,7 +48,8 @@ describe('SdkTicketsController', () => {
 
   const mockAiResult = {
     summary: 'User reports login failure',
-    enrichedDescription: 'The user is experiencing a login failure when clicking the submit button.',
+    enrichedDescription:
+      'The user is experiencing a login failure when clicking the submit button.',
     severity: 'high',
     severityConfidence: 0.85,
     type: 'bug',
@@ -61,11 +66,11 @@ describe('SdkTicketsController', () => {
         's3.secretAccessKey': 'minioadmin',
         's3.bucket': 'test-bucket',
         's3.region': 'us-east-1',
-        'S3_ENDPOINT': undefined,
-        'S3_ACCESS_KEY_ID': undefined,
-        'S3_SECRET_ACCESS_KEY': undefined,
-        'S3_BUCKET': undefined,
-        'S3_REGION': undefined,
+        S3_ENDPOINT: undefined,
+        S3_ACCESS_KEY_ID: undefined,
+        S3_SECRET_ACCESS_KEY: undefined,
+        S3_BUCKET: undefined,
+        S3_REGION: undefined,
       };
       return config[key];
     }),
@@ -138,7 +143,9 @@ describe('SdkTicketsController', () => {
     };
 
     it('should create a ticket and return success response', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       const result = await controller.create(mockTenantId, createDto);
 
@@ -154,19 +161,19 @@ describe('SdkTicketsController', () => {
     });
 
     it('should call ticketsService.create with tenantId and no reporter', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.create(mockTenantId, createDto);
 
-      expect(ticketsService.create).toHaveBeenCalledWith(
-        mockTenantId,
-        createDto,
-        undefined,
-      );
+      expect(ticketsService.create).toHaveBeenCalledWith(mockTenantId, createDto, undefined);
     });
 
     it('should enqueue AI analysis with priority 3', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.create(mockTenantId, createDto);
 
@@ -174,19 +181,23 @@ describe('SdkTicketsController', () => {
     });
 
     it('should trigger integration sync', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.create(mockTenantId, createDto);
 
       expect(integrationsSyncService.syncTicketToAllEnabledIntegrations).toHaveBeenCalledWith(
         mockTicket.id,
         mockTenantId,
-        { priority: 2 },
+        { priority: 2 }
       );
     });
 
     it('should index in Meilisearch when enabled', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
       mockSearchService.isEnabled.mockReturnValue(true);
 
       await controller.create(mockTenantId, createDto);
@@ -195,7 +206,9 @@ describe('SdkTicketsController', () => {
     });
 
     it('should not index in Meilisearch when disabled', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
       mockSearchService.isEnabled.mockReturnValue(false);
 
       await controller.create(mockTenantId, createDto);
@@ -216,14 +229,11 @@ describe('SdkTicketsController', () => {
     };
 
     it('should process report and return AI analysis', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
-
-      const result = await controller.report(
-        mockRequest,
-        mockTenantId,
-        undefined,
-        mockBody,
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
       );
+
+      const result = await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
       expect(result.success).toBe(true);
       expect(result.ticket).toBeDefined();
@@ -234,18 +244,22 @@ describe('SdkTicketsController', () => {
     });
 
     it('should call AI service to process description', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
       expect(aiProcessingService.processUserDescription).toHaveBeenCalledWith(
         mockBody.description,
-        { os: 'Windows', browser: 'Chrome' },
+        { os: 'Windows', browser: 'Chrome' }
       );
     });
 
     it('should use default title when not provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, {
         description: 'A bug',
@@ -254,40 +268,40 @@ describe('SdkTicketsController', () => {
       expect(ticketsService.create).toHaveBeenCalledWith(
         mockTenantId,
         expect.objectContaining({ title: 'Bug Report from SDK' }),
-        undefined,
+        undefined
       );
     });
 
     it('should use empty description when not provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, {});
 
-      expect(aiProcessingService.processUserDescription).toHaveBeenCalledWith(
-        '',
-        undefined,
-      );
+      expect(aiProcessingService.processUserDescription).toHaveBeenCalledWith('', undefined);
     });
 
     it('should handle malformed userContext JSON gracefully', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, {
         description: 'test',
         userContext: 'not-valid-json{{{',
       });
 
-      expect(aiProcessingService.processUserDescription).toHaveBeenCalledWith(
-        'test',
-        { raw: 'not-valid-json{{{' },
-      );
+      expect(aiProcessingService.processUserDescription).toHaveBeenCalledWith('test', {
+        raw: 'not-valid-json{{{',
+      });
     });
 
     it('should throw InternalServerErrorException when applicationId is missing from sdk', async () => {
       const reqWithoutAppId = { sdk: {} } as unknown as Record<string, unknown>;
 
       await expect(
-        controller.report(reqWithoutAppId, mockTenantId, undefined, mockBody),
+        controller.report(reqWithoutAppId, mockTenantId, undefined, mockBody)
       ).rejects.toThrow(InternalServerErrorException);
     });
 
@@ -295,12 +309,14 @@ describe('SdkTicketsController', () => {
       const reqWithoutSdk = {} as unknown as Record<string, unknown>;
 
       await expect(
-        controller.report(reqWithoutSdk, mockTenantId, undefined, mockBody),
+        controller.report(reqWithoutSdk, mockTenantId, undefined, mockBody)
       ).rejects.toThrow(InternalServerErrorException);
     });
 
     it('should update ticket with AI analysis fields', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
@@ -311,23 +327,24 @@ describe('SdkTicketsController', () => {
           aiSummary: mockAiResult.summary,
           type: 'bug',
           severity: 'high',
-        }),
+        })
       );
     });
 
     it('should update keywords when AI returns them', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
-      expect(aiService.updateKeywords).toHaveBeenCalledWith(
-        mockTicket.id,
-        mockAiResult.keywords,
-      );
+      expect(aiService.updateKeywords).toHaveBeenCalledWith(mockTicket.id, mockAiResult.keywords);
     });
 
     it('should handle video upload when provided', async () => {
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
       mockPrismaService.media.create.mockResolvedValue({
         id: 'media-001',
         storageKey: `${mockTenantId}/${mockTicket.id}/video-123.webm`,
@@ -346,12 +363,7 @@ describe('SdkTicketsController', () => {
         path: '',
       };
 
-      const result = await controller.report(
-        mockRequest,
-        mockTenantId,
-        mockVideo,
-        mockBody,
-      );
+      const result = await controller.report(mockRequest, mockTenantId, mockVideo, mockBody);
 
       expect(result.video.received).toBe(true);
       expect(result.video).toHaveProperty('mediaId', 'media-001');
@@ -363,50 +375,150 @@ describe('SdkTicketsController', () => {
             mimeType: 'video/webm',
             processingStatus: 'completed',
           }),
-        }),
+        })
       );
     });
 
     it('should map AI crash type to bug', async () => {
       const resultWithCrash = { ...mockAiResult, type: 'crash' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithCrash);
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
       expect(ticketsService.update).toHaveBeenCalledWith(
         mockTicket.id,
         mockTenantId,
-        expect.objectContaining({ type: 'bug' }),
+        expect.objectContaining({ type: 'bug' })
       );
     });
 
     it('should map AI feature-request type to feature_request', async () => {
       const resultWithFeature = { ...mockAiResult, type: 'feature-request' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithFeature);
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
       expect(ticketsService.update).toHaveBeenCalledWith(
         mockTicket.id,
         mockTenantId,
-        expect.objectContaining({ type: 'feature_request' }),
+        expect.objectContaining({ type: 'feature_request' })
       );
     });
 
     it('should default unknown severity to medium', async () => {
       const resultWithUnknownSeverity = { ...mockAiResult, severity: 'unknown' };
       mockAIProcessingService.processUserDescription.mockResolvedValue(resultWithUnknownSeverity);
-      mockTicketsService.create.mockResolvedValue(mockTicket as unknown as import('@prisma/client').Ticket);
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
 
       await controller.report(mockRequest, mockTenantId, undefined, mockBody);
 
       expect(ticketsService.update).toHaveBeenCalledWith(
         mockTicket.id,
         mockTenantId,
-        expect.objectContaining({ severity: 'medium' }),
+        expect.objectContaining({ severity: 'medium' })
       );
     });
+
+    it('should derive storage key extension from MIME type, not originalname', async () => {
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
+      mockPrismaService.media.create.mockResolvedValue({
+        id: 'media-002',
+        storageKey: `${mockTenantId}/${mockTicket.id}/video-123.mp4`,
+      });
+
+      const mockVideo: Express.Multer.File = {
+        fieldname: 'video',
+        originalname: 'evil.html',
+        encoding: '7bit',
+        mimetype: 'video/mp4',
+        buffer: Buffer.from('fake-video-data'),
+        size: 512,
+        stream: null as unknown as import('stream').Readable,
+        destination: '',
+        filename: '',
+        path: '',
+      };
+
+      await controller.report(mockRequest, mockTenantId, mockVideo, mockBody);
+
+      const storageKeyArg: string = mockPrismaService.media.create.mock.calls[0][0].data.storageKey;
+      expect(storageKeyArg).toMatch(/\.mp4$/);
+      expect(storageKeyArg).not.toMatch(/\.html/);
+    });
+
+    it('should use .mov extension for video/quicktime', async () => {
+      mockTicketsService.create.mockResolvedValue(
+        mockTicket as unknown as import('@prisma/client').Ticket
+      );
+      mockPrismaService.media.create.mockResolvedValue({
+        id: 'media-003',
+        storageKey: `${mockTenantId}/${mockTicket.id}/video-123.mov`,
+      });
+
+      const mockVideo: Express.Multer.File = {
+        fieldname: 'video',
+        originalname: 'recording.mov',
+        encoding: '7bit',
+        mimetype: 'video/quicktime',
+        buffer: Buffer.from('fake-video-data'),
+        size: 512,
+        stream: null as unknown as import('stream').Readable,
+        destination: '',
+        filename: '',
+        path: '',
+      };
+
+      await controller.report(mockRequest, mockTenantId, mockVideo, mockBody);
+
+      const storageKeyArg: string = mockPrismaService.media.create.mock.calls[0][0].data.storageKey;
+      expect(storageKeyArg).toMatch(/\.mov$/);
+    });
+  });
+
+  describe('MIME_TO_EXT map', () => {
+    it('should map video/webm to webm', () => {
+      expect(MIME_TO_EXT['video/webm']).toBe('webm');
+    });
+
+    it('should map video/mp4 to mp4', () => {
+      expect(MIME_TO_EXT['video/mp4']).toBe('mp4');
+    });
+
+    it('should map video/quicktime to mov', () => {
+      expect(MIME_TO_EXT['video/quicktime']).toBe('mov');
+    });
+  });
+
+  describe('videoFileFilter', () => {
+    const acceptedTypes = ['video/webm', 'video/mp4', 'video/quicktime'];
+    const rejectedTypes = ['image/png', 'text/html', 'application/javascript', ''];
+
+    for (const mime of acceptedTypes) {
+      it(`should accept ${mime || '(empty string)'}`, () => {
+        const cb = jest.fn();
+        videoFileFilter({}, { mimetype: mime }, cb);
+        expect(cb).toHaveBeenCalledWith(null, true);
+      });
+    }
+
+    for (const mime of rejectedTypes) {
+      it(`should reject ${mime || '(empty string)'} with BadRequestException`, () => {
+        const cb = jest.fn();
+        videoFileFilter({}, { mimetype: mime }, cb);
+        expect(cb).toHaveBeenCalledWith(expect.any(BadRequestException), false);
+        const [err] = cb.mock.calls[0] as [BadRequestException, boolean];
+        expect(err.message).toContain('Invalid file type');
+      });
+    }
   });
 });

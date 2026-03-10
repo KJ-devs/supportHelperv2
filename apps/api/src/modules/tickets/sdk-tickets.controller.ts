@@ -9,6 +9,7 @@ import {
   UseInterceptors,
   UploadedFile,
   Logger,
+  BadRequestException,
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
@@ -29,6 +30,31 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationsSyncService } from '../integrations/integrations-sync.service';
+
+const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
+
+export const MIME_TO_EXT: Record<string, string> = {
+  'video/webm': 'webm',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+};
+
+export function videoFileFilter(
+  _req: unknown,
+  file: { mimetype: string },
+  cb: (error: Error | null, acceptFile: boolean) => void
+): void {
+  if (!ALLOWED_VIDEO_MIME_TYPES.has(file.mimetype)) {
+    cb(
+      new BadRequestException(
+        `Invalid file type "${file.mimetype}". Allowed types: video/webm, video/mp4, video/quicktime`
+      ),
+      false
+    );
+    return;
+  }
+  cb(null, true);
+}
 
 // Map AI-returned types to valid ticket schema types
 const AI_TYPE_MAP: Record<string, string> = {
@@ -65,14 +91,19 @@ export class SdkTicketsController {
     private readonly aiService: AIService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly integrationsSyncService: IntegrationsSyncService,
+    private readonly integrationsSyncService: IntegrationsSyncService
   ) {
     // Initialize S3 client
     const endpoint = this.configService.get('s3.endpoint') || this.configService.get('S3_ENDPOINT');
-    const accessKeyId = this.configService.get('s3.accessKeyId') || this.configService.get('S3_ACCESS_KEY_ID');
-    const secretAccessKey = this.configService.get('s3.secretAccessKey') || this.configService.get('S3_SECRET_ACCESS_KEY');
-    this.s3Bucket = this.configService.get('s3.bucket') || this.configService.get('S3_BUCKET') || 'videos';
-    const region = this.configService.get('s3.region') || this.configService.get('S3_REGION') || 'us-east-1';
+    const accessKeyId =
+      this.configService.get('s3.accessKeyId') || this.configService.get('S3_ACCESS_KEY_ID');
+    const secretAccessKey =
+      this.configService.get('s3.secretAccessKey') ||
+      this.configService.get('S3_SECRET_ACCESS_KEY');
+    this.s3Bucket =
+      this.configService.get('s3.bucket') || this.configService.get('S3_BUCKET') || 'videos';
+    const region =
+      this.configService.get('s3.region') || this.configService.get('S3_REGION') || 'us-east-1';
 
     this.s3Client = new S3Client({
       endpoint,
@@ -92,10 +123,7 @@ export class SdkTicketsController {
   @ApiResponse({ status: 200, description: 'Ticket found' })
   @ApiResponse({ status: 401, description: 'Invalid SDK key' })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
-  async findOne(
-    @Param('id') id: string,
-    @CurrentTenant() tenantId: string,
-  ) {
+  async findOne(@Param('id') id: string, @CurrentTenant() tenantId: string) {
     const ticket = await this.prisma.ticket.findFirst({
       where: {
         id,
@@ -142,7 +170,9 @@ export class SdkTicketsController {
     await this.ticketsAIService.enqueueAnalysis(ticket.id, 3);
 
     // Trigger integration syncs
-    await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, { priority: 2 });
+    await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, {
+      priority: 2,
+    });
 
     return {
       success: true,
@@ -161,6 +191,7 @@ export class SdkTicketsController {
   @UseInterceptors(
     FileInterceptor('video', {
       limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max
+      fileFilter: videoFileFilter,
     })
   )
   @ApiConsumes('multipart/form-data')
@@ -217,7 +248,9 @@ export class SdkTicketsController {
     // Update ticket with AI analysis fields
     const mappedType = mapAiType(aiResult.type);
     const validSeverities = ['critical', 'high', 'medium', 'low'];
-    const mappedSeverity = validSeverities.includes(aiResult.severity) ? aiResult.severity : 'medium';
+    const mappedSeverity = validSeverities.includes(aiResult.severity)
+      ? aiResult.severity
+      : 'medium';
 
     await this.ticketsService.update(ticket.id, tenantId, {
       aiSummary: aiResult.summary,
@@ -232,7 +265,13 @@ export class SdkTicketsController {
         hasVideo: !!video,
         videoSize: video?.size,
       },
-      type: mappedType as 'bug' | 'feature_request' | 'question' | 'documentation' | 'performance' | 'security',
+      type: mappedType as
+        | 'bug'
+        | 'feature_request'
+        | 'question'
+        | 'documentation'
+        | 'performance'
+        | 'security',
       severity: mappedSeverity as 'critical' | 'high' | 'medium' | 'low',
     });
 
@@ -255,8 +294,8 @@ export class SdkTicketsController {
       );
 
       try {
-        // Generate storage key: tenantId/ticketId/filename
-        const fileExt = video.originalname.split('.').pop() || 'webm';
+        // Generate storage key using normalized extension from MIME type
+        const fileExt = MIME_TO_EXT[video.mimetype] ?? 'webm';
         const storageKey = `${tenantId}/${ticket.id}/video-${Date.now()}.${fileExt}`;
 
         // Upload to S3/MinIO
@@ -298,9 +337,13 @@ export class SdkTicketsController {
         await this.ticketsAIService.enqueueAnalysis(ticket.id, 2);
 
         // Trigger integration syncs
-        await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, { priority: 2 });
+        await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, {
+          priority: 2,
+        });
       } catch (error) {
-        this.logger.error(`Failed to save video: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        this.logger.error(
+          `Failed to save video: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
         // Don't fail the entire request if video upload fails
       }
     }
@@ -323,16 +366,17 @@ export class SdkTicketsController {
         keywords: aiResult.keywords,
         reproductionSteps: aiResult.reproductionSteps,
       },
-      video: video && mediaRecord
-        ? {
-            received: true,
-            filename: video.originalname,
-            size: video.size,
-            mimeType: video.mimetype,
-            mediaId: mediaRecord.id,
-            storageKey: mediaRecord.storageKey,
-          }
-        : { received: false },
+      video:
+        video && mediaRecord
+          ? {
+              received: true,
+              filename: video.originalname,
+              size: video.size,
+              mimeType: video.mimetype,
+              mediaId: mediaRecord.id,
+              storageKey: mediaRecord.storageKey,
+            }
+          : { received: false },
     };
   }
 }

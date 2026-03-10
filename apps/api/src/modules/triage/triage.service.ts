@@ -5,10 +5,8 @@ import { AIService } from '../../ai/ai.service';
 import { TriageClassificationService } from './triage-classification.service';
 import { TriageRouterService } from './triage-router.service';
 import { TicketsAIService } from '../tickets/tickets-ai.service';
-import {
-  TriageContext,
-  TriageResult,
-} from './interfaces/triage.interfaces';
+import { FeedbackService } from '../feedback/feedback.service';
+import { TriageContext, TriageResult } from './interfaces/triage.interfaces';
 import {
   AgentHandoffContext,
   TriageDecision,
@@ -28,6 +26,7 @@ export class TriageService {
     private readonly classificationService: TriageClassificationService,
     private readonly routerService: TriageRouterService,
     private readonly ticketsAiService: TicketsAIService,
+    private readonly feedbackService: FeedbackService
   ) {}
 
   /**
@@ -38,11 +37,13 @@ export class TriageService {
     ticketId: string,
     tenantId: string,
     applicationId: string,
-    options?: { skipClassification?: boolean; source?: string },
+    options?: { skipClassification?: boolean; source?: string }
   ): Promise<TriageResult> {
     const startTime = Date.now();
 
-    this.logger.log(`Starting triage for ticket ${ticketId} (source: ${options?.source || 'unknown'})`);
+    this.logger.log(
+      `Starting triage for ticket ${ticketId} (source: ${options?.source || 'unknown'})`
+    );
 
     // Record timeline event
     await this.prisma.ticketEvent.create({
@@ -67,20 +68,18 @@ export class TriageService {
         this.logger.log(`Ticket ${ticketId}: already triaged with high confidence, skipping`);
 
         // Still route even if classification is skipped
-        const route = await this.routerService.route(
-          ticketId,
-          tenantId,
-          applicationId,
-          {
-            type: context.ticket.existingType as 'bug' | 'feature_request' | 'question',
-            typeConfidence: context.ticket.existingTypeConfidence!,
-            severity: 'medium',
-            severityConfidence: 0.5,
-            summary: context.ticket.aiSummary || context.ticket.title || '',
-            keywords: context.ticket.keywords,
-            reasoning: 'Pre-existing high-confidence classification',
-          },
-        );
+        const route = await this.routerService.route(ticketId, tenantId, applicationId, {
+          type: context.ticket.existingType as 'bug' | 'feature_request' | 'question',
+          typeConfidence: context.ticket.existingTypeConfidence!,
+          severity: 'medium',
+          severityConfidence: 0.5,
+          summary: context.ticket.aiSummary || context.ticket.title || '',
+          keywords: context.ticket.keywords,
+          reasoning: 'Pre-existing high-confidence classification',
+          isWorkingAsIntended: false,
+          workingAsIntendedConfidence: 0,
+          workingAsIntendedReasoning: 'Skipped — pre-existing classification used',
+        });
 
         await this.recordTriageCompleted(ticketId, tenantId, {
           type: context.ticket.existingType!,
@@ -121,7 +120,7 @@ export class TriageService {
         ticketId,
         tenantId,
         applicationId,
-        classification,
+        classification
       );
 
       // Record timeline event
@@ -140,7 +139,9 @@ export class TriageService {
 
       // Propagate triage decision into AgentHandoffContext on the session
       await this.updateSessionHandoffContext(ticketId, tenantId, {
-        type: (classification.type === 'feature_request' ? 'feature' : classification.type) as TriageType,
+        type: (classification.type === 'feature_request'
+          ? 'feature'
+          : classification.type) as TriageType,
         severity: classification.severity as TriageSeverity,
         confidence: classification.typeConfidence,
         routedTo: this.mapActionToTriageRoute(route.action),
@@ -151,7 +152,7 @@ export class TriageService {
       this.logger.log(
         `Triage complete for ticket ${ticketId}: ` +
           `type=${classification.type} (${classification.typeConfidence}), ` +
-          `routed to ${route.action}`,
+          `routed to ${route.action}`
       );
 
       return {
@@ -162,8 +163,7 @@ export class TriageService {
         duration: Date.now() - startTime,
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown error';
+      const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`Triage failed for ticket ${ticketId}: ${message}`);
 
       await this.prisma.ticketEvent.create({
@@ -207,7 +207,7 @@ export class TriageService {
   private async updateSessionHandoffContext(
     ticketId: string,
     tenantId: string,
-    triageDecision: TriageDecision,
+    triageDecision: TriageDecision
   ): Promise<void> {
     const session = await this.prisma.agentSession.findFirst({
       where: { ticketId, ticket: { tenantId } },
@@ -217,7 +217,7 @@ export class TriageService {
     if (!session) {
       // No session yet — triage may have been triggered before a session was created
       this.logger.debug(
-        `No AgentSession found for ticket ${ticketId} — skipping handoff context update`,
+        `No AgentSession found for ticket ${ticketId} — skipping handoff context update`
       );
       return;
     }
@@ -245,7 +245,7 @@ export class TriageService {
     });
 
     this.logger.log(
-      `Updated AgentHandoffContext for session ${session.id}: triageDecision written`,
+      `Updated AgentHandoffContext for session ${session.id}: triageDecision written`
     );
   }
 
@@ -254,7 +254,7 @@ export class TriageService {
    */
   private async buildTriageContext(
     ticketId: string,
-    tenantId: string,
+    tenantId: string
   ): Promise<TriageContext | null> {
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
@@ -331,7 +331,9 @@ export class TriageService {
     }
 
     // Codebase metadata
-    const githubConfig = ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ?? ticket.application?.githubConfigs?.[0];
+    const githubConfig =
+      ticket.application?.githubConfigs?.find((c: { isPrimary: boolean }) => c.isPrimary) ??
+      ticket.application?.githubConfigs?.[0];
     let hasIndexedCodebase = false;
 
     if (githubConfig) {
@@ -345,6 +347,18 @@ export class TriageService {
     // Find similar tickets via embedding (if available)
     const similarTickets = await this.findSimilarTickets(ticket, tenantId);
 
+    // Fetch human corrections for similar tickets — used as classification signals
+    const similarTicketIds = similarTickets.map(t => t.id);
+    const feedbackRecords = await this.feedbackService.findByTicketIds(similarTicketIds);
+    const feedbackCorrections = feedbackRecords.map(fb => ({
+      ticketId: fb.ticketId,
+      ticketTitle: similarTickets.find(t => t.id === fb.ticketId)?.title ?? null,
+      field: fb.field,
+      originalValue: fb.originalValue,
+      correctedValue: fb.correctedValue,
+      reason: null,
+    }));
+
     return {
       ticket: {
         id: ticket.id,
@@ -352,9 +366,7 @@ export class TriageService {
         description: ticket.description,
         aiSummary: ticket.aiSummary,
         existingType: ticket.type,
-        existingTypeConfidence: ticket.typeConfidence
-          ? Number(ticket.typeConfidence)
-          : null,
+        existingTypeConfidence: ticket.typeConfidence ? Number(ticket.typeConfidence) : null,
         keywords: ticket.keywords,
       },
       userContext,
@@ -362,11 +374,10 @@ export class TriageService {
       codebaseMetadata: {
         hasIndexedCodebase,
         hasGithubConfig: !!githubConfig,
-        repoName: githubConfig
-          ? `${githubConfig.owner}/${githubConfig.repo}`
-          : null,
+        repoName: githubConfig ? `${githubConfig.owner}/${githubConfig.repo}` : null,
       },
       similarTickets,
+      feedbackCorrections,
     };
   }
 
@@ -376,7 +387,7 @@ export class TriageService {
    */
   private async findSimilarTickets(
     ticket: { id: string; title: string | null; description: string | null; tenantId: string },
-    tenantId: string,
+    tenantId: string
   ): Promise<TriageContext['similarTickets']> {
     try {
       return await this.ticketsAiService.findSimilar(ticket.id, tenantId, 5);
@@ -399,7 +410,7 @@ export class TriageService {
   private async recordTriageCompleted(
     ticketId: string,
     tenantId: string,
-    data: Record<string, unknown>,
+    data: Record<string, unknown>
   ): Promise<void> {
     await this.prisma.ticketEvent.create({
       data: {

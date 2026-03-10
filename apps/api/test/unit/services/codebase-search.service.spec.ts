@@ -11,6 +11,7 @@ describe('CodebaseSearchService', () => {
   const mockPrismaService = {
     $queryRaw: jest.fn(),
     ticket: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
     },
     codebaseIndexStatus: {
@@ -128,7 +129,9 @@ describe('CodebaseSearchService', () => {
   });
 
   describe('findRelevantForTicket', () => {
-    it('should search using ticket content when codebase is indexed', async () => {
+    const tenantId = 'tenant-abc';
+
+    it('should search using ticket content when codebase is indexed (same tenant)', async () => {
       const ticketId = 'ticket-123';
       const ticket = {
         applicationId: 'app-123',
@@ -152,18 +155,53 @@ describe('CodebaseSearchService', () => {
         },
       ];
 
-      mockPrismaService.ticket.findUnique.mockResolvedValue(ticket);
+      mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
       mockPrismaService.codebaseIndexStatus.findUnique.mockResolvedValue(indexStatus);
       mockAIService.generateEmbedding.mockResolvedValue(embedding);
       mockPrismaService.$queryRaw.mockResolvedValue(dbResults);
 
-      const results = await service.findRelevantForTicket(ticketId, 10);
+      const results = await service.findRelevantForTicket(ticketId, tenantId, 10);
 
       expect(results).toHaveLength(1);
       expect(results[0].filePath).toBe('src/auth/auth.service.ts');
       expect(aiService.generateEmbedding).toHaveBeenCalledWith(
-        'Login fails with JWT Users cannot login Authentication issue with JWT tokens',
+        'Login fails with JWT Users cannot login Authentication issue with JWT tokens'
       );
+    });
+
+    it('should pass tenantId in the WHERE clause to Prisma', async () => {
+      mockPrismaService.ticket.findFirst.mockResolvedValue(null);
+
+      await service.findRelevantForTicket('ticket-123', tenantId, 10);
+
+      expect(prisma.ticket.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: 'ticket-123', tenantId }),
+        })
+      );
+    });
+
+    it('should return empty array for cross-tenant ticket ID (wrong tenant)', async () => {
+      // findFirst returns null when tenantId does not match — simulating cross-tenant attempt
+      mockPrismaService.ticket.findFirst.mockResolvedValue(null);
+
+      const results = await service.findRelevantForTicket(
+        'ticket-other-tenant',
+        'tenant-attacker',
+        10
+      );
+
+      expect(results).toEqual([]);
+      expect(prisma.codebaseIndexStatus.findUnique).not.toHaveBeenCalled();
+      expect(aiService.generateEmbedding).not.toHaveBeenCalled();
+    });
+
+    it('should return empty array for non-existent ticket ID', async () => {
+      mockPrismaService.ticket.findFirst.mockResolvedValue(null);
+
+      const results = await service.findRelevantForTicket('non-existent', tenantId, 10);
+
+      expect(results).toEqual([]);
     });
 
     it('should return empty array when ticket has no application', async () => {
@@ -173,20 +211,12 @@ describe('CodebaseSearchService', () => {
         title: 'Test ticket',
       };
 
-      mockPrismaService.ticket.findUnique.mockResolvedValue(ticket);
+      mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
 
-      const results = await service.findRelevantForTicket(ticketId, 10);
+      const results = await service.findRelevantForTicket(ticketId, tenantId, 10);
 
       expect(results).toEqual([]);
       expect(prisma.codebaseIndexStatus.findUnique).not.toHaveBeenCalled();
-    });
-
-    it('should return empty array when ticket not found', async () => {
-      mockPrismaService.ticket.findUnique.mockResolvedValue(null);
-
-      const results = await service.findRelevantForTicket('non-existent', 10);
-
-      expect(results).toEqual([]);
     });
 
     it('should return empty array when codebase not indexed', async () => {
@@ -197,15 +227,15 @@ describe('CodebaseSearchService', () => {
         description: 'Desc',
       };
 
-      mockPrismaService.ticket.findUnique.mockResolvedValue(ticket);
+      mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
       mockPrismaService.codebaseIndexStatus.findUnique.mockResolvedValue(null);
 
-      const results = await service.findRelevantForTicket(ticketId, 10);
+      const results = await service.findRelevantForTicket(ticketId, tenantId, 10);
 
       expect(results).toEqual([]);
     });
 
-    it('should return empty array when codebase status is not indexed', async () => {
+    it('should return empty array when codebase status is not "indexed"', async () => {
       const ticketId = 'ticket-999';
       const ticket = {
         applicationId: 'app-999',
@@ -216,10 +246,10 @@ describe('CodebaseSearchService', () => {
         status: 'indexing',
       };
 
-      mockPrismaService.ticket.findUnique.mockResolvedValue(ticket);
+      mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
       mockPrismaService.codebaseIndexStatus.findUnique.mockResolvedValue(indexStatus);
 
-      const results = await service.findRelevantForTicket(ticketId, 10);
+      const results = await service.findRelevantForTicket(ticketId, tenantId, 10);
 
       expect(results).toEqual([]);
     });
@@ -237,12 +267,39 @@ describe('CodebaseSearchService', () => {
         status: 'indexed',
       };
 
-      mockPrismaService.ticket.findUnique.mockResolvedValue(ticket);
+      mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
       mockPrismaService.codebaseIndexStatus.findUnique.mockResolvedValue(indexStatus);
 
-      const results = await service.findRelevantForTicket(ticketId, 10);
+      const results = await service.findRelevantForTicket(ticketId, tenantId, 10);
 
       expect(results).toEqual([]);
+    });
+
+    it('should not expose results to a different tenant even when ticket exists', async () => {
+      // Tenant A owns the ticket; Tenant B attempts to access it.
+      // Prisma findFirst with tenantId = tenant-B should return null.
+      mockPrismaService.ticket.findFirst.mockImplementation(
+        ({ where }: { where: { id: string; tenantId: string } }) => {
+          // Only return ticket when the tenantId matches the owner
+          if (where.tenantId === 'tenant-A') {
+            return Promise.resolve({
+              applicationId: 'app-A',
+              title: 'Real ticket',
+              description: 'desc',
+              aiSummary: null,
+            });
+          }
+          return Promise.resolve(null);
+        }
+      );
+
+      const resultsForOwner = await service.findRelevantForTicket('ticket-123', 'tenant-A', 10);
+      const resultsForAttacker = await service.findRelevantForTicket('ticket-123', 'tenant-B', 10);
+
+      // Owner lookup proceeds to the next stage (codebaseIndexStatus not mocked here → returns [])
+      expect(resultsForAttacker).toEqual([]);
+      // The attacker call must NOT hit codebaseIndexStatus at all
+      expect(prisma.codebaseIndexStatus.findUnique).toHaveBeenCalledTimes(1);
     });
   });
 });
