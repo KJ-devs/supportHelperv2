@@ -30,6 +30,7 @@ model Tenant {
   githubInstallations     GithubInstallation[]
   integrations            Integration[]
   aiConfig                AiConfig?
+  aiPromptConfig          AiPromptConfig?
   tenantQuota             TenantQuota?
   codebaseEmbeddings      CodebaseEmbedding[]
   agentTasks              AgentTask[]
@@ -416,6 +417,35 @@ model AiConfig {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@map("ai_configs")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AI PROMPT CONFIGURATION (per-tenant custom AI instructions)
+// ═══════════════════════════════════════════════════════════════════════
+
+model AiPromptConfig {
+  id                   String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  tenantId             String   @unique @map("tenant_id") @db.Uuid
+
+  // Product context — injected into ALL AI prompts
+  productDescription   String?  @map("product_description") @db.Text
+
+  // Global custom instructions (applies to all AI features)
+  globalInstructions   String?  @map("global_instructions") @db.Text
+
+  // Per-feature custom instructions (extend/override defaults)
+  triageInstructions   String?  @map("triage_instructions") @db.Text
+  analysisInstructions String?  @map("analysis_instructions") @db.Text
+
+  // Behavior preferences
+  responseLanguage     String?  @map("response_language") @db.VarChar(10)
+
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("ai_prompt_configs")
 }
 
 // ═══════════════════════════════════════════════════════════════════════

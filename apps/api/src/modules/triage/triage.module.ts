@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
+import { AiConfigModule } from '../ai-config/ai-config.module';
 import { TicketsModule } from '../tickets/tickets.module';
 import { FeedbackModule } from '../feedback/feedback.module';
 import { TriageService } from './triage.service';
@@ -13,6 +14,7 @@ import { TriageController } from './triage.controller';
   imports: [
     PrismaModule,
     AIModule,
+    AiConfigModule,
     forwardRef(() => TicketsModule),
     FeedbackModule,
     BullModule.registerQueue({

@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common'
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma/prisma.service';
 import { sanitizeForPrompt } from '../../common/utils/prompt-sanitizer';
+import { AiPromptConfigService } from '../ai-config/ai-prompt-config.service';
 import { CodeInvestigationService } from './code-investigation.service';
 import { AgenticLoopService, AgenticLoopOptions, AgenticLoopResult } from './agentic-loop.service';
 import { AgentMessage } from '../../ai/providers/tool-capable-provider.interface';
@@ -52,6 +53,7 @@ export class DeepAnalysisService {
     private readonly codeInvestigation: CodeInvestigationService,
     private readonly agenticLoop: AgenticLoopService,
     private readonly diagnosisService: DiagnosisService,
+    private readonly aiPromptConfigService: AiPromptConfigService,
     private readonly eventEmitter: EventEmitter2,
     @Optional() private readonly ticketsGateway: TicketsGateway,
     @Optional() private readonly ticketsAiService: TicketsAIService
@@ -154,6 +156,13 @@ export class DeepAnalysisService {
         systemPrompt += `\nSimilar ticket IDs (check their diagnosis for context): ${n1Context.similarTicketIds.join(', ')}`;
       }
     }
+
+    // Append tenant custom AI instructions
+    const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
+      tenantId,
+      'analysis',
+    );
+    systemPrompt += customInstructions;
 
     const safeTitle = sanitizeForPrompt(ticket.title, { maxLength: 500, fieldName: 'title' });
     const safeDescription = sanitizeForPrompt(ticket.description, {
@@ -360,6 +369,13 @@ Start by identifying which parts of the codebase are likely involved, then read 
     if (existingDiagnosis) {
       systemPrompt += `\n\n## Current Diagnosis\n${JSON.stringify(existingDiagnosis, null, 2)}`;
     }
+
+    // Append tenant custom AI instructions
+    const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
+      tenantId,
+      'analysis',
+    );
+    systemPrompt += customInstructions;
 
     // Rebuild conversation history from persisted messages
     const storedMessages = session.anthropicMessages as AgentMessage[] | null;

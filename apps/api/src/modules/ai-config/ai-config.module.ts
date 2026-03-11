@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AiConfigController } from './ai-config.controller';
 import { AiConfigService } from './ai-config.service';
+import { AiPromptConfigService } from './ai-prompt-config.service';
 import { AnthropicClientFactory } from './anthropic-client.factory';
 import { ToolCapableProviderFactory } from './tool-capable-provider.factory';
 import { AIProviderFactory } from '../../ai/providers/ai-provider.factory';
@@ -15,6 +16,7 @@ import { AIModule } from '../../ai/ai.module';
   controllers: [AiConfigController],
   providers: [
     AiConfigService,
+    AiPromptConfigService,
     AnthropicClientFactory,
     ToolCapableProviderFactory,
     AIProviderFactory,
@@ -24,6 +26,7 @@ import { AIModule } from '../../ai/ai.module';
   ],
   exports: [
     AiConfigService,
+    AiPromptConfigService,
     AnthropicClientFactory,
     ToolCapableProviderFactory,
     QuotaService,

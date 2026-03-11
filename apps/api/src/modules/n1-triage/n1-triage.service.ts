@@ -3,6 +3,8 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
+import { AiPromptConfigService } from '../ai-config/ai-prompt-config.service';
+import { sanitizeForPrompt } from '../../common/utils/prompt-sanitizer';
 import { TicketRelationsService } from '../ticket-relations/ticket-relations.service';
 
 interface N1Assessment {
@@ -115,6 +117,7 @@ export class N1TriageService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiService: AIService,
+    private readonly aiPromptConfigService: AiPromptConfigService,
     private readonly ticketRelationsService: TicketRelationsService,
     @InjectQueue('deep-analysis') private readonly deepAnalysisQueue: Queue
   ) {}
@@ -139,7 +142,7 @@ export class N1TriageService {
       context.similarTickets = similarTickets;
 
       // Step 3: Run AI assessment
-      const assessment = await this.runAssessment(context);
+      const assessment = await this.runAssessment(context, tenantId);
 
       // Step 4: Execute decision
       await this.executeDecision(ticketId, tenantId, applicationId, assessment);
@@ -329,9 +332,9 @@ export class N1TriageService {
   /**
    * Run AI assessment — single call, no agentic loop.
    */
-  private async runAssessment(context: N1Context): Promise<N1Assessment> {
+  private async runAssessment(context: N1Context, tenantId: string): Promise<N1Assessment> {
     const prompt = this.buildN1Prompt(context);
-    const provider = await this.aiService.getActiveProvider(context.ticket.id);
+    const provider = await this.aiService.getActiveProvider(tenantId);
 
     if (!provider) {
       this.logger.warn('No AI provider — defaulting to escalate_n2');
@@ -345,11 +348,17 @@ export class N1TriageService {
     }
 
     try {
+      const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
+        tenantId,
+        'n1_triage'
+      );
+      const systemPrompt = N1_SYSTEM_PROMPT + customInstructions;
+
       const result = await provider.generateStructuredOutput<N1Assessment>(
         prompt,
         N1_OUTPUT_SCHEMA,
         {
-          systemPrompt: N1_SYSTEM_PROMPT,
+          systemPrompt,
           temperature: 0.1,
           maxTokens: 1024,
         }
@@ -371,12 +380,25 @@ export class N1TriageService {
   private buildN1Prompt(context: N1Context): string {
     const parts: string[] = [];
 
+    const safeTitle = sanitizeForPrompt(context.ticket.title, {
+      maxLength: 500,
+      fieldName: 'title',
+    });
+    const safeDescription = sanitizeForPrompt(context.ticket.description, {
+      maxLength: 10_000,
+      fieldName: 'description',
+    });
+
     parts.push('## TICKET');
-    parts.push(`Title: ${context.ticket.title || 'No title'}`);
-    parts.push(`Description: ${context.ticket.description || 'No description'}`);
+    parts.push(`Title: ${safeTitle || 'No title'}`);
+    parts.push(`Description: ${safeDescription || 'No description'}`);
 
     if (context.ticket.aiSummary) {
-      parts.push(`AI Video Summary: ${context.ticket.aiSummary}`);
+      const safeAiSummary = sanitizeForPrompt(context.ticket.aiSummary, {
+        maxLength: 2000,
+        fieldName: 'ai_summary',
+      });
+      parts.push(`AI Video Summary: ${safeAiSummary}`);
     }
 
     parts.push(

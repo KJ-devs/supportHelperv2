@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AIService } from '../../ai/ai.service';
+import { AiPromptConfigService } from '../ai-config/ai-prompt-config.service';
 import { TriageContext, TriageClassification } from './interfaces/triage.interfaces';
 import { sanitizeForPrompt } from '../../common/utils/prompt-sanitizer';
 
@@ -110,7 +111,10 @@ export const TRIAGE_OUTPUT_SCHEMA = {
 export class TriageClassificationService {
   private readonly logger = new Logger(TriageClassificationService.name);
 
-  constructor(private readonly aiService: AIService) {}
+  constructor(
+    private readonly aiService: AIService,
+    private readonly aiPromptConfigService: AiPromptConfigService
+  ) {}
 
   /**
    * Classify a ticket using AI structured output.
@@ -126,11 +130,18 @@ export class TriageClassificationService {
     }
 
     try {
+      // Append tenant custom instructions to system prompt
+      const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
+        tenantId,
+        'triage'
+      );
+      const systemPrompt = TRIAGE_SYSTEM_PROMPT + customInstructions;
+
       const result = await provider.generateStructuredOutput<TriageClassification>(
         prompt,
         TRIAGE_OUTPUT_SCHEMA,
         {
-          systemPrompt: TRIAGE_SYSTEM_PROMPT,
+          systemPrompt,
           temperature: 0.1,
           maxTokens: 1024,
         }
@@ -164,7 +175,11 @@ export class TriageClassificationService {
     parts.push(`Description: ${description || 'No description'}`);
 
     if (ctx.ticket.aiSummary) {
-      parts.push(`\nAI Summary: ${ctx.ticket.aiSummary}`);
+      const safeAiSummary = sanitizeForPrompt(ctx.ticket.aiSummary, {
+        maxLength: 2000,
+        fieldName: 'ai_summary',
+      });
+      parts.push(`\nAI Summary: ${safeAiSummary}`);
     }
 
     if (ctx.userContext) {

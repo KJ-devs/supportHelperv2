@@ -10,6 +10,7 @@ import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CodeInvestigationService } from '../../../src/modules/agent-v2/code-investigation.service';
 import { AgenticLoopService } from '../../../src/modules/agent-v2/agentic-loop.service';
 import { DiagnosisService, Diagnosis } from '../../../src/modules/agent-v2/diagnosis.service';
+import { AiPromptConfigService } from '../../../src/modules/ai-config/ai-prompt-config.service';
 import type { Octokit } from '@octokit/rest';
 
 describe('DeepAnalysisService', () => {
@@ -113,6 +114,10 @@ describe('DeepAnalysisService', () => {
         { provide: CodeInvestigationService, useValue: mockCodeInvestigation },
         { provide: AgenticLoopService, useValue: mockAgenticLoop },
         { provide: DiagnosisService, useValue: mockDiagnosisService },
+        {
+          provide: AiPromptConfigService,
+          useValue: { buildCustomInstructions: jest.fn().mockResolvedValue('') },
+        },
         { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();

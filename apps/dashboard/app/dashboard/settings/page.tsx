@@ -24,6 +24,7 @@ import {
   Shield,
   BarChart3,
   TrendingUp,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -162,6 +163,7 @@ export default function SettingsPage() {
     { href: '/dashboard/settings/billing', label: t('pages.billing'), icon: CreditCard },
     { href: '/dashboard/settings/license', label: t('pages.license'), icon: Key },
     { href: '/dashboard/settings/ai', label: t('pages.ai'), icon: Bot },
+    { href: '/dashboard/settings/ai-behavior', label: t('pages.aiBehavior'), icon: SlidersHorizontal },
     { href: '/dashboard/settings/ai-usage', label: t('pages.aiUsage'), icon: TrendingUp },
     { href: '/dashboard/settings/github', label: t('pages.github'), icon: Github },
     { href: '/dashboard/settings/auth/sso', label: t('pages.sso'), icon: Shield },

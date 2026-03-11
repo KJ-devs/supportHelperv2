@@ -5,6 +5,7 @@ import {
   TRIAGE_OUTPUT_SCHEMA,
 } from '../../../src/modules/triage/triage-classification.service';
 import { AIService } from '../../../src/ai/ai.service';
+import { AiPromptConfigService } from '../../../src/modules/ai-config/ai-prompt-config.service';
 import {
   TriageContext,
   TriageClassification,
@@ -72,7 +73,14 @@ describe('TriageClassificationService', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [TriageClassificationService, { provide: AIService, useValue: mockAiService }],
+      providers: [
+        TriageClassificationService,
+        { provide: AIService, useValue: mockAiService },
+        {
+          provide: AiPromptConfigService,
+          useValue: { buildCustomInstructions: jest.fn().mockResolvedValue('') },
+        },
+      ],
     }).compile();
 
     service = module.get(TriageClassificationService);
