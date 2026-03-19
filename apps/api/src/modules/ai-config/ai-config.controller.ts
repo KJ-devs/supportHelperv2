@@ -92,6 +92,7 @@ export class AiConfigController {
         productDescription: null,
         globalInstructions: null,
         triageInstructions: null,
+        n1Instructions: null,
         analysisInstructions: null,
         responseLanguage: null,
       };
@@ -100,6 +101,7 @@ export class AiConfigController {
       config.productDescription ||
       config.globalInstructions ||
       config.triageInstructions ||
+      config.n1Instructions ||
       config.analysisInstructions ||
       config.responseLanguage
     );
@@ -123,6 +125,7 @@ export class AiConfigController {
       config.productDescription ||
       config.globalInstructions ||
       config.triageInstructions ||
+      config.n1Instructions ||
       config.analysisInstructions ||
       config.responseLanguage
     );

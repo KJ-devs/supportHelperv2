@@ -435,6 +435,7 @@ model AiPromptConfig {
 
   // Per-feature custom instructions (extend/override defaults)
   triageInstructions   String?  @map("triage_instructions") @db.Text
+  n1Instructions       String?  @map("n1_instructions") @db.Text
   analysisInstructions String?  @map("analysis_instructions") @db.Text
 
   // Behavior preferences

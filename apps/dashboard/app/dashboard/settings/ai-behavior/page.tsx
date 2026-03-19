@@ -31,6 +31,7 @@ interface FormState {
   productDescription: string;
   globalInstructions: string;
   triageInstructions: string;
+  n1Instructions: string;
   analysisInstructions: string;
   responseLanguage: string;
 }
@@ -112,6 +113,7 @@ export default function AiBehaviorPage() {
     productDescription: '',
     globalInstructions: '',
     triageInstructions: '',
+    n1Instructions: '',
     analysisInstructions: '',
     responseLanguage: '',
   });
@@ -132,6 +134,7 @@ export default function AiBehaviorPage() {
           productDescription: data.productDescription ?? '',
           globalInstructions: data.globalInstructions ?? '',
           triageInstructions: data.triageInstructions ?? '',
+          n1Instructions: data.n1Instructions ?? '',
           analysisInstructions: data.analysisInstructions ?? '',
           responseLanguage: data.responseLanguage ?? '',
         };
@@ -167,6 +170,7 @@ export default function AiBehaviorPage() {
         productDescription: form.productDescription,
         globalInstructions: form.globalInstructions,
         triageInstructions: form.triageInstructions,
+        n1Instructions: form.n1Instructions,
         analysisInstructions: form.analysisInstructions,
         responseLanguage: form.responseLanguage,
       });
@@ -301,6 +305,22 @@ export default function AiBehaviorPage() {
               placeholder={t('triageInstructionsPlaceholder')}
               value={form.triageInstructions}
               onChange={setField('triageInstructions')}
+              disabled={saving}
+            />
+          </Card>
+
+          {/* N1 Assessment Instructions */}
+          <Card>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
+              {t('n1InstructionsTitle')}
+            </h2>
+            <TextareaField
+              id={`${formId}-n1`}
+              label={t('n1InstructionsLabel')}
+              helperText={t('n1InstructionsHelper')}
+              placeholder={t('n1InstructionsPlaceholder')}
+              value={form.n1Instructions}
+              onChange={setField('n1Instructions')}
               disabled={saving}
             />
           </Card>

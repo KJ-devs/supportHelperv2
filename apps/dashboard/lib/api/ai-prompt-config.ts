@@ -5,6 +5,7 @@ export interface AiPromptConfigResponse {
   productDescription: string | null;
   globalInstructions: string | null;
   triageInstructions: string | null;
+  n1Instructions: string | null;
   analysisInstructions: string | null;
   responseLanguage: string | null;
 }
@@ -13,6 +14,7 @@ export interface AiPromptConfigUpdate {
   productDescription?: string;
   globalInstructions?: string;
   triageInstructions?: string;
+  n1Instructions?: string;
   analysisInstructions?: string;
   responseLanguage?: string;
 }

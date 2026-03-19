@@ -9,6 +9,7 @@ export interface PromptCustomization {
   productDescription: string | null;
   globalInstructions: string | null;
   triageInstructions: string | null;
+  n1Instructions: string | null;
   analysisInstructions: string | null;
   responseLanguage: string | null;
 }
@@ -65,6 +66,9 @@ export class AiPromptConfigService {
       }),
       ...(dto.triageInstructions !== undefined && {
         triageInstructions: dto.triageInstructions?.trim() || null,
+      }),
+      ...(dto.n1Instructions !== undefined && {
+        n1Instructions: dto.n1Instructions?.trim() || null,
       }),
       ...(dto.analysisInstructions !== undefined && {
         analysisInstructions: dto.analysisInstructions?.trim() || null,
@@ -189,8 +193,9 @@ export class AiPromptConfigService {
   private getFeatureInstructions(config: AiPromptConfig, feature: AiFeature): string | null {
     switch (feature) {
       case 'triage':
-      case 'n1_triage':
         return config.triageInstructions;
+      case 'n1_triage':
+        return config.n1Instructions;
       case 'analysis':
         return config.analysisInstructions;
     }
