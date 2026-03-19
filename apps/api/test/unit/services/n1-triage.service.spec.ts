@@ -76,6 +76,9 @@ const mockAiService = {
 
 const mockAiPromptConfigService = {
   buildCustomInstructions: jest.fn().mockResolvedValue(''),
+  getFeatureFlags: jest
+    .fn()
+    .mockResolvedValue({ enableTriage: true, enableN1: true, enableN2: true }),
 };
 
 const mockTicketRelationsService = {

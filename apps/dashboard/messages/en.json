@@ -1926,6 +1926,14 @@
     "configuredBadge": "Customized",
     "notConfiguredBadge": "Default",
     "notConfiguredDetail": "AI will use default behavior until you save at least a product description.",
-    "permissionError": "Only owners and admins can modify AI behavior settings."
+    "permissionError": "Only owners and admins can modify AI behavior settings.",
+    "pipelineFeaturesTitle": "AI Pipeline Features",
+    "pipelineFeaturesDescription": "Enable or disable individual stages of the AI processing pipeline. Disabled stages are skipped and tickets proceed to manual review.",
+    "enableTriageLabel": "Automatic Classification",
+    "enableTriageDescription": "AI classifies tickets as bug/feature/question and assigns severity",
+    "enableN1Label": "Smart Pre-triage",
+    "enableN1Description": "AI evaluates if a bug needs deep investigation or can be resolved directly",
+    "enableN2Label": "Autonomous Investigation",
+    "enableN2Description": "AI agent investigates source code and proposes fixes"
   }
 }

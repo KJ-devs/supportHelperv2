@@ -1926,6 +1926,14 @@
     "configuredBadge": "Personnalis\u00e9",
     "notConfiguredBadge": "Par d\u00e9faut",
     "notConfiguredDetail": "L'IA utilisera le comportement par d\u00e9faut tant que vous n'aurez pas enregistr\u00e9 au moins une description de produit.",
-    "permissionError": "Seuls les propri\u00e9taires et administrateurs peuvent modifier les param\u00e8tres de comportement IA."
+    "permissionError": "Seuls les propri\u00e9taires et administrateurs peuvent modifier les param\u00e8tres de comportement IA.",
+    "pipelineFeaturesTitle": "Fonctionnalités de la pipeline IA",
+    "pipelineFeaturesDescription": "Activez ou désactivez les étapes individuelles de la pipeline de traitement IA. Les étapes désactivées sont ignorées et les tickets passent en revue manuelle.",
+    "enableTriageLabel": "Classification automatique",
+    "enableTriageDescription": "L'IA classifie les tickets en bug/feature/question et attribue une sévérité",
+    "enableN1Label": "Pré-triage intelligent",
+    "enableN1Description": "L'IA évalue si un bug nécessite une investigation approfondie",
+    "enableN2Label": "Investigation autonome",
+    "enableN2Description": "L'agent IA investigue le code source et propose des correctifs"
   }
 }

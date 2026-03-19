@@ -441,6 +441,11 @@ model AiPromptConfig {
   // Behavior preferences
   responseLanguage     String?  @map("response_language") @db.VarChar(10)
 
+  // Feature flags — enable/disable individual AI pipeline stages
+  enableTriage         Boolean  @default(true) @map("enable_triage")
+  enableN1             Boolean  @default(true) @map("enable_n1")
+  enableN2             Boolean  @default(true) @map("enable_n2")
+
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 

@@ -8,6 +8,9 @@ export interface AiPromptConfigResponse {
   n1Instructions: string | null;
   analysisInstructions: string | null;
   responseLanguage: string | null;
+  enableTriage?: boolean;
+  enableN1?: boolean;
+  enableN2?: boolean;
 }
 
 export interface AiPromptConfigUpdate {
@@ -17,6 +20,9 @@ export interface AiPromptConfigUpdate {
   n1Instructions?: string;
   analysisInstructions?: string;
   responseLanguage?: string;
+  enableTriage?: boolean;
+  enableN1?: boolean;
+  enableN2?: boolean;
 }
 
 export const aiPromptConfigApi = {

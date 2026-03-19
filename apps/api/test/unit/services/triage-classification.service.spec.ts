@@ -78,7 +78,12 @@ describe('TriageClassificationService', () => {
         { provide: AIService, useValue: mockAiService },
         {
           provide: AiPromptConfigService,
-          useValue: { buildCustomInstructions: jest.fn().mockResolvedValue('') },
+          useValue: {
+            buildCustomInstructions: jest.fn().mockResolvedValue(''),
+            getFeatureFlags: jest
+              .fn()
+              .mockResolvedValue({ enableTriage: true, enableN1: true, enableN2: true }),
+          },
         },
       ],
     }).compile();

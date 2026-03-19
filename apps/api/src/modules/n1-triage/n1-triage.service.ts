@@ -167,6 +167,26 @@ export class N1TriageService {
     this.logger.log(`N1 assessment starting for ticket ${ticketId}`);
 
     try {
+      // Check feature flags before running any AI
+      const flags = await this.aiPromptConfigService.getFeatureFlags(tenantId);
+      if (!flags.enableN1) {
+        this.logger.log('N1 triage AI disabled for tenant, escalating to N2');
+        await this.executeDecision(
+          ticketId,
+          tenantId,
+          applicationId,
+          {
+            decision: 'escalate_n2',
+            confidence: 0.0,
+            reasoning: 'N1 triage AI is disabled for this tenant',
+            userResponse: 'Your bug report is being reviewed by our engineering team.',
+            escalationContext: 'N1 AI disabled — forwarded to N2 or manual review',
+          },
+          flags
+        );
+        return { success: true, decision: 'escalate_n2' };
+      }
+
       // Step 1: Build N1 context
       const context = await this.buildN1Context(ticketId, tenantId);
       if (!context) {
@@ -181,7 +201,7 @@ export class N1TriageService {
       const assessment = await this.runAssessment(context, tenantId);
 
       // Step 4: Execute decision
-      await this.executeDecision(ticketId, tenantId, applicationId, assessment);
+      await this.executeDecision(ticketId, tenantId, applicationId, assessment, flags);
 
       const duration = Date.now() - startTime;
       this.logger.log(
@@ -571,7 +591,8 @@ export class N1TriageService {
     ticketId: string,
     tenantId: string,
     applicationId: string,
-    assessment: N1Assessment
+    assessment: N1Assessment,
+    flags?: { enableN2: boolean }
   ): Promise<void> {
     // Save N1 assessment on ticket
     await this.prisma.ticket.update({
@@ -628,30 +649,40 @@ export class N1TriageService {
         break;
 
       case 'escalate_n2':
-        await this.deepAnalysisQueue.add(
-          'analyze',
-          {
-            ticketId,
-            tenantId,
-            applicationId,
-            n1Context: {
-              reasoning: assessment.escalationContext || assessment.reasoning,
-              investigationHints: assessment.investigationHints,
-              similarTicketIds: assessment.similarTicketIds,
+        if (flags?.enableN2 === false) {
+          this.logger.log(
+            `N2 deep analysis disabled for tenant, ticket ${ticketId} awaits manual review`
+          );
+          await this.prisma.ticket.update({
+            where: { id: ticketId },
+            data: { status: 'triaged' },
+          });
+        } else {
+          await this.deepAnalysisQueue.add(
+            'analyze',
+            {
+              ticketId,
+              tenantId,
+              applicationId,
+              n1Context: {
+                reasoning: assessment.escalationContext || assessment.reasoning,
+                investigationHints: assessment.investigationHints,
+                similarTicketIds: assessment.similarTicketIds,
+              },
             },
-          },
-          {
-            attempts: 3,
-            backoff: { type: 'exponential', delay: 30000 },
-            removeOnComplete: 50,
-            removeOnFail: 100,
-          }
-        );
-        await this.prisma.ticket.update({
-          where: { id: ticketId },
-          data: { status: 'analyzing' },
-        });
-        this.logger.log(`Ticket ${ticketId}: N1 escalated to N2 deep analysis`);
+            {
+              attempts: 3,
+              backoff: { type: 'exponential', delay: 30000 },
+              removeOnComplete: 50,
+              removeOnFail: 100,
+            }
+          );
+          await this.prisma.ticket.update({
+            where: { id: ticketId },
+            data: { status: 'analyzing' },
+          });
+          this.logger.log(`Ticket ${ticketId}: N1 escalated to N2 deep analysis`);
+        }
         break;
     }
   }

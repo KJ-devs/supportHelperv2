@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, IsIn } from 'class-validator';
+import { IsOptional, IsString, MaxLength, IsIn, IsBoolean } from 'class-validator';
 
 export class UpdateAiPromptConfigDto {
   @ApiPropertyOptional({
@@ -60,4 +60,28 @@ export class UpdateAiPromptConfigDto {
   @IsString()
   @IsIn(['en', 'fr', 'de', 'es', 'it', 'pt', 'nl', 'ja', 'ko', 'zh', 'ar', 'ru'])
   responseLanguage?: string;
+
+  @ApiPropertyOptional({
+    description: 'Enable/disable automatic triage classification (type, severity)',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableTriage?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Enable/disable N1 smart pre-triage assessment',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableN1?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Enable/disable N2 autonomous deep analysis',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  enableN2?: boolean;
 }

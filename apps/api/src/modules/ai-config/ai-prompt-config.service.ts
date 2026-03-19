@@ -14,6 +14,12 @@ export interface PromptCustomization {
   responseLanguage: string | null;
 }
 
+export interface AiFeatureFlags {
+  enableTriage: boolean;
+  enableN1: boolean;
+  enableN2: boolean;
+}
+
 type AiFeature = 'triage' | 'n1_triage' | 'analysis';
 
 const CACHE_TTL_SECONDS = 120;
@@ -74,6 +80,9 @@ export class AiPromptConfigService {
         analysisInstructions: dto.analysisInstructions?.trim() || null,
       }),
       ...(dto.responseLanguage !== undefined && { responseLanguage: dto.responseLanguage || null }),
+      ...(dto.enableTriage !== undefined && { enableTriage: dto.enableTriage }),
+      ...(dto.enableN1 !== undefined && { enableN1: dto.enableN1 }),
+      ...(dto.enableN2 !== undefined && { enableN2: dto.enableN2 }),
     };
 
     const hasContent = Object.values(data).some(v => v !== null && v !== undefined);
@@ -98,6 +107,38 @@ export class AiPromptConfigService {
     await this.cacheService.del(this.cacheKey(tenantId));
 
     return result;
+  }
+
+  /**
+   * Get feature flags for a tenant with 2-minute cache.
+   * Defaults all flags to true if no config exists (no change for existing tenants).
+   */
+  async getFeatureFlags(tenantId: string): Promise<AiFeatureFlags> {
+    try {
+      const key = this.cacheKey(tenantId);
+      const cached = await this.cacheService.get<AiPromptConfig>(key);
+      const config =
+        cached ?? (await this.prisma.aiPromptConfig.findUnique({ where: { tenantId } }));
+
+      if (!config) {
+        return { enableTriage: true, enableN1: true, enableN2: true };
+      }
+
+      if (!cached) {
+        await this.cacheService.set(key, config, CACHE_TTL_SECONDS);
+      }
+
+      return {
+        enableTriage: config.enableTriage ?? true,
+        enableN1: config.enableN1 ?? true,
+        enableN2: config.enableN2 ?? true,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load feature flags for tenant ${tenantId}: ${(error as Error).message}. Defaulting all flags to enabled.`
+      );
+      return { enableTriage: true, enableN1: true, enableN2: true };
+    }
   }
 
   /**

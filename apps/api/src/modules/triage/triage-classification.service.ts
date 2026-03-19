@@ -120,6 +120,13 @@ export class TriageClassificationService {
    * Classify a ticket using AI structured output.
    */
   async classify(context: TriageContext, tenantId: string): Promise<TriageClassification> {
+    const { enableTriage } = await this.aiPromptConfigService.getFeatureFlags(tenantId);
+
+    if (!enableTriage) {
+      this.logger.log('Triage AI disabled for tenant, using defaults');
+      return this.disabledClassification(context);
+    }
+
     const prompt = this.buildTriagePrompt(context);
 
     const provider = await this.aiService.getActiveProvider(tenantId);
@@ -262,6 +269,24 @@ export class TriageClassificationService {
     parts.push('\nClassify this ticket now.');
 
     return parts.join('\n');
+  }
+
+  /**
+   * Default result when triage AI is disabled for the tenant.
+   */
+  private disabledClassification(_ctx: TriageContext): TriageClassification {
+    return {
+      type: 'bug',
+      typeConfidence: 0.0,
+      severity: 'medium',
+      severityConfidence: 0.0,
+      summary: 'Triage AI disabled — manual review required',
+      keywords: [],
+      reasoning: 'Triage AI is disabled for this tenant',
+      isWorkingAsIntended: false,
+      workingAsIntendedConfidence: 0,
+      workingAsIntendedReasoning: 'Triage AI disabled',
+    };
   }
 
   /**

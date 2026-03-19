@@ -34,6 +34,58 @@ interface FormState {
   n1Instructions: string;
   analysisInstructions: string;
   responseLanguage: string;
+  enableTriage: boolean;
+  enableN1: boolean;
+  enableN2: boolean;
+}
+
+interface FeatureFlagRowProps {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+  disabled: boolean;
+}
+
+function FeatureFlagRow({
+  id,
+  label,
+  description,
+  checked,
+  onChange,
+  disabled,
+}: FeatureFlagRowProps) {
+  return (
+    <div className="flex items-start justify-between gap-4 py-3">
+      <div className="flex-1 min-w-0">
+        <label
+          htmlFor={id}
+          className="block text-sm font-medium text-gray-900 dark:text-white cursor-pointer"
+        >
+          {label}
+        </label>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{description}</p>
+      </div>
+      <button
+        id={id}
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+          checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+        }`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+            checked ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
 }
 
 function CharCount({ value, max }: { value: string; max: number }) {
@@ -116,6 +168,9 @@ export default function AiBehaviorPage() {
     n1Instructions: '',
     analysisInstructions: '',
     responseLanguage: '',
+    enableTriage: true,
+    enableN1: true,
+    enableN2: true,
   });
 
   const languageOptions = LANGUAGE_OPTIONS.map(opt => ({
@@ -137,6 +192,9 @@ export default function AiBehaviorPage() {
           n1Instructions: data.n1Instructions ?? '',
           analysisInstructions: data.analysisInstructions ?? '',
           responseLanguage: data.responseLanguage ?? '',
+          enableTriage: data.enableTriage ?? true,
+          enableN1: data.enableN1 ?? true,
+          enableN2: data.enableN2 ?? true,
         };
         setForm(loaded);
         setInitialForm(loaded);
@@ -152,6 +210,10 @@ export default function AiBehaviorPage() {
   }, [authLoading]);
 
   const setField = (field: keyof FormState) => (value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const setFlag = (field: 'enableTriage' | 'enableN1' | 'enableN2') => (value: boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
 
@@ -173,6 +235,9 @@ export default function AiBehaviorPage() {
         n1Instructions: form.n1Instructions,
         analysisInstructions: form.analysisInstructions,
         responseLanguage: form.responseLanguage,
+        enableTriage: form.enableTriage,
+        enableN1: form.enableN1,
+        enableN2: form.enableN2,
       });
       setConfigured(updated.configured);
       setInitialForm({ ...form });
@@ -244,6 +309,42 @@ export default function AiBehaviorPage() {
         </div>
 
         <form onSubmit={handleSave} className="space-y-6">
+          {/* AI Pipeline Features */}
+          <Card>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+              {t('pipelineFeaturesTitle')}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t('pipelineFeaturesDescription')}
+            </p>
+            <div className="divide-y divide-gray-100 dark:divide-gray-700">
+              <FeatureFlagRow
+                id={`${formId}-enableTriage`}
+                label={t('enableTriageLabel')}
+                description={t('enableTriageDescription')}
+                checked={form.enableTriage}
+                onChange={setFlag('enableTriage')}
+                disabled={saving}
+              />
+              <FeatureFlagRow
+                id={`${formId}-enableN1`}
+                label={t('enableN1Label')}
+                description={t('enableN1Description')}
+                checked={form.enableN1}
+                onChange={setFlag('enableN1')}
+                disabled={saving}
+              />
+              <FeatureFlagRow
+                id={`${formId}-enableN2`}
+                label={t('enableN2Label')}
+                description={t('enableN2Description')}
+                checked={form.enableN2}
+                onChange={setFlag('enableN2')}
+                disabled={saving}
+              />
+            </div>
+          </Card>
+
           {/* Product Context */}
           <Card>
             <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-4">
