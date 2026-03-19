@@ -112,6 +112,12 @@ export class TriageService {
           severityConfidence: classification.severityConfidence,
           aiSummary: classification.summary || undefined,
           keywords: classification.keywords,
+          // Store working-as-intended signal for N1 triage consumption
+          aiAnalysis: {
+            workingAsIntendedConfidence: classification.workingAsIntendedConfidence,
+            isWorkingAsIntended: classification.isWorkingAsIntended,
+            workingAsIntendedReasoning: classification.workingAsIntendedReasoning,
+          },
         },
       });
 

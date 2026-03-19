@@ -28,6 +28,8 @@ interface N1Context {
     typeConfidence: unknown;
     severity: string | null;
     keywords: string[];
+    userContext: Record<string, unknown> | null;
+    workingAsIntendedConfidence: number | null;
   };
   ocrTexts: string[];
   visualCues: { errors: string[]; urls: string[]; components: string[] };
@@ -40,6 +42,8 @@ interface N1Context {
     aiSummary: string | null;
     diagnosis: unknown;
     similarity: number;
+    resolvedAt: Date | null;
+    lastAgentMessage: string | null;
   }>;
 }
 
@@ -244,6 +248,16 @@ export class N1TriageService {
       visualCues.components.push(...(cues.components ?? []));
     }
 
+    // Extract workingAsIntendedConfidence from aiAnalysis JSON (stored by triage)
+    const aiAnalysis = ticket.aiAnalysis as Record<string, unknown> | null;
+    const workingAsIntendedConfidence =
+      typeof aiAnalysis?.['workingAsIntendedConfidence'] === 'number'
+        ? (aiAnalysis['workingAsIntendedConfidence'] as number)
+        : null;
+
+    // Extract userContext
+    const userContext = ticket.userContext as Record<string, unknown> | null;
+
     return {
       ticket: {
         id: ticket.id,
@@ -254,6 +268,8 @@ export class N1TriageService {
         typeConfidence: ticket.typeConfidence,
         severity: ticket.severity,
         keywords: ticket.keywords,
+        userContext,
+        workingAsIntendedConfidence,
       },
       ocrTexts,
       visualCues: {
@@ -265,13 +281,17 @@ export class N1TriageService {
     };
   }
 
+  private static readonly SIMILAR_TICKET_LIMIT = 10;
+  private static readonly SIMILARITY_THRESHOLD = 0.6;
+
   /**
    * Find similar tickets using pgvector cosine similarity, with keyword fallback.
+   * Returns up to 10 tickets with similarity > 0.6, enriched with resolution data.
    */
   private async findSimilarTickets(
     ticketId: string,
     tenantId: string,
-    limit: number = 5
+    limit: number = N1TriageService.SIMILAR_TICKET_LIMIT
   ): Promise<N1Context['similarTickets']> {
     try {
       const similar = await this.prisma.$queryRaw<
@@ -284,35 +304,61 @@ export class N1TriageService {
           ai_summary: string | null;
           diagnosis: unknown;
           similarity: number;
+          resolved_at: Date | null;
+          updated_at: Date;
+          last_agent_message: string | null;
         }>
       >`
         WITH ref AS (
           SELECT embedding FROM tickets WHERE id = ${ticketId} LIMIT 1
+        ),
+        similar_base AS (
+          SELECT
+            t.id, t.title, t.status, t.type, t.severity,
+            t.ai_summary, t.diagnosis,
+            t.resolved_at, t.updated_at,
+            1 - (t.embedding <-> ref.embedding) as similarity
+          FROM tickets t, ref
+          WHERE
+            t."tenantId" = ${tenantId}
+            AND t.id != ${ticketId}
+            AND t.embedding IS NOT NULL
+            AND t.status IN ('resolved', 'closed', 'analyzed', 'fix_proposed', 'merged')
+          ORDER BY t.embedding <-> ref.embedding
+          LIMIT ${limit}
+        ),
+        with_agent_message AS (
+          SELECT
+            sb.*,
+            (
+              SELECT am.content
+              FROM agent_sessions s
+              JOIN agent_messages am ON am.session_id = s.id
+              WHERE s.ticket_id = sb.id
+                AND am.role IN ('assistant', 'system')
+              ORDER BY am.created_at DESC
+              LIMIT 1
+            ) as last_agent_message
+          FROM similar_base sb
         )
-        SELECT
-          t.id, t.title, t.status, t.type, t.severity,
-          t.ai_summary, t.diagnosis,
-          1 - (t.embedding <-> ref.embedding) as similarity
-        FROM tickets t, ref
-        WHERE
-          t."tenantId" = ${tenantId}
-          AND t.id != ${ticketId}
-          AND t.embedding IS NOT NULL
-          AND t.status IN ('resolved', 'closed', 'analyzed', 'fix_proposed', 'merged')
-        ORDER BY t.embedding <-> ref.embedding
-        LIMIT ${limit}
+        SELECT * FROM with_agent_message
+        WHERE similarity > ${N1TriageService.SIMILARITY_THRESHOLD}
       `;
 
-      return similar.map(t => ({
-        id: t.id,
-        title: t.title,
-        status: t.status,
-        type: t.type,
-        severity: t.severity,
-        aiSummary: t.ai_summary,
-        diagnosis: t.diagnosis,
-        similarity: t.similarity,
-      }));
+      return similar
+        .filter(t => t.similarity > N1TriageService.SIMILARITY_THRESHOLD)
+        .map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          type: t.type,
+          severity: t.severity,
+          aiSummary: t.ai_summary,
+          diagnosis: t.diagnosis,
+          similarity: t.similarity,
+          resolvedAt: t.resolved_at ?? null,
+          lastAgentMessage: t.last_agent_message ?? null,
+        }));
     } catch (error) {
       this.logger.warn(
         `Vector search failed for ticket ${ticketId}, falling back to keywords: ${(error as Error).message}`
@@ -355,10 +401,16 @@ export class N1TriageService {
         severity: true,
         aiSummary: true,
         diagnosis: true,
+        resolvedAt: true,
       },
     });
 
-    return results.map(t => ({ ...t, similarity: 0.5 }));
+    return results.map(t => ({
+      ...t,
+      similarity: 0.5,
+      resolvedAt: t.resolvedAt ?? null,
+      lastAgentMessage: null,
+    }));
   }
 
   /**
@@ -438,6 +490,31 @@ export class N1TriageService {
     );
     parts.push(`Severity: ${context.ticket.severity || 'unknown'}`);
 
+    // workingAsIntendedConfidence signal — strong hint for no_fix_needed
+    if (
+      context.ticket.workingAsIntendedConfidence !== null &&
+      context.ticket.workingAsIntendedConfidence > 0.7
+    ) {
+      parts.push(
+        `\nSIGNAL: Triage classification indicates this may be working as intended (confidence: ${context.ticket.workingAsIntendedConfidence.toFixed(2)})`
+      );
+    }
+
+    // User environment
+    if (context.ticket.userContext && Object.keys(context.ticket.userContext).length > 0) {
+      const uc = context.ticket.userContext;
+      parts.push('\n## USER ENVIRONMENT');
+      if (uc['browser']) parts.push(`Browser: ${uc['browser']}`);
+      if (uc['os']) parts.push(`OS: ${uc['os']}`);
+      if (uc['viewport']) parts.push(`Viewport: ${uc['viewport']}`);
+      if (uc['url']) parts.push(`URL: ${uc['url']}`);
+      const extra = Object.entries(uc)
+        .filter(([k]) => !['browser', 'os', 'viewport', 'url'].includes(k))
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+      if (extra) parts.push(extra);
+    }
+
     if (context.ocrTexts.length > 0) {
       parts.push('\n## VIDEO OCR TEXT');
       parts.push(context.ocrTexts.slice(0, 10).join('\n'));
@@ -456,13 +533,26 @@ export class N1TriageService {
     if (context.similarTickets.length > 0) {
       parts.push('\n## SIMILAR RESOLVED TICKETS');
       for (const t of context.similarTickets) {
-        const diag = t.diagnosis as { rootCause?: string; suggestedFix?: string } | null;
+        const diag = t.diagnosis as {
+          rootCause?: string;
+          suggestedFix?: string;
+          affectedFiles?: string[];
+        } | null;
         parts.push(
           `- [${t.id}] "${t.title}" (status: ${t.status}, similarity: ${Math.round(t.similarity * 100)}%)`
         );
+        if (t.resolvedAt) {
+          parts.push(`  Resolved: ${t.resolvedAt.toISOString().split('T')[0]}`);
+        }
         if (t.aiSummary) parts.push(`  Summary: ${t.aiSummary}`);
         if (diag?.rootCause) parts.push(`  Root cause: ${diag.rootCause}`);
         if (diag?.suggestedFix) parts.push(`  Fix: ${diag.suggestedFix}`);
+        if (diag?.affectedFiles && diag.affectedFiles.length > 0) {
+          parts.push(`  Affected files: ${diag.affectedFiles.slice(0, 5).join(', ')}`);
+        }
+        if (t.lastAgentMessage) {
+          parts.push(`  Resolution: ${t.lastAgentMessage.slice(0, 500)}`);
+        }
       }
     } else {
       parts.push('\n## SIMILAR TICKETS');
