@@ -11,6 +11,20 @@ import { ApiError } from '@/lib/api/client';
 
 const MAX_LENGTH = 2000;
 
+const TRIAGE_TEMPLATE = `- Our product is a REST API for inventory management
+- 404 errors on /api/v1/* are usually incorrect IDs, not bugs
+- Timeouts > 30s are severity critical (our SLA is 5s)
+- CORS errors usually come from client-side misconfiguration`;
+
+const N1_TEMPLATE = `- Tickets mentioning "legacy" or "/v1/" concern the old API, prefer no_fix_needed if a /v2/ equivalent exists
+- Never mark as duplicate if app versions differ
+- SSO-related errors must always escalate to N2 (security impact)`;
+
+const ANALYSIS_TEMPLATE = `- Our code convention: NestJS modules in src/modules/{domain}/
+- Tests are in test/unit/ and test/e2e/
+- Never modify files in src/core/ without human escalation
+- Main branch is main, create fix branches from main`;
+
 const LANGUAGE_OPTIONS = [
   { value: '', labelKey: 'langAuto' },
   { value: 'en', labelKey: 'langEn' },
@@ -116,6 +130,8 @@ interface TextareaFieldProps {
   value: string;
   onChange: (value: string) => void;
   disabled: boolean;
+  onLoadTemplate?: () => void;
+  loadTemplateLabel?: string;
 }
 
 function TextareaField({
@@ -126,6 +142,8 @@ function TextareaField({
   value,
   onChange,
   disabled,
+  onLoadTemplate,
+  loadTemplateLabel,
 }: TextareaFieldProps) {
   return (
     <div>
@@ -145,7 +163,19 @@ function TextareaField({
         rows={4}
         className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed resize-y"
       />
-      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{helperText}</p>
+      <div className="flex items-center justify-between mt-1">
+        <p className="text-xs text-gray-500 dark:text-gray-400">{helperText}</p>
+        {onLoadTemplate && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={onLoadTemplate}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline disabled:opacity-50 disabled:cursor-not-allowed shrink-0 ml-4"
+          >
+            {loadTemplateLabel}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -216,6 +246,13 @@ export default function AiBehaviorPage() {
   const setFlag = (field: 'enableTriage' | 'enableN1' | 'enableN2') => (value: boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
+
+  const loadTemplate =
+    (field: 'triageInstructions' | 'n1Instructions' | 'analysisInstructions', template: string) =>
+    () => {
+      if (form[field] && !window.confirm(t('loadTemplateConfirm'))) return;
+      setForm(prev => ({ ...prev, [field]: template }));
+    };
 
   const isDirty = initialForm && JSON.stringify(form) !== JSON.stringify(initialForm);
 
@@ -407,6 +444,8 @@ export default function AiBehaviorPage() {
               value={form.triageInstructions}
               onChange={setField('triageInstructions')}
               disabled={saving}
+              onLoadTemplate={loadTemplate('triageInstructions', TRIAGE_TEMPLATE)}
+              loadTemplateLabel={t('loadTemplate')}
             />
           </Card>
 
@@ -423,6 +462,8 @@ export default function AiBehaviorPage() {
               value={form.n1Instructions}
               onChange={setField('n1Instructions')}
               disabled={saving}
+              onLoadTemplate={loadTemplate('n1Instructions', N1_TEMPLATE)}
+              loadTemplateLabel={t('loadTemplate')}
             />
           </Card>
 
@@ -439,6 +480,8 @@ export default function AiBehaviorPage() {
               value={form.analysisInstructions}
               onChange={setField('analysisInstructions')}
               disabled={saving}
+              onLoadTemplate={loadTemplate('analysisInstructions', ANALYSIS_TEMPLATE)}
+              loadTemplateLabel={t('loadTemplate')}
             />
           </Card>
 
