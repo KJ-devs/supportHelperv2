@@ -51,6 +51,11 @@ interface FormState {
   enableTriage: boolean;
   enableN1: boolean;
   enableN2: boolean;
+  triageTemperature: number;
+  n1Temperature: number;
+  analysisTemperature: number;
+  maxIterationsN2: number;
+  timeoutN2: number;
 }
 
 interface FeatureFlagRowProps {
@@ -201,6 +206,11 @@ export default function AiBehaviorPage() {
     enableTriage: true,
     enableN1: true,
     enableN2: true,
+    triageTemperature: 0.1,
+    n1Temperature: 0.1,
+    analysisTemperature: 0.3,
+    maxIterationsN2: 15,
+    timeoutN2: 120,
   });
 
   const languageOptions = LANGUAGE_OPTIONS.map(opt => ({
@@ -225,6 +235,11 @@ export default function AiBehaviorPage() {
           enableTriage: data.enableTriage ?? true,
           enableN1: data.enableN1 ?? true,
           enableN2: data.enableN2 ?? true,
+          triageTemperature: data.triageTemperature ?? 0.1,
+          n1Temperature: data.n1Temperature ?? 0.1,
+          analysisTemperature: data.analysisTemperature ?? 0.3,
+          maxIterationsN2: data.maxIterationsN2 ?? 15,
+          timeoutN2: data.timeoutN2 ?? 120,
         };
         setForm(loaded);
         setInitialForm(loaded);
@@ -246,6 +261,20 @@ export default function AiBehaviorPage() {
   const setFlag = (field: 'enableTriage' | 'enableN1' | 'enableN2') => (value: boolean) => {
     setForm(prev => ({ ...prev, [field]: value }));
   };
+
+  const setNumber =
+    (
+      field:
+        | 'triageTemperature'
+        | 'n1Temperature'
+        | 'analysisTemperature'
+        | 'maxIterationsN2'
+        | 'timeoutN2'
+    ) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = parseFloat(e.target.value);
+      if (!isNaN(val)) setForm(prev => ({ ...prev, [field]: val }));
+    };
 
   const loadTemplate =
     (field: 'triageInstructions' | 'n1Instructions' | 'analysisInstructions', template: string) =>
@@ -275,6 +304,11 @@ export default function AiBehaviorPage() {
         enableTriage: form.enableTriage,
         enableN1: form.enableN1,
         enableN2: form.enableN2,
+        triageTemperature: form.triageTemperature,
+        n1Temperature: form.n1Temperature,
+        analysisTemperature: form.analysisTemperature,
+        maxIterationsN2: form.maxIterationsN2,
+        timeoutN2: form.timeoutN2,
       });
       setConfigured(updated.configured);
       setInitialForm({ ...form });
@@ -379,6 +413,50 @@ export default function AiBehaviorPage() {
                 onChange={setFlag('enableN2')}
                 disabled={saving}
               />
+            </div>
+          </Card>
+
+          {/* AI Tuning Parameters */}
+          <Card>
+            <h2 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+              {t('tuningParamsTitle')}
+            </h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+              {t('tuningParamsDescription')}
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {(
+                [
+                  { field: 'triageTemperature', min: 0, max: 1, step: 0.05 },
+                  { field: 'n1Temperature', min: 0, max: 1, step: 0.05 },
+                  { field: 'analysisTemperature', min: 0, max: 1, step: 0.05 },
+                  { field: 'maxIterationsN2', min: 5, max: 30, step: 1 },
+                  { field: 'timeoutN2', min: 30, max: 300, step: 10 },
+                ] as const
+              ).map(({ field, min, max, step }) => (
+                <div key={field}>
+                  <label
+                    htmlFor={`${formId}-${field}`}
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  >
+                    {t(`${field}Label` as Parameters<typeof t>[0])}
+                  </label>
+                  <input
+                    id={`${formId}-${field}`}
+                    type="number"
+                    min={min}
+                    max={max}
+                    step={step}
+                    value={form[field]}
+                    onChange={setNumber(field)}
+                    disabled={saving}
+                    className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                    {t(`${field}Helper` as Parameters<typeof t>[0])}
+                  </p>
+                </div>
+              ))}
             </div>
           </Card>
 

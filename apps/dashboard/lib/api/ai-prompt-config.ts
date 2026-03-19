@@ -11,6 +11,11 @@ export interface AiPromptConfigResponse {
   enableTriage?: boolean;
   enableN1?: boolean;
   enableN2?: boolean;
+  triageTemperature?: number | null;
+  n1Temperature?: number | null;
+  analysisTemperature?: number | null;
+  maxIterationsN2?: number | null;
+  timeoutN2?: number | null;
 }
 
 export interface AiPromptConfigUpdate {
@@ -23,6 +28,11 @@ export interface AiPromptConfigUpdate {
   enableTriage?: boolean;
   enableN1?: boolean;
   enableN2?: boolean;
+  triageTemperature?: number;
+  n1Temperature?: number;
+  analysisTemperature?: number;
+  maxIterationsN2?: number;
+  timeoutN2?: number;
 }
 
 export const aiPromptConfigApi = {

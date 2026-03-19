@@ -458,12 +458,14 @@ export class N1TriageService {
       );
       const systemPrompt = N1_SYSTEM_PROMPT + customInstructions;
 
+      const tuningParams = await this.aiPromptConfigService.getAiTuningParams(tenantId);
+
       const result = await provider.generateStructuredOutput<N1Assessment>(
         prompt,
         N1_OUTPUT_SCHEMA,
         {
           systemPrompt,
-          temperature: 0.1,
+          temperature: tuningParams.n1Temperature,
           maxTokens: 1024,
         }
       );

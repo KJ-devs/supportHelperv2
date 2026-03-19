@@ -1936,6 +1936,18 @@
     "enableN1Label": "Smart Pre-triage",
     "enableN1Description": "AI evaluates if a bug needs deep investigation or can be resolved directly",
     "enableN2Label": "Autonomous Investigation",
-    "enableN2Description": "AI agent investigates source code and proposes fixes"
+    "enableN2Description": "AI agent investigates source code and proposes fixes",
+    "tuningParamsTitle": "AI Tuning Parameters",
+    "tuningParamsDescription": "Fine-tune temperature and limits for each AI pipeline stage. Changes take effect on the next ticket processed.",
+    "triageTemperatureLabel": "Triage Temperature",
+    "triageTemperatureHelper": "Lower = more consistent classifications (default: 0.1)",
+    "n1TemperatureLabel": "N1 Temperature",
+    "n1TemperatureHelper": "Lower = more predictable decisions (default: 0.1)",
+    "analysisTemperatureLabel": "Analysis Temperature",
+    "analysisTemperatureHelper": "Higher = more creative investigation (default: 0.3)",
+    "maxIterationsN2Label": "Max N2 Iterations",
+    "maxIterationsN2Helper": "Maximum steps the AI agent can take (default: 15)",
+    "timeoutN2Label": "N2 Timeout (seconds)",
+    "timeoutN2Helper": "Maximum duration for investigation (default: 120)"
   }
 }

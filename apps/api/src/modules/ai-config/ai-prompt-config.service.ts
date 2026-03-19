@@ -20,6 +20,14 @@ export interface AiFeatureFlags {
   enableN2: boolean;
 }
 
+export interface AiTuningParams {
+  triageTemperature: number;
+  n1Temperature: number;
+  analysisTemperature: number;
+  maxIterationsN2: number;
+  timeoutN2: number;
+}
+
 type AiFeature = 'triage' | 'n1_triage' | 'analysis';
 
 const CACHE_TTL_SECONDS = 120;
@@ -83,6 +91,13 @@ export class AiPromptConfigService {
       ...(dto.enableTriage !== undefined && { enableTriage: dto.enableTriage }),
       ...(dto.enableN1 !== undefined && { enableN1: dto.enableN1 }),
       ...(dto.enableN2 !== undefined && { enableN2: dto.enableN2 }),
+      ...(dto.triageTemperature !== undefined && { triageTemperature: dto.triageTemperature }),
+      ...(dto.n1Temperature !== undefined && { n1Temperature: dto.n1Temperature }),
+      ...(dto.analysisTemperature !== undefined && {
+        analysisTemperature: dto.analysisTemperature,
+      }),
+      ...(dto.maxIterationsN2 !== undefined && { maxIterationsN2: dto.maxIterationsN2 }),
+      ...(dto.timeoutN2 !== undefined && { timeoutN2: dto.timeoutN2 }),
     };
 
     const hasContent = Object.values(data).some(v => v !== null && v !== undefined);
@@ -138,6 +153,52 @@ export class AiPromptConfigService {
         `Failed to load feature flags for tenant ${tenantId}: ${(error as Error).message}. Defaulting all flags to enabled.`
       );
       return { enableTriage: true, enableN1: true, enableN2: true };
+    }
+  }
+
+  /**
+   * Get AI tuning parameters for a tenant with 2-minute cache.
+   * Returns defaults if no config exists so the pipeline behaves identically to before.
+   */
+  async getAiTuningParams(tenantId: string): Promise<AiTuningParams> {
+    try {
+      const key = this.cacheKey(tenantId);
+      const cached = await this.cacheService.get<AiPromptConfig>(key);
+      const config =
+        cached ?? (await this.prisma.aiPromptConfig.findUnique({ where: { tenantId } }));
+
+      if (!config) {
+        return {
+          triageTemperature: 0.1,
+          n1Temperature: 0.1,
+          analysisTemperature: 0.3,
+          maxIterationsN2: 15,
+          timeoutN2: 120,
+        };
+      }
+
+      if (!cached) {
+        await this.cacheService.set(key, config, CACHE_TTL_SECONDS);
+      }
+
+      return {
+        triageTemperature: config.triageTemperature ?? 0.1,
+        n1Temperature: config.n1Temperature ?? 0.1,
+        analysisTemperature: config.analysisTemperature ?? 0.3,
+        maxIterationsN2: config.maxIterationsN2 ?? 15,
+        timeoutN2: config.timeoutN2 ?? 120,
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load AI tuning params for tenant ${tenantId}: ${(error as Error).message}. Using defaults.`
+      );
+      return {
+        triageTemperature: 0.1,
+        n1Temperature: 0.1,
+        analysisTemperature: 0.3,
+        maxIterationsN2: 15,
+        timeoutN2: 120,
+      };
     }
   }
 

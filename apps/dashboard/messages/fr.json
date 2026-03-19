@@ -1936,6 +1936,18 @@
     "enableN1Label": "Pré-triage intelligent",
     "enableN1Description": "L'IA évalue si un bug nécessite une investigation approfondie",
     "enableN2Label": "Investigation autonome",
-    "enableN2Description": "L'agent IA investigue le code source et propose des correctifs"
+    "enableN2Description": "L'agent IA investigue le code source et propose des correctifs",
+    "tuningParamsTitle": "Paramètres de réglage IA",
+    "tuningParamsDescription": "Ajustez la température et les limites pour chaque étape de la pipeline IA. Les modifications s'appliquent au prochain ticket traité.",
+    "triageTemperatureLabel": "Température de triage",
+    "triageTemperatureHelper": "Plus bas = classifications plus cohérentes (défaut : 0.1)",
+    "n1TemperatureLabel": "Température N1",
+    "n1TemperatureHelper": "Plus bas = décisions plus prévisibles (défaut : 0.1)",
+    "analysisTemperatureLabel": "Température d'analyse",
+    "analysisTemperatureHelper": "Plus haut = investigation plus créative (défaut : 0.3)",
+    "maxIterationsN2Label": "Itérations max N2",
+    "maxIterationsN2Helper": "Nombre maximum d'étapes que l'agent IA peut effectuer (défaut : 15)",
+    "timeoutN2Label": "Timeout N2 (secondes)",
+    "timeoutN2Helper": "Durée maximale de l'investigation (défaut : 120)"
   }
 }

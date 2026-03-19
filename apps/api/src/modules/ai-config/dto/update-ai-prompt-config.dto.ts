@@ -1,5 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength, IsIn, IsBoolean } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  MaxLength,
+  IsIn,
+  IsBoolean,
+  IsNumber,
+  IsInt,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class UpdateAiPromptConfigDto {
   @ApiPropertyOptional({
@@ -84,4 +94,55 @@ export class UpdateAiPromptConfigDto {
   @IsOptional()
   @IsBoolean()
   enableN2?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Temperature for triage classification AI (0.0-1.0). Lower = more consistent.',
+    example: 0.1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  triageTemperature?: number;
+
+  @ApiPropertyOptional({
+    description: 'Temperature for N1 triage AI (0.0-1.0). Lower = more predictable decisions.',
+    example: 0.1,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  n1Temperature?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Temperature for deep analysis AI (0.0-1.0). Higher = more creative investigation.',
+    example: 0.3,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  analysisTemperature?: number;
+
+  @ApiPropertyOptional({
+    description: 'Maximum number of agentic iterations for N2 deep analysis (5-30).',
+    example: 15,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5)
+  @Max(30)
+  maxIterationsN2?: number;
+
+  @ApiPropertyOptional({
+    description: 'Maximum duration in seconds for N2 deep analysis (30-300).',
+    example: 120,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(30)
+  @Max(300)
+  timeoutN2?: number;
 }

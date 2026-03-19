@@ -116,7 +116,16 @@ describe('DeepAnalysisService', () => {
         { provide: DiagnosisService, useValue: mockDiagnosisService },
         {
           provide: AiPromptConfigService,
-          useValue: { buildCustomInstructions: jest.fn().mockResolvedValue('') },
+          useValue: {
+            buildCustomInstructions: jest.fn().mockResolvedValue(''),
+            getAiTuningParams: jest.fn().mockResolvedValue({
+              triageTemperature: 0.1,
+              n1Temperature: 0.1,
+              analysisTemperature: 0.3,
+              maxIterationsN2: 15,
+              timeoutN2: 120,
+            }),
+          },
         },
         { provide: EventEmitter2, useValue: mockEventEmitter },
       ],

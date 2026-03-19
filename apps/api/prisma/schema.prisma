@@ -446,6 +446,13 @@ model AiPromptConfig {
   enableN1             Boolean  @default(true) @map("enable_n1")
   enableN2             Boolean  @default(true) @map("enable_n2")
 
+  // AI tuning parameters — temperature and N2 limits
+  triageTemperature    Float?   @default(0.1) @map("triage_temperature")
+  n1Temperature        Float?   @default(0.1) @map("n1_temperature")
+  analysisTemperature  Float?   @default(0.3) @map("analysis_temperature")
+  maxIterationsN2      Int?     @default(15) @map("max_iterations_n2")
+  timeoutN2            Int?     @default(120) @map("timeout_n2")
+
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 

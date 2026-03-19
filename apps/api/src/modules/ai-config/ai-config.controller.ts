@@ -95,6 +95,11 @@ export class AiConfigController {
         n1Instructions: null,
         analysisInstructions: null,
         responseLanguage: null,
+        triageTemperature: 0.1,
+        n1Temperature: 0.1,
+        analysisTemperature: 0.3,
+        maxIterationsN2: 15,
+        timeoutN2: 120,
       };
     }
     const hasContent = !!(

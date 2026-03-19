@@ -144,12 +144,14 @@ export class TriageClassificationService {
       );
       const systemPrompt = TRIAGE_SYSTEM_PROMPT + customInstructions;
 
+      const tuningParams = await this.aiPromptConfigService.getAiTuningParams(tenantId);
+
       const result = await provider.generateStructuredOutput<TriageClassification>(
         prompt,
         TRIAGE_OUTPUT_SCHEMA,
         {
           systemPrompt,
-          temperature: 0.1,
+          temperature: tuningParams.triageTemperature,
           maxTokens: 1024,
         }
       );

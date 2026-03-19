@@ -83,6 +83,13 @@ describe('TriageClassificationService', () => {
             getFeatureFlags: jest
               .fn()
               .mockResolvedValue({ enableTriage: true, enableN1: true, enableN2: true }),
+            getAiTuningParams: jest.fn().mockResolvedValue({
+              triageTemperature: 0.1,
+              n1Temperature: 0.1,
+              analysisTemperature: 0.3,
+              maxIterationsN2: 15,
+              timeoutN2: 120,
+            }),
           },
         },
       ],

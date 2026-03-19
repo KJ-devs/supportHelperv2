@@ -158,10 +158,10 @@ export class DeepAnalysisService {
     }
 
     // Append tenant custom AI instructions
-    const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
-      tenantId,
-      'analysis',
-    );
+    const [customInstructions, tuningParams] = await Promise.all([
+      this.aiPromptConfigService.buildCustomInstructions(tenantId, 'analysis'),
+      this.aiPromptConfigService.getAiTuningParams(tenantId),
+    ]);
     systemPrompt += customInstructions;
 
     const safeTitle = sanitizeForPrompt(ticket.title, { maxLength: 500, fieldName: 'title' });
@@ -192,9 +192,9 @@ Start by identifying which parts of the codebase are likely involved, then read 
         status: ticket.status,
       },
       tenantId,
-      maxIterations: n1Context?.investigationHints?.length ? 10 : 15,
+      maxIterations: n1Context?.investigationHints?.length ? 10 : tuningParams.maxIterationsN2,
       maxTokens: 4096,
-      timeoutMs: 2 * 60 * 1000,
+      timeoutMs: tuningParams.timeoutN2 * 1000,
       ticketId,
       agentTaskId: agentTask.id,
     };
@@ -371,10 +371,10 @@ Start by identifying which parts of the codebase are likely involved, then read 
     }
 
     // Append tenant custom AI instructions
-    const customInstructions = await this.aiPromptConfigService.buildCustomInstructions(
-      tenantId,
-      'analysis',
-    );
+    const [customInstructions, tuningParamsMsg] = await Promise.all([
+      this.aiPromptConfigService.buildCustomInstructions(tenantId, 'analysis'),
+      this.aiPromptConfigService.getAiTuningParams(tenantId),
+    ]);
     systemPrompt += customInstructions;
 
     // Rebuild conversation history from persisted messages
@@ -395,10 +395,10 @@ Start by identifying which parts of the codebase are likely involved, then read 
         status: ticket.status,
       },
       tenantId,
-      maxIterations: 15,
+      maxIterations: tuningParamsMsg.maxIterationsN2,
       maxTokens: 4096,
       existingMessages,
-      timeoutMs: 2 * 60 * 1000,
+      timeoutMs: tuningParamsMsg.timeoutN2 * 1000,
       ticketId: ticket.id,
       sessionId,
       skipCheckpoints,
