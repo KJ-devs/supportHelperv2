@@ -178,4 +178,8 @@ export const agentTasksApi = {
   async getPendingReviews(): Promise<AgentTask[]> {
     return apiRequest<AgentTask[]>('/api/v1/agent-tasks/pending-reviews');
   },
+
+  async getTasksByTicket(ticketId: string): Promise<AgentTask[]> {
+    return apiRequest<AgentTask[]>(`/api/v1/agent-tasks/tickets/${ticketId}`);
+  },
 };

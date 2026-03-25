@@ -271,7 +271,23 @@
       "n2Notification": "Agent IA : Analyse N1 terminée — Planification N2 démarrée",
       "dismiss": "Fermer",
       "retry": "Réessayer",
-      "errorLoading": "Impossible de charger le ticket"
+      "errorLoading": "Impossible de charger le ticket",
+      "statusLabel": "Statut",
+      "statusUpdated": "Statut mis à jour",
+      "statusUpdateError": "Impossible de mettre à jour le statut",
+      "prLink": "Pull Request #{number}",
+      "prInProgress": "Analyse en cours...",
+      "prFailed": "Analyse échouée",
+      "manualStatuses": {
+        "open": "Ouvert",
+        "in_progress": "En cours",
+        "pending": "En attente",
+        "waiting": "En attente externe",
+        "waiting_response": "Attente de réponse",
+        "escalated": "Escaladé",
+        "resolved": "Résolu",
+        "closed": "Fermé"
+      }
     }
   },
   "bulkActions": {
@@ -1857,7 +1873,13 @@
     "alertCancelFailed": "Échec de l'annulation de la tâche",
     "alertApproveFailed": "Échec de l'approbation de la tâche",
     "alertRejectFailed": "Échec du rejet de la tâche",
-    "promptRejectReason": "Raison du rejet (optionnel) :"
+    "promptRejectReason": "Raison du rejet (optionnel) :",
+    "rejectTitle": "Rejeter la tâche",
+    "rejectMessage": "Veuillez fournir une raison pour le rejet. Cela aidera l'agent à s'améliorer.",
+    "rejectPlaceholder": "ex: Le correctif est trop large, concentrez-vous sur le module auth uniquement...",
+    "rejectConfirmLabel": "Rejeter",
+    "rejectCancelLabel": "Annuler",
+    "rejectSuccess": "Tâche rejetée"
   },
   "agentTaskLogs": {
     "phaseAll": "Tout",

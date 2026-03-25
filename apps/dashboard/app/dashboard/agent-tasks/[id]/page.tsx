@@ -8,7 +8,7 @@ import { useRequireAuth } from '@/lib/auth';
 import { agentTasksApi } from '@/lib/api/agent-tasks';
 import type { AgentTask, ExecutionLogEntry } from '@/lib/api/agent-tasks';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { PageLoader, Button } from '@/components/ui';
+import { PageLoader, Button, ConfirmModal, useToast } from '@/components/ui';
 import { AgentTaskStatusBadge } from '../components/AgentTaskStatusBadge';
 import { AgentTaskDetail, isInProgress, isTerminal } from '../components/AgentTaskDetail';
 import { useAgentTaskSocket } from '@/hooks/useAgentTaskSocket';
@@ -23,10 +23,15 @@ export default function AgentTaskDetailPage() {
 
   const taskId = params.id as string;
 
+  const toast = useToast();
   const [task, setTask] = useState<AgentTask | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejectPhase, setRejectPhase] = useState<'plan' | 'code'>('plan');
+  const [isRejecting, setIsRejecting] = useState(false);
 
   const fetchTask = useCallback(async () => {
     try {
@@ -158,14 +163,25 @@ export default function AgentTaskDetailPage() {
     }
   };
 
-  const handleReject = async (phase: 'plan' | 'code') => {
-    if (!task) return;
-    const reason = prompt(t('promptRejectReason'));
+  const openRejectModal = (phase: 'plan' | 'code') => {
+    setRejectPhase(phase);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  const handleRejectConfirm = async () => {
+    if (!task || !rejectReason.trim()) return;
     try {
-      const updated = await agentTasksApi.rejectTask(task.id, phase, reason || undefined);
+      setIsRejecting(true);
+      const updated = await agentTasksApi.rejectTask(task.id, rejectPhase, rejectReason);
       setTask(updated);
+      toast.success(t('rejectSuccess'));
+      setShowRejectModal(false);
+      setRejectReason('');
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : t('alertRejectFailed'));
+      toast.error(err instanceof Error ? err.message : t('alertRejectFailed'));
+    } finally {
+      setIsRejecting(false);
     }
   };
 
@@ -212,7 +228,7 @@ export default function AgentTaskDetailPage() {
                     <Button variant="primary" size="sm" onClick={() => handleApprove('plan')}>
                       {t('approvePlan')}
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleReject('plan')}>
+                    <Button variant="danger" size="sm" onClick={() => openRejectModal('plan')}>
                       {t('rejectPlan')}
                     </Button>
                   </>
@@ -222,7 +238,7 @@ export default function AgentTaskDetailPage() {
                     <Button variant="primary" size="sm" onClick={() => handleApprove('code')}>
                       {t('approveCode')}
                     </Button>
-                    <Button variant="danger" size="sm" onClick={() => handleReject('code')}>
+                    <Button variant="danger" size="sm" onClick={() => openRejectModal('code')}>
                       {t('rejectCode')}
                     </Button>
                   </>
@@ -265,6 +281,30 @@ export default function AgentTaskDetailPage() {
         {/* Content */}
         {task && !error && <AgentTaskDetail task={task} isLive={isLive} />}
       </div>
+
+      <ConfirmModal
+        isOpen={showRejectModal}
+        onClose={() => { setShowRejectModal(false); setRejectReason(''); }}
+        onConfirm={handleRejectConfirm}
+        title={t('rejectTitle')}
+        message={
+          <div>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">{t('rejectMessage')}</p>
+            <textarea
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              rows={3}
+              placeholder={t('rejectPlaceholder')}
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              autoFocus
+            />
+          </div>
+        }
+        confirmLabel={t('rejectConfirmLabel')}
+        cancelLabel={t('rejectCancelLabel')}
+        variant="danger"
+        isLoading={isRejecting}
+      />
     </DashboardLayout>
   );
 }

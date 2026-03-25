@@ -58,9 +58,9 @@ export async function getAgentMessages(sessionId: string): Promise<AgentMessageR
 
 export async function getTicketSession(
   ticketId: string
-): Promise<{ sessionId: string; status: string } | null> {
+): Promise<{ sessionId: string; status: string; agentMode?: string } | null> {
   try {
-    return await apiRequest<{ sessionId: string; status: string }>(
+    return await apiRequest<{ sessionId: string; status: string; agentMode?: string }>(
       `/api/agent/v2/tickets/${ticketId}/session`
     );
   } catch (err) {

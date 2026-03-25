@@ -5,6 +5,7 @@
 
 'use client';
 
+import type { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { Modal } from './Modal';
 import { Button } from './Button';
@@ -14,7 +15,7 @@ interface ConfirmModalProps {
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'default' | 'danger';
@@ -53,7 +54,11 @@ export function ConfirmModal({
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} footer={footer} size="sm">
-      <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{message}</p>
+      {typeof message === 'string' ? (
+        <p className="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line">{message}</p>
+      ) : (
+        message
+      )}
     </Modal>
   );
 }

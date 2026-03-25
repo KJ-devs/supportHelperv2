@@ -29,7 +29,8 @@ import { VideoPlayer } from '@/components/media/VideoPlayer';
 import { N1AssessmentBadge } from '@/components/n1-assessment/N1AssessmentBadge';
 import { RelatedTicketsSection } from '@/components/ticket-relations/RelatedTicketsSection';
 import type { N1Assessment } from '@/lib/types/ticket';
-import { AlertTriangle, RefreshCw, Trash2, Bot } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Trash2, Bot, GitPullRequest, ExternalLink, Loader2 } from 'lucide-react';
+import type { AgentTask } from '@/lib/api/agent-tasks';
 import { useTicketSocket, type AgentEscalatedToN2Event } from '@/hooks/useTicketSocket';
 import { useTranslations } from 'next-intl';
 
@@ -77,6 +78,8 @@ export default function TicketDetailPage() {
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [isDiagnosisLoading, setIsDiagnosisLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [latestTask, setLatestTask] = useState<AgentTask | null>(null);
 
   // Media pre-signed URLs
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
@@ -116,12 +119,25 @@ export default function TicketDetailPage() {
     }
   }, [ticketId]);
 
+  const fetchLatestTask = useCallback(async () => {
+    try {
+      const tasks = await agentTasksApi.getTasksByTicket(ticketId);
+      if (tasks.length > 0) {
+        const completed = tasks.find(t => t.prUrl);
+        setLatestTask(completed ?? tasks[0] ?? null);
+      }
+    } catch {
+      // silently ignore — PR section is optional
+    }
+  }, [ticketId]);
+
   useEffect(() => {
     if (!authLoading && ticketId) {
       fetchTicket();
       fetchDiagnosis();
+      fetchLatestTask();
     }
-  }, [ticketId, authLoading, fetchTicket, fetchDiagnosis]);
+  }, [ticketId, authLoading, fetchTicket, fetchDiagnosis, fetchLatestTask]);
 
   const handleAgentEscalatedToN2 = useCallback(
     (event: AgentEscalatedToN2Event) => {
@@ -176,6 +192,24 @@ export default function TicketDetailPage() {
     fetchDiagnosis();
   }, [fetchTicket, fetchDiagnosis]);
 
+  const MANUAL_STATUSES = ['open', 'in_progress', 'pending', 'waiting', 'waiting_response', 'escalated', 'resolved', 'closed'] as const;
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!ticket || newStatus === ticket.status) return;
+    const previousStatus = ticket.status;
+    setTicket(prev => prev ? { ...prev, status: newStatus as Ticket['status'] } : null);
+    setIsUpdatingStatus(true);
+    try {
+      await ticketsApi.updateTicket(ticketId, { status: newStatus as Ticket['status'] });
+      toast.success(t('statusUpdated'));
+    } catch (err: unknown) {
+      setTicket(prev => prev ? { ...prev, status: previousStatus } : null);
+      toast.error(err instanceof Error ? err.message : t('statusUpdateError'));
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
   const handleTriggerAnalysis = async () => {
     try {
       setIsAnalyzing(true);
@@ -213,6 +247,21 @@ export default function TicketDetailPage() {
 
         {/* Right: actions */}
         <div className="flex items-center gap-2 flex-shrink-0">
+          {ticket && (
+            <select
+              aria-label={t('statusLabel')}
+              value={ticket.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              disabled={isUpdatingStatus}
+              className="h-8 px-2 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 cursor-pointer"
+            >
+              {MANUAL_STATUSES.map(s => (
+                <option key={s} value={s}>
+                  {t(`manualStatuses.${s}` as Parameters<typeof t>[0])}
+                </option>
+              ))}
+            </select>
+          )}
           <Button
             variant="primary"
             size="sm"
@@ -328,6 +377,45 @@ export default function TicketDetailPage() {
                   ticketId={ticketId}
                   onOverride={handleRefresh}
                 />
+              )}
+
+              {/* ── PULL REQUEST ── */}
+              {latestTask && (
+                <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 p-3">
+                  <div className="flex items-center gap-2">
+                    <GitPullRequest className="w-4 h-4 text-purple-500 flex-shrink-0" aria-hidden="true" />
+                    {latestTask.prUrl ? (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <a
+                          href={latestTask.prUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1"
+                        >
+                          {t('prLink', { number: latestTask.prNumber ?? '' })}
+                          <ExternalLink className="w-3 h-3" aria-hidden="true" />
+                        </a>
+                        {latestTask.branchName && (
+                          <code className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded truncate max-w-[200px]">
+                            {latestTask.branchName}
+                          </code>
+                        )}
+                      </div>
+                    ) : ['analyzing', 'plan_ready', 'plan_approved', 'generating', 'pushing'].includes(latestTask.status) ? (
+                      <span className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                        {t('prInProgress')}
+                      </span>
+                    ) : latestTask.status === 'failed' ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-red-500">{t('prFailed')}</span>
+                        <Button variant="ghost" size="sm" onClick={() => agentTasksApi.retryTask(latestTask.id).then(fetchLatestTask)}>
+                          {t('retry')}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               )}
 
               {/* ── RELATED TICKETS ── */}

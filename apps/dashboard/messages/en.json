@@ -271,7 +271,23 @@
       "n2Notification": "AI Agent: N1 analysis complete — N2 action planning started",
       "dismiss": "Dismiss",
       "retry": "Retry",
-      "errorLoading": "Failed to load ticket"
+      "errorLoading": "Failed to load ticket",
+      "statusLabel": "Status",
+      "statusUpdated": "Status updated",
+      "statusUpdateError": "Failed to update status",
+      "prLink": "Pull Request #{number}",
+      "prInProgress": "Analysis in progress...",
+      "prFailed": "Analysis failed",
+      "manualStatuses": {
+        "open": "Open",
+        "in_progress": "In Progress",
+        "pending": "Pending",
+        "waiting": "Waiting",
+        "waiting_response": "Waiting for Response",
+        "escalated": "Escalated",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      }
     }
   },
   "bulkActions": {
@@ -1857,7 +1873,13 @@
     "alertCancelFailed": "Failed to cancel task",
     "alertApproveFailed": "Failed to approve task",
     "alertRejectFailed": "Failed to reject task",
-    "promptRejectReason": "Reason for rejection (optional):"
+    "promptRejectReason": "Reason for rejection (optional):",
+    "rejectTitle": "Reject Task",
+    "rejectMessage": "Please provide a reason for rejecting this task. This will help the agent improve.",
+    "rejectPlaceholder": "e.g., The fix is too broad, focus on the auth module only...",
+    "rejectConfirmLabel": "Reject",
+    "rejectCancelLabel": "Cancel",
+    "rejectSuccess": "Task rejected"
   },
   "agentTaskLogs": {
     "phaseAll": "All",

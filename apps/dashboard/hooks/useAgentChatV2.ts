@@ -87,6 +87,9 @@ export function useAgentChatV2(ticketId: string): UseAgentChatV2Return {
         if (existingSession) {
           resolvedSessionId = existingSession.sessionId;
           setIsNewSession(false);
+          if (existingSession.agentMode === 'guided' || existingSession.agentMode === 'autonomous') {
+            setAgentMode(existingSession.agentMode);
+          }
         } else {
           const newSession = await createAgentSession(
             ticketId,

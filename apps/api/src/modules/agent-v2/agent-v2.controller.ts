@@ -175,7 +175,7 @@ export class AgentV2Controller {
       throw new NotFoundException('No session found for this ticket');
     }
 
-    return { sessionId: session.id, status: session.status };
+    return { sessionId: session.id, status: session.status, agentMode: session.agentMode ?? 'autonomous' };
   }
 
   @Get('tickets/:ticketId/diagnosis')
