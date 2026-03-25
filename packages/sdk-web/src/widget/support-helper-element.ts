@@ -12,6 +12,7 @@ import type {
 } from './widget-types';
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { ConsoleCapture } from '../context/console-capture';
+import { ErrorCapture } from '../context/error-capture';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
 import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
@@ -115,6 +116,7 @@ export class SupportHelperElement extends HTMLElement {
 
   connectedCallback(): void {
     ConsoleCapture.install(50);
+    ErrorCapture.install(20);
 
     // Parse config from attributes
     const attrConfig = parseAttributeConfig(this);
@@ -161,6 +163,7 @@ export class SupportHelperElement extends HTMLElement {
 
   disconnectedCallback(): void {
     ConsoleCapture.uninstall();
+    ErrorCapture.uninstall();
     // Cleanup
     this.stopRecordingTimer();
     this.stopAttentionPulseTimer();

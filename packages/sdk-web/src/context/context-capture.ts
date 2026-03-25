@@ -1,4 +1,5 @@
 import { ConsoleCapture, type ConsoleLogEntry } from './console-capture';
+import { ErrorCapture, type UncaughtError } from './error-capture';
 
 export interface UserContext extends Record<string, unknown> {
   url: string;
@@ -19,6 +20,7 @@ export interface UserContext extends Record<string, unknown> {
   sessionStorage: boolean;
   customContext?: Record<string, unknown>;
   consoleLogs?: ConsoleLogEntry[];
+  uncaughtErrors?: UncaughtError[];
 }
 
 export class ContextCapture {
@@ -42,6 +44,7 @@ export class ContextCapture {
       sessionStorage: this.testStorageAccess('sessionStorage'),
       customContext,
       consoleLogs: ConsoleCapture.getEntries(),
+      uncaughtErrors: ErrorCapture.getEntries(),
     };
   }
 
