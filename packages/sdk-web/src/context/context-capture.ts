@@ -1,3 +1,5 @@
+import { ConsoleCapture, type ConsoleLogEntry } from './console-capture';
+
 export interface UserContext extends Record<string, unknown> {
   url: string;
   userAgent: string;
@@ -16,6 +18,7 @@ export interface UserContext extends Record<string, unknown> {
   localStorage: boolean;
   sessionStorage: boolean;
   customContext?: Record<string, unknown>;
+  consoleLogs?: ConsoleLogEntry[];
 }
 
 export class ContextCapture {
@@ -38,6 +41,7 @@ export class ContextCapture {
       localStorage: this.testStorageAccess('localStorage'),
       sessionStorage: this.testStorageAccess('sessionStorage'),
       customContext,
+      consoleLogs: ConsoleCapture.getEntries(),
     };
   }
 
