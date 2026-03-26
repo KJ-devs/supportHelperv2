@@ -6,14 +6,11 @@
  * <SupportHelperWidget sdkKey="sk_xxx" apiUrl="https://..." onSubmit={({ticketId}) => ...} />
  */
 
+import React, { useRef, useEffect } from 'react';
 import type { ReportResponse, WidgetPosition, WidgetTheme } from '../widget/widget-types';
 
 // Ensure the custom element is registered
 import '../widget/index';
-
-// Minimal types for when @types/react is not installed
-type ReactRef<T> = { current: T | null } | ((instance: T | null) => void) | null;
-type ReactCSSProperties = Record<string, string | number>;
 
 export interface SupportHelperWidgetProps {
   /** SDK Key for authentication */
@@ -43,28 +40,7 @@ export interface SupportHelperWidgetProps {
   /** Additional class name */
   className?: string;
   /** Additional inline styles */
-  style?: ReactCSSProperties;
-}
-
-/**
- * Get React dynamically - avoids compile-time dependency
- */
-function getReact(): {
-  useRef: <T>(initial: T | null) => { current: T | null };
-  useEffect: (effect: () => (() => void) | void, deps: unknown[]) => void;
-  createElement: (type: string, props: Record<string, unknown>) => unknown;
-} | null {
-  try {
-    // Check for globally available React (CDN or pre-bundled)
-    const g = globalThis as Record<string, unknown>;
-    if (g.React) return g.React as ReturnType<typeof getReact>;
-
-    // In bundled environments, the consuming app provides React as a peer dependency.
-    // We avoid eval/require to stay CSP-safe and bundler-compatible.
-    return null;
-  } catch {
-    return null;
-  }
+  style?: React.CSSProperties;
 }
 
 /**
@@ -72,13 +48,7 @@ function getReact(): {
  *
  * This component wraps the <support-helper> custom element for React
  */
-export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
-  const React = getReact();
-  if (!React) {
-    console.error('[SupportHelper] React is required for this component');
-    return null;
-  }
-
+export function SupportHelperWidget(props: SupportHelperWidgetProps): React.ReactElement | null {
   const {
     sdkKey,
     apiUrl,
@@ -96,10 +66,10 @@ export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
     style,
   } = props;
 
-  const elementRef = React.useRef<HTMLElement>(null);
+  const elementRef = useRef<HTMLElement>(null);
 
   // Attach event listeners
-  React.useEffect(() => {
+  useEffect(() => {
     const element = elementRef.current;
     if (!element) return;
 
@@ -168,7 +138,6 @@ export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
   if (zIndex !== undefined) attrs['z-index'] = zIndex;
   if (theme) attrs['theme'] = theme;
 
-  // Use createElement to render custom element
   return React.createElement('support-helper', {
     ref: elementRef,
     class: className,
@@ -180,32 +149,26 @@ export function SupportHelperWidget(props: SupportHelperWidgetProps): unknown {
 /**
  * Hook to programmatically control the widget
  */
-export function useSupportHelper(ref: ReactRef<HTMLElement>): {
+export function useSupportHelper(ref: React.RefObject<HTMLElement>): {
   open: () => void;
   close: () => void;
   reset: () => void;
 } {
   return {
     open: () => {
-      const el = (ref && 'current' in ref ? ref.current : null) as
-        | (HTMLElement & { open?: () => void })
-        | null;
+      const el = ref.current as (HTMLElement & { open?: () => void }) | null;
       if (el && typeof el.open === 'function') {
         el.open();
       }
     },
     close: () => {
-      const el = (ref && 'current' in ref ? ref.current : null) as
-        | (HTMLElement & { close?: () => void })
-        | null;
+      const el = ref.current as (HTMLElement & { close?: () => void }) | null;
       if (el && typeof el.close === 'function') {
         el.close();
       }
     },
     reset: () => {
-      const el = (ref && 'current' in ref ? ref.current : null) as
-        | (HTMLElement & { reset?: () => void })
-        | null;
+      const el = ref.current as (HTMLElement & { reset?: () => void }) | null;
       if (el && typeof el.reset === 'function') {
         el.reset();
       }
