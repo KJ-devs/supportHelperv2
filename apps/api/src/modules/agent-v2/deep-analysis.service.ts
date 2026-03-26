@@ -112,6 +112,26 @@ export class DeepAnalysisService {
 
     const repoCtx = await this.codeInvestigation.getRepoContext(ticket.applicationId);
 
+    // Auto-trigger codebase indexing if no index exists yet
+    if (repoCtx) {
+      try {
+        const indexStatus = await this.prisma.codebaseIndexStatus.findFirst({
+          where: { applicationId: ticket.applicationId },
+        });
+        if (!indexStatus) {
+          this.logger.log(
+            `No codebase index for app ${ticket.applicationId} — triggering indexing`
+          );
+          this.eventEmitter.emit('codebase.index-requested', {
+            applicationId: ticket.applicationId,
+            tenantId,
+          });
+        }
+      } catch {
+        // Non-blocking — proceed without indexing
+      }
+    }
+
     // Get repo structure for the system prompt (or empty string if no repo)
     let repoStructure = 'No repository connected to this application.';
     if (repoCtx) {
