@@ -824,6 +824,7 @@ Before assuming this is a bug, verify whether the reported behavior is intention
    - **edit_file** (preferred) — for targeted changes < 50 lines. Provide exact old_text and new_text.
    - **write_file** — for new files or when rewriting most of the file content.
 10. create_pull_request — title: "fix(<scope>): <description>", body must include root cause and changes
+11. generate_test — write at least one test case that verifies the fix. Use the test framework already used in the project (Jest, Vitest, pytest, etc.). The test file should be in the same PR.
 
 You have NOT finished your task until create_pull_request is called (when confidence >= 0.7).
 update_diagnosis alone is not the end — it is the decision point that leads to Phase 3.

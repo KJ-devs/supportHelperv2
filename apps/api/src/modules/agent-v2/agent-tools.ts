@@ -17,7 +17,8 @@ export type ToolName =
   | 'create_branch'
   | 'write_file'
   | 'edit_file'
-  | 'create_pull_request';
+  | 'create_pull_request'
+  | 'generate_test';
 
 export interface ToolCallResult {
   toolCallId: string;
@@ -428,6 +429,41 @@ export const AGENT_TOOLS: AgentTool[] = [
         },
       },
       required: ['title', 'body', 'head_branch'],
+    },
+  },
+
+  // ── TEST GENERATION ────────────────────────────────────────
+  {
+    name: 'generate_test',
+    description:
+      'Write a test file for the fix you just implemented. Detect the test framework from the repo (Jest, Vitest, pytest, Go test, etc.) and write appropriate test cases that verify the fix. The test file will be committed to the same branch as the fix.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        test_file_path: {
+          type: 'string',
+          description:
+            'Path for the new test file relative to repo root (e.g. "src/__tests__/auth.fix.spec.ts")',
+        },
+        test_content: {
+          type: 'string',
+          description: 'Full content of the test file',
+        },
+        related_fix_file: {
+          type: 'string',
+          description: 'The source file this test covers (for context)',
+        },
+        branch: {
+          type: 'string',
+          description: 'The branch to write the test file to (same as the fix branch)',
+        },
+        repo: {
+          type: 'string',
+          description:
+            'Optional: target repository in "owner/repo" format. If omitted, uses the primary repo.',
+        },
+      },
+      required: ['test_file_path', 'test_content', 'related_fix_file', 'branch'],
     },
   },
 ];

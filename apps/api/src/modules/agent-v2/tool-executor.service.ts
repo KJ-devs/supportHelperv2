@@ -376,6 +376,22 @@ export class ToolExecutorService {
         return { ...pr, reused };
       }
 
+      case 'generate_test': {
+        if (isPathDenied(input.test_file_path as string)) {
+          return { error: `Writing to "${input.test_file_path}" is not allowed (protected path)` };
+        }
+        const ctx = await this.resolveRepoContext(input, context);
+        if (!ctx) return { error: NO_REPO_ERROR };
+
+        return this.codeInvestigation.writeFile(
+          ctx,
+          input.branch as string,
+          input.test_file_path as string,
+          input.test_content as string,
+          `test: add test for fix in ${input.related_fix_file as string}`
+        );
+      }
+
       default: {
         const exhaustive: never = toolName;
         return { error: `Unknown tool: ${String(exhaustive)}` };
