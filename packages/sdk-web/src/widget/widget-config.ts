@@ -5,6 +5,7 @@ export const DEFAULT_CONFIG: Omit<WidgetConfig, 'sdkKey' | 'apiUrl'> = {
   primaryColor: '#6366f1',
   zIndex: 99999,
   theme: 'auto',
+  captureNetwork: false,
 };
 
 export const POSITION_STYLES: Record<
@@ -61,6 +62,11 @@ export function parseAttributeConfig(element: HTMLElement): Partial<WidgetConfig
   const locale = element.getAttribute('locale');
   if (locale && isValidLocale(locale)) {
     config.locale = locale;
+  }
+
+  const captureNetwork = element.getAttribute('capture-network');
+  if (captureNetwork === 'true') {
+    config.captureNetwork = true;
   }
 
   return config;

@@ -39,6 +39,7 @@ export interface WidgetConfig {
   zIndex: number;
   theme: WidgetTheme;
   locale?: 'en' | 'fr';
+  captureNetwork?: boolean;
 }
 
 export interface ReportPayload {

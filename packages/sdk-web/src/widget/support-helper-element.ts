@@ -13,6 +13,7 @@ import type {
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { ConsoleCapture } from '../context/console-capture';
 import { ErrorCapture } from '../context/error-capture';
+import { NetworkCapture } from '../context/network-capture';
 import { WidgetStateMachine } from './widget-state-machine';
 import { createWidgetStyles } from './widget-styles';
 import { renderFAB, renderModal, renderRecordingBar, getViewForState } from './widget-templates';
@@ -84,7 +85,16 @@ export class SupportHelperElement extends HTMLElement {
   private pollingTickTimer: number | null = null;
 
   static get observedAttributes(): string[] {
-    return ['sdk-key', 'api-url', 'position', 'primary-color', 'z-index', 'theme', 'locale'];
+    return [
+      'sdk-key',
+      'api-url',
+      'position',
+      'primary-color',
+      'z-index',
+      'theme',
+      'locale',
+      'capture-network',
+    ];
   }
 
   constructor() {
@@ -128,6 +138,11 @@ export class SupportHelperElement extends HTMLElement {
       apiUrl: attrConfig.apiUrl || '',
     };
 
+    // Install network capture if opted in
+    if (this.config.captureNetwork && this.config.apiUrl) {
+      NetworkCapture.install(this.config.apiUrl);
+    }
+
     // Validate required attributes
     if (!this.config.sdkKey) {
       console.warn('[SupportHelper] sdk-key attribute is required');
@@ -165,6 +180,7 @@ export class SupportHelperElement extends HTMLElement {
   disconnectedCallback(): void {
     ConsoleCapture.uninstall();
     ErrorCapture.uninstall();
+    NetworkCapture.uninstall();
     // Cleanup
     this.stopRecordingTimer();
     this.stopAttentionPulseTimer();
