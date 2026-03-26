@@ -579,6 +579,53 @@ export function renderErrorView(message: string, t: WidgetTranslations): string 
 }
 
 /**
+ * Cropping view - screen region selection
+ */
+export function renderCroppingView(
+  imageDataUrl: string,
+  mode: 'video' | 'screenshot',
+  t: WidgetTranslations
+): string {
+  const instruction =
+    mode === 'video' ? t.cropping.instructionVideo : t.cropping.instructionScreenshot;
+
+  return `
+    <div class="sh-view">
+      <p class="sh-message">${escapeHtml(instruction)}</p>
+      <div class="sh-crop-container">
+        <img class="sh-crop-image" src="${imageDataUrl}" draggable="false" alt="" />
+        <div class="sh-crop-overlay">
+          <div class="sh-crop-selection" style="display:none;">
+            <div class="sh-crop-handle" data-handle="nw"></div>
+            <div class="sh-crop-handle" data-handle="n"></div>
+            <div class="sh-crop-handle" data-handle="ne"></div>
+            <div class="sh-crop-handle" data-handle="e"></div>
+            <div class="sh-crop-handle" data-handle="se"></div>
+            <div class="sh-crop-handle" data-handle="s"></div>
+            <div class="sh-crop-handle" data-handle="sw"></div>
+            <div class="sh-crop-handle" data-handle="w"></div>
+            <div class="sh-crop-dimensions"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sh-btn-group">
+        <button class="sh-btn sh-btn-secondary" data-action="close" tabindex="0">
+          ${escapeHtml(t.cropping.cancel)}
+        </button>
+        <button
+          class="sh-btn sh-btn-primary sh-crop-confirm-btn"
+          data-action="crop-confirm"
+          disabled
+          tabindex="0"
+        >
+          ${escapeHtml(t.cropping.confirm)}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/**
  * Get view content based on state
  */
 export function getViewForState(
@@ -593,12 +640,16 @@ export function getViewForState(
     dashboardUrl?: string;
     errorMessage?: string;
     analyzingContext?: AnalyzingContext;
+    cropImageDataUrl?: string;
+    cropMode?: 'video' | 'screenshot';
   },
   t: WidgetTranslations
 ): string {
   switch (state) {
     case 'open':
       return renderOpenView(t);
+    case 'cropping':
+      return renderCroppingView(context.cropImageDataUrl || '', context.cropMode || 'video', t);
     case 'recording':
       return renderRecordingView(context.duration || 0, context.isPaused || false, t);
     case 'preview':

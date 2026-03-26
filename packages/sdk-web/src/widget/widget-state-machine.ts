@@ -8,8 +8,13 @@ const TRANSITIONS: Record<WidgetState, TransitionMap> = {
   },
   open: {
     CLOSE: 'idle',
-    START: 'recording',
-    SCREENSHOT: 'editing',
+    START: 'cropping',
+    SCREENSHOT: 'cropping',
+  },
+  cropping: {
+    CROP_CONFIRM_VIDEO: 'recording',
+    CROP_CONFIRM_SCREENSHOT: 'editing',
+    CLOSE: 'idle',
   },
   recording: {
     STOP: 'preview',

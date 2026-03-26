@@ -5,6 +5,7 @@ export type WidgetTheme = 'light' | 'dark' | 'auto';
 export type WidgetState =
   | 'idle'
   | 'open'
+  | 'cropping'
   | 'recording'
   | 'preview'
   | 'editing'
@@ -29,7 +30,16 @@ export type WidgetAction =
   | 'ANALYSIS_TIMEOUT'
   | 'ERROR'
   | 'RESET'
-  | 'SCREENSHOT';
+  | 'SCREENSHOT'
+  | 'CROP_CONFIRM_VIDEO'
+  | 'CROP_CONFIRM_SCREENSHOT';
+
+export interface CropRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface WidgetConfig {
   sdkKey: string;

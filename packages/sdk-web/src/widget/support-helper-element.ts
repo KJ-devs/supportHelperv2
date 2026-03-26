@@ -9,6 +9,7 @@ import type {
   WidgetEventMap,
   ReportResponse,
   AnalyzingContext,
+  CropRegion,
 } from './widget-types';
 import { DEFAULT_CONFIG, parseAttributeConfig } from './widget-config';
 import { ConsoleCapture } from '../context/console-capture';
@@ -25,6 +26,7 @@ import { ContextCapture } from '../context/context-capture';
 import { KeyboardManager } from './keyboard-manager';
 import { ScreenReaderAnnouncer } from './screen-reader-announcer';
 import type { QueueFlushedDetail, QueueErrorDetail } from '../offline-queue';
+import { CropManager } from './crop-overlay';
 
 /**
  * Support Helper Web Component
@@ -74,6 +76,14 @@ export class SupportHelperElement extends HTMLElement {
   // Attention pulse timer
   private attentionPulseTimer: number | null = null;
   private attentionPulseDelay = 5000; // 5 seconds
+
+  // Crop state
+  private cropManager: CropManager | null = null;
+  private cropMode: 'video' | 'screenshot' | null = null;
+  private cropImageDataUrl: string | null = null;
+  private cropStream: MediaStream | null = null;
+  private cropAnimFrameId: number | null = null;
+  private cropSourceVideo: HTMLVideoElement | null = null;
 
   // AI polling state
   private pollStop: (() => void) | null = null;
@@ -186,6 +196,7 @@ export class SupportHelperElement extends HTMLElement {
     this.stopAttentionPulseTimer();
     this.stopPolling();
     this.cleanupVideoUrl();
+    this.cleanupCrop();
     if (this.videoRecorder?.isActive()) {
       this.videoRecorder.stop().catch(() => {});
     }
@@ -295,6 +306,7 @@ export class SupportHelperElement extends HTMLElement {
 
     // Render modal if not idle and not recording
     if (state !== 'idle' && state !== 'recording') {
+      const modalTitle = state === 'cropping' ? t.cropping.title : t.open.title;
       const viewContent = getViewForState(
         state,
         {
@@ -304,7 +316,7 @@ export class SupportHelperElement extends HTMLElement {
           isPaused: this.isRecordingPaused,
           ticketId: this.lastReportResponse?.ticket.id ?? this.pollingTicketId,
           aiAnalysis: this.lastReportResponse?.aiAnalysis,
-          dashboardUrl: undefined, // Could be constructed from config
+          dashboardUrl: undefined,
           errorMessage: this.errorMessage,
           analyzingContext:
             state === 'analyzing'
@@ -315,14 +327,24 @@ export class SupportHelperElement extends HTMLElement {
                   aiResult: this.pollingResult ?? undefined,
                 }
               : undefined,
+          cropImageDataUrl: this.cropImageDataUrl || undefined,
+          cropMode: this.cropMode || undefined,
         },
         t
       );
-      html += renderModal(t.open.title, viewContent, t);
+      html += renderModal(modalTitle, viewContent, t);
     }
 
     this.shadow.innerHTML = html;
     this.attachEventListeners();
+
+    // Attach crop manager after render when in cropping state
+    if (state === 'cropping') {
+      if (!this.cropManager) {
+        this.cropManager = new CropManager();
+      }
+      this.cropManager.attach(this.shadow);
+    }
   }
 
   /**
@@ -399,6 +421,9 @@ export class SupportHelperElement extends HTMLElement {
           this.stateMachine.dispatch('ACCEPT');
         }
         break;
+      case 'crop-confirm':
+        void this.handleCropConfirm();
+        break;
       case 're-record':
         this.handleReRecord();
         break;
@@ -417,6 +442,13 @@ export class SupportHelperElement extends HTMLElement {
     // Stop ongoing AI polling when user closes the widget.
     if (currentState === 'analyzing') {
       this.stopPolling();
+    }
+
+    // If cropping, cleanup crop and close
+    if (currentState === 'cropping') {
+      this.cleanupCrop();
+      this.stateMachine.dispatch('CLOSE');
+      return;
     }
 
     // If recording, stop it first
@@ -465,36 +497,34 @@ export class SupportHelperElement extends HTMLElement {
 
     try {
       this.cleanupRecording();
+      this.cleanupCrop();
 
-      this.videoRecorder = new VideoRecorder({
-        mimeType: 'video/webm',
-        audioTracks: true,
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always',
+        } as MediaTrackConstraints,
+        audio: true,
       });
 
-      await this.videoRecorder.start();
+      const dataUrl = await this.captureFrameDataUrl(stream);
 
-      this.recordingStartTime = Date.now();
-      this.isRecordingPaused = false;
-      this.startRecordingTimer();
+      this.cropStream = stream;
+      this.cropMode = 'video';
+      this.cropImageDataUrl = dataUrl;
 
-      // Transition to recording state
       this.stateMachine.dispatch('START');
-
-      // Announce to screen readers
-      this.announcer.announce('Recording started', 'polite');
-
-      this.emit('sh:recording-start', undefined);
     } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        this.isStartingRecording = false;
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Failed to start recording';
       this.errorMessage = message;
-
-      // Announce error to screen readers
       this.announcer.announce(`Error: ${message}`, 'assertive');
-
       this.emit('sh:error', { message });
       console.error('[SupportHelper] Start recording error:', error);
-      // Cleanup on failure
       this.cleanupRecording();
+      this.cleanupCrop();
     } finally {
       this.isStartingRecording = false;
     }
@@ -507,50 +537,25 @@ export class SupportHelperElement extends HTMLElement {
     if (!this.stateMachine.canTransition('SCREENSHOT')) return;
 
     try {
+      this.cleanupCrop();
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
         audio: false,
       });
 
-      const track = stream.getVideoTracks()[0];
-      if (!track) {
-        stream.getTracks().forEach(t => t.stop());
-        throw new Error('No video track available');
-      }
+      const dataUrl = await this.captureFrameDataUrl(stream);
 
-      // Create a video element to grab a frame
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
-      await video.play();
-
-      // Wait one frame to ensure the video is rendering
-      await new Promise(resolve => requestAnimationFrame(resolve));
-
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1920;
-      canvas.height = video.videoHeight || 1080;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Failed to get canvas context');
-      ctx.drawImage(video, 0, 0);
-
-      // Stop stream immediately
+      // Stop stream immediately for screenshots — we have the frame
       stream.getTracks().forEach(t => t.stop());
-      video.srcObject = null;
 
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob(b => {
-          if (b) resolve(b);
-          else reject(new Error('Failed to capture screenshot'));
-        }, 'image/png');
-      });
+      this.cropMode = 'screenshot';
+      this.cropImageDataUrl = dataUrl;
 
-      this.screenshotBlob = blob;
-      this.videoBlob = null;
       this.stateMachine.dispatch('SCREENSHOT');
     } catch (error) {
       if (error instanceof DOMException && error.name === 'NotAllowedError') {
-        return; // User cancelled — stay on open
+        return;
       }
       const message = error instanceof Error ? error.message : 'Failed to capture screenshot';
       this.errorMessage = message;
@@ -587,6 +592,20 @@ export class SupportHelperElement extends HTMLElement {
       this.videoBlob = await this.videoRecorder.stop();
       this.videoSize = this.videoBlob.size;
       this.videoDuration = Math.floor((Date.now() - this.recordingStartTime) / 1000);
+
+      // Cleanup cropped recording resources
+      if (this.cropAnimFrameId !== null) {
+        cancelAnimationFrame(this.cropAnimFrameId);
+        this.cropAnimFrameId = null;
+      }
+      if (this.cropSourceVideo) {
+        this.cropSourceVideo.srcObject = null;
+        this.cropSourceVideo = null;
+      }
+      if (this.cropStream) {
+        this.cropStream.getTracks().forEach(t => t.stop());
+        this.cropStream = null;
+      }
 
       // Create URL for preview
       this.cleanupVideoUrl();
@@ -645,6 +664,158 @@ export class SupportHelperElement extends HTMLElement {
       this.render();
     } catch (error) {
       console.error('[SupportHelper] Resume recording error:', error);
+    }
+  }
+
+  /**
+   * Capture first video frame as a data URL from a MediaStream.
+   */
+  private async captureFrameDataUrl(stream: MediaStream): Promise<string> {
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    await video.play();
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth || 1920;
+    canvas.height = video.videoHeight || 1080;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+    ctx.drawImage(video, 0, 0);
+    video.srcObject = null;
+
+    return canvas.toDataURL('image/jpeg', 0.85);
+  }
+
+  /**
+   * Handle crop confirm — branches on mode.
+   */
+  private async handleCropConfirm(): Promise<void> {
+    if (!this.cropManager) return;
+    const region = this.cropManager.getRegion();
+    if (!region) return;
+
+    if (this.cropMode === 'screenshot') {
+      await this.cropScreenshotRegion(region);
+      this.cleanupCrop();
+      this.stateMachine.dispatch('CROP_CONFIRM_SCREENSHOT');
+    } else if (this.cropMode === 'video') {
+      await this.startCroppedRecording(region);
+      this.cleanupCropManager();
+      this.stateMachine.dispatch('CROP_CONFIRM_VIDEO');
+
+      this.recordingStartTime = Date.now();
+      this.isRecordingPaused = false;
+      this.startRecordingTimer();
+      this.announcer.announce('Recording started', 'polite');
+      this.emit('sh:recording-start', undefined);
+    }
+  }
+
+  /**
+   * Crop the stored screenshot image to the selected region.
+   */
+  private async cropScreenshotRegion(region: CropRegion): Promise<void> {
+    if (!this.cropImageDataUrl) return;
+
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = region.width;
+        canvas.height = region.height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        ctx.drawImage(img, region.x, region.y, region.width, region.height, 0, 0, region.width, region.height);
+        canvas.toBlob(blob => {
+          if (blob) {
+            this.screenshotBlob = blob;
+            this.videoBlob = null;
+            resolve();
+          } else {
+            reject(new Error('Failed to crop screenshot'));
+          }
+        }, 'image/png');
+      };
+      img.onerror = () => reject(new Error('Failed to load screenshot for cropping'));
+      img.src = this.cropImageDataUrl!;
+    });
+  }
+
+  /**
+   * Start a cropped recording by rendering only the selected region to a canvas stream.
+   */
+  private async startCroppedRecording(region: CropRegion): Promise<void> {
+    if (!this.cropStream) throw new Error('No crop stream available');
+
+    const sourceVideo = document.createElement('video');
+    sourceVideo.srcObject = this.cropStream;
+    sourceVideo.muted = true;
+    await sourceVideo.play();
+
+    const canvas = document.createElement('canvas');
+    canvas.width = region.width;
+    canvas.height = region.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Failed to get canvas context');
+
+    const drawFrame = (): void => {
+      ctx.drawImage(
+        sourceVideo,
+        region.x, region.y, region.width, region.height,
+        0, 0, region.width, region.height
+      );
+      this.cropAnimFrameId = requestAnimationFrame(drawFrame);
+    };
+    this.cropAnimFrameId = requestAnimationFrame(drawFrame);
+    this.cropSourceVideo = sourceVideo;
+
+    const croppedStream = canvas.captureStream(30);
+
+    // Attach audio tracks from original stream
+    this.cropStream.getAudioTracks().forEach(track => {
+      croppedStream.addTrack(track);
+    });
+
+    this.videoRecorder = new VideoRecorder({
+      mimeType: 'video/webm',
+      audioTracks: true,
+    });
+    await this.videoRecorder.startWithStream(croppedStream);
+  }
+
+  /**
+   * Cleanup only the CropManager (detach + null), leaving stream/image for video recording.
+   */
+  private cleanupCropManager(): void {
+    if (this.cropManager) {
+      this.cropManager.detach();
+      this.cropManager = null;
+    }
+    this.cropImageDataUrl = null;
+    this.cropMode = null;
+  }
+
+  /**
+   * Full crop cleanup — manager, image, stream.
+   */
+  private cleanupCrop(): void {
+    this.cleanupCropManager();
+    if (this.cropStream) {
+      this.cropStream.getTracks().forEach(t => t.stop());
+      this.cropStream = null;
+    }
+    if (this.cropAnimFrameId !== null) {
+      cancelAnimationFrame(this.cropAnimFrameId);
+      this.cropAnimFrameId = null;
+    }
+    if (this.cropSourceVideo) {
+      this.cropSourceVideo.srcObject = null;
+      this.cropSourceVideo = null;
     }
   }
 
@@ -816,10 +987,19 @@ export class SupportHelperElement extends HTMLElement {
 
       // Cleanup on close
       this.cleanupRecording();
+      this.cleanupCrop();
       this.stopPolling();
       this.formData = { title: '', description: '' };
       // Restart attention pulse timer when returning to idle
       this.startAttentionPulseTimer();
+    }
+
+    // Detach crop manager when leaving cropping state
+    if (prevState === 'cropping' && newState !== 'cropping') {
+      if (this.cropManager) {
+        this.cropManager.detach();
+        // Keep cropManager instance; it gets set to null in cleanupCropManager/cleanupCrop
+      }
     }
 
     // Re-render

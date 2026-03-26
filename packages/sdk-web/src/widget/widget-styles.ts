@@ -830,6 +830,76 @@ export function createWidgetStyles(primaryColor: string, zIndex: number, positio
       border: 1px solid var(--sh-border);
     }
 
+    /* Cropping state - wider modal */
+    :host([data-state="cropping"]) .sh-modal {
+      width: 600px;
+      max-width: min(90vw, 600px);
+    }
+
+    /* Crop container */
+    .sh-crop-container {
+      position: relative;
+      overflow: hidden;
+      border-radius: var(--sh-radius-sm);
+      max-height: 300px;
+      background: black;
+    }
+
+    .sh-crop-image {
+      width: 100%;
+      display: block;
+      user-select: none;
+      pointer-events: none;
+      max-height: 300px;
+      object-fit: contain;
+    }
+
+    .sh-crop-overlay {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+    }
+
+    .sh-crop-selection {
+      position: absolute;
+      border: 2px dashed white;
+      box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+      cursor: move;
+    }
+
+    /* Resize handles */
+    .sh-crop-handle {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      background: white;
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 2px;
+    }
+
+    .sh-crop-handle[data-handle="nw"] { top: -5px; left: -5px; cursor: nw-resize; }
+    .sh-crop-handle[data-handle="n"]  { top: -5px; left: calc(50% - 5px); cursor: n-resize; }
+    .sh-crop-handle[data-handle="ne"] { top: -5px; right: -5px; cursor: ne-resize; }
+    .sh-crop-handle[data-handle="e"]  { top: calc(50% - 5px); right: -5px; cursor: e-resize; }
+    .sh-crop-handle[data-handle="se"] { bottom: -5px; right: -5px; cursor: se-resize; }
+    .sh-crop-handle[data-handle="s"]  { bottom: -5px; left: calc(50% - 5px); cursor: s-resize; }
+    .sh-crop-handle[data-handle="sw"] { bottom: -5px; left: -5px; cursor: sw-resize; }
+    .sh-crop-handle[data-handle="w"]  { top: calc(50% - 5px); left: -5px; cursor: w-resize; }
+
+    .sh-crop-dimensions {
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       .sh-modal {

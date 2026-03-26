@@ -77,6 +77,39 @@ export class VideoRecorder {
     }
   }
 
+  async startWithStream(stream: MediaStream): Promise<void> {
+    if (this.isRecording) {
+      throw new Error('Recording already in progress');
+    }
+
+    this.stream = stream;
+
+    const mediaRecorderOptions: MediaRecorderOptions = {
+      mimeType: this.options.mimeType,
+    };
+
+    if (this.options.videoBitsPerSecond) {
+      mediaRecorderOptions.videoBitsPerSecond = this.options.videoBitsPerSecond;
+    }
+
+    this.mediaRecorder = new MediaRecorder(this.stream, mediaRecorderOptions);
+
+    this.mediaRecorder.ondataavailable = (event: BlobEvent) => {
+      if (event.data.size > 0) {
+        this.chunks.push(event.data);
+      }
+    };
+
+    this.mediaRecorder.start();
+    this.isRecording = true;
+
+    this.stream.getTracks().forEach(track => {
+      track.onended = () => {
+        this.stop();
+      };
+    });
+  }
+
   stop(): Promise<Blob> {
     // If already stopped or not initialized
     if (!this.mediaRecorder || !this.isRecording) {

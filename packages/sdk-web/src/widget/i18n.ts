@@ -61,6 +61,13 @@ export interface WidgetTranslations {
     close: string;
     unknownError: string;
   };
+  cropping: {
+    title: string;
+    instructionVideo: string;
+    instructionScreenshot: string;
+    confirm: string;
+    cancel: string;
+  };
 }
 
 const en: WidgetTranslations = {
@@ -126,6 +133,13 @@ const en: WidgetTranslations = {
     close: 'Close',
     unknownError: 'An unknown error occurred.',
   },
+  cropping: {
+    title: 'Select area',
+    instructionVideo: 'Draw a rectangle to select the area you want to record.',
+    instructionScreenshot: 'Draw a rectangle to select the area you want to capture.',
+    confirm: 'Confirm selection',
+    cancel: 'Cancel',
+  },
 };
 
 const fr: WidgetTranslations = {
@@ -190,6 +204,13 @@ const fr: WidgetTranslations = {
     tryAgain: 'Reessayer',
     close: 'Fermer',
     unknownError: 'Une erreur inconnue est survenue.',
+  },
+  cropping: {
+    title: 'Selectionner une zone',
+    instructionVideo: 'Dessinez un rectangle pour selectionner la zone a enregistrer.',
+    instructionScreenshot: 'Dessinez un rectangle pour selectionner la zone a capturer.',
+    confirm: 'Confirmer la selection',
+    cancel: 'Annuler',
   },
 };
 

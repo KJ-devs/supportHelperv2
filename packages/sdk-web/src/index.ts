@@ -157,6 +157,7 @@ export class SupportHelper {
         title: options.title,
         description: options.description,
         videoBlob: options.videoBlob,
+        screenshotBlob: null,
         userContext: context,
       },
     );
