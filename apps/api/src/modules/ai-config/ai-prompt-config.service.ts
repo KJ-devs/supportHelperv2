@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { AiPromptConfig } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -300,6 +301,27 @@ export class AiPromptConfigService {
         return config.n1Instructions;
       case 'analysis':
         return config.analysisInstructions;
+    }
+  }
+
+  async computeConfigHash(tenantId: string): Promise<string | null> {
+    try {
+      const config = await this.prisma.aiPromptConfig.findUnique({
+        where: { tenantId },
+      });
+      if (!config) return null;
+
+      const payload = JSON.stringify({
+        productDescription: config.productDescription,
+        globalInstructions: config.globalInstructions,
+        triageInstructions: config.triageInstructions,
+        n1Instructions: config.n1Instructions,
+        analysisInstructions: config.analysisInstructions,
+      });
+
+      return createHash('sha256').update(payload).digest('hex');
+    } catch {
+      return null;
     }
   }
 }

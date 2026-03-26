@@ -6,6 +6,7 @@ import { TriageClassificationService } from './triage-classification.service';
 import { TriageRouterService } from './triage-router.service';
 import { TicketsAIService } from '../tickets/tickets-ai.service';
 import { FeedbackService } from '../feedback/feedback.service';
+import { AiPromptConfigService } from '../ai-config/ai-prompt-config.service';
 import { TriageContext, TriageResult } from './interfaces/triage.interfaces';
 import {
   AgentHandoffContext,
@@ -26,7 +27,8 @@ export class TriageService {
     private readonly classificationService: TriageClassificationService,
     private readonly routerService: TriageRouterService,
     private readonly ticketsAiService: TicketsAIService,
-    private readonly feedbackService: FeedbackService
+    private readonly feedbackService: FeedbackService,
+    private readonly aiPromptConfigService: AiPromptConfigService,
   ) {}
 
   /**
@@ -102,6 +104,9 @@ export class TriageService {
       // Run AI classification (unless explicitly skipped)
       const classification = await this.classificationService.classify(context, tenantId);
 
+      // Compute config hash for audit trail
+      const aiConfigHash = await this.aiPromptConfigService.computeConfigHash(tenantId);
+
       // Update ticket with classification results
       await this.prisma.ticket.update({
         where: { id: ticketId },
@@ -112,6 +117,7 @@ export class TriageService {
           severityConfidence: classification.severityConfidence,
           aiSummary: classification.summary || undefined,
           keywords: classification.keywords,
+          aiConfigHash,
           // Store working-as-intended signal for N1 triage consumption
           aiAnalysis: {
             workingAsIntendedConfidence: classification.workingAsIntendedConfidence,
