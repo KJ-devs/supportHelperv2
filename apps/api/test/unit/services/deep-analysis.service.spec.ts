@@ -86,6 +86,9 @@ describe('DeepAnalysisService', () => {
       agentMessage: {
         create: jest.fn(),
       },
+      codebaseIndexStatus: {
+        findFirst: jest.fn(),
+      },
     };
 
     const mockCodeInvestigation = {
@@ -530,6 +533,67 @@ describe('DeepAnalysisService', () => {
       await service.analyze('ticket-123', 'tenant-123');
       const { systemPrompt } = (agenticLoop.run as jest.Mock).mock.calls[0][0];
       expect(systemPrompt).toContain('not a bug');
+    });
+  });
+
+  describe('auto-index codebase on first analysis', () => {
+    let eventEmitter: jest.Mocked<{ emit: jest.Mock }>;
+
+    beforeEach(() => {
+      eventEmitter = service['eventEmitter'] as unknown as jest.Mocked<{ emit: jest.Mock }>;
+
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue(mockTicketBase);
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({});
+      (prisma.ticketEvent.create as jest.Mock).mockResolvedValue({});
+      (agenticLoop.run as jest.Mock).mockResolvedValue(mockLoopResult);
+      (diagnosisService.extractDiagnosisFromToolCalls as jest.Mock).mockReturnValue(mockDiagnosis);
+      (diagnosisService.saveDiagnosis as jest.Mock).mockResolvedValue(undefined);
+    });
+
+    it('emits "codebase.index-requested" when repo exists but no CodebaseIndexStatus', async () => {
+      (codeInvestigation.getRepoContext as jest.Mock).mockResolvedValue(mockRepoCtx);
+      (codeInvestigation.getRepoStructure as jest.Mock).mockResolvedValue('src/');
+      (prisma.codebaseIndexStatus.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await service.analyze('ticket-123', 'tenant-123');
+
+      expect(eventEmitter.emit).toHaveBeenCalledWith('codebase.index-requested', {
+        applicationId: 'app-123',
+        tenantId: 'tenant-123',
+      });
+    });
+
+    it('does NOT emit "codebase.index-requested" when index already exists', async () => {
+      (codeInvestigation.getRepoContext as jest.Mock).mockResolvedValue(mockRepoCtx);
+      (codeInvestigation.getRepoStructure as jest.Mock).mockResolvedValue('src/');
+      (prisma.codebaseIndexStatus.findFirst as jest.Mock).mockResolvedValue({
+        id: 'index-1',
+        applicationId: 'app-123',
+        status: 'ready',
+      });
+
+      await service.analyze('ticket-123', 'tenant-123');
+
+      const emitCalls = (eventEmitter.emit as jest.Mock).mock.calls;
+      const indexCalls = emitCalls.filter(
+        ([event]: [string]) => event === 'codebase.index-requested'
+      );
+      expect(indexCalls).toHaveLength(0);
+    });
+
+    it('does NOT emit "codebase.index-requested" when no repo context', async () => {
+      (codeInvestigation.getRepoContext as jest.Mock).mockResolvedValue(null);
+      (prisma.codebaseIndexStatus.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await service.analyze('ticket-123', 'tenant-123');
+
+      const emitCalls = (eventEmitter.emit as jest.Mock).mock.calls;
+      const indexCalls = emitCalls.filter(
+        ([event]: [string]) => event === 'codebase.index-requested'
+      );
+      expect(indexCalls).toHaveLength(0);
+      // codebaseIndexStatus should not have been queried either
+      expect(prisma.codebaseIndexStatus.findFirst).not.toHaveBeenCalled();
     });
   });
 });
