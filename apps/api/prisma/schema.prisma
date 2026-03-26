@@ -42,6 +42,7 @@ model Tenant {
   ssoConfig               SsoConfig?
   archivedDeadLetterJobs  ArchivedDeadLetterJob[]
   ticketRelations         TicketRelation[]
+  agentDefinitions        AgentDefinition[]
 
   @@map("tenants")
 }
@@ -871,4 +872,31 @@ model TicketRelation {
   @@index([targetTicketId])
   @@index([tenantId])
   @@map("ticket_relations")
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// AGENT DEFINITIONS
+// ═══════════════════════════════════════════════════════════════════════
+
+model AgentDefinition {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String?  @map("tenant_id") @db.Uuid
+  name          String   @db.VarChar(100)
+  description   String?  @db.Text
+  systemPrompt  String   @map("system_prompt") @db.Text
+  toolset       String[] @default([])
+  triggerRules  Json?    @map("trigger_rules") @db.JsonB
+  model         String?  @db.VarChar(100)
+  temperature   Float?   @db.DoublePrecision
+  maxIterations Int?     @map("max_iterations") @default(15)
+  isActive      Boolean  @default(true) @map("is_active")
+  isSystem      Boolean  @default(false) @map("is_system")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("agent_definitions")
 }

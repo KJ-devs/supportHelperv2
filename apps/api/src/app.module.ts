@@ -42,6 +42,7 @@ import { MediaModule } from './modules/media/media.module';
 // AI & Automation
 import { AIModule } from './ai/ai.module';
 import { AiConfigModule } from './modules/ai-config/ai-config.module';
+
 // Integrations
 import { GithubModule } from './modules/github/github.module';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
@@ -93,6 +94,9 @@ import { BillingModule } from './modules/billing/billing.module';
 
 // Admin (Queue metrics & platform management)
 import { AdminModule } from './modules/admin/admin.module';
+
+// Agent Definitions
+import { AgentDefinitionsModule } from './modules/agent-definitions/agent-definitions.module';
 
 /**
  * Root Application Module
@@ -249,6 +253,9 @@ import { AdminModule } from './modules/admin/admin.module';
 
     // Admin (Queue metrics & platform management)
     AdminModule,
+
+    // Agent Definitions
+    AgentDefinitionsModule,
   ],
   providers: [
     // Global rate limiting guard
