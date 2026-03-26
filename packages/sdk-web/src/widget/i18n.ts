@@ -11,6 +11,7 @@ export interface WidgetTranslations {
     title: string;
     message: string;
     startRecording: string;
+    takeScreenshot: string;
   };
   recording: {
     paused: string;
@@ -74,6 +75,7 @@ const en: WidgetTranslations = {
     message:
       "Share your screen to capture exactly what went wrong. We'll analyze the video to help resolve your issue faster.",
     startRecording: 'Start Recording',
+    takeScreenshot: 'Take Screenshot',
   },
   recording: {
     paused: 'Recording paused',
@@ -138,6 +140,7 @@ const fr: WidgetTranslations = {
     message:
       "Partagez votre ecran pour capturer exactement ce qui s'est passe. Nous analyserons la video pour resoudre votre probleme plus rapidement.",
     startRecording: "Demarrer l'enregistrement",
+    takeScreenshot: "Capture d'ecran",
   },
   recording: {
     paused: 'Enregistrement en pause',

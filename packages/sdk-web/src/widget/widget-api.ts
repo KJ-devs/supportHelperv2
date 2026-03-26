@@ -43,7 +43,7 @@ export async function submitReport(
   sdkKey: string,
   payload: ReportPayload,
   timeout = 60000,
-  onQueued?: (reason: string) => void,
+  onQueued?: (reason: string) => void
 ): Promise<ReportResponse | null> {
   // When offline, skip the network attempt and queue directly.
   if (!navigator.onLine) {
@@ -60,6 +60,10 @@ export async function submitReport(
   if (payload.videoBlob) {
     const ext = payload.videoBlob.type.includes('mp4') ? 'mp4' : 'webm';
     formData.append('video', payload.videoBlob, `recording_${Date.now()}.${ext}`);
+  }
+
+  if (payload.screenshotBlob) {
+    formData.append('screenshot', payload.screenshotBlob, `screenshot_${Date.now()}.png`);
   }
 
   const controller = new AbortController();
@@ -93,7 +97,7 @@ export async function submitReport(
     // queue the report and return null so the widget can show a "queued" state.
     const isNetworkError = error instanceof TypeError;
     if (isNetworkError) {
-      await enqueueReport(apiUrl, sdkKey, payload, 'network-error').catch((qErr) => {
+      await enqueueReport(apiUrl, sdkKey, payload, 'network-error').catch(qErr => {
         // If queuing itself fails, log and rethrow the original error.
         console.warn('[OfflineQueue] Failed to queue report:', qErr);
       });
@@ -144,7 +148,7 @@ export function pollTicketStatus(
   ticketId: string,
   callbacks: PollCallbacks,
   intervalMs = POLL_INTERVAL_MS,
-  timeoutMs = POLL_TIMEOUT_MS,
+  timeoutMs = POLL_TIMEOUT_MS
 ): { stop: () => void } {
   let stopped = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -210,7 +214,7 @@ async function enqueueReport(
   apiUrl: string,
   sdkKey: string,
   payload: ReportPayload,
-  _reason: string,
+  _reason: string
 ): Promise<void> {
   const queue = await getOfflineQueue();
   await queue.enqueue({

@@ -25,6 +25,11 @@ const ICONS = {
     <circle cx="12" cy="12" r="3"/>
   </svg>`,
 
+  camera: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+    <circle cx="12" cy="13" r="4"/>
+  </svg>`,
+
   play: `<svg viewBox="0 0 24 24" fill="currentColor">
     <polygon points="5 3 19 12 5 21 5 3"/>
   </svg>`,
@@ -134,15 +139,28 @@ export function renderOpenView(t: WidgetTranslations): string {
       <p class="sh-message">
         ${escapeHtml(t.open.message)}
       </p>
-      <button
-        class="sh-btn sh-btn-primary sh-btn-block"
-        data-action="start"
-        aria-label="${escapeHtml(t.open.startRecording)}"
-        tabindex="0"
-      >
-        ${ICONS.video}
-        <span>${escapeHtml(t.open.startRecording)}</span>
-      </button>
+      <div style="display: flex; gap: 8px;">
+        <button
+          class="sh-btn sh-btn-primary"
+          style="flex: 1;"
+          data-action="start"
+          aria-label="${escapeHtml(t.open.startRecording)}"
+          tabindex="0"
+        >
+          ${ICONS.video}
+          <span>${escapeHtml(t.open.startRecording)}</span>
+        </button>
+        <button
+          class="sh-btn sh-btn-secondary"
+          style="flex: 1;"
+          data-action="screenshot"
+          aria-label="${escapeHtml(t.open.takeScreenshot)}"
+          tabindex="0"
+        >
+          ${ICONS.camera}
+          <span>${escapeHtml(t.open.takeScreenshot)}</span>
+        </button>
+      </div>
     </div>
   `;
 }

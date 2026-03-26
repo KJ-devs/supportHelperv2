@@ -28,7 +28,8 @@ export type WidgetAction =
   | 'ANALYSIS_DONE'
   | 'ANALYSIS_TIMEOUT'
   | 'ERROR'
-  | 'RESET';
+  | 'RESET'
+  | 'SCREENSHOT';
 
 export interface WidgetConfig {
   sdkKey: string;
@@ -44,6 +45,7 @@ export interface ReportPayload {
   title: string;
   description: string;
   videoBlob: Blob | null;
+  screenshotBlob: Blob | null;
   userContext: Record<string, unknown>;
 }
 

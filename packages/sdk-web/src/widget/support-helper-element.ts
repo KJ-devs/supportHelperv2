@@ -34,6 +34,7 @@ export class SupportHelperElement extends HTMLElement {
   private config: WidgetConfig;
   private videoRecorder: VideoRecorder | null = null;
   private videoBlob: Blob | null = null;
+  private screenshotBlob: Blob | null = null;
   private videoUrl: string | null = null;
   private videoDuration = 0;
   private videoSize = 0;
@@ -365,6 +366,9 @@ export class SupportHelperElement extends HTMLElement {
       case 'start':
         this.handleStartRecording();
         break;
+      case 'screenshot':
+        this.handleScreenshot();
+        break;
       case 'stop':
         this.handleStopRecording();
         break;
@@ -477,6 +481,64 @@ export class SupportHelperElement extends HTMLElement {
       this.cleanupRecording();
     } finally {
       this.isStartingRecording = false;
+    }
+  }
+
+  /**
+   * Handle screenshot capture
+   */
+  private async handleScreenshot(): Promise<void> {
+    if (!this.stateMachine.canTransition('SCREENSHOT')) return;
+
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false,
+      });
+
+      const track = stream.getVideoTracks()[0];
+      if (!track) {
+        stream.getTracks().forEach(t => t.stop());
+        throw new Error('No video track available');
+      }
+
+      // Create a video element to grab a frame
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      await video.play();
+
+      // Wait one frame to ensure the video is rendering
+      await new Promise(resolve => requestAnimationFrame(resolve));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 1920;
+      canvas.height = video.videoHeight || 1080;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Failed to get canvas context');
+      ctx.drawImage(video, 0, 0);
+
+      // Stop stream immediately
+      stream.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(b => {
+          if (b) resolve(b);
+          else reject(new Error('Failed to capture screenshot'));
+        }, 'image/png');
+      });
+
+      this.screenshotBlob = blob;
+      this.videoBlob = null;
+      this.stateMachine.dispatch('SCREENSHOT');
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotAllowedError') {
+        return; // User cancelled — stay on open
+      }
+      const message = error instanceof Error ? error.message : 'Failed to capture screenshot';
+      this.errorMessage = message;
+      this.emit('sh:error', { message });
     }
   }
 
@@ -653,6 +715,7 @@ export class SupportHelperElement extends HTMLElement {
           title: this.formData.title,
           description: this.formData.description,
           videoBlob: this.videoBlob,
+          screenshotBlob: this.screenshotBlob,
           userContext,
         },
         60000,
@@ -792,6 +855,7 @@ export class SupportHelperElement extends HTMLElement {
     this.stopRecordingTimer();
     this.cleanupVideoUrl();
     this.videoBlob = null;
+    this.screenshotBlob = null;
     this.videoDuration = 0;
     this.videoSize = 0;
     this.isRecordingPaused = false;
