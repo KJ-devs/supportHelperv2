@@ -665,7 +665,7 @@ export class TicketsService {
       },
     });
 
-    if (resolvedTickets.length === 0) return 0;
+    if (resolvedTickets.length === 0) return null;
 
     const totalTime = resolvedTickets.reduce((sum, ticket) => {
       if (!ticket.resolvedAt) return sum;
