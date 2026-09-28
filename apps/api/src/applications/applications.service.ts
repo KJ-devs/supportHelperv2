@@ -30,7 +30,7 @@ export class ApplicationsService {
   }
 
   async findByTenant(tenantId: string) {
-    return this.cacheService.getOrSet(
+    const apps = await this.cacheService.getOrSet(
       CacheKeys.applicationList(tenantId),
       CacheTTL.APPLICATIONS,
       () => this.prisma.application.findMany({
@@ -38,6 +38,19 @@ export class ApplicationsService {
         orderBy: { createdAt: 'desc' },
       }),
     );
+
+    // Ticket counts change constantly, so they are computed outside the cache
+    const counts = await this.prisma.ticket.groupBy({
+      by: ['applicationId'],
+      where: { tenantId },
+      _count: { _all: true },
+    });
+    const countByApp = new Map(counts.map((c) => [c.applicationId, c._count._all]));
+
+    return apps.map((app) => ({
+      ...app,
+      _count: { tickets: countByApp.get(app.id) ?? 0 },
+    }));
   }
 
   async findOne(id: string, tenantId: string) {

@@ -50,6 +50,7 @@ describe('ApplicationsService', () => {
             },
             ticket: {
               count: jest.fn(),
+              groupBy: jest.fn().mockResolvedValue([]),
             },
           },
         },
@@ -96,13 +97,19 @@ describe('ApplicationsService', () => {
   });
 
   describe('findByTenant', () => {
-    it('should return all applications for a tenant', async () => {
+    it('should return all applications for a tenant with their ticket count', async () => {
       (prismaService.application.findMany as jest.Mock).mockResolvedValue([mockApplication]);
+      (prismaService.ticket.groupBy as jest.Mock).mockResolvedValue([
+        { applicationId: mockApplication.id, _count: { _all: 7 } },
+      ]);
 
       const result = await service.findByTenant('tenant-123');
 
       expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(mockApplication);
+      expect(result[0]).toEqual({ ...mockApplication, _count: { tickets: 7 } });
+      expect(prismaService.ticket.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({ by: ['applicationId'], where: { tenantId: 'tenant-123' } }),
+      );
       expect(prismaService.application.findMany).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-123' },
         orderBy: { createdAt: 'desc' },
