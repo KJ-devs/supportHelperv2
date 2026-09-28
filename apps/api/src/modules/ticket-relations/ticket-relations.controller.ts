@@ -12,7 +12,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { TicketRelationsService } from './ticket-relations.service';
 import { CreateTicketRelationDto } from './dto/create-ticket-relation.dto';
 
-@Controller('api/tickets/:ticketId/relations')
+@Controller('tickets/:ticketId/relations')
 @UseGuards(JwtAuthGuard)
 export class TicketRelationsController {
   constructor(private readonly relationsService: TicketRelationsService) {}
