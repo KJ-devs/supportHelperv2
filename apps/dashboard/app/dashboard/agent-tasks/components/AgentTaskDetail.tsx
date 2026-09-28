@@ -273,6 +273,31 @@ function OverviewTab({
         </div>
       )}
 
+      {/* Diagnosis summary card */}
+      {task.diagnosisSnapshot && (
+        <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              {t('rootCause')}
+            </h4>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                Math.round(task.diagnosisSnapshot.confidence * 100) >= 70
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : Math.round(task.diagnosisSnapshot.confidence * 100) >= 40
+                    ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+                    : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+              }`}
+            >
+              {Math.round(task.diagnosisSnapshot.confidence * 100)}% {t('confidence')}
+            </span>
+          </div>
+          <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-3">
+            {task.diagnosisSnapshot.rootCause}
+          </p>
+        </div>
+      )}
+
       {/* Execution Logs (inline terminal) */}
       <div className="mt-6">
         <div className="flex items-center gap-2 mb-3">
@@ -286,7 +311,7 @@ function OverviewTab({
             </span>
           )}
         </div>
-        <div className="h-64 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
+        <div className="h-80 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-800">
           <AgentTaskLogs
             taskId={task.id}
             isActive={isLive && isInProgress(task.status)}
@@ -517,15 +542,28 @@ function DiagnosisTab({
   task: AgentTask;
   t: ReturnType<typeof useTranslations<'agentTaskDetail'>>;
 }) {
+  const conclusionEntry = executionLog.find(e => e.step === 'conclusion');
+  const diagEntry = executionLog.find(e => e.step === 'update_diagnosis');
+  const thinkingEntries = executionLog.filter(e => e.step === 'thinking');
+  const lastThinking =
+    thinkingEntries.length > 0 ? thinkingEntries[thinkingEntries.length - 1] : null;
+
   // If no formal diagnosis snapshot, try to extract from execution logs
   if (!diagnosis) {
-    const conclusionEntry = executionLog.find(e => e.step === 'conclusion');
-    const thinkingEntries = executionLog.filter(e => e.step === 'thinking');
-    const lastThinking =
-      thinkingEntries.length > 0 ? thinkingEntries[thinkingEntries.length - 1] : null;
-    const diagEntry = executionLog.find(e => e.step === 'update_diagnosis');
+    const hasSomething = conclusionEntry || lastThinking || diagEntry;
 
-    if (!conclusionEntry && !lastThinking && !diagEntry) {
+    if (!hasSomething) {
+      if (isInProgress(task.status)) {
+        return (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <span className="relative flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-blue-500" />
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">Analyse en cours...</span>
+          </div>
+        );
+      }
       return (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">{t('noDiagnosis')}</div>
       );
@@ -533,24 +571,42 @@ function DiagnosisTab({
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {t('sourceLabel')}
-          </span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
-            {t('extractedFromLogs')}
-          </span>
-        </div>
-
-        {/* Structured ActionPlan from update_diagnosis toolInput */}
+        {/* Structured diagnosis from update_diagnosis toolInput */}
         <ActionPlanPanel task={task} t={t} />
 
+        {/* Agent conclusion */}
+        {conclusionEntry && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t('agentConclusion')}
+            </h4>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <MarkdownRenderer
+                content={String(conclusionEntry.detail || conclusionEntry.message)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Last agent reasoning as fallback (only if no conclusion) */}
+        {!conclusionEntry && lastThinking && (
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              {t('lastAgentReasoning')}
+            </h4>
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+              <MarkdownRenderer content={String(lastThinking.detail || lastThinking.message)} />
+            </div>
+          </div>
+        )}
+
+        {/* diagEntry message fallback (no toolInput) */}
         {diagEntry && !diagEntry.toolInput && (
           <div>
             <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               {t('diagnosisToolCall')}
             </h4>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
               <MarkdownRenderer content={String(diagEntry.message)} />
               {typeof diagEntry.detail === 'string' && diagEntry.detail && (
                 <div className="mt-2 border-t border-gray-200 dark:border-gray-700 pt-2">
@@ -560,55 +616,41 @@ function DiagnosisTab({
             </div>
           </div>
         )}
-        {conclusionEntry && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('agentConclusion')}
-            </h4>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <MarkdownRenderer
-                content={String(conclusionEntry.detail || conclusionEntry.message)}
-              />
-            </div>
-          </div>
-        )}
-        {!conclusionEntry && lastThinking && (
-          <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('lastAgentReasoning')}
-            </h4>
-            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-              <MarkdownRenderer content={String(lastThinking.detail || lastThinking.message)} />
-            </div>
-          </div>
-        )}
       </div>
     );
   }
 
+  // Formal diagnosisSnapshot
   const confidencePercent = Math.round(diagnosis.confidence * 100);
-  const confidenceColor =
+  const confidenceBarColor =
     confidencePercent >= 70
-      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+      ? 'bg-green-500'
       : confidencePercent >= 40
-        ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-        : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+        ? 'bg-yellow-500'
+        : 'bg-red-500';
+  const confidenceTextColor =
+    confidencePercent >= 70
+      ? 'text-green-600 dark:text-green-400'
+      : confidencePercent >= 40
+        ? 'text-yellow-600 dark:text-yellow-400'
+        : 'text-red-600 dark:text-red-400';
 
   return (
     <div className="space-y-6">
-      {/* Structured plan panel (always shown at top when diagEntry exists) */}
-      <ActionPlanPanel task={task} t={t} />
-
-      {/* Confidence */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-          {t('confidenceLabel')}
-        </span>
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${confidenceColor}`}
-        >
-          {confidencePercent}%
-        </span>
+      {/* Confidence bar */}
+      <div className="bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl p-4 space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="font-medium text-gray-700 dark:text-gray-300">
+            {t('confidenceLabel')}
+          </span>
+          <span className={`font-bold text-base ${confidenceTextColor}`}>{confidencePercent}%</span>
+        </div>
+        <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+          <div
+            className={`${confidenceBarColor} h-2 rounded-full transition-all duration-300`}
+            style={{ width: `${confidencePercent}%` }}
+          />
+        </div>
       </div>
 
       {/* Root Cause */}
@@ -616,10 +658,13 @@ function DiagnosisTab({
         <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
           {t('rootCause')}
         </h4>
-        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
           <MarkdownRenderer content={diagnosis.rootCause} />
         </div>
       </div>
+
+      {/* Structured plan panel (approve/reject buttons if applicable) */}
+      <ActionPlanPanel task={task} t={t} />
 
       {/* Suggested Fix */}
       {diagnosis.suggestedFix && (

@@ -337,18 +337,33 @@ function IterationSeparator({ label }: { label: string }) {
   );
 }
 
-function FilePreviewPanel({ filePreview }: { filePreview: string }) {
+function FilePreviewPanel({
+  filePreview,
+  filePath,
+}: {
+  filePreview: string;
+  filePath?: string;
+}) {
+  const fileName = filePath?.split('/').pop() || filePath;
   return (
-    <pre className="mt-2 p-3 bg-gray-950 rounded-lg text-xs font-mono text-gray-300 max-h-64 overflow-auto border border-gray-800">
-      {filePreview.split('\n').map((fileLine, i) => (
-        <div key={i} className="flex">
-          <span className="text-gray-600 select-none w-8 text-right mr-3 flex-shrink-0">
-            {i + 1}
-          </span>
-          <span className="flex-1 whitespace-pre-wrap break-all">{fileLine}</span>
+    <div className="mt-2 rounded-lg overflow-hidden border border-gray-800">
+      {fileName && (
+        <div className="bg-zinc-800 px-3 py-1.5 text-[10px] text-zinc-400 font-mono flex items-center gap-2">
+          <span className="text-zinc-500">📄</span>
+          {fileName}
         </div>
-      ))}
-    </pre>
+      )}
+      <pre className="p-3 bg-gray-950 text-xs font-mono text-gray-300 max-h-96 overflow-auto">
+        {filePreview.split('\n').map((fileLine, i) => (
+          <div key={i} className="flex hover:bg-zinc-900/50">
+            <span className="text-gray-600 select-none w-8 text-right mr-3 flex-shrink-0">
+              {i + 1}
+            </span>
+            <span className="flex-1 whitespace-pre-wrap break-all">{fileLine}</span>
+          </div>
+        ))}
+      </pre>
+    </div>
   );
 }
 
@@ -358,11 +373,18 @@ function SearchResultsPanel({
   searchResults: Array<{ filePath: string; fragment?: string }>;
 }) {
   return (
-    <div className="mt-2 space-y-1">
+    <div className="mt-2 space-y-2 max-h-80 overflow-y-auto">
       {searchResults.map((hit, i) => (
-        <div key={i} className="flex items-start gap-2 text-xs">
-          <span className="text-blue-400 font-mono flex-shrink-0">{hit.filePath}</span>
-          {hit.fragment && <span className="text-gray-400 truncate">{hit.fragment}</span>}
+        <div key={i} className="rounded-lg border border-zinc-800 overflow-hidden">
+          <div className="bg-zinc-800 px-3 py-1 text-[10px] text-blue-400 font-mono flex items-center gap-2">
+            <span className="text-zinc-500">📄</span>
+            {hit.filePath}
+          </div>
+          {hit.fragment && (
+            <pre className="px-3 py-2 bg-zinc-950 text-xs font-mono text-zinc-300 whitespace-pre-wrap break-all">
+              {hit.fragment}
+            </pre>
+          )}
         </div>
       ))}
     </div>
@@ -467,7 +489,93 @@ function hasRichDetail(line: LogLine): boolean {
     line.codeChanges ||
     line.prData ||
     line.detail ||
-    line.toolInput
+    line.toolInput ||
+    line.hasError
+  );
+}
+
+/** Extract diagnosis fields from toolInput for update_diagnosis entries */
+interface DiagnosisToolInput {
+  root_cause?: string;
+  confidence?: number | string;
+  affected_files?: Array<{ file_path?: string; relevance?: string; description?: string }>;
+  suggested_fix?: string;
+}
+
+function DiagnosisDetailPanel({ toolInput }: { toolInput: Record<string, unknown> }) {
+  const diag = toolInput as DiagnosisToolInput;
+  const rawConf = diag.confidence;
+  const conf =
+    rawConf !== undefined ? Math.round(Number(rawConf) * (Number(rawConf) <= 1 ? 100 : 1)) : null;
+  const barColor =
+    conf !== null && conf >= 70
+      ? 'bg-green-500'
+      : conf !== null && conf >= 40
+        ? 'bg-yellow-500'
+        : 'bg-red-500';
+  const textColor =
+    conf !== null && conf >= 70
+      ? 'text-green-400'
+      : conf !== null && conf >= 40
+        ? 'text-yellow-400'
+        : 'text-red-400';
+
+  return (
+    <div className="mt-2 space-y-3">
+      {conf !== null && (
+        <div className="space-y-1">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-zinc-400">Confiance</span>
+            <span className={`font-semibold ${textColor}`}>{conf}%</span>
+          </div>
+          <div className="w-full bg-zinc-800 rounded-full h-1.5">
+            <div className={`${barColor} h-1.5 rounded-full`} style={{ width: `${conf}%` }} />
+          </div>
+        </div>
+      )}
+      {diag.root_cause && (
+        <div>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Cause racine</span>
+          <div className="mt-1 p-2 bg-zinc-900/60 rounded text-xs text-zinc-300 whitespace-pre-wrap">
+            {diag.root_cause}
+          </div>
+        </div>
+      )}
+      {diag.affected_files && diag.affected_files.length > 0 && (
+        <div>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+            Fichiers affectés ({diag.affected_files.length})
+          </span>
+          <div className="mt-1 space-y-1">
+            {diag.affected_files.map((f, i) => (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span
+                  className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                    f.relevance === 'primary'
+                      ? 'bg-blue-900/40 text-blue-300'
+                      : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  {f.relevance || 'sec'}
+                </span>
+                <span className="font-mono text-blue-400 truncate">{f.file_path}</span>
+                {f.description && <span className="text-zinc-500 truncate">{f.description}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {diag.suggested_fix && (
+        <div>
+          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">
+            Correction suggérée
+          </span>
+          <div className="mt-1 p-2 bg-emerald-950/40 border border-emerald-800/40 rounded text-xs text-emerald-300 whitespace-pre-wrap">
+            {diag.suggested_fix}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -482,7 +590,7 @@ function LogRow({
   prNewLabel: string;
   viewOnGitHubLabel: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(line.hasError || false);
 
   const hasDetails = hasRichDetail(line) || line.durationMs !== undefined || line.hasError;
 
@@ -542,17 +650,17 @@ function LogRow({
           {line.message}
         </span>
 
-        {/* Duration badge */}
-        {line.durationMs !== undefined && (
-          <span className="flex-shrink-0 bg-zinc-800 text-zinc-400 rounded px-1 py-0.5 text-[10px] font-mono self-center">
-            {formatDuration(line.durationMs)}
+        {/* Result preview badge — primary summary, shown before duration */}
+        {line.resultPreview && (
+          <span className="flex-shrink-0 bg-zinc-800 text-zinc-300 rounded px-1.5 py-0.5 text-[10px] font-mono self-center max-w-[160px] truncate border border-zinc-700/50">
+            {line.resultPreview}
           </span>
         )}
 
-        {/* Result preview badge */}
-        {line.resultPreview && (
-          <span className="flex-shrink-0 bg-zinc-800 text-zinc-400 rounded px-1 py-0.5 text-[10px] font-mono self-center max-w-[120px] truncate">
-            {line.resultPreview}
+        {/* Duration badge — only show if meaningful (>100ms) */}
+        {line.durationMs !== undefined && line.durationMs > 100 && (
+          <span className="flex-shrink-0 bg-zinc-900 text-zinc-500 rounded px-1 py-0.5 text-[10px] font-mono self-center">
+            {formatDuration(line.durationMs)}
           </span>
         )}
 
@@ -578,7 +686,7 @@ function LogRow({
 
         {/* Expand chevron */}
         {hasDetails && (
-          <span className="flex-shrink-0 text-zinc-600 self-center text-[10px] ml-1">
+          <span className="flex-shrink-0 text-zinc-400 self-center text-xs ml-1 transition-transform">
             {expanded ? '▲' : '▼'}
           </span>
         )}
@@ -586,14 +694,19 @@ function LogRow({
 
       {/* Expanded detail panel */}
       <div
-        className={`overflow-hidden transition-all duration-200 ${expanded && hasDetails ? 'max-h-[600px]' : 'max-h-0'}`}
+        className={`overflow-hidden transition-all duration-200 ${expanded && hasDetails ? 'max-h-[800px]' : 'max-h-0'}`}
       >
         {expanded && hasDetails && (
           <div
             className={`ml-10 mr-1 mb-1 p-2 rounded border text-[11px] font-mono space-y-1 ${colorClasses}`}
           >
             {/* Rich detail panels */}
-            {line.filePreview && <FilePreviewPanel filePreview={line.filePreview} />}
+            {line.filePreview && (
+              <FilePreviewPanel
+                filePreview={line.filePreview}
+                filePath={line.toolInput?.['file_path'] as string | undefined}
+              />
+            )}
             {line.searchResults && line.searchResults.length > 0 && (
               <SearchResultsPanel searchResults={line.searchResults} />
             )}
@@ -610,71 +723,102 @@ function LogRow({
               />
             )}
 
-            {/* Existing detail fields */}
+            {/* Fallback detail panel (no rich data panels) */}
             {!line.filePreview &&
               !line.searchResults &&
               !line.directoryContents &&
               !line.codeChanges &&
               !line.prData && (
                 <>
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-500">step:</span>
-                    <span>{line.step}</span>
-                  </div>
-                  {line.durationMs !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-500">duration:</span>
-                      <span>{formatDuration(line.durationMs)}</span>
-                      <span className="text-zinc-600">({line.durationMs}ms)</span>
-                    </div>
-                  )}
+                  {/* Error panel */}
                   {line.hasError && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-zinc-500">status:</span>
-                      <span className="text-red-400 font-semibold">ERROR</span>
-                    </div>
-                  )}
-                  {line.toolInput && Object.keys(line.toolInput).length > 0 && (
-                    <div>
-                      <span className="text-zinc-500">input:</span>
-                      <div className="mt-1 ml-2 space-y-0.5">
-                        {Object.entries(line.toolInput).map(([k, v]) => (
-                          <div key={k} className="flex gap-2">
-                            <span className="text-zinc-500">{k}:</span>
-                            <span className="break-all text-zinc-300">
-                              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                            </span>
-                          </div>
-                        ))}
+                    <div className="p-3 bg-red-950/60 border border-red-800/50 rounded-lg">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-red-400 font-bold text-xs uppercase tracking-wider">
+                          Erreur
+                        </span>
                       </div>
+                      {line.detail && (
+                        <div className="mt-1.5 text-red-300 text-xs whitespace-pre-wrap leading-relaxed">
+                          {line.detail}
+                        </div>
+                      )}
+                      {!line.detail && line.message && (
+                        <div className="mt-1.5 text-red-300 text-xs leading-relaxed">
+                          {line.message}
+                        </div>
+                      )}
                     </div>
                   )}
-                  {line.detail && (
-                    <div>
-                      <span className="text-zinc-500">detail:</span>
+
+                  {/* update_diagnosis: show structured diagnosis card */}
+                  {line.step === 'update_diagnosis' &&
+                    line.toolInput &&
+                    Object.keys(line.toolInput).length > 0 &&
+                    !line.hasError && <DiagnosisDetailPanel toolInput={line.toolInput} />}
+
+                  {/* thinking / conclusion: show full text */}
+                  {(line.step === 'thinking' || line.step === 'conclusion') && line.detail && (
+                    <div
+                      className={`mt-2 max-h-80 overflow-y-auto p-3 rounded-lg border ${
+                        line.step === 'conclusion'
+                          ? 'border-green-800/40 bg-green-950/20'
+                          : 'border-amber-800/30 bg-amber-950/10 border-l-2 border-l-amber-500/50'
+                      }`}
+                    >
+                      <MarkdownRenderer
+                        content={line.detail}
+                        className="text-zinc-300 [&_pre]:bg-zinc-950 [&_code]:bg-zinc-800 [&_p]:text-zinc-300 [&_p]:text-xs [&_strong]:text-zinc-200 [&_li]:text-zinc-300 [&_h1]:text-zinc-200 [&_h2]:text-zinc-200 [&_h3]:text-zinc-200"
+                      />
+                    </div>
+                  )}
+
+                  {/* Generic detail for other steps */}
+                  {line.detail &&
+                    line.step !== 'thinking' &&
+                    line.step !== 'conclusion' &&
+                    !line.hasError && (
                       <div className="bg-zinc-900/60 rounded p-2 mt-1 text-[11px] max-h-40 overflow-y-auto">
                         <MarkdownRenderer
                           content={line.detail}
                           className="text-zinc-300 [&_pre]:bg-zinc-950 [&_code]:bg-zinc-800 [&_p]:text-zinc-300 [&_p]:text-[11px] [&_strong]:text-zinc-200 [&_li]:text-zinc-300 [&_h1]:text-zinc-200 [&_h2]:text-zinc-200 [&_h3]:text-zinc-200"
                         />
                       </div>
-                    </div>
-                  )}
-                  {Object.keys(line.metadata).length > 0 && (
-                    <div>
-                      <span className="text-zinc-500">metadata:</span>
-                      <div className="mt-1 ml-2 space-y-0.5">
-                        {Object.entries(line.metadata).map(([k, v]) => (
-                          <div key={k} className="flex gap-2">
-                            <span className="text-zinc-500">{k}:</span>
-                            <span className="break-all text-zinc-300">
-                              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                            </span>
-                          </div>
-                        ))}
+                    )}
+
+                  {/* toolInput for non-diagnosis steps */}
+                  {line.toolInput &&
+                    Object.keys(line.toolInput).length > 0 &&
+                    line.step !== 'update_diagnosis' && (
+                      <div className="mt-1">
+                        <span className="text-zinc-500 text-[10px] uppercase tracking-wider">
+                          Paramètres
+                        </span>
+                        <div className="mt-1 space-y-0.5">
+                          {Object.entries(line.toolInput).map(([k, v]) => (
+                            <div key={k} className="flex gap-2 text-[11px]">
+                              <span className="text-zinc-500 flex-shrink-0">{k}:</span>
+                              <span className="break-all text-zinc-300">
+                                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                  {/* Duration only if no richer content (purely informational row) */}
+                  {!line.detail &&
+                    !line.toolInput &&
+                    !line.hasError &&
+                    line.durationMs !== undefined &&
+                    line.durationMs > 100 && (
+                      <div className="flex items-center gap-2 text-[11px]">
+                        <span className="text-zinc-500">durée:</span>
+                        <span>{formatDuration(line.durationMs)}</span>
+                      </div>
+                    )}
                 </>
               )}
 
