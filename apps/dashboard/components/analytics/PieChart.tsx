@@ -74,7 +74,7 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{title}</h3>
       )}
 
-      <div className="flex flex-col md:flex-row items-center gap-6">
+      <div className="flex flex-col 2xl:flex-row items-center gap-6">
         {/* Chart */}
         <svg width={size} height={size} className="flex-shrink-0">
           {slices.map((slice, index) => (
@@ -90,7 +90,7 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
         </svg>
 
         {/* Legend */}
-        <div className="flex-1 space-y-2">
+        <div className="w-full flex-1 min-w-0 space-y-2">
           {data.map((item, index) => (
             <div key={index} className="flex items-center gap-3">
               <div
@@ -102,7 +102,7 @@ export function PieChart({ data, title, size = 200 }: PieChartProps) {
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                     {item.label}
                   </span>
-                  <span className="text-sm text-gray-900 dark:text-gray-100 font-semibold ml-2">
+                  <span className="text-sm text-gray-900 dark:text-gray-100 font-semibold ml-2 whitespace-nowrap">
                     {item.value} ({((item.value / total) * 100).toFixed(1)}%)
                   </span>
                 </div>

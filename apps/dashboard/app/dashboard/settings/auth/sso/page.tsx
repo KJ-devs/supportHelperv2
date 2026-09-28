@@ -6,6 +6,7 @@ import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input, Badge } from '@/components/ui';
 import { ssoApi } from '@/lib/api/sso';
+import { apiRequest } from '@/lib/api/client';
 import type { SsoConfigResponse, SsoProviderType, RoleMapping } from '@/lib/types/sso';
 
 type TestStatus = 'idle' | 'testing' | 'success' | 'error';
@@ -54,8 +55,13 @@ export default function SsoSettingsPage() {
     setTimeout(() => setToast(null), 5000);
   }, []);
 
-  // Check if enterprise plan (mock - replace with actual check)
-  const isEnterprise = true; // TODO: Replace with actual tenant plan check
+  // SSO is gated by the license: the API rejects SSO calls when the feature is missing
+  const [isEnterprise, setIsEnterprise] = useState(true);
+  useEffect(() => {
+    apiRequest<{ limits?: { features?: string[] } }>('/api/system/license')
+      .then(info => setIsEnterprise(Boolean(info.limits?.features?.includes('sso'))))
+      .catch(() => setIsEnterprise(false));
+  }, []);
 
   // Computed values
   const acsUrl = useMemo(() => {

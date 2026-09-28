@@ -151,11 +151,13 @@ export default function AgentTasksPage() {
                 <span>{t('liveIndicator')}</span>
                 {lastUpdated && (
                   <span className="ml-1 text-gray-400 dark:text-gray-500">
-                    · updated{' '}
-                    {lastUpdated.toLocaleTimeString([], {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      second: '2-digit',
+                    ·{' '}
+                    {t('updatedAt', {
+                      time: lastUpdated.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      }),
                     })}
                   </span>
                 )}
