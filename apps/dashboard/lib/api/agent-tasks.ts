@@ -127,9 +127,14 @@ function buildQueryString(filters: AgentTaskFilters): string {
 }
 
 export const agentTasksApi = {
-  async triggerAnalysis(ticketId: string): Promise<AgentTask> {
+  async triggerAnalysis(
+    ticketId: string,
+    options?: { model?: string; agentMode?: 'autonomous' | 'guided' }
+  ): Promise<AgentTask> {
     return apiRequest<AgentTask>(`/api/v1/agent-tasks/tickets/${ticketId}/analyze`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options ?? {}),
     });
   },
 
@@ -167,7 +172,12 @@ export const agentTasksApi = {
     });
   },
 
-  async rejectTask(id: string, phase: 'plan' | 'code', reason?: string, iterate?: boolean): Promise<AgentTask> {
+  async rejectTask(
+    id: string,
+    phase: 'plan' | 'code',
+    reason?: string,
+    iterate?: boolean
+  ): Promise<AgentTask> {
     return apiRequest<AgentTask>(`/api/v1/agent-tasks/${id}/reject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

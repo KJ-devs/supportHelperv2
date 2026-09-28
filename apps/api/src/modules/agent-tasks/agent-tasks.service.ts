@@ -32,7 +32,26 @@ export class AgentTasksService {
     private readonly eventEmitter: EventEmitter2
   ) {}
 
-  async create(ticketId: string, tenantId: string, applicationId: string) {
+  async create(
+    ticketId: string,
+    tenantId: string,
+    applicationId: string,
+    model?: string,
+    agentMode: 'autonomous' | 'guided' = 'autonomous'
+  ) {
+    const initialLog =
+      model || agentMode !== 'autonomous'
+        ? [
+            {
+              step: 'init',
+              message: 'Task created',
+              timestamp: new Date().toISOString(),
+              model: model ?? null,
+              agentMode,
+            },
+          ]
+        : [];
+
     const task = await this.prisma.agentTask.create({
       data: {
         ticketId,
@@ -40,11 +59,13 @@ export class AgentTasksService {
         applicationId,
         status: 'analyzing',
         startedAt: new Date(),
-        executionLog: [],
+        executionLog: initialLog,
       },
     });
 
-    this.logger.log(`Created agent task ${task.id} for ticket ${ticketId}`);
+    this.logger.log(
+      `Created agent task ${task.id} for ticket ${ticketId} (model=${model ?? 'default'}, agentMode=${agentMode})`
+    );
 
     await this.ticketTimeline.recordEvent(ticketId, tenantId, 'agent_analysis_started', {
       agentTaskId: task.id,

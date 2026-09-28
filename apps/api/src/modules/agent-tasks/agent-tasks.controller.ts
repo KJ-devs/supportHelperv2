@@ -32,6 +32,7 @@ import { DeepAnalysisService } from '../agent-v2/deep-analysis.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AgentTaskResponseDto } from './dto/agent-task-response.dto';
 import { ApproveTaskDto, RejectTaskDto } from './dto/review-task.dto';
+import { TriggerAnalysisDto } from './dto/trigger-analysis.dto';
 
 @ApiTags('Agent Tasks')
 @ApiBearerAuth()
@@ -58,7 +59,11 @@ export class AgentTasksController {
   })
   @ApiResponse({ status: 404, description: 'Ticket not found' })
   @ApiResponse({ status: 400, description: 'Ticket has no linked application' })
-  async analyzeTicket(@CurrentTenant() tenantId: string, @Param('ticketId') ticketId: string) {
+  async analyzeTicket(
+    @CurrentTenant() tenantId: string,
+    @Param('ticketId') ticketId: string,
+    @Body() dto: TriggerAnalysisDto
+  ) {
     // Verify ticket exists and belongs to the tenant
     const ticket = await this.prisma.ticket.findFirst({
       where: { id: ticketId, tenantId },
@@ -76,7 +81,13 @@ export class AgentTasksController {
     }
 
     // Create the agent task record (returned immediately to the dashboard)
-    const task = await this.agentTasksService.create(ticketId, tenantId, ticket.applicationId);
+    const task = await this.agentTasksService.create(
+      ticketId,
+      tenantId,
+      ticket.applicationId,
+      dto.model,
+      dto.agentMode ?? 'autonomous'
+    );
 
     // Fire V2 deep analysis in the background (non-blocking)
     this.deepAnalysisService.analyze(ticketId, tenantId, undefined, task.id).catch(err => {
