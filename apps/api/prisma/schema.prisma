@@ -63,9 +63,27 @@ model User {
   assignedTickets  Ticket[]          @relation("AssignedTickets")
   escalatedSessions AgentSession[]
   feedbacks        ClassificationFeedback[]
+  tokens           UserToken[]
 
   @@unique([tenantId, email])
   @@map("users")
+}
+
+/// One-time tokens sent by email (password reset, team invitation).
+/// Only the SHA-256 hash of the token is stored.
+model UserToken {
+  id        String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  type      String    @db.VarChar(30)
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64)
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@map("user_tokens")
 }
 
 model Application {

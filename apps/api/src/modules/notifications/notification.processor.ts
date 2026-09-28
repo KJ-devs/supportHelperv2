@@ -3,6 +3,7 @@ import { Logger, ServiceUnavailableException, InternalServerErrorException } fro
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MailService } from '../../common/mail/mail.service';
 
 /** Notification channel config — dynamic JSON fields vary per channel type */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -25,6 +26,7 @@ export class NotificationProcessor extends WorkerHost {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {
     super();
   }
@@ -96,18 +98,6 @@ export class NotificationProcessor extends WorkerHost {
     data: Record<string, unknown>,
     config: NotificationConfig,
   ): Promise<void> {
-    const { Resend } = await import('resend');
-    const apiKey = this.configService.get<string>('RESEND_API_KEY');
-    if (!apiKey) {
-      this.logger.warn('RESEND_API_KEY not set - skipping email notification');
-      return;
-    }
-
-    const resend = new Resend(apiKey);
-    const fromEmail =
-      this.configService.get<string>('RESEND_FROM_EMAIL') ||
-      'notifications@support-helper.com';
-
     // Determine recipients from config or look up ticket reporter
     let recipients: string[] = [];
     if (config.recipients && Array.isArray(config.recipients)) {
@@ -137,8 +127,7 @@ export class NotificationProcessor extends WorkerHost {
     const subject = this.buildEmailSubject(eventType, data);
     const html = this.buildEmailHtml(eventType, data);
 
-    const result = await resend.emails.send({
-      from: fromEmail,
+    await this.mailService.send({
       to: recipients,
       subject,
       html,
@@ -148,10 +137,6 @@ export class NotificationProcessor extends WorkerHost {
         { name: 'tenantId', value: tenantId },
       ],
     });
-
-    if (result.error) {
-      throw new ServiceUnavailableException(`Resend error: ${result.error.message}`);
-    }
   }
 
   private async sendWebhook(

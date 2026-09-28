@@ -19,6 +19,7 @@ import { HealthModule } from './health/health.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
 import { CorrelationIdMiddleware } from './monitoring/correlation-id.middleware';
 import { EncryptionModule } from './common/encryption.module';
+import { MailModule } from './common/mail/mail.module';
 
 // Logging & Metrics
 import { LoggerModule } from './common/logger/logger.module';
@@ -183,6 +184,7 @@ import { AgentDefinitionsModule } from './modules/agent-definitions/agent-defini
     PrismaModule,
     RedisCacheModule,
     EncryptionModule,
+    MailModule,
     MonitoringModule,
     HealthModule,
     LoggerModule,
