@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getQueueToken } from '@nestjs/bullmq';
 import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { AIService } from '../../../src/ai/ai.service';
@@ -7,19 +6,8 @@ import { AIService } from '../../../src/ai/ai.service';
 describe('TicketsAIService', () => {
   let service: TicketsAIService;
   let prisma: jest.Mocked<PrismaService>;
-  let mockQueue: any;
 
   beforeEach(async () => {
-    mockQueue = {
-      add: jest.fn().mockResolvedValue({}),
-      getWaitingCount: jest.fn().mockResolvedValue(5),
-      getActiveCount: jest.fn().mockResolvedValue(2),
-      getCompletedCount: jest.fn().mockResolvedValue(100),
-      getFailedCount: jest.fn().mockResolvedValue(3),
-      clean: jest.fn().mockResolvedValue([]),
-      close: jest.fn(),
-    };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TicketsAIService,
@@ -37,10 +25,6 @@ describe('TicketsAIService', () => {
             generateEmbedding: jest.fn().mockResolvedValue([]),
           },
         },
-        {
-          provide: getQueueToken('ticket-analysis'),
-          useValue: mockQueue,
-        },
       ],
     }).compile();
 
@@ -52,44 +36,19 @@ describe('TicketsAIService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('enqueueAnalysis', () => {
-    it('should add job to queue with default priority', async () => {
-      await service.enqueueAnalysis('ticket-123');
-
-      expect(mockQueue.add).toHaveBeenCalledWith(
-        'analyze-ticket',
-        expect.objectContaining({ ticketId: 'ticket-123' }),
-        expect.objectContaining({ priority: 5, attempts: 3 }),
-      );
-    });
-
-    it('should add job with custom priority', async () => {
-      await service.enqueueAnalysis('ticket-123', 1);
-
-      expect(mockQueue.add).toHaveBeenCalledWith(
-        'analyze-ticket',
-        expect.objectContaining({ ticketId: 'ticket-123' }),
-        expect.objectContaining({ priority: 1 }),
-      );
-    });
-
-    it('should throw when queue.add fails', async () => {
-      mockQueue.add.mockRejectedValue(new Error('Queue error'));
-
-      await expect(service.enqueueAnalysis('ticket-123')).rejects.toThrow('Queue error');
-    });
-  });
-
   describe('findSimilar', () => {
     it('should use vector search when available', async () => {
       (prisma.ticket.findFirst as jest.Mock).mockResolvedValue({ id: 'ticket-123', title: 'Bug', description: 'desc' });
-      (prisma.$queryRaw as jest.Mock).mockResolvedValue([
-        { id: 'similar-1', title: 'Similar Bug', similarity: 0.9 },
-      ]);
+      // 1st query: the source ticket has an embedding; 2nd: nearest neighbours
+      (prisma.$queryRaw as jest.Mock)
+        .mockResolvedValueOnce([{ has_emb: true }])
+        .mockResolvedValueOnce([{ id: 'similar-1', title: 'Similar Bug', similarity: 0.9 }]);
 
       const result = await service.findSimilar('ticket-123', 'tenant-123');
 
       expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({ id: 'similar-1' });
+      expect(prisma.ticket.findMany).not.toHaveBeenCalled();
     });
 
     it('should throw when ticket not found', async () => {
@@ -137,22 +96,6 @@ describe('TicketsAIService', () => {
       (prisma.$executeRaw as jest.Mock).mockRejectedValue(new Error('DB error'));
 
       await expect(service.storeEmbedding('ticket-123', [0.1])).rejects.toThrow('DB error');
-    });
-  });
-
-  describe('getQueueStats', () => {
-    it('should return queue statistics', async () => {
-      const result = await service.getQueueStats();
-
-      expect(result).toEqual({ waiting: 5, active: 2, completed: 100, failed: 3 });
-    });
-  });
-
-  describe('cleanupQueue', () => {
-    it('should clean completed and failed jobs', async () => {
-      await service.cleanupQueue();
-
-      expect(mockQueue.clean).toHaveBeenCalledTimes(2);
     });
   });
 });

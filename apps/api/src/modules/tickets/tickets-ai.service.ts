@@ -1,8 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AIService } from '../../ai/ai.service';
-import { Queue } from 'bullmq';
 import { SimilarTicketContext, SimilarTicketFix } from '@support-helper/shared';
 
 @Injectable()
@@ -12,40 +10,8 @@ export class TicketsAIService {
   constructor(
     private prisma: PrismaService,
     private readonly aiService: AIService,
-    @InjectQueue('ticket-analysis') private analysisQueue: Queue,
   ) {
     this.logger.log('TicketsAIService initialized');
-  }
-
-  /**
-   * Enqueue ticket for AI analysis
-   */
-  async enqueueAnalysis(ticketId: string, priority: number = 5): Promise<void> {
-    try {
-      await this.analysisQueue.add(
-        'analyze-ticket',
-        {
-          ticketId,
-          timestamp: new Date().toISOString(),
-        },
-        {
-          priority,
-          attempts: 3,
-          backoff: {
-            type: 'exponential',
-            delay: 5000,
-          },
-        },
-      );
-
-      this.logger.log(`Enqueued ticket ${ticketId} for AI analysis`);
-    } catch (error) {
-      this.logger.error(
-        `Failed to enqueue ticket ${ticketId} for analysis`,
-        error,
-      );
-      throw error;
-    }
   }
 
   /**
@@ -373,34 +339,5 @@ export class TicketsAIService {
       this.logger.error(`Failed to store embedding for ${ticketId}`, error);
       throw error;
     }
-  }
-
-  /**
-   * Get queue statistics
-   */
-  async getQueueStats() {
-    const [waiting, active, completed, failed] = await Promise.all([
-      this.analysisQueue.getWaitingCount(),
-      this.analysisQueue.getActiveCount(),
-      this.analysisQueue.getCompletedCount(),
-      this.analysisQueue.getFailedCount(),
-    ]);
-
-    return {
-      waiting,
-      active,
-      completed,
-      failed,
-    };
-  }
-
-  /**
-   * Clean up old completed jobs
-   */
-  async cleanupQueue(olderThan: number = 7 * 24 * 60 * 60 * 1000): Promise<void> {
-    await this.analysisQueue.clean(olderThan, 100, 'completed');
-    await this.analysisQueue.clean(olderThan, 100, 'failed');
-
-    this.logger.log('Cleaned up old queue jobs');
   }
 }

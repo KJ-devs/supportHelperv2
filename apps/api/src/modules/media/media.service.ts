@@ -261,7 +261,7 @@ export class MediaService {
   /**
    * Enqueue video for AI analysis
    */
-  private async enqueueVideoAnalysis(mediaId: string, ticketId: string, severity?: string | null) {
+  async enqueueVideoAnalysis(mediaId: string, ticketId: string, severity?: string | null) {
     const priority = this.severityToBullMQPriority(severity);
 
     try {

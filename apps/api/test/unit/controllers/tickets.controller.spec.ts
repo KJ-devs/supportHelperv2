@@ -1,3 +1,4 @@
+import { InternalAuthGuard } from '../../../src/common/guards/internal-auth.guard';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { TicketsController } from '../../../src/modules/tickets/tickets.controller';
@@ -83,7 +84,6 @@ describe('TicketsController', () => {
         {
           provide: TicketsAIService,
           useValue: {
-            enqueueAnalysis: jest.fn(),
             findSimilar: jest.fn(),
           },
         },
@@ -110,7 +110,11 @@ describe('TicketsController', () => {
           },
         },
       ],
-    }).compile();
+    })
+      // Internal routes are covered by the guard's own tests
+      .overrideGuard(InternalAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<TicketsController>(TicketsController);
     ticketsService = module.get(TicketsService);
@@ -138,7 +142,6 @@ describe('TicketsController', () => {
       (ticketsService.create as jest.Mock).mockResolvedValue(mockTicket);
       (ticketsSearchService.isEnabled as jest.Mock).mockReturnValue(true);
       (ticketsSearchService.indexTicket as jest.Mock).mockResolvedValue(undefined);
-      (ticketsAIService.enqueueAnalysis as jest.Mock).mockResolvedValue(undefined);
       (integrationsSyncService.syncTicketToAllEnabledIntegrations as jest.Mock).mockResolvedValue(
         undefined,
       );
@@ -148,7 +151,6 @@ describe('TicketsController', () => {
       expect(ticketsService.create).toHaveBeenCalledWith('tenant-123', dto, 'user-123');
       expect(ticketsSearchService.isEnabled).toHaveBeenCalled();
       expect(ticketsSearchService.indexTicket).toHaveBeenCalledWith(mockTicket);
-      expect(ticketsAIService.enqueueAnalysis).toHaveBeenCalledWith('ticket-123');
       expect(integrationsSyncService.syncTicketToAllEnabledIntegrations).toHaveBeenCalledWith(
         'ticket-123',
         'tenant-123',
@@ -166,7 +168,6 @@ describe('TicketsController', () => {
 
       (ticketsService.create as jest.Mock).mockResolvedValue(mockTicket);
       (ticketsSearchService.isEnabled as jest.Mock).mockReturnValue(false);
-      (ticketsAIService.enqueueAnalysis as jest.Mock).mockResolvedValue(undefined);
       (integrationsSyncService.syncTicketToAllEnabledIntegrations as jest.Mock).mockResolvedValue(
         undefined,
       );
@@ -174,7 +175,6 @@ describe('TicketsController', () => {
       await controller.create('tenant-123', 'user-123', dto as unknown);
 
       expect(ticketsSearchService.indexTicket).not.toHaveBeenCalled();
-      expect(ticketsAIService.enqueueAnalysis).toHaveBeenCalled();
     });
   });
 

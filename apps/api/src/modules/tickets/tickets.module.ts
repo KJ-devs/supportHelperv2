@@ -17,6 +17,7 @@ import { PrismaModule } from '../../prisma/prisma.module';
 import { AIModule } from '../../ai/ai.module';
 import { AuthModule } from '../../auth/auth.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
+import { MediaModule } from '../media/media.module';
 import { NotificationModule } from '../notifications/notification.module';
 import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
 
@@ -27,18 +28,7 @@ import { WsJwtGuard } from '../../common/guards/ws-jwt.guard';
     AuthModule,
     IntegrationsModule,
     forwardRef(() => NotificationModule),
-    BullModule.registerQueue({
-      name: 'ticket-analysis',
-      defaultJobOptions: {
-        attempts: 3,
-        backoff: {
-          type: 'exponential',
-          delay: 5000,
-        },
-        removeOnComplete: 100,
-        removeOnFail: 500,
-      },
-    }),
+    MediaModule,
     // GitHub queue for auto-issue creation on ticket create
     BullModule.registerQueue({
       name: 'github',

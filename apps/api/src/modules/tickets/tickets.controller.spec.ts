@@ -114,7 +114,6 @@ describe('TicketsController', () => {
         {
           provide: TicketsAIService,
           useValue: {
-            enqueueAnalysis: jest.fn(),
             findSimilar: jest.fn(),
           },
         },
@@ -155,22 +154,19 @@ describe('TicketsController', () => {
       sessionId: 'session-123',
     };
 
-    it('should create a ticket and trigger AI analysis', async () => {
+    it('should create a ticket', async () => {
       mockPrismaService.ticket.create.mockResolvedValue(mockTicket);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(false);
-      jest.spyOn(aiService, 'enqueueAnalysis').mockResolvedValue();
 
       const result = await controller.create(mockTenantId, mockUserId, createDto);
 
       expect(result).toEqual(mockTicket);
-      expect(aiService.enqueueAnalysis).toHaveBeenCalledWith(mockTicketId);
     });
 
     it('should index ticket in Meilisearch if enabled', async () => {
       mockPrismaService.ticket.create.mockResolvedValue(mockTicket);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(true);
       jest.spyOn(searchService, 'indexTicket').mockResolvedValue();
-      jest.spyOn(aiService, 'enqueueAnalysis').mockResolvedValue();
 
       await controller.create(mockTenantId, mockUserId, createDto);
 
@@ -181,7 +177,6 @@ describe('TicketsController', () => {
       mockPrismaService.ticket.create.mockResolvedValue(mockTicket);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(false);
       jest.spyOn(searchService, 'indexTicket').mockResolvedValue();
-      jest.spyOn(aiService, 'enqueueAnalysis').mockResolvedValue();
 
       await controller.create(mockTenantId, mockUserId, createDto);
 
@@ -570,7 +565,6 @@ describe('TicketsController', () => {
       mockPrismaService.ticket.create.mockResolvedValue(mockTicket);
       jest.spyOn(searchService, 'isEnabled').mockReturnValue(true);
       jest.spyOn(searchService, 'indexTicket').mockResolvedValue();
-      jest.spyOn(aiService, 'enqueueAnalysis').mockResolvedValue();
 
       const createdTicket = await controller.create(
         mockTenantId,

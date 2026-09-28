@@ -12,6 +12,7 @@ import { TicketsAIService } from '../../../src/modules/tickets/tickets-ai.servic
 import { AIService } from '../../../src/ai/ai.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { IntegrationsSyncService } from '../../../src/modules/integrations/integrations-sync.service';
+import { MediaService } from '../../../src/modules/media/media.service';
 
 // Mock AWS SDK
 jest.mock('@aws-sdk/client-s3', () => ({
@@ -88,12 +89,15 @@ describe('SdkTicketsController', () => {
   };
 
   const mockAIService = {
-    enqueueAnalysis: jest.fn().mockResolvedValue(undefined),
     updateKeywords: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockAIProcessingService = {
     processUserDescription: jest.fn().mockResolvedValue(mockAiResult),
+  };
+
+  const mockMediaService = {
+    enqueueVideoAnalysis: jest.fn().mockResolvedValue(undefined),
   };
 
   const mockIntegrationsSyncService = {
@@ -117,6 +121,7 @@ describe('SdkTicketsController', () => {
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: IntegrationsSyncService, useValue: mockIntegrationsSyncService },
+        { provide: MediaService, useValue: mockMediaService },
       ],
     }).compile();
 
@@ -168,16 +173,6 @@ describe('SdkTicketsController', () => {
       await controller.create(mockTenantId, createDto);
 
       expect(ticketsService.create).toHaveBeenCalledWith(mockTenantId, createDto, undefined);
-    });
-
-    it('should enqueue AI analysis with priority 3', async () => {
-      mockTicketsService.create.mockResolvedValue(
-        mockTicket as unknown as import('@prisma/client').Ticket
-      );
-
-      await controller.create(mockTenantId, createDto);
-
-      expect(aiService.enqueueAnalysis).toHaveBeenCalledWith(mockTicket.id, 3);
     });
 
     it('should trigger integration sync', async () => {
@@ -373,9 +368,15 @@ describe('SdkTicketsController', () => {
             ticketId: mockTicket.id,
             type: 'video',
             mimeType: 'video/webm',
-            processingStatus: 'completed',
+            processingStatus: 'pending',
           }),
         })
+      );
+      // The uploaded video must reach the worker pipeline
+      expect(mockMediaService.enqueueVideoAnalysis).toHaveBeenCalledWith(
+        'media-001',
+        mockTicket.id,
+        mockTicket.severity,
       );
     });
 

@@ -82,9 +82,6 @@ export class TicketsController {
       await this.ticketsSearchService.indexTicket(ticket);
     }
 
-    // Enqueue AI analysis
-    await this.ticketsAIService.enqueueAnalysis(ticket.id);
-
     // Trigger integration syncs
     await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, { priority: 2 });
 

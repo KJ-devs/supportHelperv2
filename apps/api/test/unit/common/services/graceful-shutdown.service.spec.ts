@@ -20,8 +20,8 @@ describe('GracefulShutdownService', () => {
     // Mock ModuleRef
     const mockModuleRef = {
       get: jest.fn((token, options) => {
-        // Only return queue for 'ticket-analysis'
-        if (token === getQueueToken('ticket-analysis')) {
+        // Only return a queue for 'github'
+        if (token === getQueueToken('github')) {
           return mockQueue;
         }
         throw new Error('Queue not found');

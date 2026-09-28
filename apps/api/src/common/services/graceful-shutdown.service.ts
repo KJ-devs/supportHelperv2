@@ -14,7 +14,6 @@ import { getQueueToken } from '@nestjs/bullmq';
  * 4. Logs shutdown progress
  *
  * Queue names tracked:
- * - ticket-analysis (TicketsModule)
  * - github (GithubModule)
  * - media (MediaModule)
  * - video-analysis (Worker queue, API only enqueues)
@@ -38,7 +37,6 @@ export class GracefulShutdownService implements OnApplicationShutdown {
    * These match the BullModule.registerQueue() names across modules
    */
   private readonly QUEUE_NAMES = [
-    'ticket-analysis',
     'github',
     'media',
     'video-analysis',

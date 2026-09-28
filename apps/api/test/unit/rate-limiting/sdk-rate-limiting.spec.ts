@@ -27,6 +27,7 @@ import { AIService } from '../../../src/ai/ai.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationsSyncService } from '../../../src/modules/integrations/integrations-sync.service';
+import { MediaService } from '../../../src/modules/media/media.service';
 import request from 'supertest';
 import type { Type, Provider } from '@nestjs/common';
 
@@ -86,6 +87,7 @@ function buildSdkApp(storage: InMemoryThrottlerStorage, limit: number): Promise<
     { provide: PrismaService, useValue: mockPrismaService },
     { provide: ConfigService, useValue: mockConfigService },
     { provide: IntegrationsSyncService, useValue: mockIntegrationsSyncService },
+    { provide: MediaService, useValue: mockMediaService },
   ]);
 }
 
@@ -156,7 +158,6 @@ const mockSearchService = {
 };
 
 const mockAIService = {
-  enqueueAnalysis: jest.fn().mockResolvedValue(undefined),
   updateKeywords: jest.fn().mockResolvedValue(undefined),
 };
 
@@ -171,6 +172,10 @@ const mockAIProcessingService = {
     keywords: [],
     reproductionSteps: [],
   }),
+};
+
+const mockMediaService = {
+  enqueueVideoAnalysis: jest.fn().mockResolvedValue(undefined),
 };
 
 const mockIntegrationsSyncService = {

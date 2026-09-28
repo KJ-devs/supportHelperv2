@@ -30,6 +30,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { ConfigService } from '@nestjs/config';
 import { IntegrationsSyncService } from '../integrations/integrations-sync.service';
+import { MediaService } from '../media/media.service';
 
 const ALLOWED_VIDEO_MIME_TYPES = new Set(['video/webm', 'video/mp4', 'video/quicktime']);
 
@@ -91,7 +92,8 @@ export class SdkTicketsController {
     private readonly aiService: AIService,
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly integrationsSyncService: IntegrationsSyncService
+    private readonly integrationsSyncService: IntegrationsSyncService,
+    private readonly mediaService: MediaService
   ) {
     // Initialize S3 client
     const endpoint = this.configService.get('s3.endpoint') || this.configService.get('S3_ENDPOINT');
@@ -165,9 +167,6 @@ export class SdkTicketsController {
     if (this.ticketsSearchService.isEnabled()) {
       await this.ticketsSearchService.indexTicket(ticket);
     }
-
-    // Enqueue AI analysis with high priority for SDK tickets
-    await this.ticketsAIService.enqueueAnalysis(ticket.id, 3);
 
     // Trigger integration syncs
     await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, {
@@ -322,7 +321,7 @@ export class SdkTicketsController {
             storageKey,
             fileSize: BigInt(video.size),
             mimeType: video.mimetype,
-            processingStatus: 'completed', // Mark as completed since upload succeeded
+            processingStatus: 'pending',
             metadata: {
               originalFilename: video.originalname,
               uploadedAt: new Date().toISOString(),
@@ -333,8 +332,8 @@ export class SdkTicketsController {
 
         this.logger.log(`Media record created: ${mediaRecord.id}`);
 
-        // Enqueue for deeper video analysis
-        await this.ticketsAIService.enqueueAnalysis(ticket.id, 2);
+        // Hand the video to the worker pipeline (keyframes > OCR > vision)
+        await this.mediaService.enqueueVideoAnalysis(mediaRecord.id, ticket.id, ticket.severity);
 
         // Trigger integration syncs
         await this.integrationsSyncService.syncTicketToAllEnabledIntegrations(ticket.id, tenantId, {
