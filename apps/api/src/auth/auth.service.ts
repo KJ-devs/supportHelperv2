@@ -6,6 +6,9 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { TenantsService } from '../tenants/tenants.service';
+import { UserTokensService } from '../users/user-tokens.service';
+import { MailService } from '../common/mail/mail.service';
+import { passwordResetEmail } from '../common/mail/templates';
 import {
   RegisterDto,
   LoginDto,
@@ -25,7 +28,9 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly usersService: UsersService,
     private readonly tenantsService: TenantsService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly userTokens: UserTokensService,
+    private readonly mailService: MailService,
   ) {
     const configuredSecret = this.configService.get<string>('JWT_REFRESH_SECRET');
     if (!configuredSecret) {
@@ -118,6 +123,37 @@ export class AuthService {
       accessToken,
       refreshToken,
     };
+  }
+
+  /**
+   * Sends a password reset link. Always resolves the same way so the endpoint
+   * cannot be used to discover which emails have an account.
+   */
+  async forgotPassword(email: string): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+      select: { id: true, email: true },
+    });
+    if (!user) return;
+
+    const token = await this.userTokens.issue(user.id, 'password_reset');
+    const dashboardUrl = this.configService.get<string>('app.dashboardUrl') || 'http://localhost:3000';
+    const link = `${dashboardUrl}/reset-password?token=${token}`;
+
+    try {
+      await this.mailService.send(passwordResetEmail(user.email, link));
+    } catch (error) {
+      this.logger.error(
+        `Failed to send password reset email: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  /** Sets a new password from a reset or invitation link. */
+  async resetPassword(token: string, password: string): Promise<void> {
+    const userId = await this.userTokens.consume(token, ['password_reset', 'invite']);
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.prisma.user.update({ where: { id: userId }, data: { passwordHash } });
   }
 
   async login(dto: LoginDto): Promise<AuthResponse> {

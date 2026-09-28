@@ -5,7 +5,9 @@ import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { UsersService } from '../../../src/users/users.service';
 import { TenantsService } from '../../../src/tenants/tenants.service';
-import { ConflictException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { UserTokensService } from '../../../src/users/user-tokens.service';
+import { MailService } from '../../../src/common/mail/mail.service';
 import * as bcrypt from 'bcrypt';
 
 // Mock bcrypt
@@ -48,10 +50,19 @@ describe('AuthService', () => {
     updatedAt: new Date(),
   };
 
+  const mockUserTokens = { issue: jest.fn(), consume: jest.fn() };
+  const mockMailService = { send: jest.fn() };
+
   beforeEach(async () => {
+    mockUserTokens.issue.mockReset();
+    mockUserTokens.consume.mockReset();
+    mockMailService.send.mockReset();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: UserTokensService, useValue: mockUserTokens },
+        { provide: MailService, useValue: mockMailService },
         {
           provide: PrismaService,
           useValue: {
@@ -59,6 +70,7 @@ describe('AuthService', () => {
               findFirst: jest.fn(),
               findUnique: jest.fn(),
               create: jest.fn(),
+              update: jest.fn(),
             },
           },
         },
@@ -91,6 +103,9 @@ describe('AuthService', () => {
               }
               if (key === 'NODE_ENV') {
                 return 'test';
+              }
+              if (key === 'app.dashboardUrl') {
+                return 'http://dash.test';
               }
               return defaultValue;
             }),
@@ -284,6 +299,62 @@ describe('AuthService', () => {
         tenantId: mockUser.tenantId,
         role: mockUser.role,
       });
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('should email a reset link when the account exists', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-123', email: 'test@example.com' });
+      mockUserTokens.issue.mockResolvedValue('reset-token');
+      mockMailService.send.mockResolvedValue(true);
+
+      await service.forgotPassword('TEST@example.com');
+
+      expect(mockUserTokens.issue).toHaveBeenCalledWith('user-123', 'password_reset');
+      expect(mockMailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@example.com',
+          text: expect.stringContaining('http://dash.test/reset-password?token=reset-token'),
+        }),
+      );
+    });
+
+    it('should silently do nothing for an unknown email', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.forgotPassword('nobody@example.com')).resolves.toBeUndefined();
+      expect(mockUserTokens.issue).not.toHaveBeenCalled();
+      expect(mockMailService.send).not.toHaveBeenCalled();
+    });
+
+    it('should not leak email transport failures to the caller', async () => {
+      (prismaService.user.findFirst as jest.Mock).mockResolvedValue({ id: 'user-123', email: 'test@example.com' });
+      mockUserTokens.issue.mockResolvedValue('reset-token');
+      mockMailService.send.mockRejectedValue(new Error('SMTP down'));
+
+      await expect(service.forgotPassword('test@example.com')).resolves.toBeUndefined();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('should hash and store the new password for the token owner', async () => {
+      mockUserTokens.consume.mockResolvedValue('user-123');
+      (bcrypt.hash as jest.Mock).mockResolvedValue('new-hash');
+
+      await service.resetPassword('a'.repeat(64), 'newPassword123');
+
+      expect(mockUserTokens.consume).toHaveBeenCalledWith('a'.repeat(64), ['password_reset', 'invite']);
+      expect(prismaService.user.update).toHaveBeenCalledWith({
+        where: { id: 'user-123' },
+        data: { passwordHash: 'new-hash' },
+      });
+    });
+
+    it('should reject an invalid token without touching the user', async () => {
+      mockUserTokens.consume.mockRejectedValue(new BadRequestException('This link is invalid or has expired'));
+
+      await expect(service.resetPassword('bad', 'newPassword123')).rejects.toThrow(BadRequestException);
+      expect(prismaService.user.update).not.toHaveBeenCalled();
     });
   });
 });

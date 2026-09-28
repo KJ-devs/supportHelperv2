@@ -32,6 +32,24 @@ export class LoginDto {
   password: string;
 }
 
+export class ForgotPasswordDto {
+  @ApiProperty({ example: 'user@example.com' })
+  @IsEmail()
+  email: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({ description: 'Token received by email' })
+  @IsString()
+  @MinLength(32)
+  token: string;
+
+  @ApiProperty({ example: 'newPassword123', minLength: 8 })
+  @IsString()
+  @MinLength(8)
+  password: string;
+}
+
 export class RefreshTokenDto {
   @ApiProperty({ description: 'Refresh token' })
   @IsString()
