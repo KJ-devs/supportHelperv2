@@ -1,7 +1,20 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { TenantGuard } from '../../../src/common/guards/tenant.guard';
-import { UserEntity, ApplicationEntity } from '../../../src/modules/auth/dto/auth.dto';
+
+// Shapes attached to the request by the JWT and SDK-key strategies
+interface UserEntity {
+  id: string;
+  tenantId: string;
+  email: string;
+  role: string;
+  [key: string]: unknown;
+}
+interface ApplicationEntity {
+  id: string;
+  tenantId: string;
+  [key: string]: unknown;
+}
 
 describe('TenantGuard', () => {
   let guard: TenantGuard;

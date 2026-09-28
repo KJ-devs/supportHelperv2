@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ThrottlerStorageRedisService } from '@/common/services/throttler-storage-redis.service';
-import { TenantRateLimitGuard } from '@/modules/auth/guards/tenant-rate-limit.guard';
 import Redis from 'ioredis';
 
 /**

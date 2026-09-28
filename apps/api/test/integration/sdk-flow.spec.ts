@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
-import { AuthService } from '@/modules/auth/auth.service';
+import { AuthService } from '@/auth/auth.service';
+import { UsersService } from '@/users/users.service';
+import { TenantsService } from '@/tenants/tenants.service';
+import { UserTokensService } from '@/users/user-tokens.service';
+import { MailService } from '@/common/mail/mail.service';
 import { TicketsService } from '@/modules/tickets/tickets.service';
 import { TicketsGateway } from '@/modules/tickets/tickets.gateway';
 import { CacheService } from '@/cache';
@@ -89,6 +93,10 @@ describe('SDK Flow Integration', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: UsersService, useValue: {} },
+        { provide: TenantsService, useValue: { create: (data: unknown) => prisma.tenant.create({ data }) } },
+        { provide: UserTokensService, useValue: { issue: jest.fn(), consume: jest.fn() } },
+        { provide: MailService, useValue: { send: jest.fn() } },
         TicketsService,
         { provide: PrismaService, useValue: prisma },
         { provide: TicketsGateway, useValue: mockGateway },
@@ -127,7 +135,7 @@ describe('SDK Flow Integration', () => {
     it('should validate a valid SDK key and return application', async () => {
       prisma.application.findUnique.mockResolvedValue(mockApplication);
 
-      const result = await authService.validateApiKey(sdkKey);
+      const result = await authService.validateSdkKey(sdkKey);
 
       expect(result.id).toBe(applicationId);
       expect(result.tenantId).toBe(tenantId);
@@ -144,7 +152,7 @@ describe('SDK Flow Integration', () => {
     it('should reject invalid SDK key', async () => {
       prisma.application.findUnique.mockResolvedValue(null);
 
-      await expect(authService.validateApiKey('sk_invalid_key')).rejects.toThrow(
+      await expect(authService.validateSdkKey('sk_invalid_key')).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -152,13 +160,13 @@ describe('SDK Flow Integration', () => {
     it('should reject empty SDK key', async () => {
       prisma.application.findUnique.mockResolvedValue(null);
 
-      await expect(authService.validateApiKey('')).rejects.toThrow(UnauthorizedException);
+      await expect(authService.validateSdkKey('')).rejects.toThrow(UnauthorizedException);
     });
 
     it('should reject SDK key with wrong format', async () => {
       prisma.application.findUnique.mockResolvedValue(null);
 
-      await expect(authService.validateApiKey('not-a-valid-key')).rejects.toThrow(
+      await expect(authService.validateSdkKey('not-a-valid-key')).rejects.toThrow(
         UnauthorizedException,
       );
     });
@@ -289,7 +297,7 @@ describe('SDK Flow Integration', () => {
     it('should complete full SDK flow: validate key -> create ticket -> return ID', async () => {
       // Step 1: Validate SDK key
       prisma.application.findUnique.mockResolvedValue(mockApplication);
-      const app = await authService.validateApiKey(sdkKey);
+      const app = await authService.validateSdkKey(sdkKey);
       expect(app.id).toBe(applicationId);
 
       // Step 2: Create ticket from SDK
@@ -413,7 +421,7 @@ describe('SDK Flow Integration', () => {
 
       // SDK key validates to tenant A
       prisma.application.findUnique.mockResolvedValue(mockApplication);
-      const app = await authService.validateApiKey(sdkKey);
+      const app = await authService.validateSdkKey(sdkKey);
       expect(app.tenantId).toBe(tenantId);
 
       // Attempting to create ticket for tenant B should fail

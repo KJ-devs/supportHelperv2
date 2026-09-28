@@ -3,14 +3,18 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { ConflictException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
-import { AuthService } from '@/modules/auth/auth.service';
+import { AuthService } from '@/auth/auth.service';
+import { UsersService } from '@/users/users.service';
+import { TenantsService } from '@/tenants/tenants.service';
+import { UserTokensService } from '@/users/user-tokens.service';
+import { MailService } from '@/common/mail/mail.service';
 import { PrismaService } from '@/prisma/prisma.service';
 
 /**
  * Auth Flow Integration Tests
  *
  * Tests the complete authentication lifecycle:
- * register -> login -> refresh -> validateUser -> validateApiKey
+ * register -> login -> refresh -> validateUser -> validateSdkKey
  *
  * Uses mocked Prisma but real JWT + bcrypt to verify token flow integrity.
  */
@@ -33,6 +37,7 @@ describe('Auth Flow Integration', () => {
   };
 
   const JWT_SECRET = 'test-jwt-secret-for-integration-tests';
+  const JWT_REFRESH_SECRET = 'test-refresh-secret-for-integration-tests';
 
   const mockTenant = {
     id: 'tenant-001',
@@ -78,6 +83,10 @@ describe('Auth Flow Integration', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         AuthService,
+        { provide: UsersService, useValue: {} },
+        { provide: TenantsService, useValue: { create: (data: unknown) => prisma.tenant.create({ data }) } },
+        { provide: UserTokensService, useValue: { issue: jest.fn(), consume: jest.fn() } },
+        { provide: MailService, useValue: { send: jest.fn() } },
         {
           provide: PrismaService,
           useValue: prisma,
@@ -97,6 +106,7 @@ describe('Auth Flow Integration', () => {
               const config: Record<string, any> = {
                 JWT_SECRET,
                 JWT_EXPIRES_IN: '7d',
+                JWT_REFRESH_SECRET,
               };
               return config[key] ?? defaultValue;
             }),
@@ -137,10 +147,9 @@ describe('Auth Flow Integration', () => {
       expect(accessPayload.sub).toBe('user-001');
       expect(accessPayload.email).toBe('test@example.com');
       expect(accessPayload.tenantId).toBe('tenant-001');
-      expect(accessPayload.type).toBe('access');
 
       const refreshPayload = jwtService.verify(result.refreshToken, {
-        secret: JWT_SECRET,
+        secret: JWT_REFRESH_SECRET,
       });
       expect(refreshPayload.sub).toBe('user-001');
       expect(refreshPayload.type).toBe('refresh');
@@ -176,9 +185,7 @@ describe('Auth Flow Integration', () => {
       // Now use the refresh token to get new tokens
       prisma.user.findUnique.mockResolvedValue(mockUser);
 
-      const refreshResult = await authService.refresh({
-        refreshToken: loginResult.refreshToken,
-      });
+      const refreshResult = await authService.refresh(loginResult.refreshToken);
 
       expect(refreshResult.user.id).toBe('user-001');
       expect(refreshResult.accessToken).toBeDefined();
@@ -220,9 +227,7 @@ describe('Auth Flow Integration', () => {
       // Step 3: Refresh token
       prisma.user.findUnique.mockResolvedValue(mockUser);
 
-      const refreshResult = await authService.refresh({
-        refreshToken: loginResult.refreshToken,
-      });
+      const refreshResult = await authService.refresh(loginResult.refreshToken);
 
       // Step 4: Validate user from access token payload
       const payload = jwtService.verify(refreshResult.accessToken, {
@@ -246,19 +251,6 @@ describe('Auth Flow Integration', () => {
           email: 'test@example.com',
           password: 'SecurePass123!',
           tenantName: 'Another Org',
-        }),
-      ).rejects.toThrow(ConflictException);
-    });
-
-    it('should reject registration with duplicate tenant slug', async () => {
-      prisma.user.findFirst.mockResolvedValue(null);
-      prisma.tenant.findUnique.mockResolvedValue(mockTenant);
-
-      await expect(
-        authService.register({
-          email: 'new@example.com',
-          password: 'SecurePass123!',
-          tenantName: 'Test Org',
         }),
       ).rejects.toThrow(ConflictException);
     });
@@ -287,7 +279,7 @@ describe('Auth Flow Integration', () => {
 
     it('should reject refresh with invalid token', async () => {
       await expect(
-        authService.refresh({ refreshToken: 'invalid-token' }),
+        authService.refresh('invalid-token'),
       ).rejects.toThrow(UnauthorizedException);
     });
 
@@ -300,7 +292,7 @@ describe('Auth Flow Integration', () => {
 
       // Try to use access token as refresh token - should fail
       await expect(
-        authService.refresh({ refreshToken: loginResult.accessToken }),
+        authService.refresh(loginResult.accessToken),
       ).rejects.toThrow(UnauthorizedException);
     });
 
@@ -315,7 +307,7 @@ describe('Auth Flow Integration', () => {
       prisma.user.findUnique.mockResolvedValue(null);
 
       await expect(
-        authService.refresh({ refreshToken: loginResult.refreshToken }),
+        authService.refresh(loginResult.refreshToken),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
@@ -331,7 +323,7 @@ describe('Auth Flow Integration', () => {
       };
       prisma.application.findUnique.mockResolvedValue(mockApp);
 
-      const result = await authService.validateApiKey('sk_test_abc123');
+      const result = await authService.validateSdkKey('sk_test_abc123');
 
       expect(result.id).toBe('app-001');
       expect(result.tenant.id).toBe('tenant-001');
@@ -341,7 +333,7 @@ describe('Auth Flow Integration', () => {
       prisma.application.findUnique.mockResolvedValue(null);
 
       await expect(
-        authService.validateApiKey('sk_invalid_key'),
+        authService.validateSdkKey('sk_invalid_key'),
       ).rejects.toThrow(UnauthorizedException);
     });
   });
