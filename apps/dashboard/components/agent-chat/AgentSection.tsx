@@ -91,6 +91,8 @@ function formatTime(timestamp: string): string {
 export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSectionProps) {
   const t = useTranslations('agentSection');
   const [activeTab, setActiveTab] = useState<ActiveTab>('chat');
+  // Mode/model choices are expert settings: hidden by default (Auto is recommended)
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -233,8 +235,32 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
           </button>
         ))}
 
-        {/* Model selector + mode selector + agent level badge + session indicator */}
+        {/* Agent level badge + session indicator + advanced options toggle */}
         <div className="ml-auto flex items-center gap-3">
+          {agentLevel && (
+            <AgentLevelBadge level={agentLevel} model={modelUsed} isActive={isAgentThinking} />
+          )}
+          {sessionId && !agentLevel && (
+            <div className="flex items-center gap-1.5" title={`Session: ${sessionId}`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              <span className="text-xs text-gray-500">{t('sessionActive')}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(v => !v)}
+            aria-expanded={showAdvanced}
+            className={`text-xs py-1 px-2 rounded transition-colors ${
+              showAdvanced ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-gray-200'
+            }`}
+          >
+            ⚙ {t('advancedOptions')}
+          </button>
+        </div>
+      </div>
+
+      {showAdvanced && (
+        <div className="flex flex-wrap items-center gap-4 px-4 py-2 border-b border-gray-800 bg-gray-900/60 flex-shrink-0">
           <AgentModeSelector
             value={agentMode}
             onChange={setAgentMode}
@@ -245,17 +271,11 @@ export function AgentSection({ ticketId, onDiagnosisUpdate, diagnosis }: AgentSe
             onChange={setPreferredModel}
             disabled={isAgentThinking || !!sessionId}
           />
-          {agentLevel && (
-            <AgentLevelBadge level={agentLevel} model={modelUsed} isActive={isAgentThinking} />
-          )}
-          {sessionId && !agentLevel && (
-            <div className="flex items-center gap-1.5" title={`Session: ${sessionId}`}>
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-500">{t('sessionActive')}</span>
-            </div>
+          {sessionId && (
+            <span className="text-[11px] text-gray-500">{t('advancedLocked')}</span>
           )}
         </div>
-      </div>
+      )}
 
       {/* CHAT TAB */}
       {activeTab === 'chat' && (

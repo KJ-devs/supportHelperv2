@@ -106,6 +106,23 @@ function formatContextKey(key: string): string {
     .replace(/^\w/, c => c.toUpperCase());
 }
 
+/** Human-readable value for the SDK user context (no raw JSON in the UI). */
+function formatContextValue(value: unknown): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (Array.isArray(value)) return value.map(formatContextValue).join(', ');
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    if (typeof obj.width === 'number' && typeof obj.height === 'number') {
+      return `${obj.width} × ${obj.height}`;
+    }
+    return Object.entries(obj)
+      .map(([k, v]) => `${formatContextKey(k)}: ${formatContextValue(v)}`)
+      .join(' · ');
+  }
+  if (typeof value === 'boolean') return value ? '✓' : '✗';
+  return String(value);
+}
+
 // --- Section label (non-collapsible) ---
 
 function SectionLabel({ label, icon }: { label: string; icon?: React.ReactNode }) {
@@ -145,7 +162,6 @@ export default function TicketDetailPage() {
 
   // Media pre-signed URLs
   const [mediaUrls, setMediaUrls] = useState<Record<string, string>>({});
-  const [loadingUrls, setLoadingUrls] = useState<Record<string, boolean>>({});
 
   // N1→N2 escalation notification
   const [n2Notification, setN2Notification] = useState<AgentEscalatedToN2Event | null>(null);
@@ -231,11 +247,14 @@ export default function TicketDetailPage() {
 
   useTicketSocket(undefined, handleAgentEscalatedToN2);
 
-  // Auto-fetch media URLs on mount
+  // Auto-fetch media URLs on mount. Each media is requested at most once:
+  // depending on the URL state here re-triggered the effect below and
+  // retried failing URLs in an endless loop.
+  const requestedMediaIds = useRef(new Set<string>());
   const fetchMediaUrl = useCallback(
     async (mediaId: string) => {
-      if (mediaUrls[mediaId] || loadingUrls[mediaId]) return;
-      setLoadingUrls(prev => ({ ...prev, [mediaId]: true }));
+      if (requestedMediaIds.current.has(mediaId)) return;
+      requestedMediaIds.current.add(mediaId);
       try {
         const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
         const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
@@ -247,11 +266,9 @@ export default function TicketDetailPage() {
         setMediaUrls(prev => ({ ...prev, [mediaId]: data.url }));
       } catch (err) {
         console.error('Error fetching media URL:', err);
-      } finally {
-        setLoadingUrls(prev => ({ ...prev, [mediaId]: false }));
       }
     },
-    [mediaUrls, loadingUrls]
+    []
   );
 
   // Auto-load video URLs when ticket loads
@@ -283,15 +300,11 @@ export default function TicketDetailPage() {
     fetchLatestTask();
   }, [fetchTicket, fetchDiagnosis, fetchLatestTask]);
 
-  const MANUAL_STATUSES = [
-    'open',
-    'in_progress',
-    'pending',
-    'waiting',
-    'waiting_response',
-    'escalated',
-    'resolved',
-    'closed',
+  // Grouped so the 8 statuses read as 3 simple stages
+  const STATUS_GROUPS = [
+    { key: 'active', statuses: ['open', 'in_progress', 'escalated'] },
+    { key: 'waiting', statuses: ['waiting_response', 'waiting', 'pending'] },
+    { key: 'done', statuses: ['resolved', 'closed'] },
   ] as const;
 
   const handleStatusChange = async (newStatus: string) => {
@@ -366,21 +379,35 @@ export default function TicketDetailPage() {
               disabled={isUpdatingStatus}
               className="h-8 px-2 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 cursor-pointer"
             >
-              {MANUAL_STATUSES.map(s => (
-                <option key={s} value={s}>
-                  {t(`manualStatuses.${s}` as Parameters<typeof t>[0])}
-                </option>
+              {STATUS_GROUPS.map(group => (
+                <optgroup key={group.key} label={t(`statusGroups.${group.key}` as Parameters<typeof t>[0])}>
+                  {group.statuses.map(s => (
+                    <option key={s} value={s}>
+                      {t(`manualStatuses.${s}` as Parameters<typeof t>[0])}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           )}
-          <Button variant="ghost" size="sm" onClick={handleRefresh} className="flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleRefresh}
+            className="flex items-center"
+            title={t('refresh')}
+            aria-label={t('refresh')}
+          >
             <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
+          {/* Destructive action kept discreet: it sits next to the status selector */}
           <Button
-            variant="danger"
+            variant="ghost"
             size="sm"
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center"
+            className="flex items-center text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+            title={t('deleteTicket')}
+            aria-label={t('deleteTicket')}
           >
             <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
           </Button>
@@ -828,15 +855,16 @@ export default function TicketDetailPage() {
                   {ticket.userContext && Object.keys(ticket.userContext).length > 0 ? (
                     <div className="grid grid-cols-2 gap-3">
                       {Object.entries(ticket.userContext).map(([key, value]) => {
-                        const displayValue =
-                          typeof value === 'object' ? JSON.stringify(value) : String(value);
+                        const displayValue = formatContextValue(value);
+                        const labelKey = `contextKeys.${key}` as Parameters<typeof t>[0];
+                        const label = t.has(labelKey) ? t(labelKey) : formatContextKey(key);
                         return (
                           <div
                             key={key}
                             className="bg-gray-50 dark:bg-gray-800/80 rounded-lg px-3 py-2.5 border border-gray-100 dark:border-gray-700/50"
                           >
                             <p className="text-[10px] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wide mb-1">
-                              {formatContextKey(key)}
+                              {label}
                             </p>
                             <p
                               className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate"
