@@ -9,8 +9,19 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiParam, ApiQuery, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
+import { timingSafeEqual } from 'crypto';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { TicketTimelineService } from '../services/ticket-timeline.service';
+
+/** Reopen links from resolution emails stop working after this delay. */
+const REOPEN_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+function tokensMatch(expected: string | null, provided: string): boolean {
+  if (!expected) return false;
+  const a = Buffer.from(expected);
+  const b = Buffer.from(provided);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 @ApiTags('Ticket Reopen')
 @Controller('sdk/tickets')
@@ -23,7 +34,7 @@ export class TicketReopenController {
   ) {}
 
   @Post(':id/reopen')
-  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @Throttle({ public: { limit: 5, ttl: 60000 } })
   @ApiOperation({ summary: 'Reopen a resolved ticket (public, token-based)' })
   @ApiParam({ name: 'id', description: 'Ticket ID' })
   @ApiQuery({ name: 'token', description: 'Reopen token from the resolution email' })
@@ -47,7 +58,11 @@ export class TicketReopenController {
       throw new NotFoundException('Ticket not found');
     }
 
-    if (ticket.reopenToken !== token) {
+    const expired = ticket.resolvedAt
+      ? Date.now() - ticket.resolvedAt.getTime() > REOPEN_TOKEN_TTL_MS
+      : false;
+
+    if (!tokensMatch(ticket.reopenToken, token) || expired) {
       throw new BadRequestException('Invalid or expired reopen token');
     }
 

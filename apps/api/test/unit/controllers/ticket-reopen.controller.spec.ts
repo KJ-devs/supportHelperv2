@@ -87,6 +87,25 @@ describe('TicketReopenController', () => {
       await expect(controller.reopen('ticket-123', 'wrong-token')).rejects.toThrow(BadRequestException);
     });
 
+    it('should reject a link older than 30 days', async () => {
+      const oldTicket = {
+        ...mockTicket,
+        status: 'resolved',
+        resolvedAt: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000),
+      };
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(oldTicket as unknown);
+
+      await expect(controller.reopen('ticket-123', 'valid-token-123')).rejects.toThrow(
+        'Invalid or expired reopen token',
+      );
+    });
+
+    it('should reject a token of a different length without throwing a crypto error', async () => {
+      jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(mockTicket as unknown);
+
+      await expect(controller.reopen('ticket-123', 'x')).rejects.toThrow(BadRequestException);
+    });
+
     it('should throw BadRequestException when ticket is not reopenable', async () => {
       const newTicket = { ...mockTicket, status: 'new' };
       jest.spyOn(prismaService.ticket, 'findUnique').mockResolvedValue(newTicket as unknown);

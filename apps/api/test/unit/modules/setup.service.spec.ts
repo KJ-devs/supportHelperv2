@@ -3,6 +3,7 @@ import { SetupService } from '../../../src/modules/setup/setup.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { AuthService } from '../../../src/auth/auth.service';
 import { ConfigService } from '@nestjs/config';
+import { EncryptionService } from '../../../src/common/services/encryption.service';
 import { ConflictException, BadRequestException } from '@nestjs/common';
 
 jest.mock('openai', () => {
@@ -61,6 +62,10 @@ describe('SetupService', () => {
           useValue: {
             get: jest.fn(),
           },
+        },
+        {
+          provide: EncryptionService,
+          useValue: { encrypt: jest.fn((v: string) => `enc(${v})`) },
         },
       ],
     }).compile();
@@ -211,6 +216,32 @@ describe('SetupService', () => {
           },
         },
       });
+    });
+  });
+
+  describe('saveSmtpConfig', () => {
+    it('should encrypt the SMTP password before storing it', async () => {
+      await service.saveSmtpConfig({
+        host: 'smtp.test',
+        port: 587,
+        username: 'mailer',
+        password: 'secret',
+        fromEmail: 'noreply@test.local',
+      });
+
+      const upsert = prismaService.systemConfig.upsert as jest.Mock;
+      const stored = upsert.mock.calls[0][0].create.value;
+      expect(stored.password).toBe('enc(secret)');
+      expect(JSON.stringify(upsert.mock.calls[0][0])).not.toContain('"secret"');
+    });
+  });
+
+  describe('hasAnyUser', () => {
+    it('should reflect whether at least one user exists', async () => {
+      (prismaService.user.count as jest.Mock).mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+
+      await expect(service.hasAnyUser()).resolves.toBe(false);
+      await expect(service.hasAnyUser()).resolves.toBe(true);
     });
   });
 

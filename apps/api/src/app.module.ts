@@ -154,23 +154,15 @@ import { AgentDefinitionsModule } from './modules/agent-definitions/agent-defini
           lazyConnect: true,
         });
 
+        // Baseline per-IP limit applied to every route; endpoints override it
+        // with @Throttle() when they need something stricter (login, SDK, ...).
+        const limit = parseInt(config.get<string>('RATE_LIMIT_PER_MINUTE') || '300', 10);
+
         return {
           throttlers: [
-            {
-              name: 'public',
-              ttl: 60000,
-              limit: 10000,
-            },
-            {
-              name: 'authenticated',
-              ttl: 60000,
-              limit: 10000,
-            },
-            {
-              name: 'sdk',
-              ttl: 60000,
-              limit: 10000,
-            },
+            { name: 'public', ttl: 60000, limit },
+            { name: 'authenticated', ttl: 60000, limit },
+            { name: 'sdk', ttl: 60000, limit },
           ],
           storage: new ThrottlerStorageRedisService(redisClient),
         };

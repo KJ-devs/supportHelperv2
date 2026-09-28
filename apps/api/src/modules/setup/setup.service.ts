@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import OpenAI from 'openai';
 import * as nodemailer from 'nodemailer';
 import { PrismaService } from '../../prisma/prisma.service';
+import { EncryptionService } from '../../common/services/encryption.service';
 import { AuthService } from '../../auth/auth.service';
 import {
   CreateAdminDto,
@@ -39,7 +40,12 @@ export class SetupService {
     private readonly prisma: PrismaService,
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly encryption: EncryptionService,
   ) {}
+
+  async hasAnyUser(): Promise<boolean> {
+    return (await this.prisma.user.count()) > 0;
+  }
 
   /**
    * Check if initial setup has been completed
@@ -144,7 +150,8 @@ export class SetupService {
       host: dto.host,
       port: dto.port,
       username: dto.username,
-      password: dto.password,
+      // Never store the SMTP password in clear text
+      password: dto.password ? this.encryption.encrypt(dto.password) : undefined,
       fromEmail: dto.fromEmail,
       secure: dto.secure,
     };

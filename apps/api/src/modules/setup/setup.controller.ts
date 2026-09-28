@@ -6,11 +6,13 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { SetupService, SetupProgress } from './setup.service';
 import { Public } from '../../auth/decorators/public.decorator';
+import { SetupAccessGuard } from './setup-access.guard';
 import {
   CreateAdminDto,
   ValidateAiKeyDto,
@@ -97,6 +99,7 @@ export class SetupController {
    * Test and save AI API key
    */
   @Post('validate-ai-key')
+  @UseGuards(SetupAccessGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Validate and save AI API key' })
   @ApiResponse({
@@ -118,6 +121,7 @@ export class SetupController {
    * Save SMTP configuration
    */
   @Post('smtp')
+  @UseGuards(SetupAccessGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Save SMTP configuration' })
   @ApiResponse({
@@ -139,6 +143,7 @@ export class SetupController {
    * Test SMTP connection
    */
   @Post('smtp-test')
+  @UseGuards(SetupAccessGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Test SMTP connection' })
   @ApiResponse({
@@ -160,6 +165,7 @@ export class SetupController {
    * Save wizard progress
    */
   @Post('progress')
+  @UseGuards(SetupAccessGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Save setup wizard progress' })
   @ApiResponse({
@@ -182,6 +188,7 @@ export class SetupController {
    * Mark setup as completed
    */
   @Post('complete')
+  @UseGuards(SetupAccessGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark setup as completed' })
   @ApiResponse({
