@@ -14,7 +14,7 @@ vi.mock('next-intl', () => {
   }
 
   function createTranslator(namespace: string) {
-    return (key: string, params?: Record<string, unknown>): string => {
+    const translate = (key: string, params?: Record<string, unknown>): string => {
       const fullPath = namespace ? `${namespace}.${key}` : key;
       let value = getNestedValue(frMessages as unknown as Record<string, unknown>, fullPath);
       if (params) {
@@ -24,6 +24,12 @@ vi.mock('next-intl', () => {
       }
       return value ?? key;
     };
+    // Mirrors next-intl's t.has()
+    translate.has = (key: string): boolean => {
+      const fullPath = namespace ? `${namespace}.${key}` : key;
+      return getNestedValue(frMessages as unknown as Record<string, unknown>, fullPath) !== fullPath;
+    };
+    return translate;
   }
 
   return {
