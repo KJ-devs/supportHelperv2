@@ -7,6 +7,7 @@
 
 import { ReactNode, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { Toaster } from 'react-hot-toast';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useTranslations } from 'next-intl';
@@ -24,7 +25,6 @@ import {
   Bot,
   AppWindow,
   Plug,
-  Github,
   BarChart3,
   Settings,
   Bug,
@@ -39,6 +39,8 @@ interface NavItem {
   href: string;
   labelKey: string;
   icon: LucideIcon;
+  /** Other routes that belong to this entry (highlight it when visited) */
+  alsoActiveOn?: string[];
 }
 
 interface NavSection {
@@ -59,8 +61,12 @@ const navSections: NavSection[] = [
     titleKey: 'nav.configuration',
     items: [
       { href: '/dashboard/applications', labelKey: 'nav.applications', icon: AppWindow },
-      { href: '/dashboard/integrations', labelKey: 'nav.integrations', icon: Plug },
-      { href: '/dashboard/github', labelKey: 'nav.github', icon: Github },
+      {
+        href: '/dashboard/integrations',
+        labelKey: 'nav.integrations',
+        icon: Plug,
+        alsoActiveOn: ['/dashboard/github'],
+      },
     ],
   },
   {
@@ -75,6 +81,16 @@ const navSections: NavSection[] = [
     ],
   },
 ];
+
+function matchesRoute(route: string, pathname: string): boolean {
+  return pathname === route || pathname.startsWith(route + '/');
+}
+
+function isNavItemActive(item: NavItem, pathname: string): boolean {
+  // The dashboard home is the parent of every route: only highlight it on itself
+  if (item.href === '/dashboard') return pathname === '/dashboard';
+  return [item.href, ...(item.alsoActiveOn ?? [])].some((route) => matchesRoute(route, pathname));
+}
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -121,7 +137,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </p>
           <div className="space-y-1">
             {section.items.map(item => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+              const isActive = isNavItemActive(item, pathname);
               const Icon = item.icon;
               return (
                 <Link
@@ -192,6 +208,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <SkipLink />
+      <Toaster position="top-right" />
 
       {/* Desktop Sidebar */}
       <aside
@@ -245,7 +262,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Page Content */}
-        <main id="main-content" className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8" tabIndex={-1}>
+        {/* Bottom padding keeps content clear of the floating support widget */}
+        <main id="main-content" className="px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8 pb-24" tabIndex={-1}>
           {children}
         </main>
       </div>

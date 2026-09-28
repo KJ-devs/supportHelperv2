@@ -11,6 +11,7 @@ import { IntegrationModal } from '@/components/integrations/IntegrationModal';
 import { SyncLogsPanel } from '@/components/integrations/SyncLogsPanel';
 import { ToastProvider, useToast } from '@/components/integrations/IntegrationToast';
 import { PageLoader, EmptyState } from '@/components/ui';
+import { GitHubIntegrationCard } from '@/components/integrations/GitHubIntegrationCard';
 
 function IntegrationsPageContent() {
   const { addToast } = useToast();
@@ -246,6 +247,8 @@ function IntegrationsPageContent() {
             </button>
           </div>
         </div>
+
+        <GitHubIntegrationCard />
 
         {/* Error State */}
         {error && (
