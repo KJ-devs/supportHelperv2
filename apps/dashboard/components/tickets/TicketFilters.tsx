@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Select, Input, Button } from '@/components/ui';
 import type { TicketFilters as Filters } from '@/lib/types/ticket';
 import { useTranslations } from 'next-intl';
@@ -18,28 +18,41 @@ interface TicketFiltersProps {
 export function TicketFilters({ filters, onFiltersChange, onReset }: TicketFiltersProps) {
   const t = useTranslations('tickets');
   const [search, setSearch] = useState(filters.search || '');
+  const latest = useRef({ filters, onFiltersChange });
+  latest.current = { filters, onFiltersChange };
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onFiltersChange({ ...filters, search, page: 1 });
-  };
+  // Search applies as you type (debounced), like the other filters
+  useEffect(() => {
+    if (search === (latest.current.filters.search || '')) return;
+    const timer = setTimeout(() => {
+      const { filters: current, onFiltersChange: apply } = latest.current;
+      apply({ ...current, search: search || undefined, page: 1 });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Keep the input in sync when filters are reset from outside
+  useEffect(() => {
+    setSearch(filters.search || '');
+  }, [filters.search]);
+
+  const hasActiveFilters = Boolean(filters.search || filters.status || filters.type || filters.severity);
 
   const handleFilterChange = (key: keyof Filters, value: any) => {
     onFiltersChange({ ...filters, [key]: value || undefined, page: 1 });
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20 space-y-4">
-      <form onSubmit={handleSearchSubmit}>
+    <div className="bg-white dark:bg-gray-900 p-4 rounded-lg shadow dark:shadow-gray-800/20">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-[2fr_1fr_1fr_1fr] gap-4 items-end">
         <Input
-          type="text"
+          type="search"
+          label={t('searchLabel')}
           placeholder={t('searchPlaceholder')}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
-      </form>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Select
           label={t('filterStatus')}
           placeholder={t('allStatuses')}
@@ -86,14 +99,13 @@ export function TicketFilters({ filters, onFiltersChange, onReset }: TicketFilte
         />
       </div>
 
-      <div className="flex justify-end space-x-2">
-        <Button variant="ghost" size="sm" onClick={onReset}>
-          {t('resetFilters')}
-        </Button>
-        <Button size="sm" onClick={handleSearchSubmit}>
-          {t('applyFilters')}
-        </Button>
-      </div>
+      {hasActiveFilters && (
+        <div className="flex justify-end mt-3">
+          <Button variant="ghost" size="sm" onClick={onReset}>
+            {t('resetFilters')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

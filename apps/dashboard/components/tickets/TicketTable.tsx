@@ -174,27 +174,27 @@ export function TicketTable({
         <thead className="bg-gray-50 dark:bg-gray-800/50">
           <tr>
             {onSelectAll && (
-              <th className="px-6 py-3 text-left">
+              <th className="px-4 py-3 text-left">
                 <TicketCheckbox checked={allSelected} onChange={checked => onSelectAll(checked)} />
               </th>
             )}
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('title')}
             >
               <div className="flex items-center space-x-1">
-                <span>{t('title' as any)}</span>
+                <span>{t('columnTitle')}</span>
                 <SortIcon field="title" />
               </div>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               {t('filterStatus')}
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+            <th className="hidden xl:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               {t('filterType')}
             </th>
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('severity')}
             >
               <div className="flex items-center space-x-1">
@@ -202,20 +202,17 @@ export function TicketTable({
                 <SortIcon field="severity" />
               </div>
             </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Application
+            <th className="hidden 2xl:table-cell px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              {t('columnApplication')}
             </th>
             <th
-              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
+              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700/50"
               onClick={() => handleSort('createdAt')}
             >
               <div className="flex items-center space-x-1">
                 <span>{t('date' as any)}</span>
                 <SortIcon field="createdAt" />
               </div>
-            </th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              {t('actions' as any)}
             </th>
           </tr>
         </thead>
@@ -231,15 +228,15 @@ export function TicketTable({
             return (
               <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50">
                 {onSelectTicket && (
-                  <td className="px-6 py-4">
+                  <td className="px-4 py-3">
                     <TicketCheckbox
                       checked={selectedTickets.includes(ticket.id)}
                       onChange={checked => onSelectTicket(ticket.id, checked)}
                     />
                   </td>
                 )}
-                <td className="px-6 py-4">
-                  <div className="max-w-xs">
+                <td className="px-4 py-3 w-full">
+                  <div className="min-w-[14rem] max-w-xl">
                     <Link
                       href={`/dashboard/tickets/${ticket.id}`}
                       className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline"
@@ -249,30 +246,28 @@ export function TicketTable({
                     <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">
                       {ticket.description}
                     </p>
+                    {/* The Application column is hidden below 2xl: show it here instead */}
+                    {ticket.application?.name && (
+                      <p className="2xl:hidden text-xs text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                        {ticket.application.name}
+                      </p>
+                    )}
                   </div>
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <StatusBadge status={ticket.status} />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="hidden xl:table-cell px-4 py-3 whitespace-nowrap">
                   <TypeBadge type={ticket.type} />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap">
+                <td className="px-4 py-3 whitespace-nowrap">
                   <SeverityBadge severity={ticket.severity} />
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+                <td className="hidden 2xl:table-cell px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 max-w-[10rem] truncate">
                   {ticket.application?.name || '-'}
                 </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {createdAt}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <Link
-                    href={`/dashboard/tickets/${ticket.id}`}
-                    className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                  >
-                    {t('view')} →
-                  </Link>
                 </td>
               </tr>
             );

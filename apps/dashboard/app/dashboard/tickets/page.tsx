@@ -18,7 +18,8 @@ import { ExportButton } from '@/components/export/ExportButton';
 import { PageLoader, Button, EmptyState } from '@/components/ui';
 import { useTicketSocket, type TicketEvent } from '@/hooks/useTicketSocket';
 import { useTranslations } from 'next-intl';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Plus } from 'lucide-react';
+import { NewTicketModal } from '@/components/tickets/NewTicketModal';
 
 type ViewMode = 'table' | 'grid';
 
@@ -30,6 +31,7 @@ export default function TicketsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [newTicketOpen, setNewTicketOpen] = useState(false);
   const [selectedTickets, setSelectedTickets] = useState<string[]>([]);
 
   const [filters, setFilters] = useState<TicketFilters>({
@@ -199,6 +201,10 @@ export default function TicketsPage() {
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              <Button onClick={() => setNewTicketOpen(true)}>
+                <Plus className="w-4 h-4 mr-1" aria-hidden="true" />
+                {t('newTicket.button')}
+              </Button>
               <ExportButton tickets={tickets} filters={filters} />
 
               <div className="hidden sm:flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1">
@@ -381,6 +387,7 @@ export default function TicketsPage() {
           )}
         </div>
       </div>
+      <NewTicketModal isOpen={newTicketOpen} onClose={() => setNewTicketOpen(false)} />
     </DashboardLayout>
   );
 }

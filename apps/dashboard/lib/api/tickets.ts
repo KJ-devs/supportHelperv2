@@ -109,6 +109,17 @@ export const ticketsApi = {
   },
 
   /**
+   * Create a ticket manually (e.g. from a phone call or an email).
+   * Type and severity are set by the automatic triage.
+   */
+  async createTicket(data: { title: string; description?: string; applicationId: string }): Promise<Ticket> {
+    return apiRequest<Ticket>('/api/tickets', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  /**
    * Get single ticket by ID
    */
   async getTicket(id: string): Promise<Ticket> {
