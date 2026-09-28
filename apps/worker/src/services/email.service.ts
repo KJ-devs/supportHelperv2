@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
 import { getErrorMessage } from '../utils/error.utils';
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -220,6 +221,7 @@ const TEMPLATES: Record<string, EmailTemplate> = {
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private resend: Resend | null = null;
+  private smtp: nodemailer.Transporter | null = null;
   private fromEmail!: string;
   private enabled: boolean = false;
 
@@ -229,12 +231,27 @@ export class EmailService implements OnModuleInit {
     const apiKey = this.configService.get<string>('RESEND_API_KEY');
     this.fromEmail = this.configService.get<string>('RESEND_FROM_EMAIL') || 'support@example.com';
 
+    const smtpHost = this.configService.get<string>('SMTP_HOST');
+
     if (apiKey) {
       this.resend = new Resend(apiKey);
       this.enabled = true;
       this.logger.log('EmailService initialized with Resend');
+    } else if (smtpHost) {
+      // Same fallback as the API: SMTP from environment (MailHog in development)
+      const port = parseInt(this.configService.get<string>('SMTP_PORT') || '587', 10);
+      const user = this.configService.get<string>('SMTP_USER');
+      this.smtp = nodemailer.createTransport({
+        host: smtpHost,
+        port,
+        secure: port === 465,
+        auth: user ? { user, pass: this.configService.get<string>('SMTP_PASS') } : undefined,
+      });
+      this.fromEmail = this.configService.get<string>('SMTP_FROM') || this.fromEmail;
+      this.enabled = true;
+      this.logger.log(`EmailService initialized with SMTP (${smtpHost}:${port})`);
     } else {
-      this.logger.warn('RESEND_API_KEY not set - email sending disabled');
+      this.logger.warn('Neither RESEND_API_KEY nor SMTP_HOST set - email sending disabled');
     }
   }
 
@@ -249,8 +266,26 @@ export class EmailService implements OnModuleInit {
    * Send a raw email
    */
   async send(options: SendEmailOptions): Promise<{ id: string } | null> {
+    if (this.smtp) {
+      try {
+        const info = await this.smtp.sendMail({
+          from: this.fromEmail,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text,
+          replyTo: options.replyTo,
+        });
+        this.logger.log(`Email sent to ${options.to}: ${options.subject}`);
+        return { id: info.messageId || 'unknown' };
+      } catch (error) {
+        this.logger.error(`Failed to send email: ${getErrorMessage(error)}`);
+        throw error;
+      }
+    }
+
     if (!this.resend) {
-      this.logger.warn('Email not sent - Resend not configured');
+      this.logger.warn('Email not sent - no email transport configured');
       this.logger.debug(`Would have sent email to ${options.to}: ${options.subject}`);
       return null;
     }
