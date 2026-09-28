@@ -200,23 +200,31 @@ export class ToolExecutorService {
       }
 
       case 'get_ticket_details': {
-        return this.prisma.ticket.findFirst({
-          where: {
-            id: input.ticket_id as string,
-            tenantId: context.tenantId,
-          },
-          include: {
-            media: {
-              include: {
-                videoEvents: {
-                  where: { ocrText: { not: null } },
-                  orderBy: { timestampMs: 'asc' },
-                },
-              },
-            },
-            application: true,
-          },
-        });
+        // Validate UUID format for ticket_id and tenantId
+const isValidUUID = (uuid: string) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(uuid);
+
+if (!isValidUUID(input.ticket_id as string) || !isValidUUID(context.tenantId)) {
+  this.logger.error('Invalid UUID format for ticket_id or tenantId');
+  return { error: 'Invalid UUID format' };
+}
+
+return this.prisma.ticket.findFirst({
+  where: {
+    id: input.ticket_id as string,
+    tenantId: context.tenantId,
+  },
+  include: {
+    media: {
+      include: {
+        videoEvents: {
+          where: { ocrText: { not: null } },
+          orderBy: { timestampMs: 'asc' },
+        },
+      },
+    },
+    application: true,
+  },
+});
       }
 
       case 'update_ticket_status': {
