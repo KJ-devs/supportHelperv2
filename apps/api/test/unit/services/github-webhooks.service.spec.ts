@@ -168,6 +168,48 @@ describe('GithubWebhooksService', () => {
       });
     });
 
+    it('should sync a renamed issue title to the ticket', async () => {
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue({
+        id: 'gi-1',
+        ticketId: 'ticket-123',
+        ticket: { id: 'ticket-123', title: 'Old title' },
+      });
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({});
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+
+      await service.handleEvent('issues', {
+        action: 'edited',
+        changes: { title: { from: 'Old title' } },
+        issue: { number: 42, title: 'New title' },
+        repository: { full_name: 'owner/repo' },
+      });
+
+      expect(mockIssuesService.setSyncOrigin).toHaveBeenCalledWith('ticket-123', 'github');
+      expect(prisma.ticket.update).toHaveBeenCalledWith({
+        where: { id: 'ticket-123' },
+        data: { title: 'New title' },
+      });
+    });
+
+    it('should ignore issue body edits', async () => {
+      (prisma.githubIssue.findFirst as jest.Mock).mockResolvedValue({
+        id: 'gi-1',
+        ticketId: 'ticket-123',
+        ticket: { id: 'ticket-123', title: 'Same title' },
+      });
+      (prisma.githubIssue.update as jest.Mock).mockResolvedValue({});
+      (prisma.ticket.update as jest.Mock).mockClear();
+
+      await service.handleEvent('issues', {
+        action: 'edited',
+        changes: { body: { from: 'old body' } },
+        issue: { number: 42, title: 'Same title', body: 'new body' },
+        repository: { full_name: 'owner/repo' },
+      });
+
+      expect(prisma.ticket.update).not.toHaveBeenCalled();
+    });
+
     it('should skip unhandled event types', async () => {
       await service.handleEvent('star', { action: 'created' });
 

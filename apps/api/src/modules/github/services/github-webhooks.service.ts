@@ -286,8 +286,21 @@ export class GithubWebhooksService {
         break;
 
       case 'edited':
-        // Could sync title/body changes
-        this.logger.debug('Issue edited - sync not implemented');
+        // Only the title is synced: the issue body is generated from a template
+        // and must not overwrite the reporter's original description.
+        if (
+          payload.changes?.title &&
+          typeof issue.title === 'string' &&
+          issue.title.trim() &&
+          issue.title !== githubIssue.ticket?.title
+        ) {
+          await this.issuesService.setSyncOrigin(githubIssue.ticketId, 'github');
+          await this.prisma.ticket.update({
+            where: { id: githubIssue.ticketId },
+            data: { title: issue.title.trim().slice(0, 500) },
+          });
+          this.logger.log(`Synced title of ticket ${githubIssue.ticketId} from GitHub issue`);
+        }
         break;
     }
 
