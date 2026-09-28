@@ -75,14 +75,6 @@
             "timeout": 15000
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "prompt",
-            "prompt": "Si du code a ete modifie dans cette session sans verification de stabilite (build, tests, lint), recommande de lancer /stabilizer ou `bash scripts/stability-check.sh` avant de terminer."
-          }
-        ]
       }
     ]
   }
