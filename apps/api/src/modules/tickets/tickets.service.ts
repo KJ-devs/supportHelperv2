@@ -16,6 +16,11 @@ import { TicketsGateway } from './tickets.gateway';
 import { CacheService, CacheKeys, CacheTTL } from '../../cache';
 import { Prisma, TicketStatus } from '@prisma/client';
 
+/** Statuses that end the work on a ticket (they carry a resolvedAt date). */
+function isFinalStatus(status: string): boolean {
+  return status === 'resolved' || status === 'closed';
+}
+
 @Injectable()
 export class TicketsService {
   private readonly logger = new Logger(TicketsService.name);
@@ -304,7 +309,7 @@ export class TicketsService {
    */
   async update(ticketId: string, tenantId: string, dto: UpdateTicketDto) {
     // Verify ticket exists and belongs to tenant
-    await this.findOne(ticketId, tenantId);
+    const existing = await this.findOne(ticketId, tenantId);
 
     const data: Prisma.TicketUpdateInput = {
       ...(dto.title && { title: dto.title }),
@@ -321,9 +326,10 @@ export class TicketsService {
       }),
     };
 
-    // Update resolvedAt if status changed to resolved
-    if (dto.status === 'resolved') {
-      data.resolvedAt = new Date();
+    // resolvedAt marks the end of the work: set it when the ticket is resolved or
+    // closed, keep the original date on resolved -> closed, clear it when reopened
+    if (dto.status && isFinalStatus(dto.status)) {
+      if (!existing.resolvedAt) data.resolvedAt = new Date();
     } else if (dto.status) {
       data.resolvedAt = null;
     }
@@ -505,19 +511,25 @@ export class TicketsService {
       await this.prisma.$transaction(async (tx) => {
         switch (action) {
           case 'update_status': {
-            const data: Prisma.TicketUpdateManyMutationInput = {
-              status: value as TicketStatus,
-            };
-            if (value === 'resolved') {
-              data.resolvedAt = new Date();
+            const status = value as TicketStatus;
+            if (isFinalStatus(status)) {
+              // Keep the existing resolution date of tickets that were already resolved
+              await tx.ticket.updateMany({
+                where: { id: { in: validIds }, tenantId, resolvedAt: null },
+                data: { resolvedAt: new Date() },
+              });
+              const result = await tx.ticket.updateMany({
+                where: { id: { in: validIds }, tenantId },
+                data: { status },
+              });
+              processed = result.count;
             } else {
-              data.resolvedAt = null;
+              const result = await tx.ticket.updateMany({
+                where: { id: { in: validIds }, tenantId },
+                data: { status, resolvedAt: null },
+              });
+              processed = result.count;
             }
-            const result = await tx.ticket.updateMany({
-              where: { id: { in: validIds }, tenantId },
-              data,
-            });
-            processed = result.count;
             break;
           }
 

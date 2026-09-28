@@ -525,6 +525,41 @@ describe('TicketsService', () => {
       });
     });
 
+    it('should keep the original resolvedAt when a resolved ticket is closed', async () => {
+      const resolvedAt = new Date('2026-01-10T10:00:00Z');
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue({
+        ...mockTicket,
+        status: 'resolved',
+        resolvedAt,
+        media: [],
+        githubIssues: [],
+        agentSessions: [],
+      });
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({ ...mockTicket, status: 'closed', resolvedAt });
+
+      await service.update('ticket-123', 'tenant-123', { status: 'closed' as const });
+
+      const data = (prisma.ticket.update as jest.Mock).mock.calls.at(-1)[0].data;
+      expect(data.status).toBe('closed');
+      expect(data).not.toHaveProperty('resolvedAt');
+    });
+
+    it('should set resolvedAt when an open ticket is closed directly', async () => {
+      (prisma.ticket.findFirst as jest.Mock).mockResolvedValue({
+        ...mockTicket,
+        resolvedAt: null,
+        media: [],
+        githubIssues: [],
+        agentSessions: [],
+      });
+      (prisma.ticket.update as jest.Mock).mockResolvedValue({ ...mockTicket, status: 'closed' });
+
+      await service.update('ticket-123', 'tenant-123', { status: 'closed' as const });
+
+      const data = (prisma.ticket.update as jest.Mock).mock.calls.at(-1)[0].data;
+      expect(data.resolvedAt).toBeInstanceOf(Date);
+    });
+
     it('should clear resolvedAt when status changes from resolved', async () => {
       const dto = { status: 'open' as const };
 

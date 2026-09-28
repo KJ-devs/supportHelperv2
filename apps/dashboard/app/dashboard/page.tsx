@@ -88,9 +88,13 @@ export default function DashboardPage() {
 
       if (ticketStats.status === 'fulfilled') setStats(ticketStats.value);
       if (ticketsResponse.status === 'fulfilled') setRecentTickets(ticketsResponse.value.data);
-      if (trendsResult.status === 'fulfilled' && trendsResult.value.data.length > 0) {
-        const lastMonth = trendsResult.value.data.at(-1);
-        if (lastMonth) setAvgResolutionTimeHours(lastMonth.avgResolutionTimeHours);
+      if (trendsResult.status === 'fulfilled') {
+        // Weighted average over the last 12 months. Using only the current month
+        // showed "0h" as soon as nothing had been resolved yet this month.
+        const months = trendsResult.value.data;
+        const resolved = months.reduce((sum, m) => sum + m.resolved, 0);
+        const hours = months.reduce((sum, m) => sum + m.avgResolutionTimeHours * m.resolved, 0);
+        setAvgResolutionTimeHours(resolved > 0 ? hours / resolved : null);
       }
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
@@ -205,11 +209,13 @@ export default function DashboardPage() {
             icon={<Clock className="w-6 h-6" aria-hidden="true" />}
             label={t('avgResolutionTime')}
             value={
-              avgResolutionTimeHours !== null
-                ? `${Math.round(avgResolutionTimeHours)}h`
-                : t('notAvailable')
+              avgResolutionTimeHours === null
+                ? t('notAvailable')
+                : avgResolutionTimeHours >= 48
+                  ? t('durationDays', { count: Math.round(avgResolutionTimeHours / 24) })
+                  : `${Math.round(avgResolutionTimeHours)}h`
             }
-            subtitle={avgResolutionTimeHours !== null ? t('lastMonth') : t('notAvailable')}
+            subtitle={avgResolutionTimeHours !== null ? t('last12Months') : t('notAvailable')}
             borderColor="border-gray-400"
           />
         </div>
