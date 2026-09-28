@@ -10,28 +10,42 @@ import {
 } from '../../../src/modules/agent-v2/agentic-loop.service';
 import type { AgentMessage } from '../../../src/ai/providers/tool-capable-provider.interface';
 
+/**
+ * Realistic filler text. The estimator uses a real BPE tokenizer, so repeated
+ * characters ('x'.repeat(n)) collapse into very few tokens and no longer
+ * exercise the budget logic.
+ */
+function filler(chars: number): string {
+  const words = ['const', 'value', 'return', 'ticket', 'error', 'handler', 'await', 'import', 'module', 'user'];
+  let out = '';
+  for (let i = 0; out.length < chars; i++) {
+    out += `${words[i % words.length]}${i} `;
+  }
+  return out.slice(0, chars);
+}
+
 describe('Context Pruning', () => {
   describe('estimateTokens', () => {
-    it('should estimate 1 token per 4 characters', () => {
-      expect(estimateTokens('abcd')).toBe(1);
-      expect(estimateTokens('abcde')).toBe(2);
+    it('should count tokens with the tokenizer', () => {
       expect(estimateTokens('')).toBe(0);
-      expect(estimateTokens('a'.repeat(100))).toBe(25);
+      expect(estimateTokens('hello world')).toBeGreaterThan(0);
+      expect(estimateTokens(filler(400))).toBeGreaterThan(estimateTokens(filler(100)));
     });
   });
 
   describe('estimateMessageTokens', () => {
     it('should estimate tokens for a string message', () => {
-      const msg: AgentMessage = { role: 'user', content: 'a'.repeat(400) };
-      expect(estimateMessageTokens(msg)).toBe(100);
+      const text = filler(400);
+      const msg: AgentMessage = { role: 'user', content: text };
+      expect(estimateMessageTokens(msg)).toBe(estimateTokens(text));
     });
 
     it('should estimate tokens for text blocks', () => {
       const msg: AgentMessage = {
         role: 'assistant',
-        content: [{ type: 'text', text: 'a'.repeat(200) }],
+        content: [{ type: 'text', text: filler(200) }],
       };
-      expect(estimateMessageTokens(msg)).toBe(50);
+      expect(estimateMessageTokens(msg)).toBe(estimateTokens(filler(200)));
     });
 
     it('should estimate tokens for tool_use blocks', () => {
@@ -50,9 +64,9 @@ describe('Context Pruning', () => {
     it('should estimate tokens for tool_result blocks', () => {
       const msg: AgentMessage = {
         role: 'user',
-        content: [{ type: 'tool_result', toolUseId: 't1', content: 'x'.repeat(4000) }],
+        content: [{ type: 'tool_result', toolUseId: 't1', content: filler(4000) }],
       };
-      expect(estimateMessageTokens(msg)).toBe(1000);
+      expect(estimateMessageTokens(msg)).toBe(estimateTokens(filler(4000)));
     });
   });
 
@@ -103,7 +117,7 @@ describe('Context Pruning', () => {
     function makeLargeToolResult(id: string, chars: number): AgentMessage {
       return {
         role: 'user',
-        content: [{ type: 'tool_result', toolUseId: id, content: 'x'.repeat(chars) }],
+        content: [{ type: 'tool_result', toolUseId: id, content: filler(chars) }],
       };
     }
 

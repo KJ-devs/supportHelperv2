@@ -1,8 +1,13 @@
+import { AgentTasksService } from '../../../src/modules/agent-tasks/agent-tasks.service';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { ValidationModeService } from '../../../src/modules/agent-tasks/services/validation-mode.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+
+const mockAgentTasksService = {
+  appendLog: jest.fn().mockResolvedValue(undefined),
+};
 
 describe('ValidationModeService', () => {
   let service: ValidationModeService;
@@ -41,6 +46,7 @@ describe('ValidationModeService', () => {
         ValidationModeService,
         { provide: PrismaService, useValue: prisma },
         { provide: getQueueToken('agent-orchestration'), useValue: mockAgentQueue },
+        { provide: AgentTasksService, useValue: mockAgentTasksService },
       ],
     }).compile();
 

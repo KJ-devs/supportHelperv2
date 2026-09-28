@@ -1,3 +1,7 @@
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
@@ -9,9 +13,11 @@ import { AgentTasksService } from '../../../src/modules/agent-tasks/agent-tasks.
 import { ValidationModeService } from '../../../src/modules/agent-tasks/services/validation-mode.service';
 import { InternalAuthGuard } from '../../../src/common/guards/internal-auth.guard';
 import { PrismaService } from '../../../src/prisma/prisma.service';
+import { DeepAnalysisService } from '../../../src/modules/agent-v2/deep-analysis.service';
 
 describe('AgentTasksController', () => {
   let controller: AgentTasksController;
+  let deepAnalysisService: { analyze: jest.Mock };
   let agentTasksService: AgentTasksService;
   let validationModeService: ValidationModeService;
   let prisma: PrismaService;
@@ -63,6 +69,10 @@ describe('AgentTasksController', () => {
           useValue: mockPrismaService,
         },
         {
+          provide: DeepAnalysisService,
+          useValue: { analyze: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
           provide: getQueueToken('agent-orchestration'),
           useValue: mockAgentQueue,
         },
@@ -82,6 +92,7 @@ describe('AgentTasksController', () => {
     agentTasksService = module.get<AgentTasksService>(AgentTasksService);
     validationModeService = module.get<ValidationModeService>(ValidationModeService);
     prisma = module.get<PrismaService>(PrismaService);
+    deepAnalysisService = module.get(DeepAnalysisService);
     agentQueue = module.get<Queue>(getQueueToken('agent-orchestration'));
   });
 
@@ -98,31 +109,27 @@ describe('AgentTasksController', () => {
       mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
       mockAgentTasksService.create.mockResolvedValue(task);
 
-      const result = await controller.analyzeTicket(tenantId, ticketId);
+      const result = await controller.analyzeTicket(tenantId, ticketId, {});
 
       expect(result).toEqual(task);
-      expect(agentTasksService.create).toHaveBeenCalledWith(ticketId, tenantId, 'app-123');
-      expect(agentQueue.add).toHaveBeenCalledWith(
-        'generate-action-plan',
-        expect.objectContaining({
-          type: 'generate-action-plan',
-          ticketId,
-          agentTaskId: 'task-123',
-        }),
-        expect.objectContaining({
-          priority: 5,
-          attempts: 3,
-        })
+      expect(agentTasksService.create).toHaveBeenCalledWith(
+        ticketId,
+        tenantId,
+        'app-123',
+        undefined,
+        'autonomous',
       );
+      // Analysis now runs through the V2 deep analysis (no queue job)
+      expect(deepAnalysisService.analyze).toHaveBeenCalledWith(ticketId, tenantId, undefined, 'task-123');
     });
 
     it('should throw NotFoundException when ticket not found', async () => {
       mockPrismaService.ticket.findFirst.mockResolvedValue(null);
 
-      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow(
+      await expect(controller.analyzeTicket(tenantId, 'not-found', {})).rejects.toThrow(
         NotFoundException
       );
-      await expect(controller.analyzeTicket(tenantId, 'not-found')).rejects.toThrow(
+      await expect(controller.analyzeTicket(tenantId, 'not-found', {})).rejects.toThrow(
         'Ticket not-found not found'
       );
     });
@@ -133,10 +140,10 @@ describe('AgentTasksController', () => {
 
       mockPrismaService.ticket.findFirst.mockResolvedValue(ticket);
 
-      await expect(controller.analyzeTicket(tenantId, ticketId)).rejects.toThrow(
+      await expect(controller.analyzeTicket(tenantId, ticketId, {})).rejects.toThrow(
         BadRequestException
       );
-      await expect(controller.analyzeTicket(tenantId, ticketId)).rejects.toThrow(
+      await expect(controller.analyzeTicket(tenantId, ticketId, {})).rejects.toThrow(
         'Ticket has no linked application'
       );
     });
@@ -219,14 +226,7 @@ describe('AgentTasksController', () => {
         'plan',
         userId
       );
-      expect(agentQueue.add).toHaveBeenCalledWith(
-        'generate-code',
-        expect.objectContaining({
-          type: 'generate-code',
-          agentTaskId: taskId,
-        }),
-        expect.anything()
-      );
+      // Queuing the next phase is the responsibility of ValidationModeService
     });
 
     it('should approve code and queue push/PR creation', async () => {
@@ -245,14 +245,7 @@ describe('AgentTasksController', () => {
       const result = await controller.approve(tenantId, userId, taskId, dto);
 
       expect(result).toEqual(approvedTask);
-      expect(agentQueue.add).toHaveBeenCalledWith(
-        'push-code',
-        expect.objectContaining({
-          type: 'push-code',
-          agentTaskId: taskId,
-        }),
-        expect.anything()
-      );
+      expect(mockValidationModeService.approveTask).toHaveBeenCalled();
     });
   });
 
@@ -297,13 +290,7 @@ describe('AgentTasksController', () => {
 
       expect(result).toEqual(retriedTask);
       expect(agentTasksService.retry).toHaveBeenCalledWith(taskId);
-      expect(agentQueue.add).toHaveBeenCalledWith(
-        'generate-action-plan',
-        expect.objectContaining({
-          agentTaskId: taskId,
-        }),
-        expect.anything()
-      );
+      expect(deepAnalysisService.analyze).toHaveBeenCalledWith('ticket-123', tenantId, undefined, taskId);
     });
 
     it('should throw BadRequestException when task is not failed or expired', async () => {
