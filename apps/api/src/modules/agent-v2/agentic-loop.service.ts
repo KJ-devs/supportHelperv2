@@ -815,10 +815,16 @@ export class AgenticLoopService {
         } catch (err) {
           // Retry once for read-only tools on transient failure
           if (RETRYABLE_TOOLS.has(toolUse.name)) {
+            const errMsg = err instanceof Error ? err.message : 'Unknown error';
+            const isRateLimit =
+              errMsg.includes('rate limit') ||
+              (err as { status?: number })?.status === 429 ||
+              ((err as { status?: number })?.status === 403 && errMsg.includes('rate limit'));
+            const retryDelay = isRateLimit ? 15_000 : 1_000;
             this.logger.warn(
-              `Tool "${toolUse.name}" failed, retrying in 1s: ${err instanceof Error ? err.message : 'Unknown error'}`
+              `Tool "${toolUse.name}" failed, retrying in ${retryDelay / 1000}s: ${errMsg}`
             );
-            await new Promise(r => setTimeout(r, 1000));
+            await new Promise(r => setTimeout(r, retryDelay));
             try {
               result = await this.toolExecutor.execute(
                 toolUse.name as ToolName,

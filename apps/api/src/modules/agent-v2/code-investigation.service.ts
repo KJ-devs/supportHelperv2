@@ -37,6 +37,64 @@ export interface CommitInfo {
   date: string;
 }
 
+/** Max retries for GitHub API rate-limit (403/429) errors */
+const RATE_LIMIT_MAX_RETRIES = 3;
+
+/**
+ * Execute a GitHub API call with automatic rate-limit retry.
+ * Reads `retry-after` header or `x-ratelimit-reset` to compute wait time.
+ * Falls back to exponential backoff (10s, 30s, 60s).
+ */
+async function withRateLimitRetry<T>(
+  fn: () => Promise<T>,
+  logger: Logger,
+  label: string
+): Promise<T> {
+  for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
+      const isRateLimit =
+        status === 429 ||
+        (status === 403 &&
+          String((err as { message?: string }).message ?? '').includes('rate limit'));
+
+      if (!isRateLimit || attempt === RATE_LIMIT_MAX_RETRIES) {
+        throw err;
+      }
+
+      // Determine wait time from response headers or use exponential backoff
+      let waitMs: number;
+      const headers = (err as { response?: { headers?: Record<string, string> } }).response
+        ?.headers;
+      const retryAfter = headers?.['retry-after'];
+      const resetTimestamp = headers?.['x-ratelimit-reset'];
+
+      if (retryAfter) {
+        waitMs = parseInt(retryAfter, 10) * 1000;
+      } else if (resetTimestamp) {
+        waitMs = Math.max(0, parseInt(resetTimestamp, 10) * 1000 - Date.now()) + 1000;
+      } else {
+        waitMs = [10_000, 30_000, 60_000][attempt];
+      }
+
+      // Cap wait to 120s
+      waitMs = Math.min(waitMs, 120_000);
+
+      logger.warn(
+        `GitHub rate limit hit for ${label} (attempt ${attempt + 1}/${RATE_LIMIT_MAX_RETRIES}). ` +
+          `Waiting ${Math.round(waitMs / 1000)}s before retry...`
+      );
+
+      await new Promise(r => setTimeout(r, waitMs));
+    }
+  }
+
+  // Unreachable, but TypeScript needs it
+  throw new Error(`Rate limit retry exhausted for ${label}`);
+}
+
 @Injectable()
 export class CodeInvestigationService {
   private readonly logger = new Logger(CodeInvestigationService.name);
@@ -163,12 +221,17 @@ export class CodeInvestigationService {
       return this.filterLines(cached, startLine, endLine);
     }
 
-    const { data } = await ctx.octokit.repos.getContent({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      path: filePath,
-      ref: ctx.defaultBranch,
-    });
+    const { data } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.repos.getContent({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          path: filePath,
+          ref: ctx.defaultBranch,
+        }),
+      this.logger,
+      `read_file(${filePath})`
+    );
 
     if (!('content' in data) || data.encoding !== 'base64') {
       throw new Error(`Cannot read ${filePath}: not a file or too large`);
@@ -186,12 +249,17 @@ export class CodeInvestigationService {
   async listDirectory(ctx: RepoContext, path: string, recursive = false): Promise<TreeEntry[]> {
     const treeSha = path ? `${ctx.defaultBranch}:${path}` : ctx.defaultBranch;
 
-    const { data: tree } = await ctx.octokit.git.getTree({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      tree_sha: treeSha,
-      recursive: recursive ? 'true' : undefined,
-    });
+    const { data: tree } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.git.getTree({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          tree_sha: treeSha,
+          recursive: recursive ? 'true' : undefined,
+        }),
+      this.logger,
+      `list_directory(${path || '/'})`
+    );
 
     return tree.tree
       .filter(item => {
@@ -210,6 +278,7 @@ export class CodeInvestigationService {
 
   /**
    * Search code using GitHub Code Search API.
+   * Wrapped with rate-limit retry (Search API is limited to 10 req/min for installations).
    */
   async searchCode(
     ctx: RepoContext,
@@ -220,10 +289,15 @@ export class CodeInvestigationService {
     const q =
       `${query} repo:${ctx.owner}/${ctx.repo}` + (filePattern ? ` path:${filePattern}` : '');
 
-    const { data } = await ctx.octokit.search.code({
-      q,
-      per_page: Math.min(maxResults, 100),
-    });
+    const { data } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.search.code({
+          q,
+          per_page: Math.min(maxResults, 100),
+        }),
+      this.logger,
+      `search_code(${ctx.fullName})`
+    );
 
     return data.items.map(item => ({
       filePath: item.path,
@@ -251,12 +325,17 @@ export class CodeInvestigationService {
     const defaults = ['node_modules', 'dist', '.git', '*.lock', '.next', 'coverage'];
     const exclude = [...defaults, ...excludePatterns];
 
-    const { data: tree } = await ctx.octokit.git.getTree({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      tree_sha: ctx.defaultBranch,
-      recursive: 'true',
-    });
+    const { data: tree } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.git.getTree({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          tree_sha: ctx.defaultBranch,
+          recursive: 'true',
+        }),
+      this.logger,
+      `get_repo_structure(${ctx.fullName})`
+    );
 
     const filtered = tree.tree.filter(item => {
       const path = item.path || '';
@@ -277,12 +356,17 @@ export class CodeInvestigationService {
    * Get recent git commit history for a file.
    */
   async getFileHistory(ctx: RepoContext, filePath: string, limit = 5): Promise<CommitInfo[]> {
-    const { data: commits } = await ctx.octokit.repos.listCommits({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      path: filePath,
-      per_page: limit,
-    });
+    const { data: commits } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.repos.listCommits({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          path: filePath,
+          per_page: limit,
+        }),
+      this.logger,
+      `get_file_history(${filePath})`
+    );
 
     return commits.map(c => ({
       sha: c.sha.substring(0, 7),
@@ -302,15 +386,20 @@ export class CodeInvestigationService {
     endLine?: number
   ): Promise<unknown> {
     try {
-      const response = await ctx.octokit.request('GET /repos/{owner}/{repo}/blame/{path}', {
-        owner: ctx.owner,
-        repo: ctx.repo,
-        path: filePath,
-        ref: ctx.defaultBranch,
-        headers: {
-          Accept: 'application/vnd.github.v3+json',
-        },
-      });
+      const response = await withRateLimitRetry(
+        () =>
+          ctx.octokit.request('GET /repos/{owner}/{repo}/blame/{path}', {
+            owner: ctx.owner,
+            repo: ctx.repo,
+            path: filePath,
+            ref: ctx.defaultBranch,
+            headers: {
+              Accept: 'application/vnd.github.v3+json',
+            },
+          }),
+        this.logger,
+        `get_file_blame(${filePath})`
+      );
 
       let ranges =
         (
@@ -540,12 +629,17 @@ export class CodeInvestigationService {
     prNumber: number,
     body: string
   ): Promise<{ id: number; url: string }> {
-    const { data } = await ctx.octokit.issues.createComment({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      issue_number: prNumber,
-      body,
-    });
+    const { data } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.issues.createComment({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          issue_number: prNumber,
+          body,
+        }),
+      this.logger,
+      `add_pr_comment(#${prNumber})`
+    );
 
     this.logger.log(`Added comment to PR #${prNumber} in ${ctx.fullName}`);
     return { id: data.id, url: data.html_url };
@@ -563,14 +657,19 @@ export class CodeInvestigationService {
   ): Promise<{ number: number; url: string; title: string }> {
     const base = baseBranch || ctx.defaultBranch;
 
-    const { data } = await ctx.octokit.pulls.create({
-      owner: ctx.owner,
-      repo: ctx.repo,
-      title,
-      body,
-      head: headBranch,
-      base,
-    });
+    const { data } = await withRateLimitRetry(
+      () =>
+        ctx.octokit.pulls.create({
+          owner: ctx.owner,
+          repo: ctx.repo,
+          title,
+          body,
+          head: headBranch,
+          base,
+        }),
+      this.logger,
+      `create_pull_request(${ctx.fullName})`
+    );
 
     this.logger.log(`Created PR #${data.number} "${title}" in ${ctx.fullName}`);
     return { number: data.number, url: data.html_url, title: data.title };
