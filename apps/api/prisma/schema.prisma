@@ -137,6 +137,7 @@ model Ticket {
   // AI Analysis
   aiSummary          String?   @map("ai_summary") @db.Text
   aiAnalysis         Json?     @map("ai_analysis")
+  aiConfigHash       String?   @map("ai_config_hash") @db.VarChar(64)
   keywords           String[]  @default([])
 
   // Public tracking
