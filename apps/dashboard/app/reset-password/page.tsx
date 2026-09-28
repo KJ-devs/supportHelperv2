@@ -17,6 +17,8 @@ function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
+  // Invitation links reuse this page to let new members choose their password
+  const isInvite = searchParams.get('invite') === '1';
 
   useEffect(() => {
     if (!token) {
@@ -59,6 +61,10 @@ function ResetPasswordForm() {
 
     try {
       await authApi.resetPassword(token, password);
+      // Close any session already open in this browser (e.g. the admin who sent
+      // the invitation) so the next login uses the new credentials
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('refresh_token');
       setSuccess(true);
       setTimeout(() => {
         router.push('/login');
@@ -88,8 +94,12 @@ function ResetPasswordForm() {
           <LanguageSelector />
         </div>
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t('title')}</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">{t('subtitle')}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {isInvite ? t('inviteTitle') : t('title')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            {isInvite ? t('inviteSubtitle') : t('subtitle')}
+          </p>
         </div>
 
         {success ? (
@@ -166,7 +176,7 @@ function ResetPasswordForm() {
               disabled={isLoading || !token}
               className="w-full py-2 px-4 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? t('submitting') : t('submit')}
+              {isLoading ? t('submitting') : isInvite ? t('inviteSubmit') : t('submit')}
             </button>
 
             <div className="text-center">

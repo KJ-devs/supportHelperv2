@@ -5,6 +5,9 @@ import { UsersService } from '../../../src/users/users.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CacheService } from '../../../src/cache';
 import { UserRole } from '../../../src/users/dto/update-user.dto';
+import { UserTokensService } from '../../../src/users/user-tokens.service';
+import { MailService } from '../../../src/common/mail/mail.service';
+import { ConfigService } from '@nestjs/config';
 
 const mockCacheService = {
   get: jest.fn().mockResolvedValue(undefined),
@@ -32,11 +35,19 @@ describe('UsersController', () => {
     user: {
       findMany: jest.fn(),
       findFirst: jest.fn(),
+      findUnique: jest.fn().mockResolvedValue({ name: 'Alice', email: 'alice@example.com' }),
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ email: 'new@example.com' }),
       create: jest.fn(),
       update: jest.fn(),
       delete: jest.fn(),
     },
+    tenant: {
+      findUniqueOrThrow: jest.fn().mockResolvedValue({ name: 'Acme' }),
+    },
   };
+
+  const mockUserTokens = { issue: jest.fn().mockResolvedValue('token'), consume: jest.fn() };
+  const mockMailService = { send: jest.fn().mockResolvedValue(true) };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -45,6 +56,9 @@ describe('UsersController', () => {
         UsersService,
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: CacheService, useValue: mockCacheService },
+        { provide: UserTokensService, useValue: mockUserTokens },
+        { provide: MailService, useValue: mockMailService },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 
@@ -65,9 +79,10 @@ describe('UsersController', () => {
       const req = { user: { tenantId: mockTenantId } };
       const result = await controller.findAll(req);
 
-      expect(result).toEqual(mockUsers);
+      expect(result).toEqual(mockUsers.map((u) => ({ ...u, invitationPending: true })));
       expect(mockPrismaService.user.findMany).toHaveBeenCalledWith({
         where: { tenantId: mockTenantId },
+        orderBy: { createdAt: 'asc' },
         select: expect.objectContaining({
           id: true,
           email: true,
@@ -127,7 +142,7 @@ describe('UsersController', () => {
       const req = { user: { id: 'user-001', tenantId: mockTenantId, role: 'owner' } };
       const result = await controller.create(createDto, req);
 
-      expect(result).toEqual(createdUser);
+      expect(result).toEqual({ ...createdUser, invitationPending: true, invitationSent: true });
     });
 
     it('should allow admin to create a user', async () => {
@@ -141,7 +156,7 @@ describe('UsersController', () => {
       const req = { user: { id: 'user-002', tenantId: mockTenantId, role: 'admin' } };
       const result = await controller.create(createDto, req);
 
-      expect(result).toEqual(createdUser);
+      expect(result).toEqual({ ...createdUser, invitationPending: true, invitationSent: true });
     });
 
     it('should throw ForbiddenException when member tries to create user', async () => {
@@ -217,7 +232,16 @@ describe('UsersController', () => {
       ).rejects.toThrow(ForbiddenException);
       await expect(
         controller.update('user-002', { role: UserRole.ADMIN }, req),
-      ).rejects.toThrow('Only owners and admins can change user roles');
+      ).rejects.toThrow('Only owners and admins can update other users');
+    });
+
+    it('should throw ForbiddenException when member updates another user profile', async () => {
+      const req = { user: { id: 'user-003', tenantId: mockTenantId, role: 'member' } };
+
+      await expect(
+        controller.update('user-002', { name: 'Hacked' }, req),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
     });
 
     it('should prevent owner from changing their own role', async () => {
@@ -256,6 +280,37 @@ describe('UsersController', () => {
       const result = await controller.update('user-003', { name: 'New Name' }, req);
 
       expect(result.name).toBe('New Name');
+    });
+  });
+
+  describe('owner protection', () => {
+    const owner = { id: 'user-001', tenantId: mockTenantId, email: 'alice@example.com', name: 'Alice', role: 'owner', createdAt: new Date() };
+    const adminReq = { user: { id: 'user-002', tenantId: mockTenantId, role: 'admin' } };
+
+    it('should forbid an admin from demoting the owner', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(owner);
+
+      await expect(controller.update('user-001', { role: UserRole.MEMBER }, adminReq)).rejects.toThrow(
+        'Only the owner can change the owner role',
+      );
+      expect(mockPrismaService.user.update).not.toHaveBeenCalled();
+    });
+
+    it('should forbid an admin from promoting someone to owner', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue({ ...owner, id: 'user-003', role: 'member' });
+
+      await expect(controller.update('user-003', { role: UserRole.OWNER }, adminReq)).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it('should forbid an admin from deleting the owner', async () => {
+      mockPrismaService.user.findFirst.mockResolvedValue(owner);
+
+      await expect(controller.delete('user-001', adminReq)).rejects.toThrow(
+        'Only the owner can remove another owner',
+      );
+      expect(mockPrismaService.user.delete).not.toHaveBeenCalled();
     });
   });
 

@@ -1,30 +1,47 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
+import { MailService } from '../common/mail/mail.service';
+import { invitationEmail } from '../common/mail/templates';
+import { UserTokensService } from './user-tokens.service';
 import { CacheService, CacheKeys, CacheTTL } from '../cache';
 import * as bcrypt from 'bcrypt';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
+    private readonly userTokens: UserTokensService,
+    private readonly mailService: MailService,
+    private readonly config: ConfigService,
   ) {}
 
   async findByTenant(tenantId: string) {
     return this.cacheService.getOrSet(
       CacheKeys.userList(tenantId),
       CacheTTL.USER_PROFILE,
-      () => this.prisma.user.findMany({
-        where: { tenantId },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-          createdAt: true,
-        },
-      }),
+      async () => {
+        const users = await this.prisma.user.findMany({
+          where: { tenantId },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            createdAt: true,
+            passwordHash: true,
+            authProvider: true,
+          },
+        });
+        return users.map(({ passwordHash, authProvider, ...user }) => ({
+          ...user,
+          invitationPending: !passwordHash && !authProvider,
+        }));
+      },
     );
   }
 
@@ -53,27 +70,31 @@ export class UsersService {
     return user;
   }
 
-  async create(tenantId: string, data: { email: string; name: string; role?: string }) {
-    // Check for existing user with same email in tenant
+  /**
+   * Invites a team member: the account is created without a password and an
+   * email lets the person choose one (the invitation link is valid 7 days).
+   */
+  async create(
+    tenantId: string,
+    data: { email: string; name: string; role?: string },
+    invitedBy: string,
+  ) {
+    // Login resolves users by email alone, so emails must be unique across tenants
     const existing = await this.prisma.user.findFirst({
-      where: { tenantId, email: data.email },
+      where: { email: { equals: data.email, mode: 'insensitive' } },
     });
 
     if (existing) {
-      throw new ConflictException('A user with this email already exists in the tenant');
+      throw new ConflictException('A user with this email already exists');
     }
-
-    // Generate a temporary password
-    const temporaryPassword = crypto.randomBytes(16).toString('hex');
-    const passwordHash = await bcrypt.hash(temporaryPassword, 10);
 
     const user = await this.prisma.user.create({
       data: {
         tenantId,
-        email: data.email,
+        email: data.email.toLowerCase(),
         name: data.name,
         role: data.role || 'member',
-        passwordHash,
+        passwordHash: null,
       },
       select: {
         id: true,
@@ -86,8 +107,46 @@ export class UsersService {
     });
 
     await this.invalidateUserCaches(tenantId);
-    return user;
+    const invitationSent = await this.sendInvitation(user.id, tenantId, invitedBy);
+    return { ...user, invitationPending: true, invitationSent };
   }
+
+  /** (Re)sends the invitation email of a member who has not activated their account yet. */
+  async resendInvitation(id: string, tenantId: string, invitedBy: string) {
+    const user = await this.prisma.user.findFirst({ where: { id, tenantId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.passwordHash || user.authProvider) {
+      throw new BadRequestException('This user has already activated their account');
+    }
+    const invitationSent = await this.sendInvitation(id, tenantId, invitedBy);
+    return { invitationSent };
+  }
+
+  private async sendInvitation(userId: string, tenantId: string, invitedBy: string) {
+    const [user, tenant, inviter] = await Promise.all([
+      this.prisma.user.findUniqueOrThrow({ where: { id: userId } }),
+      this.prisma.tenant.findUniqueOrThrow({ where: { id: tenantId } }),
+      this.prisma.user.findUnique({ where: { id: invitedBy }, select: { name: true, email: true } }),
+    ]);
+
+    const token = await this.userTokens.issue(userId, 'invite');
+    const dashboardUrl = this.config.get<string>('app.dashboardUrl') || 'http://localhost:3000';
+    const link = `${dashboardUrl}/reset-password?token=${token}&invite=1`;
+
+    try {
+      return await this.mailService.send(
+        invitationEmail(user.email, link, tenant.name, inviter?.name || inviter?.email || tenant.name),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to send invitation email: ${error instanceof Error ? error.message : error}`,
+      );
+      return false;
+    }
+  }
+
 
   async update(id: string, tenantId: string, data: { name?: string; role?: string }) {
     const user = await this.findOne(id, tenantId);

@@ -3,6 +3,9 @@ import { NotFoundException, ConflictException } from '@nestjs/common';
 import { UsersService } from '../../../src/users/users.service';
 import { PrismaService } from '../../../src/prisma/prisma.service';
 import { CacheService } from '../../../src/cache/cache.service';
+import { UserTokensService } from '../../../src/users/user-tokens.service';
+import { MailService } from '../../../src/common/mail/mail.service';
+import { ConfigService } from '@nestjs/config';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn().mockResolvedValue('hashed-password'),
@@ -21,7 +24,12 @@ describe('UsersService', () => {
     createdAt: new Date(),
   };
 
+  const mockUserTokens = { issue: jest.fn(), consume: jest.fn() };
+  const mockMailService = { send: jest.fn() };
+
   beforeEach(async () => {
+    mockUserTokens.issue.mockReset().mockResolvedValue('invite-token');
+    mockMailService.send.mockReset().mockResolvedValue(true);
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsersService,
@@ -32,12 +40,17 @@ describe('UsersService', () => {
               findMany: jest.fn(),
               findFirst: jest.fn(),
               findUnique: jest.fn(),
+              findUniqueOrThrow: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
               delete: jest.fn(),
             },
+            tenant: { findUniqueOrThrow: jest.fn() },
           },
         },
+        { provide: UserTokensService, useValue: mockUserTokens },
+        { provide: MailService, useValue: mockMailService },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('http://dash.test') } },
         {
           provide: CacheService,
           useValue: {
@@ -60,15 +73,22 @@ describe('UsersService', () => {
 
   describe('findByTenant', () => {
     it('should return users for tenant', async () => {
-      (prisma.user.findMany as jest.Mock).mockResolvedValue([mockUser]);
+      (prisma.user.findMany as jest.Mock).mockResolvedValue([
+        { ...mockUser, passwordHash: 'hash', authProvider: null },
+        { ...mockUser, id: 'invited', passwordHash: null, authProvider: null },
+      ]);
 
       const result = await service.findByTenant('tenant-123');
 
-      expect(result).toHaveLength(1);
-      expect(prisma.user.findMany).toHaveBeenCalledWith({
-        where: { tenantId: 'tenant-123' },
-        select: expect.objectContaining({ id: true, email: true }),
-      });
+      expect(result).toHaveLength(2);
+      expect(result[0]).not.toHaveProperty('passwordHash');
+      expect(result.map((u) => u.invitationPending)).toEqual([false, true]);
+      expect(prisma.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { tenantId: 'tenant-123' },
+          select: expect.objectContaining({ id: true, email: true }),
+        }),
+      );
     });
   });
 
@@ -89,11 +109,14 @@ describe('UsersService', () => {
   });
 
   describe('create', () => {
-    it('should create user with hashed temporary password', async () => {
+    it('should create a pending user without password and email an invitation', async () => {
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
-      (prisma.user.create as jest.Mock).mockResolvedValue(mockUser);
+      (prisma.user.create as jest.Mock).mockResolvedValue({ ...mockUser, id: 'new-user' });
+      (prisma.user.findUniqueOrThrow as jest.Mock).mockResolvedValue({ id: 'new-user', email: 'new@test.com' });
+      (prisma.tenant.findUniqueOrThrow as jest.Mock).mockResolvedValue({ name: 'Acme' });
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ name: 'Alice', email: 'alice@acme.test' });
 
-      const result = await service.create('tenant-123', { email: 'new@test.com', name: 'New User' });
+      const result = await service.create('tenant-123', { email: 'New@Test.com', name: 'New User' }, 'inviter-1');
 
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
@@ -101,17 +124,37 @@ describe('UsersService', () => {
           email: 'new@test.com',
           name: 'New User',
           role: 'member',
-          passwordHash: 'hashed-password',
+          passwordHash: null,
         }),
         select: expect.any(Object),
       });
+      expect(mockUserTokens.issue).toHaveBeenCalledWith('new-user', 'invite');
+      expect(mockMailService.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'new@test.com',
+          html: expect.stringContaining('http://dash.test/reset-password?token=invite-token&amp;invite=1'),
+        }),
+      );
+      expect(result).toMatchObject({ invitationPending: true, invitationSent: true });
+    });
+
+    it('should still create the user when the invitation email fails', async () => {
+      (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.user.create as jest.Mock).mockResolvedValue({ ...mockUser, id: 'new-user' });
+      (prisma.user.findUniqueOrThrow as jest.Mock).mockResolvedValue({ id: 'new-user', email: 'new@test.com' });
+      (prisma.tenant.findUniqueOrThrow as jest.Mock).mockResolvedValue({ name: 'Acme' });
+      mockMailService.send.mockRejectedValue(new Error('SMTP down'));
+
+      const result = await service.create('tenant-123', { email: 'new@test.com', name: 'New' }, 'inviter-1');
+
+      expect(result).toMatchObject({ invitationPending: true, invitationSent: false });
     });
 
     it('should throw ConflictException for duplicate email', async () => {
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(mockUser);
 
       await expect(
-        service.create('tenant-123', { email: 'test@example.com', name: 'Dup' }),
+        service.create('tenant-123', { email: 'test@example.com', name: 'Dup' }, 'inviter-1'),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -119,7 +162,10 @@ describe('UsersService', () => {
       (prisma.user.findFirst as jest.Mock).mockResolvedValue(null);
       (prisma.user.create as jest.Mock).mockResolvedValue({ ...mockUser, role: 'admin' });
 
-      await service.create('tenant-123', { email: 'admin@test.com', name: 'Admin', role: 'admin' });
+      (prisma.user.findUniqueOrThrow as jest.Mock).mockResolvedValue({ id: 'user-123', email: 'admin@test.com' });
+      (prisma.tenant.findUniqueOrThrow as jest.Mock).mockResolvedValue({ name: 'Acme' });
+
+      await service.create('tenant-123', { email: 'admin@test.com', name: 'Admin', role: 'admin' }, 'inviter-1');
 
       expect(prisma.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({ role: 'admin' }),

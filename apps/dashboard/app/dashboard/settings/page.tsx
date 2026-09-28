@@ -11,7 +11,9 @@ import { useTranslations } from 'next-intl';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { PageLoader, Card, Button, Input } from '@/components/ui';
 import { usersApi, ApiError } from '@/lib/api/users';
-import toast, { Toaster } from 'react-hot-toast';
+import { TeamSettings } from '@/components/settings/TeamSettings';
+import Link from 'next/link';
+import toast from 'react-hot-toast';
 import {
   User,
   Lock,
@@ -25,6 +27,7 @@ import {
   BarChart3,
   TrendingUp,
   SlidersHorizontal,
+  ScrollText,
 } from 'lucide-react';
 
 export default function SettingsPage() {
@@ -158,21 +161,36 @@ export default function SettingsPage() {
     { id: 'team', label: t('tabs.team'), icon: Users },
   ] as const;
 
-  const settingsPages = [
-    { href: '/dashboard/settings/plan', label: t('pages.plan'), icon: CreditCard },
-    { href: '/dashboard/settings/billing', label: t('pages.billing'), icon: CreditCard },
-    { href: '/dashboard/settings/license', label: t('pages.license'), icon: Key },
-    { href: '/dashboard/settings/ai', label: t('pages.ai'), icon: Bot },
-    { href: '/dashboard/settings/ai-behavior', label: t('pages.aiBehavior'), icon: SlidersHorizontal },
-    { href: '/dashboard/settings/ai-usage', label: t('pages.aiUsage'), icon: TrendingUp },
-    { href: '/dashboard/settings/github', label: t('pages.github'), icon: Github },
-    { href: '/dashboard/settings/auth/sso', label: t('pages.sso'), icon: Shield },
-    { href: '/dashboard/settings/status', label: t('pages.status'), icon: BarChart3 },
+  const settingsSections = [
+    {
+      title: t('sections.organization'),
+      pages: [
+        { href: '/dashboard/settings/plan', label: t('pages.plan'), icon: CreditCard },
+        { href: '/dashboard/settings/billing', label: t('pages.billing'), icon: CreditCard },
+        { href: '/dashboard/settings/license', label: t('pages.license'), icon: Key },
+      ],
+    },
+    {
+      title: t('sections.ai'),
+      pages: [
+        { href: '/dashboard/settings/ai', label: t('pages.ai'), icon: Bot },
+        { href: '/dashboard/settings/ai-behavior', label: t('pages.aiBehavior'), icon: SlidersHorizontal },
+        { href: '/dashboard/settings/ai-usage', label: t('pages.aiUsage'), icon: TrendingUp },
+      ],
+    },
+    {
+      title: t('sections.securityAdmin'),
+      pages: [
+        { href: '/dashboard/settings/auth/sso', label: t('pages.sso'), icon: Shield },
+        { href: '/dashboard/settings/audit-log', label: t('pages.auditLog'), icon: ScrollText },
+        { href: '/dashboard/settings/github', label: t('pages.github'), icon: Github },
+        { href: '/dashboard/settings/status', label: t('pages.status'), icon: BarChart3 },
+      ],
+    },
   ];
 
   return (
     <DashboardLayout>
-      <Toaster position="top-right" />
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="mb-6">
@@ -205,23 +223,28 @@ export default function SettingsPage() {
               </nav>
             </Card>
 
-            <Card padding={false} className="mt-4">
-              <nav className="space-y-1">
-                {settingsPages.map(page => {
-                  const Icon = page.icon;
-                  return (
-                    <a
-                      key={page.href}
-                      href={page.href}
-                      className="flex items-center gap-3 w-full text-left px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      <Icon className="w-4 h-4" aria-hidden="true" />
-                      {page.label}
-                    </a>
-                  );
-                })}
-              </nav>
-            </Card>
+            {settingsSections.map(section => (
+              <Card key={section.title} padding={false} className="mt-4">
+                <p className="px-4 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                  {section.title}
+                </p>
+                <nav className="space-y-1 pb-1" aria-label={section.title}>
+                  {section.pages.map(page => {
+                    const Icon = page.icon;
+                    return (
+                      <Link
+                        key={page.href}
+                        href={page.href}
+                        className="flex items-center gap-3 w-full text-left px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <Icon className="w-4 h-4" aria-hidden="true" />
+                        {page.label}
+                      </Link>
+                    );
+                  })}
+                </nav>
+              </Card>
+            ))}
           </div>
 
           {/* Content */}
@@ -257,24 +280,8 @@ export default function SettingsPage() {
                         <span className="text-gray-600 dark:text-gray-400">
                           {t('profile.role')}
                         </span>
-                        <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
-                          {user.role}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {t('profile.tenantId')}
-                        </span>
-                        <span className="font-mono text-xs text-gray-900 dark:text-gray-100">
-                          {user.tenantId.substring(0, 20)}...
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          {t('profile.userId')}
-                        </span>
-                        <span className="font-mono text-xs text-gray-900 dark:text-gray-100">
-                          {user.id.substring(0, 20)}...
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {t(`team.roles.${user.role}` as Parameters<typeof t>[0])}
                         </span>
                       </div>
                     </div>
@@ -488,40 +495,7 @@ export default function SettingsPage() {
             )}
 
             {/* Team Tab */}
-            {activeTab === 'team' && (
-              <Card>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-6">
-                  {t('team.title')}
-                </h2>
-
-                <div className="mb-6">
-                  <Button>➕ {t('team.inviteMember')}</Button>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-semibold">
-                        {user.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {user.name || user.email}
-                        </p>
-                        <p className="text-xs text-gray-600 dark:text-gray-400">{user.email}</p>
-                      </div>
-                    </div>
-                    <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs font-medium rounded-full capitalize">
-                      {user.role}
-                    </span>
-                  </div>
-
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <p className="text-sm">{t('team.noOtherMembers')}</p>
-                  </div>
-                </div>
-              </Card>
-            )}
+            {activeTab === 'team' && <TeamSettings currentUser={user} />}
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Request, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Request, ForbiddenException, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../common/guards';
@@ -30,7 +30,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'User not found' })
   async findOne(
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Request() req: { user: { tenantId: string } }
   ) {
     return this.usersService.findOne(id, req.user.tenantId);
@@ -48,52 +48,7 @@ export class UsersController {
     if (req.user.role !== 'owner' && req.user.role !== 'admin') {
       throw new ForbiddenException('Only owners and admins can create users');
     }
-    return this.usersService.create(req.user.tenantId, dto);
-  }
-
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update user (role changes require owner or admin role)' })
-  @ApiParam({ name: 'id', type: String, description: 'User ID' })
-  @ApiResponse({ status: 200, description: 'User updated successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Insufficient permissions to change role or cannot change own role' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  async update(
-    @Param('id') id: string,
-    @Body() dto: UpdateUserDto,
-    @Request() req: { user: { id: string; tenantId: string; role: string } }
-  ) {
-    // Only owners and admins can change roles
-    if (dto.role !== undefined) {
-      if (req.user.role !== 'owner' && req.user.role !== 'admin') {
-        throw new ForbiddenException('Only owners and admins can change user roles');
-      }
-      // Prevent users from changing their own role
-      if (req.user.id === id) {
-        throw new ForbiddenException('Cannot change your own role');
-      }
-    }
-    return this.usersService.update(id, req.user.tenantId, dto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete user (requires owner or admin role)' })
-  @ApiParam({ name: 'id', type: String, description: 'User ID' })
-  @ApiResponse({ status: 200, description: 'User deleted successfully' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiResponse({ status: 403, description: 'Only owners and admins can delete users, cannot delete yourself' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  async delete(
-    @Param('id') id: string,
-    @Request() req: { user: { id: string; tenantId: string; role: string } }
-  ) {
-    if (req.user.role !== 'owner' && req.user.role !== 'admin') {
-      throw new ForbiddenException('Only owners and admins can delete users');
-    }
-    if (req.user.id === id) {
-      throw new ForbiddenException('Cannot delete yourself');
-    }
-    return this.usersService.delete(id, req.user.tenantId);
+    return this.usersService.create(req.user.tenantId, dto, req.user.id);
   }
 
   @Patch('profile')
@@ -135,4 +90,75 @@ export class UsersController {
   ) {
     return this.usersService.updateNotifications(req.user.id, req.user.tenantId, dto);
   }
+  @Post(':id/resend-invitation')
+  @ApiOperation({ summary: 'Resend the invitation email (requires owner or admin role)' })
+  @ApiParam({ name: 'id', type: String, description: 'User ID' })
+  async resendInvitation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: { user: { id: string; tenantId: string; role: string } }
+  ) {
+    if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+      throw new ForbiddenException('Only owners and admins can invite users');
+    }
+    return this.usersService.resendInvitation(id, req.user.tenantId, req.user.id);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update user (role changes require owner or admin role)' })
+  @ApiParam({ name: 'id', type: String, description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'User updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions to change role or cannot change own role' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDto,
+    @Request() req: { user: { id: string; tenantId: string; role: string } }
+  ) {
+    const isAdmin = req.user.role === 'owner' || req.user.role === 'admin';
+    if (!isAdmin && req.user.id !== id) {
+      throw new ForbiddenException('Only owners and admins can update other users');
+    }
+    // Only owners and admins can change roles
+    if (dto.role !== undefined) {
+      if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+        throw new ForbiddenException('Only owners and admins can change user roles');
+      }
+      // Prevent users from changing their own role
+      if (req.user.id === id) {
+        throw new ForbiddenException('Cannot change your own role');
+      }
+      // Only the owner can hand over or take away ownership
+      const target = await this.usersService.findOne(id, req.user.tenantId);
+      if ((dto.role === 'owner' || target.role === 'owner') && req.user.role !== 'owner') {
+        throw new ForbiddenException('Only the owner can change the owner role');
+      }
+    }
+    return this.usersService.update(id, req.user.tenantId, dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete user (requires owner or admin role)' })
+  @ApiParam({ name: 'id', type: String, description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'User deleted successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Only owners and admins can delete users, cannot delete yourself' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async delete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: { user: { id: string; tenantId: string; role: string } }
+  ) {
+    if (req.user.role !== 'owner' && req.user.role !== 'admin') {
+      throw new ForbiddenException('Only owners and admins can delete users');
+    }
+    if (req.user.id === id) {
+      throw new ForbiddenException('Cannot delete yourself');
+    }
+    const target = await this.usersService.findOne(id, req.user.tenantId);
+    if (target.role === 'owner' && req.user.role !== 'owner') {
+      throw new ForbiddenException('Only the owner can remove another owner');
+    }
+    return this.usersService.delete(id, req.user.tenantId);
+  }
+
 }
